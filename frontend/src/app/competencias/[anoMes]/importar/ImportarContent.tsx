@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock, Upload } from "lucide-react";
 
 import { useAbaLembrada } from "@/hooks/useAbaLembrada";
@@ -128,6 +128,18 @@ export function ImportarContent() {
     enabled: periodo !== null,
     // Enquanto houver importação em andamento (a fila do lote segue com o diálogo fechado), a lista se atualiza sozinha.
     refetchInterval: (q) => (q.state.data?.itens.some((i) => i.status === "PROCESSANDO") ? 2000 : false),
+  });
+
+  // Lançamentos contábeis do RM Saldus (BPM.CONTR.002): a linha própria da tabela, fora da fila de arquivos.
+  const queryClient = useQueryClient();
+  const lancamentosRm = useQuery({
+    queryKey: ["lancamentosRm", anoMes],
+    queryFn: () => importacoesService.statusLancamentosRm(anoMes),
+    enabled: periodo !== null,
+  });
+  const importarLancamentosRm = useMutation({
+    mutationFn: () => importacoesService.importarLancamentosRm(anoMes),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["lancamentosRm", anoMes] }),
   });
 
   // Memorizadas porque entram no filtro dos rótulos, que recalcula quando a lista muda.
@@ -301,6 +313,50 @@ export function ImportarContent() {
                     </td>
                   </tr>
                 ))}
+                {/* Lançamentos contábeis do RM Saldus: importação própria, não é um arquivo (BPM.CONTR.002). */}
+                <tr className="border-b border-gray-100">
+                  <td className="px-4 text-sm font-medium whitespace-nowrap text-gray-900">Lançamentos Contábeis (RM)</td>
+                  <td className="w-full px-4 text-sm text-gray-600">
+                    <div className="relative h-5" title="Sentença BPM.CONTR.002 do TOTVS RM Saldus">
+                      <div className="absolute inset-x-0 truncate">BPM.CONTR.002 · TOTVS RM Saldus</div>
+                    </div>
+                    {importarLancamentosRm.isError ? (
+                      <span className="mt-0.5 block text-xs text-red-700">
+                        {(importarLancamentosRm.error as { response?: { data?: { error?: string } } } | null)?.response?.data?.error ?? "Falha ao importar do RM."}
+                      </span>
+                    ) : null}
+                    {importarLancamentosRm.isSuccess && importarLancamentosRm.data.lidas === 0 ? (
+                      <span className="mt-0.5 block text-xs text-gray-500">O RM não devolveu lançamentos neste mês; nada foi alterado.</span>
+                    ) : null}
+                  </td>
+                  <td className="px-4 text-sm whitespace-nowrap text-gray-600">
+                    {lancamentosRm.data?.sincronizadoEm ? dataHora(lancamentosRm.data.sincronizadoEm) : ""}
+                  </td>
+                  <td className="px-4 text-sm whitespace-nowrap text-gray-600" />
+                  <td className="px-4 text-right text-sm">{lancamentosRm.data?.linhas ? inteiro(lancamentosRm.data.linhas) : ""}</td>
+                  <td className="px-4 text-right text-sm" />
+                  <td className="px-4">
+                    {lancamentosRm.data && lancamentosRm.data.linhas > 0 ? (
+                      <Selo classe="border-green-200 bg-green-50 text-green-700">Importado</Selo>
+                    ) : (
+                      <Selo classe="border-gray-200 bg-white text-gray-500">Não Importado</Selo>
+                    )}
+                  </td>
+                  <td className="px-4 text-right">
+                    {podeImportar && !fechada ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-sm"
+                        disabled={importarLancamentosRm.isPending || lancamentosRm.isPending}
+                        onClick={() => importarLancamentosRm.mutate()}
+                      >
+                        {importarLancamentosRm.isPending ? "Importando…" : lancamentosRm.data && lancamentosRm.data.linhas > 0 ? "Reimportar" : "Importar"}
+                      </Button>
+                    ) : null}
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}

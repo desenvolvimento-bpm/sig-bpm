@@ -37,6 +37,7 @@ import { relatoriosExecutivosRoutes } from "./routes/analisesGerenciais/relatori
 import { paineisDeBordoRoutes } from "./routes/analisesGerenciais/paineisDeBordoRoutes.js";
 import { apiExternaRoutes, conectividadeRoutes } from "./routes/conectividade/conectividadeRoutes.js";
 import { cenariosRoutes } from "./routes/cenarios/cenariosRoutes.js";
+import { movimentoRoutes } from "./routes/movimento/movimentoRoutes.js";
 import {
   importacoesDaCompetenciaRoutes,
   importacoesRoutes,
@@ -115,6 +116,7 @@ app.use("/paineis-de-bordo", paineisDeBordoRoutes);
 app.use("/v1", apiExternaRoutes);
 app.use("/conectividade", conectividadeRoutes);
 app.use("/cenarios", cenariosRoutes);
+app.use("/movimento", movimentoRoutes);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "Rota não encontrada" });

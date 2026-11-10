@@ -17,6 +17,7 @@ datasource db {
   // PostgreSQL (23/10/2026). As migrações do SQLite ficam em prisma/migrations-sqlite (histórico); a inicial do
   // PostgreSQL é a prisma/migrations/0_init. Os campos Json são @db.Json (o json do PostgreSQL, que guarda o texto como
   // veio), não jsonb: o jsonb reordena as chaves dos objetos, e a Auditoria e outras telas mostram a ordem gravada.
+  // PostgreSQL (branch feature/api-lancamentos-contabeis). A URL vem do DATABASE_URL (prisma.config.ts).
   provider = "postgresql"
 }
 
@@ -2832,4 +2833,131 @@ model ArquivoGeral {
 
   @@index([categoria, enviadoEm])
   @@map("arquivos_gerais")
+}
+// -----------------------------------------------------------------------------
+// Fornecedores (FCFO) do TOTVS RM — espelho somente leitura, atualizado pela
+// sincronização (services/totvs/fornecedoresSync.ts). Não tem relação com as
+// demais tabelas: o SIG só guarda o cadastro para consulta.
+// -----------------------------------------------------------------------------
+
+/// Espelho do FCFO do TOTVS RM (sentença de consulta: fornecedores). Chave: coligada + código.
+model SigFornecedor {
+  codcoligada   Int      @map("codcoligada")
+  codcfo        String   @map("codcfo")
+  nomeFantasia  String?  @map("nome_fantasia")
+  /// PAGREC do RM: tipo do cadastro (pagamento/recebimento).
+  pagrec        Int?     @map("pagrec")
+  /// ATIVO do RM: 1 ativo, 0 inativo.
+  ativo         Int      @map("ativo")
+  idcfo         Int?     @map("idcfo")
+  cgccfo        String?  @map("cgccfo")
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  @@id([codcoligada, codcfo])
+  @@index([nomeFantasia])
+  @@map("sig_fornecedor")
+}
+
+/// Espelho do centro de custo (GCCUSTO) do TOTVS RM, com o responsável (PPESSOA). Chave: coligada + código.
+/// Contém nome e e-mail de pessoa física (o responsável): acesso restrito, LGPD.
+model SigCentroCusto {
+  codcoligada      Int       @map("codcoligada")
+  codccusto        String    @map("codccusto")
+  nome             String?   @map("nome")
+  ativo            Int       @map("ativo")
+  reccreatedon     DateTime? @map("reccreatedon")
+  recmodifiedon    DateTime? @map("recmodifiedon")
+  responsavel      String?   @map("responsavel")
+  nomeResponsavel  String?   @map("nome_responsavel")
+  emailResponsavel String?   @map("email_responsavel")
+  sincronizadoEm   DateTime  @map("sincronizado_em")
+
+  @@id([codcoligada, codccusto])
+  @@index([nome])
+  @@map("sig_centro_custo")
+}
+
+/// Espelho do plano de contas (CCONTA) do TOTVS RM (sentença de consulta: contas contábeis). Chave: coligada + código.
+model SigContaContabil {
+  codcoligada    Int      @map("codcoligada")
+  codconta       String   @map("codconta")
+  reduzido       String?  @map("reduzido")
+  descricao      String?  @map("descricao")
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  @@id([codcoligada, codconta])
+  @@index([descricao])
+  @@map("sig_conta_contabil")
+}
+
+/// Espelho dos produtos do TOTVS RM (sentença BPM.TI.RetPRD: TPRODUTO + TPRODUTODEF + TPRDCOMPL + GIMAGEM, só os últimos
+/// níveis). Chave: coligada + IDPRD. Atualizado pela sincronização (services/totvs/produtosSync.ts).
+model SigProduto {
+  codcoligada              Int       @map("codcoligada")
+  idprd                    Int       @map("idprd")
+  codcolprd                Int?      @map("codcolprd")
+  nomeFantasia             String?   @map("nome_fantasia")
+  codigoprd                String    @map("codigoprd")
+  inativo                  Int       @map("inativo")
+  codigoreduzido           String?   @map("codigoreduzido")
+  ultimonivel              Int       @map("ultimonivel")
+  tipo                     String?   @map("tipo") @db.Char(1)
+  codigoauxiliar           String?   @map("codigoauxiliar")
+  idclassifbensservico     String?   @map("idclassifbensservico")
+  codundcontrole           String?   @map("codundcontrole")
+  codundcompra             String?   @map("codundcompra")
+  codundvenda              String?   @map("codundvenda")
+  codtb1fat                String?   @map("codtb1fat")
+  codtborcamento           String?   @map("codtborcamento")
+  codcoltborcamento        String?   @map("codcoltborcamento")
+  codtborcamentoreceita    String?   @map("codtborcamentoreceita")
+  codcoltborcamentoreceita String?   @map("codcoltborcamentoreceita")
+  integraManutencao        Int?      @map("integra_manutencao")
+  codtrf                   String?   @map("codtrf")
+  volume                   String?   @map("volume")
+  imagem                   String?   @map("imagem")
+  usuarioCriacaoTotvs      String?   @map("usuario_criacao_totvs")
+  dtcadastramento          DateTime? @map("dtcadastramento")
+  sincronizadoEm           DateTime  @map("sincronizado_em")
+
+  @@id([codcoligada, idprd])
+  @@index([codcoligada, codigoprd])
+  @@index([codcoligada, codigoreduzido])
+  @@index([codcoligada, nomeFantasia])
+  @@map("sig_produto")
+}
+
+/// Espelho dos tipos de movimento do TOTVS RM (sentença BPM.TI.TMOV: TTMV). Chave: coligada + código do tipo.
+model SigTipoMovimento {
+  codcoligada    Int      @map("codcoligada")
+  codtmv         String   @map("codtmv")
+  nome           String?  @map("nome")
+  classificacao  String?  @map("classificacao")
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  @@id([codcoligada, codtmv])
+  @@map("sig_tipo_movimento")
+}
+
+/// Lançamentos contábeis do TOTVS RM Saldus (sentença BPM.CONTR.002, módulo C), importados por mês. Sem chave natural:
+/// a importação do mês substitui as linhas daquela competência (não é upsert).
+model SigLancamentoContabilRm {
+  id              Int      @id @default(autoincrement())
+  /// Competência no formato aaaa-mm.
+  competencia     String   @db.Char(7)
+  idmov           Int?     @map("idmov")
+  idprd           Int?     @map("idprd")
+  filial          Int?     @map("filial")
+  codCusto        String?  @map("cod_custo")
+  subCodConta4    String?  @map("sub_cod_conta_4")
+  reduzidoConta   String?  @map("reduzido_conta")
+  codCliFornecedor String? @map("cod_cli_forn")
+  emissao         DateTime? @map("emissao") @db.Date
+  historico       String?  @map("historico")
+  /// VALOR da BPM.CONTR.002: a movimentação do lançamento (positiva ou negativa), com 2 casas.
+  valor           Decimal? @map("valor") @db.Decimal(18, 2)
+  sincronizadoEm  DateTime @map("sincronizado_em")
+
+  @@index([competencia])
+  @@map("sig_lancamentos_contabeis_rm")
 }
