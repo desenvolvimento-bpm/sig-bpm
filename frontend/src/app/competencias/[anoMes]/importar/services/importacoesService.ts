@@ -151,6 +151,8 @@ export type ImportacaoDetalhe = Importacao & {
 export type ImportacoesDaCompetencia = {
   competencia: { id: string; ano: number; mes: number; status: StatusCompetencia };
   itens: Importacao[];
+  /** A primeira competência do SIG: só nela aparece o Saldo Inicial do Estoque (06/11/2026). */
+  primeira: boolean;
 };
 
 export const importacoesService = {

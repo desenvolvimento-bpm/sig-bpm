@@ -366,7 +366,9 @@ export const importacoesService = {
       orderBy: { importadoEm: "desc" },
       select: CAMPOS_RESUMO,
     });
-    return { competencia, itens };
+    // A primeira competência do SIG (06/11/2026): só nela a tela mostra o Saldo Inicial do Estoque.
+    const primeira = await getPrismaClient().competencia.findFirst({ orderBy: [{ ano: "asc" }, { mes: "asc" }], select: { id: true } });
+    return { competencia, itens, primeira: primeira?.id === competencia.id };
   },
 
   async detalhar(id: string) {

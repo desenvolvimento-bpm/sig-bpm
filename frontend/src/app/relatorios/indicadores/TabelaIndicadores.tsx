@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 
 import { BarraDeRolagem } from "@/components/shared/BarraDeRolagem";
 import { Button } from "@/components/ui/button";
@@ -246,6 +246,8 @@ type Props<T extends Indicador> = {
    * cenário (o último mês e o acumulado), lado a lado e nas cores dele.
    */
   comparados?: ComparadoNosIndicadores[];
+  /** A lupa de um mês (06/11/2026: os apurados no Quadro de Lotação): o clique dela, ou nulo sem lupa. */
+  lupa?: (i: T, k: number) => (() => void) | null;
 };
 
 /**
@@ -266,6 +268,7 @@ export function TabelaIndicadores<T extends Indicador>({
   dicaDoDestaque,
   comReferencia,
   comparados,
+  lupa,
 }: Props<T>) {
   const colunas = useMemo(() => {
     const indices = soUltimoMes ? [meses.length - 1] : meses.map((_, k) => k);
@@ -409,12 +412,26 @@ export function TabelaIndicadores<T extends Indicador>({
                         const emDestaque = mes >= 0 && !!destacar?.(i, meses.findIndex((m) => m.mes === mes + 1));
                         // O valor digitado (lançamentos manuais do cenário) num amarelo mais forte que o das linhas e o dos totais.
                         const fundo = emDestaque ? "bg-yellow-200" : fundoDoIndicador(i, estiloDa(c.chave));
+                        const daLupa = mes >= 0 ? lupa?.(i, meses.findIndex((m) => m.mes === mes + 1)) : null;
                         return (
                           <td
                             key={c.chave}
                             className={`px-4 py-1.5 text-right whitespace-nowrap ${tom} ${c.chave === "acumulado" ? "border-l border-gray-300" : ""} ${fundo} ${aoPassar}`}
                             title={emDestaque ? dicaDoDestaque : undefined}
                           >
+                            {daLupa ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  daLupa();
+                                }}
+                                title="Ver as movimentações do Quadro de Lotação que deram este valor"
+                                className="mr-1 inline-flex align-middle text-gray-400 hover:text-gray-900"
+                              >
+                                <Search className="size-3.5" />
+                              </button>
+                            ) : null}
                             {c.texto?.(i)}
                           </td>
                         );

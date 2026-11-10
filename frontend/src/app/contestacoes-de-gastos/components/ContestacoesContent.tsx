@@ -21,6 +21,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
 import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
+import { ItensDoMovimentoDialog } from "@/app/competencias/[anoMes]/dre/components/ItensDoMovimentoDialog";
 import { moeda } from "@/app/competencias/[anoMes]/utils/formatacao";
 
 import { contestacoesService, mensagemDeErro, quemResponde, ROTULO_SITUACAO, type Contestacao, type SituacaoContestacao } from "../services/contestacoesService";
@@ -177,7 +178,9 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
               nas competências anteriores e nas seguintes já importadas (sem os que já têm uma contestação em andamento); marcadas, o modal mostra o
               total que muda de centro e/ou de conta, competência por competência. A contestação é uma só: a coluna Competência mostra da primeira à
               última, o Valor é o total, e “Ver Movimentos”{enxuta ? ", no menu da coluna Ações," : ", na coluna Movimento,"} lista cada um (a emissão, o
-              histórico e o valor), com a correção dele.
+              histórico e o valor), com a correção dele. Com o ID do movimento no RM (a coluna ID do Balancete (Lista)), o botão Itens abre os itens da
+              requisição ou da nota fiscal dele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas)
+              {enxuta ? "" : "; nesta tela, o Ver Movimentos também aparece na contestação de um movimento só, quando ele tem itens"}.
             </li>
             <li>
               A contestação vai para quem responde pelo centro de custo (o novo; sem centro novo, o do movimento): os usuários com Editar em Contestações
@@ -272,7 +275,8 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
                   {c.contaBalancete ? ` · Conta do balancete ${c.contaBalancete}` : ""}
                   {!c.comItem ? " · fora do balancete reimportado" : ""}
                 </div>
-                {c.movimentos.length > 1 ? (
+                {/* Com um movimento só, o Ver Movimentos também aparece quando ele tem itens (10/11/2026: o botão Itens). */}
+                {c.movimentos.length > 1 || c.movimentos.some((m) => m.itens > 0) ? (
                   <div className="mt-1">
                     <button
                       type="button"
@@ -283,7 +287,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
                       <ListTree className="size-3.5" />
                       Ver Movimentos ({c.movimentos.length})
                     </button>
-                    <div className="text-gray-500">com as {anterioresEPosteriores(c)}</div>
+                    {c.movimentos.length > 1 ? <div className="text-gray-500">com as {anterioresEPosteriores(c)}</div> : null}
                   </div>
                 ) : null}
               </td>
@@ -346,7 +350,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
         />
       </QuadroTabela>
 
-      {vendo ? <MovimentosDialog c={vendo} onFechar={() => setVendo(null)} /> : null}
+      {vendo ? <MovimentosDialog c={vendo} aba={aba} onFechar={() => setVendo(null)} /> : null}
       {lendo ? <TextoDaContestacaoDialog c={lendo.c} o={lendo.o} onFechar={() => setLendo(null)} /> : null}
       {acatando ? <AcatarDialog c={acatando} pendente={responder.isPending} onFechar={() => setAcatando(null)} onAcatar={() => responder.mutate({ id: acatando.id, acatar: true, justificativa: null })} /> : null}
       {recusando ? <RecusarDialog c={recusando} pendente={responder.isPending} onFechar={() => setRecusando(null)} onRecusar={(j) => responder.mutate({ id: recusando.id, acatar: false, justificativa: j })} /> : null}
@@ -538,8 +542,13 @@ function TextoDaContestacaoDialog({ c, o, onFechar }: { c: Contestacao; o: "moti
 
 const ROTULO_CORRECAO = { NO_BALANCETE: "No balancete", LANCAMENTO_MANUAL: "Pelos lançamentos" } as const;
 
-/** Ver Movimentos: os movimentos da contestação (o contestado e os das anteriores e posteriores), com a correção de cada um. */
-function MovimentosDialog({ c, onFechar }: { c: Contestacao; onFechar: () => void }) {
+/**
+ * Ver Movimentos: os movimentos da contestação (o contestado e os das anteriores e posteriores), com a correção de cada um e,
+ * com o ID do movimento no RM (10/11/2026), o botão Itens: os itens da requisição ou da nota fiscal dele.
+ */
+function MovimentosDialog({ c, aba, onFechar }: { c: Contestacao; aba: AbaDasContestacoes; onFechar: () => void }) {
+  const [vendoItens, setVendoItens] = useState<Contestacao["movimentos"][number] | null>(null);
+  const comId = c.movimentos.some((m) => m.idMovimento);
   const correcao = (m: Contestacao["movimentos"][number]) =>
     m.formaValidacao
       ? m.formaValidacao === "LANCAMENTO_MANUAL" && c.lancadaEm
@@ -569,8 +578,10 @@ function MovimentosDialog({ c, onFechar }: { c: Contestacao; onFechar: () => voi
                 <th className="px-3 py-1.5 font-medium">Emissão</th>
                 <th className="px-3 py-1.5 font-medium">Histórico</th>
                 <th className="px-3 py-1.5 font-medium">Filial</th>
+                {comId ? <th className="px-3 py-1.5 font-medium">ID</th> : null}
                 <th className="px-3 py-1.5 text-right font-medium">Valor</th>
                 <th className="px-3 py-1.5 font-medium">Correção</th>
+                {comId ? <th className="px-3 py-1.5 font-medium">Ações</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -586,8 +597,30 @@ function MovimentosDialog({ c, onFechar }: { c: Contestacao; onFechar: () => voi
                     {!m.comItem ? <div className="text-gray-500">fora do balancete reimportado</div> : null}
                   </td>
                   <td className="px-3 py-1.5">{m.filial}</td>
+                  {comId ? (
+                    <td className="px-3 py-1.5 whitespace-nowrap" title={m.idMovimento && !m.itens ? "Nenhum item com este ID nas requisições e nas notas fiscais importadas" : undefined}>
+                      {m.idMovimento ?? <span className="text-gray-400">—</span>}
+                    </td>
+                  ) : null}
                   <td className="px-3 py-1.5 text-right whitespace-nowrap">{moeda(m.valor)}</td>
                   <td className="px-3 py-1.5 whitespace-nowrap">{correcao(m)}</td>
+                  {comId ? (
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      {m.idMovimento && m.itens > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 rounded-sm px-2 text-[11px]"
+                          onClick={() => setVendoItens(m)}
+                          title={`Os itens da requisição ou da nota fiscal do movimento (${m.itens} ${plural(m.itens, "item", "itens")})`}
+                        >
+                          <ListTree className="size-3.5" />
+                          Itens
+                        </Button>
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -597,6 +630,14 @@ function MovimentosDialog({ c, onFechar }: { c: Contestacao; onFechar: () => voi
           {c.movimentos.length} {plural(c.movimentos.length, "movimento", "movimentos")} em {c.competencias.length}{" "}
           {plural(c.competencias.length, "competência", "competências")} · Total <span className="font-bold text-gray-900">{moeda(c.valor)}</span>
         </p>
+        {vendoItens?.idMovimento ? (
+          <ItensDoMovimentoDialog
+            movimento={{ idMovimento: vendoItens.idMovimento, emissao: vendoItens.emissao, cliForn: vendoItens.cliForn, historico: vendoItens.historico, valor: vendoItens.valor, conta: c.contaBalanceteReduzido, centro: c.codigoCentroCusto }}
+            queryKey={["contestacoes", aba, c.id, "itens", vendoItens.id]}
+            carregar={() => contestacoesService.itensDoMovimento(aba, c.id, vendoItens.id)}
+            onFechar={() => setVendoItens(null)}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

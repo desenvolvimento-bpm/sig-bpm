@@ -22,7 +22,8 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * Quadro de Lotação (Colaboradores CLT e PJ e o Total de Colaboradores, de onde saem os quadros de lotação dos
  * indicadores), os Encargos e Benefícios (os percentuais e os Benefícios Adicionais) e as contas (mão de obra e gastos
  * gerais, por atribuição; a Encargos e Benefícios, calculada). O grupo com centros de baldes diferentes traz o aviso: o
- * valor vai pelo balde mais comum.
+ * valor vai pelo balde mais comum. O grupo com linhas na aba Quadro de Lotação (09/11/2026) tem os colaboradores, as
+ * Remunerações CLT e PJ e os Salários dos Aprendizes calculados por elas, com o aviso.
  */
 export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const [busca, setBusca] = useState("");
@@ -77,6 +78,12 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
                 {contas.data.grupo.balde ?? "—"}. Revise o agrupamento no cadastro Centros de Custo para que o grupo tenha um balde só.
               </p>
             ) : null}
+            {contas.data.lotacao.linhasDoQuadro ? (
+              <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
+                Este grupo tem {contas.data.lotacao.linhasDoQuadro} {plural(contas.data.lotacao.linhasDoQuadro, "linha", "linhas")} na aba Quadro de Lotação: os
+                Colaboradores CLT e PJ, as Remunerações CLT e PJ e os Salários dos Aprendizes vêm de lá e não se digitam aqui.
+              </p>
+            ) : null}
             <TabelaEditavel
               key={grupo ?? ""}
               titulo={contas.data.grupo.grupo}
@@ -103,6 +110,8 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
  */
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const { clt, pj } = dados.lotacao;
+  // Com linhas na aba Quadro de Lotação (09/11/2026), os colaboradores são calculados.
+  const doQuadro = dados.lotacao.linhasDoQuadro > 0;
   const premissa = (chave: string, secao: string, rotulo: string, und: string, casas: number, x: SerieDoCentro): LinhaDaPremissa => ({
     chave,
     secao,
@@ -116,8 +125,8 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     gravados: x.gravados,
   });
   const lotacao: LinhaDaPremissa[] = [
-    premissa("LOTACAO|CLT", "QUADRO DE LOTAÇÃO", "Colaboradores CLT", "colab.", 0, clt),
-    premissa("LOTACAO|PJ", "QUADRO DE LOTAÇÃO", "Colaboradores PJ", "colab.", 0, pj),
+    { ...premissa("LOTACAO|CLT", "QUADRO DE LOTAÇÃO", "Colaboradores CLT", "colab.", 0, clt), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
+    { ...premissa("LOTACAO|PJ", "QUADRO DE LOTAÇÃO", "Colaboradores PJ", "colab.", 0, pj), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
     {
       chave: "LOTACAO|TOTAL",
       secao: "QUADRO DE LOTAÇÃO",
@@ -131,6 +140,22 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
       valores: clt.valores.map((v, k) => v + (pj.valores[k] ?? 0)),
       gravados: clt.valores.map(() => false),
     },
+    // Os Salários dos Aprendizes de cada mão de obra (a base do FGTS Aprendiz), da aba Quadro de Lotação.
+    ...dados.aprendizes.map(
+      (a): LinhaDaPremissa => ({
+        chave: `LOTACAO|APRENDIZ|${a.prefixo}`,
+        secao: "QUADRO DE LOTAÇÃO",
+        grupo: null,
+        rotulo: a.rotulo,
+        und: "R$",
+        tipo: "CALCULO",
+        negrito: false,
+        casas: 2,
+        referencia: null,
+        valores: a.valores,
+        gravados: a.valores.map(() => false),
+      }),
+    ),
   ];
   const encargos = dados.encargos.map((e) => premissa(`ENCARGOS|${e.item}`, "ENCARGOS E BENEFÍCIOS", e.rotulo, e.und, 2, e));
   const contas = dados.contas;
@@ -140,7 +165,8 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     grupo: null,
     rotulo: c.descricao,
     und: "R$",
-    // A Encargos e Benefícios é calculada (19/10/2026; 20/10/2026: com a incidência sobre as provisões; encargosCenario.ts).
+    // A Encargos e Benefícios é calculada (19/10/2026; 20/10/2026: com a incidência sobre as provisões; encargosCenario.ts), e as
+    // Remunerações dos grupos com linhas na aba Quadro de Lotação (09/11/2026).
     tipo: c.calculada ? "CALCULO" : "PREMISSA",
     negrito: false,
     casas: 2,

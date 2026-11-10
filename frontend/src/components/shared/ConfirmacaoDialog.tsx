@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 /**
  * O modal de confirmação padrão do SIG (30/10/2026, pedido do Adão: no lugar da confirmação do navegador): o título, a
- * explicação, o detalhe (opcional, como os itens que saem), Cancelar e o botão da ação, vermelho (Excluir, Inativar).
+ * explicação, o detalhe (opcional, como os itens que saem), Cancelar e o botão da ação, vermelho (Excluir, Inativar). Com
+ * `destrutiva={false}` (06/11/2026: Reabrir, Aprovar), o botão amarelo de sempre.
  */
 export function ConfirmacaoDialog({
   titulo,
@@ -16,6 +17,7 @@ export function ConfirmacaoDialog({
   acao = "Excluir",
   acaoPendente = "Excluindo…",
   pendente = false,
+  destrutiva = true,
   onConfirmar,
   onFechar,
 }: {
@@ -25,6 +27,7 @@ export function ConfirmacaoDialog({
   acao?: string;
   acaoPendente?: string;
   pendente?: boolean;
+  destrutiva?: boolean;
   onConfirmar: () => void;
   onFechar: () => void;
 }) {
@@ -40,7 +43,12 @@ export function ConfirmacaoDialog({
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" className="rounded-sm bg-red-700 font-bold text-white hover:bg-red-800" disabled={pendente} onClick={onConfirmar}>
+          <Button
+            type="button"
+            className={destrutiva ? "rounded-sm bg-red-700 font-bold text-white hover:bg-red-800" : "bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font-bold text-black shadow-sm"}
+            disabled={pendente}
+            onClick={onConfirmar}
+          >
             {pendente ? acaoPendente : acao}
           </Button>
         </DialogFooter>

@@ -4,7 +4,9 @@ import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 import { estrutura } from "../dre/dreService.js";
 import { diasUteis } from "./calendario.js";
 import { alocarCentros, contasDoGrupo, gruposDoCadastro } from "./centrosCenario.js";
-import { ehContaDeEncargos, encargosDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
+import { ehContaDeEncargos, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
+import { VENDA_LOTACAO_CLT, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
+import { linhasDoQuadro, quadroDosGrupos, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
@@ -353,6 +355,7 @@ async function materializarEncargos(
   grupos: Awaited<ReturnType<typeof gruposDoCadastro>>,
   gravadas: Array<{ unidade: number; venda: string; chave: string; mes: number; valor: unknown }>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
+  quadro: Map<string, QuadroDoGrupo>,
 ) {
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
   const valor = new Map(meses.map((x) => [`${x.grupo}|${x.codigo}|${x.mes}`, x.valor]));
@@ -362,7 +365,15 @@ async function materializarEncargos(
   for (const g of grupos) {
     doCadastro.add(g.grupo);
     const codigos = contasDoGrupo(est, g).map((l) => l.codigo);
-    const r = encargosDoGrupo(codigos, g.atribuicao, (codigo, mes) => valor.get(`${g.grupo}|${codigo}|${mes}`) ?? 0, (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`));
+    // Os salários dos aprendizes (09/11/2026): os do Quadro de Lotação do cenário, por mão de obra.
+    const q = quadro.get(g.grupo);
+    const r = encargosDoGrupo(
+      codigos,
+      g.atribuicao,
+      (codigo, mes) => valor.get(`${g.grupo}|${codigo}|${mes}`) ?? 0,
+      (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`),
+      (prefixo, mes) => q?.maos.get(prefixo)?.aprendizes[mes - 1] ?? 0,
+    );
     for (const [codigo, lista] of r) lista.forEach((v, k) => (Math.abs(v) >= 0.00005 ? calculados.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
   }
   const contasDeEncargos = est.filter((l) => l.tipo === "ITEM" && ehContaDeEncargos(l.codigo)).map((l) => l.id);
@@ -372,6 +383,50 @@ async function materializarEncargos(
       data: calculados.slice(i, i + 500).map((x) => ({ cenarioId, grupo: x.grupo, linhaDREId: idDaConta.get(x.codigo)!, mes: x.mes, valor: new Prisma.Decimal(x.valor.toFixed(4)) })),
     });
   return [...meses.filter((x) => !(doCadastro.has(x.grupo) && ehContaDeEncargos(x.codigo))), ...calculados];
+}
+
+/**
+ * O Quadro de Lotação do cenário nos grupos com linhas (09/11/2026, quadroDoCenario.ts): grava os Colaboradores CLT e PJ
+ * (as premissas LOTACAO_CLT e LOTACAO_PJ) e as Remunerações CLT e PJ de cada mão de obra (os centros) dos meses 1 a 12,
+ * no lugar do que havia (a Média de Referência, o mês 0, fica). Devolve os valores dos meses dos centros com elas.
+ */
+async function materializarQuadro(
+  tx: Tx,
+  cenarioId: string,
+  est: LinhaEstrutura[],
+  grupos: Awaited<ReturnType<typeof gruposDoCadastro>>,
+  quadro: Map<string, QuadroDoGrupo>,
+  meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
+) {
+  if (!quadro.size) return meses;
+  const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
+  const comQuadro = [...quadro.keys()];
+  const premissas: Array<{ cenarioId: string; unidade: number; venda: string; chave: string; mes: number; valor: Prisma.Decimal }> = [];
+  const centros: Array<{ grupo: string; codigo: string; mes: number; valor: number }> = [];
+  const remuneracoes = new Set<string>();
+  for (const g of grupos) {
+    const q = quadro.get(g.grupo);
+    if (!q) continue;
+    for (const [venda, lista] of [[VENDA_LOTACAO_CLT, q.clt], [VENDA_LOTACAO_PJ, q.pj]] as const)
+      lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
+    for (const mo of maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao)) {
+      const s = q.maos.get(mo.prefixo);
+      for (const [codigo, lista] of [[mo.remuneracoes, s?.clt], [mo.remuneracoesPJ, s?.pj]] as const) {
+        if (!idDaConta.has(codigo)) continue;
+        remuneracoes.add(codigo);
+        lista?.forEach((v, k) => (Math.abs(v) >= 0.00005 ? centros.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
+      }
+    }
+  }
+  await tx.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_LOTACAO }, chave: { in: comQuadro }, mes: { gte: 1, lte: 12 } } });
+  if (premissas.length) await tx.cenarioPremissa.createMany({ data: premissas });
+  const ids = [...remuneracoes].map((c) => idDaConta.get(c)!);
+  await tx.cenarioCentro.deleteMany({ where: { cenarioId, grupo: { in: comQuadro }, mes: { gte: 1, lte: 12 }, linhaDREId: { in: ids } } });
+  for (let i = 0; i < centros.length; i += 500)
+    await tx.cenarioCentro.createMany({
+      data: centros.slice(i, i + 500).map((x) => ({ cenarioId, grupo: x.grupo, linhaDREId: idDaConta.get(x.codigo)!, mes: x.mes, valor: new Prisma.Decimal(x.valor.toFixed(4)) })),
+    });
+  return [...meses.filter((x) => !(quadro.has(x.grupo) && remuneracoes.has(x.codigo))), ...centros];
 }
 
 /**
@@ -396,7 +451,10 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   const { somas, bases, juntar } = calcularPremissas(est, linhas, cenario.ano, gravadas);
   // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
   const meses = valoresCentros.filter((x) => x.mes >= 1 && x.mes <= 12).map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
-  const valoresDosCentros = await materializarEncargos(tx, cenarioId, est, grupos, gravadas, meses);
+  // O Quadro de Lotação do cenário (09/11/2026): os colaboradores e as remunerações dos grupos com linhas, antes dos encargos.
+  const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos, (g) => contasDoGrupo(est, g).map((l) => l.codigo));
+  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses);
+  const valoresDosCentros = await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro);
   const alocados = alocarCentros(
     est,
     grupos,

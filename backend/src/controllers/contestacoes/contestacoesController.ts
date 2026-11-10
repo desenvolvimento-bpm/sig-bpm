@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { getPrismaClient } from "../../config/prisma.js";
+import { temPermissao } from "../../middlewares/verificarPermissao.js";
 import { anoMesSchema } from "../../schemas/importacoes/importacaoSchemas.js";
 import { departamentoDaLinha, gestaoDoCentro } from "../../services/acesso/recorteDepartamento.js";
 import { centroForaDaContestacao, contestacoesService, RegraContestacaoError, type UsuarioDaContestacao } from "../../services/contestacoes/contestacoesService.js";
@@ -55,7 +56,20 @@ function competencia(request: Request, response: Response) {
   return c.data;
 }
 
+/** A permissão de Ler de cada aba das contestações. */
+const LER_DA_ABA = { solicitadas: "contestacoes.solicitadas:ler", recebidas: "contestacoes.recebidas:ler", validacoes: "contestacoes_validacoes:ler" } as const;
+
 export const contestacoesController = {
+  /** Os itens de um movimento da contestação (10/11/2026): ?aba= (a aba em que o usuário a vê). */
+  async itensDoMovimento(request: Request, response: Response) {
+    const aba = abaSchema.safeParse(request.query.aba);
+    const id = idSchema.safeParse(request.params.id);
+    const movimentoId = idSchema.safeParse(request.params.movimentoId);
+    if (!aba.success || !id.success || !movimentoId.success) return response.status(400).json({ error: "Dados inválidos." });
+    if (!temPermissao(request, LER_DA_ABA[aba.data])) return response.status(403).json({ error: "Sem acesso a esta aba das contestações." });
+    return responder(response, () => contestacoesService.itensDoMovimento(id.data, movimentoId.data, aba.data, usuario(request)));
+  },
+
   async criar(request: Request, response: Response) {
     const b = criarSchema.safeParse(request.body);
     if (!b.success) return invalido(response, b.error);

@@ -6,11 +6,14 @@ import { chaveDaLinha } from "../../../lib/linhas.js";
 import { LINHAS_TOTAIS } from "../../volumes/totaisOperacao.js";
 import { NOME_DA_CHAVE } from "../../volumes/rateiosService.js";
 import { conflitoDeVigencia } from "../../volumes/vigenciasRateio.js";
-import { formulasPorExtenso, INDICADORES_DAS_LISTAS, TOTALIZADORES_DAS_LISTAS } from "../../relatorios/catalogoIndicadores.js";
+import { formulasPorExtenso, INDICADORES_DAS_LISTAS, ROTULO_DO_REGISTRADO, rotuloDoMovimento, rotuloDoQuadro, TOTALIZADORES_DAS_LISTAS } from "../../relatorios/catalogoIndicadores.js";
+import { DEPARTAMENTOS_DO_QUADRO } from "../../relatorios/formulaIndicador.js";
 import { compilarFormula, FormulaInvalidaError, formulaPorExtenso } from "../../relatorios/formulaIndicador.js";
 import { CALCULOS_SISTEMA } from "../../relatorios/indicadores.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
+import { DEFINICOES_COLABORADORES } from "./definicoesColaboradores.js";
+import { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
 /**
  * Cadastros editáveis pela tela (Passo 25, RF002 e RF003). Cada cadastro
@@ -23,18 +26,8 @@ const Decimal = Prisma.Decimal;
 type Db = ReturnType<typeof getPrismaClient>;
 export type Valores = Record<string, unknown>;
 
-/** Uma correção que o formulário aplica com um clique (24/10/2026: as combinações de linha e rateio de uma conta). */
-export type Sugestao = { rotulo: string; detalhe?: string; valores: Valores };
-
-export class RegraCadastroError extends Error {
-  constructor(
-    readonly status: 400 | 404 | 409,
-    message: string,
-    readonly sugestoes?: Sugestao[],
-  ) {
-    super(message);
-  }
-}
+// O erro de regra e a sugestão ficam em erroCadastro.ts (06/11/2026); daqui, os de sempre os importam.
+export { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
 /**
  * Uma opção de lista; `grupos`: os valores do campo `filtradoPor` em que ela aparece. `chave`: liga as opções
@@ -62,6 +55,8 @@ export type Campo = {
   filtradoPor?: string;
   /** Ocupa as duas colunas do formulário de edição. */
   larguraInteira?: boolean;
+  /** Um texto longo, em várias linhas (06/11/2026: as Competências e as Atividades das funções). */
+  multilinha?: boolean;
   /** Uma coluna estreita na tabela (a ordem e o código, 12/10/2026): o nome fica com o resto. */
   estreita?: boolean;
   /** Um valor em reais: a tabela mostra "R$" e duas casas, e o formulário, duas casas (12/10/2026). */
@@ -308,7 +303,19 @@ const centros: DefinicaoCadastro = {
   async impedimentoExclusao(db, id) {
     if ((await db.regraRateio.findUnique({ where: { id }, select: { percentualFixo: true } }))?.percentualFixo != null) return "Esta regra é de percentual fixo: exclua-a em “Percentuais Fixos”, com os outros destinos da chave.";
     const m = await this.movimentos!(db, id);
-    return m ? `${m} Inative-o em vez de excluir.` : null;
+    if (m) return `${m} Inative-o em vez de excluir.`;
+    // A Gestão de Colaboradores (09/11/2026): o Lançamento Inicial, as movimentações e as linhas do Quadro de Lotação dos cenários.
+    const [c, q, l] = await Promise.all([
+      db.colaboradorCargaInicial.count({ where: { centroCustoId: id } }),
+      db.colaboradorMovimentacao.count({ where: { centroCustoId: id } }),
+      db.cenarioLotacao.count({ where: { centroCustoId: id } }),
+    ]);
+    const usos = [
+      c ? `${c} ${plural(c, "colaborador", "colaboradores")} do Lançamento Inicial` : "",
+      q ? `${q} ${plural(q, "movimentação", "movimentações")} do Quadro de Lotação` : "",
+      l ? `${l} ${plural(l, "linha", "linhas")} do Quadro de Lotação dos cenários analíticos` : "",
+    ].filter(Boolean);
+    return usos.length ? `O centro está em ${usos.join(", ")} (Gestão de Colaboradores). Inative-o em vez de excluir.` : null;
   },
   remover: async (db, id) => void (await db.centroCusto.delete({ where: { id } })),
 };
@@ -818,19 +825,36 @@ const MODOS_DO_ACUMULADO: Array<[string, string]> = [
   ["SISTEMA", "Cálculo do sistema"],
 ];
 
+/** Os centros de custo do item Quadro de Lotação (09/11/2026): os ativos com o código RM, pelo código. */
+const centrosDoQuadro = (db: Db) =>
+  db.centroCusto.findMany({ where: { ativo: true, codigoRM: { not: null } }, orderBy: { codigoRM: "asc" }, select: { codigoRM: true, nomeRM: true } });
+
 /** Os itens que a fórmula pode usar (as opções do montador): valor "TIPO|chave", grupo pelo tipo do item. */
 async function itensDaFormula(db: Db): Promise<Opcao[]> {
   const linhas = await db.linhaDRE.findMany({ where: { tipo: { not: "SECAO" }, ativo: true }, orderBy: { ordem: "asc" }, select: { codigo: true, descricao: true, grupoSigla: true, tipo: true } });
   const indicadores = await db.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" }, select: { nome: true, grupo: true, ativo: true } });
   const nomes = indicadores.map((i) => i.nome);
+  const centros = await centrosDoQuadro(db);
+  const tiposDeMovimentacao = await db.colaboradorTipoMovimentacao.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { nome: true } });
   return [
     ...linhas.map((l) => ({ valor: `DRE|${l.codigo}`, rotulo: `${l.grupoSigla} › ${l.descricao}${l.tipo === "ITEM" ? "" : " (total)"}`, grupos: ["DRE"] })),
     ...TOTALIZADORES_DAS_LISTAS.map((t) => ({ valor: `LISTA|${t.codigo}`, rotulo: t.rotulo, grupos: ["LISTA"] })),
+    // O "Comercial e Administrativo" saiu do montador em 06/11/2026: as opções ficam só para mostrar os itens já gravados.
     ...INDICADORES_DAS_LISTAS.map((n) => ({ valor: `IND|${n}`, rotulo: n, grupos: ["IND"] })),
     // A marca ACUMULAVEL (23/10/2026): o montador oferece o Período (No Mês ou Acumulado no Ano) nas metas e nos indicadores.
     ...nomes.map((n) => ({ valor: `META|${n}`, rotulo: n, grupos: ["META", "ACUMULAVEL"] })),
     // Os outros indicadores do cadastro (23/10/2026), com o grupo antes, como no Painel de Bordo; o próprio, o cadastro recusa.
     ...indicadores.filter((i) => i.ativo).map((i) => ({ valor: `INDICADOR|${i.nome}`, rotulo: `${i.grupo} › ${i.nome}`, grupos: ["INDICADOR", "ACUMULAVEL"] })),
+    // O Quadro de Lotação (09/11/2026): por Departamento (com a Atribuição no montador: Geral, Direto ou Indireto) ou por
+    // Centro de Custo. O valor do departamento é "QL|DEP|<código>"; o montador acrescenta a atribuição ao inserir.
+    ...DEPARTAMENTOS_DO_QUADRO.map(([codigo, nome]) => ({ valor: `QL|DEP|${codigo}`, rotulo: nome, grupos: ["QL", "QL_DEP"] })),
+    ...centros.map((c) => ({ valor: `QL|CC|${c.codigoRM}`, rotulo: `${c.codigoRM} · ${c.nomeRM}`, grupos: ["QL", "QL_CC"] })),
+    // Os Movimentos do QL (06/11/2026): as movimentações aprovadas do mês de cada tipo e, desde 09/11/2026, todas as de uma contagem.
+    { valor: "MQL|#POSITIVA", rotulo: rotuloDoMovimento("#POSITIVA"), grupos: ["MQL"] },
+    { valor: "MQL|#NEGATIVA", rotulo: rotuloDoMovimento("#NEGATIVA"), grupos: ["MQL"] },
+    ...tiposDeMovimentacao.map((t) => ({ valor: `MQL|${t.nome}`, rotulo: t.nome, grupos: ["MQL"] })),
+    // O Valor Registrado (09/11/2026): o valor do mês com o nome do próprio indicador (importado, digitado ou apurado).
+    { valor: "REGISTRADO|", rotulo: ROTULO_DO_REGISTRADO, grupos: ["REGISTRADO"] },
   ];
 }
 
@@ -869,6 +893,9 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
   const listas = new Set(TOTALIZADORES_DAS_LISTAS.map((t) => t.codigo));
   const indicadores = new Set(INDICADORES_DAS_LISTAS);
   const metas = new Set(nomesDoCatalogo);
+  // O Quadro de Lotação e os Movimentos do QL: os centros (pelo código RM) e os tipos de movimentação (ou uma contagem).
+  const centros = new Set((await centrosDoQuadro(db)).map((c) => c.codigoRM!));
+  const movimentos = new Set([...(await db.colaboradorTipoMovimentacao.findMany({ select: { nome: true } })).map((t) => t.nome), "#POSITIVA", "#NEGATIVA"]);
   for (const i of compilada.itens.values()) {
     const ok =
       i.tipo === "DRE"
@@ -877,8 +904,15 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
           ? listas.has(i.codigo)
           : i.tipo === "IND"
             ? indicadores.has(i.nome)
-            : (i.tipo === "META" || i.tipo === "INDICADOR") && metas.has(i.nome);
-    if (!ok) throw new RegraCadastroError(400, `${rotulo}: o item ${i.tipo === "DRE" ? i.codigo : i.tipo === "LISTA" ? i.codigo : i.nome} não existe.`);
+            : i.tipo === "QL"
+              ? i.chave.startsWith("DEP|") || centros.has(i.chave.slice(3))
+              : i.tipo === "MQL"
+                ? movimentos.has(i.nome)
+                : i.tipo === "REGISTRADO" || ((i.tipo === "META" || i.tipo === "INDICADOR") && metas.has(i.nome));
+    if (!ok) {
+      const nome = i.tipo === "DRE" || i.tipo === "LISTA" ? i.codigo : i.tipo === "QL" ? rotuloDoQuadro(i.chave) : i.tipo === "REGISTRADO" ? ROTULO_DO_REGISTRADO : i.nome;
+      throw new RegraCadastroError(400, `${rotulo}: o item ${nome} não existe.`);
+    }
   }
 }
 
@@ -888,7 +922,12 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
  */
 function paraATela<T extends { modo: string; peso: string | null }>(i: T, texto: string | null) {
   const porFormula = i.modo === "FORMULA";
-  return { ...i, peso: porFormula ? null : i.peso, formulaAcumulado: porFormula ? i.peso : null, metodologiaTexto: i.modo === "SISTEMA" ? "Cálculo do sistema" : texto };
+  return {
+    ...i,
+    peso: porFormula ? null : i.peso,
+    formulaAcumulado: porFormula ? i.peso : null,
+    metodologiaTexto: i.modo === "SISTEMA" ? "Cálculo do sistema" : (texto ?? ROTULO_DO_REGISTRADO),
+  };
 }
 
 const estruturaIndicadores: DefinicaoCadastro = {
@@ -905,7 +944,15 @@ const estruturaIndicadores: DefinicaoCadastro = {
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS) },
     { nome: "unidade", rotulo: "Unidade de Medida", rotuloColuna: "Und.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(UNIDADES_DE_INDICADOR) },
     { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true, naTabela: false, ajuda: "O texto que a aba Indicadores do Painel de Bordo mostra sob o nome." },
-    { nome: "formula", rotulo: "Metodologia", tipo: "formula", larguraInteira: true, naTabela: false, opcoes: itensDaFormula },
+    {
+      nome: "formula",
+      rotulo: "Metodologia",
+      tipo: "formula",
+      larguraInteira: true,
+      naTabela: false,
+      opcoes: itensDaFormula,
+      ajuda: "O item Valor Registrado é o valor do mês com o nome do indicador: importado (Indicadores do Administrativo e do Comercial), digitado nas Listas ou apurado no Quadro de Lotação.",
+    },
     { nome: "metodologiaTexto", rotulo: "Metodologia", tipo: "texto", derivado: true, noFormulario: false },
     { nome: "modo", rotulo: "Acumulado", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(MODOS_DO_ACUMULADO) },
     { nome: "peso", rotulo: "Peso da Média", tipo: "formula", larguraInteira: true, naTabela: false, visivelSe: { campo: "modo", valores: ["MEDIA_PONDERADA"] }, opcoes: itensDaFormula },
@@ -953,7 +1000,8 @@ const estruturaIndicadores: DefinicaoCadastro = {
       formula = null;
       peso = null;
     } else {
-      if (!formula) throw new RegraCadastroError(400, "Monte a Metodologia (a fórmula do indicador).");
+      // Para o valor registrado no mês com o nome do indicador, o item Valor Registrado (09/11/2026).
+      if (!formula) throw new RegraCadastroError(400, "Monte a Metodologia; para o valor registrado no mês com o nome do indicador, use o item Valor Registrado.");
       await validarFormula(db, formula, "Metodologia", nomes);
       if (modo === "MEDIA_PONDERADA") {
         if (!peso) throw new RegraCadastroError(400, "Na média ponderada, monte o Peso da Média.");
@@ -1341,7 +1389,7 @@ async function validarFormulaDoPainel(db: Db, formula: string, rotulo: string) {
 function porExtensoNoPainel(formula: string | null) {
   if (!formula) return null;
   try {
-    return formulaPorExtenso(formula, (i) => ("nome" in i ? i.nome : i.codigo));
+    return formulaPorExtenso(formula, (i) => ("nome" in i ? i.nome : "chave" in i ? rotuloDoQuadro(i.chave) : i.tipo === "REGISTRADO" ? ROTULO_DO_REGISTRADO : i.codigo));
   } catch {
     return formula;
   }
@@ -1519,7 +1567,11 @@ const estacas: DefinicaoCadastro = {
 };
 
 export const DEFINICOES: Record<string, DefinicaoCadastro> = Object.fromEntries(
-  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, tipos, estacas].map((d) => [d.entidade, d]),
+  // Os cadastros da Gestão de Colaboradores (06/11/2026), no arquivo deles.
+  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
+    d.entidade,
+    d,
+  ]),
 );
 
 /** Para a tela e para o log: Decimal e Date viram texto. */

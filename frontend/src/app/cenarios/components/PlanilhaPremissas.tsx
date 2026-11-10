@@ -22,7 +22,7 @@ const invalidar = (queryClient: ReturnType<typeof useQueryClient>) => {
 
 /** O que cada botão faz, nos modais e no Como Usar. */
 const ABAS_DA_PLANILHA =
-  "Matriz, Filial, Serviços, Centros de Custo (com o Quadro de Lotação e os Encargos e Benefícios), Investimentos (a Depreciação Base), Extra-Operacional e Indicadores Manuais";
+  "Matriz, Filial, Serviços, Quadro de Lotação, Centros de Custo (com o Quadro de Lotação e os Encargos e Benefícios), Investimentos (a Depreciação Base), Extra-Operacional e Indicadores Manuais";
 
 /**
  * Os botões Replicar Médias e Apagar Valores (15/10/2026; antes, um botão só, Replicar Médias / Apagar Valores, com a
@@ -170,8 +170,8 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <DialogTitle>Exportar Premissas</DialogTitle>
           <DialogDescription>
             O arquivo em Excel leva só o que é dos departamentos marcados. Logística, Técnico, Comercial, Administrativo e Extra-Operacional levam também a
-            depreciação e os investimentos de Despesas e Extra; os indicadores manuais vão pelo grupo deles. Cada linha traz a Média e o Total da
-            Referência, a Variação Máxima e Justificar? (em fórmula).
+            depreciação e os investimentos de Despesas e Extra; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos
+            centros dos departamentos marcados. Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
           </DialogDescription>
         </DialogHeader>
         <fieldset className="space-y-2">
@@ -269,14 +269,17 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
   const valores = aImportar.reduce((s, a) => s + a.alteracoes.length, 0);
   const justificativas = aImportar.reduce((s, a) => s + a.justificativas.length, 0);
   const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length, 0);
+  // As linhas do Quadro de Lotação (09/11/2026): as novas e as alteradas.
+  const doQuadro = aImportar.reduce((s, a) => s + a.quadro.novas.length + a.quadro.alteradas.length, 0);
   const analisando = itens.some((x) => x.estado === "analisando");
   const importar = useMutation({
     mutationFn: () => cenariosService.importarPremissas(id, aImportar),
     onSuccess: (r) => {
       invalidar(queryClient);
       const inv = r.investimentosNovos + r.investimentosAlterados;
+      const ql = r.quadroNovas + r.quadroAlteradas;
       toast.success(
-        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? ` e ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}; a DRE do cenário foi recalculada.`,
+        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")} e ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
       );
       onFechar();
     },
@@ -290,7 +293,8 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
             Escolha os arquivos (ou uma pasta) gerados pelo Exportar Premissas: planilhas .xlsx ou o .zip de um arquivo por centro. Cada arquivo é
             conferido assim que entra na lista; os valores mensais, as justificativas e os investimentos se gravam só em “Importar” (em branco, o mês
             fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. Na aba Investimentos, os com o Nome de
-            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem.
+            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro de
+            Lotação, as linhas com o Código da Linha são atualizadas e as sem código entram como novas; um cadastro que não existe recusa o arquivo.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2">
@@ -324,13 +328,14 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                 <th className="px-3 py-2 text-right text-xs font-bold">Valores</th>
                 <th className="px-3 py-2 text-right text-xs font-bold">Justificativas</th>
                 <th className="px-3 py-2 text-right text-xs font-bold">Investimentos</th>
+                <th className="px-3 py-2 text-right text-xs font-bold">Quadro de Lotação</th>
                 <th className="w-10 px-2 py-2" />
               </tr>
             </thead>
             <tbody>
               {itens.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
                     Nenhum arquivo escolhido.
                   </td>
                 </tr>
@@ -345,7 +350,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                   return [
                     <tr key={x.id} className="border-b border-gray-100">
                       <td className="px-3 py-2 break-all text-gray-900">{x.nome}</td>
-                      <td colSpan={5} className={`px-3 py-2 ${x.estado === "erro" ? "text-red-700" : "text-gray-500"}`}>
+                      <td colSpan={6} className={`px-3 py-2 ${x.estado === "erro" ? "text-red-700" : "text-gray-500"}`}>
                         {x.estado === "erro" ? x.erro : "Conferindo…"}
                       </td>
                       <td className="px-2 py-2 text-right">{remover}</td>
@@ -370,6 +375,13 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                         ? "—"
                         : a.investimentos.novos.length + a.investimentos.alterados.length
                           ? `${a.investimentos.novos.length} ${plural(a.investimentos.novos.length, "novo", "novos")} · ${a.investimentos.alterados.length} ${plural(a.investimentos.alterados.length, "alterado", "alterados")}`
+                          : "0"}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {!a.valido
+                        ? "—"
+                        : a.quadro.novas.length + a.quadro.alteradas.length
+                          ? `${a.quadro.novas.length} ${plural(a.quadro.novas.length, "nova", "novas")} · ${a.quadro.alteradas.length} ${plural(a.quadro.alteradas.length, "alterada", "alteradas")}`
                           : "0"}
                     </td>
                     <td className="px-2 py-2 text-right">{k === 0 ? remover : null}</td>
@@ -435,12 +447,13 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
         <DialogFooter className="items-center">
           <span className="text-xs text-gray-600 sm:mr-auto">
             {validas.length} {plural(validas.length, "planilha no padrão", "planilhas no padrão")}: {valores.toLocaleString("pt-BR")} {plural(valores, "valor muda", "valores mudam")},{" "}
-            {justificativas} {plural(justificativas, "justificativa", "justificativas")} e {investimentos} {plural(investimentos, "investimento", "investimentos")}.
+            {justificativas} {plural(justificativas, "justificativa", "justificativas")}, {investimentos} {plural(investimentos, "investimento", "investimentos")} e {doQuadro}{" "}
+            {plural(doQuadro, "linha do Quadro de Lotação", "linhas do Quadro de Lotação")}.
           </span>
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" className={botaoPrimario} disabled={analisando || importar.isPending || valores + justificativas + investimentos === 0} onClick={() => importar.mutate()}>
+          <Button type="button" className={botaoPrimario} disabled={analisando || importar.isPending || valores + justificativas + investimentos + doQuadro === 0} onClick={() => importar.mutate()}>
             {importar.isPending ? "Importando…" : "Importar"}
           </Button>
         </DialogFooter>

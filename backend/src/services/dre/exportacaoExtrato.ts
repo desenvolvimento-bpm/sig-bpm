@@ -52,6 +52,7 @@ const selecaoMovimento = {
   emissao: true,
   cliForn: true,
   historico: true,
+  idMovimento: true,
   valorMovimento: true,
   centroCusto: { select: { codigoRM: true, nomeRM: true } },
   contaResultado: { select: { reduzido: true, descricao: true } },
@@ -104,6 +105,8 @@ const COLUNAS_MOVIMENTACOES: Array<[string, number, boolean?]> = [
 const COLUNAS_DETALHES: Array<[string, number, boolean?]> = [
   ["Bloco", 44],
   ["Filial", 7],
+  // O ID do movimento no RM (10/11/2026), como no Balancete (Lista).
+  ["ID", 10],
   ["Centro de Custo", 16],
   ["Nome do Centro de Custo", 34],
   ["Conta", 10],
@@ -192,7 +195,7 @@ export async function exportarExtrato(ano: number, mes: number, linha: string, v
     detalhes.push(cabecalho(colunasDetalhes));
     let soma = new Decimal(0);
     for (const m of b.linhas) {
-      detalhes.push([texto(m.filial), texto(m.codigoCentroCusto), texto(m.nomeCentroCusto), texto(b.conta.reduzido), texto(b.conta.descricao), texto(dataCurta(m.emissao)), texto(m.cliForn), texto(m.historico), moeda(m.valor)]);
+      detalhes.push([texto(m.filial), texto(m.idMovimento), texto(m.codigoCentroCusto), texto(m.nomeCentroCusto), texto(b.conta.reduzido), texto(b.conta.descricao), texto(dataCurta(m.emissao)), texto(m.cliForn), texto(m.historico), moeda(m.valor)]);
       soma = soma.plus(m.valor);
     }
     detalhes.push(total("Soma", colunasDetalhes.length - 1, [soma]));
@@ -212,6 +215,7 @@ export async function exportarExtrato(ano: number, mes: number, linha: string, v
           detalhes.push([
             texto(tituloDoBloco(bloco)),
             texto(m.filial),
+            texto(m.idMovimento),
             texto(m.centroCusto?.codigoRM ?? m.codigoCentroCusto),
             texto(m.centroCusto?.nomeRM ?? m.nomeCentroCusto),
             texto(conta.reduzido),

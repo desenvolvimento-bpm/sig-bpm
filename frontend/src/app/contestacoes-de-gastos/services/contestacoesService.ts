@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 
-import type { SituacaoContestacao } from "@/app/competencias/[anoMes]/dre/services/dreService";
+import type { ItensDoMovimento, SituacaoContestacao } from "@/app/competencias/[anoMes]/dre/services/dreService";
 
 export type { SituacaoContestacao };
 
@@ -17,6 +17,9 @@ export type MovimentoDaContestacao = {
   historico: string | null;
   valor: string;
   formaValidacao: "NO_BALANCETE" | "LANCAMENTO_MANUAL" | null;
+  /** O ID do movimento no RM (10/11/2026) e quantos itens ele tem nas requisições e nas notas fiscais importadas. */
+  idMovimento: string | null;
+  itens: number;
 };
 
 /** Uma contestação de gasto (27/10/2026): os movimentos, o antes e o depois, a situação e quem fez o quê. */
@@ -51,6 +54,10 @@ export type Contestacao = {
     competenciasParaLancamentos: string[];
   };
   contaBalancete: string | null;
+  /** A conta do balancete pelo código reduzido (10/11/2026). */
+  contaBalanceteReduzido: string | null;
+  /** O centro de custo do balancete (o código RM), o dos movimentos todos (10/11/2026). */
+  codigoCentroCusto: string | null;
   centroAntes: string | null;
   contaAntes: string | null;
   centroNovo: string | null;
@@ -182,6 +189,9 @@ export const contestacoesService = {
     posteriores: boolean;
   }): Promise<Contestacao> => (await api.post("/proxy/contestacoes", d)).data.data,
   listar: async (aba: "solicitadas" | "recebidas" | "validacoes"): Promise<Contestacao[]> => (await api.get(`/proxy/contestacoes/${aba}`)).data.data,
+  /** Os itens de um movimento da contestação (10/11/2026), na aba em que ela aparece. */
+  itensDoMovimento: async (aba: "solicitadas" | "recebidas" | "validacoes", id: string, movimentoId: string): Promise<ItensDoMovimento> =>
+    (await api.get(`/proxy/contestacoes/${id}/movimentos/${movimentoId}/itens`, { params: { aba } })).data.data,
   responder: async (id: string, d: { acatar: boolean; justificativa: string | null }): Promise<Contestacao> => (await api.post(`/proxy/contestacoes/${id}/responder`, d)).data.data,
   alterarSituacao: async (id: string, d: { situacao: SituacaoContestacao; justificativa: string }): Promise<Contestacao> => (await api.post(`/proxy/contestacoes/${id}/situacao`, d)).data.data,
   processar: async (): Promise<{ validadas: number; movimentos: number; paraLancamentos: number; reclassificadas: string[]; reapurar: string[] }> =>

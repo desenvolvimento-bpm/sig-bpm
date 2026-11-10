@@ -6,6 +6,7 @@ import { departamentoDaLinha, gestaoDoCentro, MENSAGEM_SENSIVEL, podeVerCentro, 
 import { auditar } from "../auditoriaService.js";
 import { classificacaoService } from "../classificacao/classificacaoService.js";
 import { manualNoSinalDoBalancete } from "../dre/apuracaoUnidades.js";
+import { itensDoMovimentoService } from "../dre/itensDoMovimento.js";
 import { lancamentosManuaisService } from "../lancamentosManuais/lancamentosManuaisService.js";
 
 /**
@@ -90,6 +91,8 @@ const MOVIMENTO_SEL = {
   contaAntesId: true,
   formaValidacao: true,
   competencia: { select: { id: true, ano: true, mes: true, status: true, apuradaEm: true } },
+  // O ID do movimento no RM (10/11/2026), pelo item do balancete: abre os itens do movimento.
+  lancamentoContabil: { select: { idMovimento: true } },
 } satisfies Prisma.ContestacaoMovimentoSelect;
 type MovimentoDaContestacao = Prisma.ContestacaoMovimentoGetPayload<{ select: typeof MOVIMENTO_SEL }>;
 const SELECAO = {
@@ -286,6 +289,7 @@ const corrigivelNoBalancete = (m: MovimentoDaContestacao) => !m.formaValidacao &
 async function apresentar(ls: Linha[], usuarioId: string) {
   const responsaveis = await responsaveisDosCentros(ls.map(centroAlvo));
   const ns = await nomes(ls.flatMap((c) => [c.respondidaPorId, c.justificadaPorId, c.validadaPorId]));
+  const itens = await itensDoMovimentoService.contar(ls.flatMap((c) => c.movimentos.map((m) => m.lancamentoContabil?.idMovimento)));
   return ls.map((c) => {
     const resp = responsaveis.get(centroAlvo(c)) ?? [];
     const manual = c.lancamentosManuais[0]?.competencia;
@@ -323,6 +327,9 @@ async function apresentar(ls: Linha[], usuarioId: string) {
         historico: m.historico,
         valor: m.valor.toFixed(2),
         formaValidacao: m.formaValidacao,
+        /** O ID do movimento no RM e quantos itens ele tem nas requisições e nas notas fiscais importadas. */
+        idMovimento: m.lancamentoContabil?.idMovimento ?? null,
+        itens: m.lancamentoContabil?.idMovimento ? (itens.get(m.lancamentoContabil.idMovimento) ?? 0) : 0,
       })),
       /** A correção dos movimentos: no balancete, pelos lançamentos, os que o Processar corrige e os que esperam o Importar. */
       correcao: {
@@ -334,6 +341,10 @@ async function apresentar(ls: Linha[], usuarioId: string) {
         competenciasParaLancamentos: [...new Set(paraLancamentos.map((m) => rotulo(m.competencia.ano, m.competencia.mes)))],
       },
       contaBalancete: contaTexto(c.contaBalancete),
+      /** A conta do balancete pelo código reduzido (10/11/2026: os itens do movimento nela). */
+      contaBalanceteReduzido: c.contaBalancete?.reduzido ?? null,
+      /** O centro de custo do balancete (o código RM), o dos movimentos todos. */
+      codigoCentroCusto: c.codigoCentroCusto,
       centroAntes: centroTexto(c.centroAntes) ?? (c.codigoCentroCusto ? `${c.codigoCentroCusto} · ${c.nomeCentroCusto ?? ""}` : null),
       contaAntes: contaTexto(c.contaAntes),
       centroNovo: centroTexto(c.centroNovo),
@@ -367,6 +378,23 @@ async function centrosDoRecorte(acesso: Acesso): Promise<string[] | null> {
   if (!temRecorte(acesso)) return null;
   const todos = await getPrismaClient().centroCusto.findMany({ select: { id: true, departamento: true } });
   return todos.filter((c) => podeVerCentro(acesso, c)).map((c) => c.id);
+}
+
+type AbaDaContestacao = "solicitadas" | "recebidas" | "validacoes";
+
+/** As contestações de uma aba: as do usuário (Solicitadas), as dos centros dele (Recebidas) ou todas (Validações). */
+async function ondeDaAba(aba: AbaDaContestacao, u: UsuarioDaContestacao): Promise<Prisma.ContestacaoWhereInput> {
+  if (aba === "solicitadas") return { solicitanteId: u.id };
+  if (aba === "recebidas") {
+    // As pedidas por outros usuários (as do próprio ficam em Solicitadas), do recorte dele (o centro novo; sem ele, o do
+    // movimento); sem recorte, todas.
+    const centros = await centrosDoRecorte(u.acesso);
+    return {
+      solicitanteId: { not: u.id },
+      ...(centros ? { OR: [{ centroNovoId: { in: centros } }, { centroNovoId: null, centroAntesId: { in: centros } }] } : {}),
+    };
+  }
+  return {};
 }
 
 async function exigirContestacao(id: string) {
@@ -558,21 +586,22 @@ export const contestacoesService = {
   },
 
   /** As contestações de uma aba: as do usuário (Solicitadas), as dos centros dele (Recebidas) ou todas (Validações). */
-  async listar(aba: "solicitadas" | "recebidas" | "validacoes", u: UsuarioDaContestacao) {
-    const prisma = getPrismaClient();
-    let where: Prisma.ContestacaoWhereInput = {};
-    if (aba === "solicitadas") where = { solicitanteId: u.id };
-    if (aba === "recebidas") {
-      // As pedidas por outros usuários (as do próprio ficam em Solicitadas), do recorte dele (o centro novo; sem ele, o do
-      // movimento); sem recorte, todas.
-      const centros = await centrosDoRecorte(u.acesso);
-      where = {
-        solicitanteId: { not: u.id },
-        ...(centros ? { OR: [{ centroNovoId: { in: centros } }, { centroNovoId: null, centroAntesId: { in: centros } }] } : {}),
-      };
-    }
-    const ls = await prisma.contestacao.findMany({ where, select: SELECAO, orderBy: [{ solicitadaEm: "desc" }] });
+  async listar(aba: AbaDaContestacao, u: UsuarioDaContestacao) {
+    const ls = await getPrismaClient().contestacao.findMany({ where: await ondeDaAba(aba, u), select: SELECAO, orderBy: [{ solicitadaEm: "desc" }] });
     return apresentar(ls, u.id);
+  },
+
+  /** Os itens de um movimento da contestação (10/11/2026): a contestação tem de estar na aba do usuário, como na lista. */
+  async itensDoMovimento(id: string, movimentoId: string, aba: AbaDaContestacao, u: UsuarioDaContestacao) {
+    const c = await getPrismaClient().contestacao.findFirst({
+      where: { AND: [{ id }, await ondeDaAba(aba, u)] },
+      select: { movimentos: { where: { id: movimentoId }, select: { lancamentoContabil: { select: { idMovimento: true } } } } },
+    });
+    if (!c) throw new RegraContestacaoError(404, "Contestação não encontrada.");
+    const m = c.movimentos[0];
+    if (!m) throw new RegraContestacaoError(404, "O movimento não está na contestação.");
+    if (!m.lancamentoContabil?.idMovimento) throw new RegraContestacaoError(404, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)).");
+    return itensDoMovimentoService.listar(m.lancamentoContabil.idMovimento);
   },
 
   /** Os movimentos contestados de um balancete (o modal): a situação da última contestação de cada um, para a coluna Ações. */

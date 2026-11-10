@@ -189,6 +189,7 @@ export async function substituirBalanceteDetalhado(opcoes: {
         cliForn: l.cliForn,
         emissao: l.emissao,
         historico: l.historico,
+        idMovimento: l.idMovimento,
         ...c,
       };
     });

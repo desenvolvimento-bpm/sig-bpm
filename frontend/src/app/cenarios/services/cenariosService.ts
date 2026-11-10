@@ -101,12 +101,48 @@ export type ContasDoCentro = {
    * O quadro de lotação do grupo (14/10/2026; 19/10/2026: Colaboradores CLT e PJ) e os quadros dos indicadores em que ele
    * entra. `referencia`: a Média de Referência (o mês 0; 15/10/2026).
    */
-  lotacao: { clt: SerieDoCentro; pj: SerieDoCentro; quadro: string };
+  lotacao: { clt: SerieDoCentro; pj: SerieDoCentro; quadro: string; linhasDoQuadro: number };
+  /** Os Salários dos Aprendizes de cada mão de obra (09/11/2026): nos grupos com linhas na aba Quadro de Lotação. */
+  aprendizes: Array<{ prefixo: string; encargos: string; rotulo: string; valores: number[] }>;
   /** Os Encargos e Benefícios (19/10/2026): os percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$. */
   encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$" }>;
-  /** `calculada`: a conta Encargos e Benefícios (19/10/2026), que não se digita. */
-  contas: Array<SerieDoCentro & { codigo: string; descricao: string; atribuicao: string; calculada: boolean }>;
+  /** `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026). */
+  contas: Array<SerieDoCentro & { codigo: string; descricao: string; atribuicao: string; calculada: boolean; doQuadro: boolean }>;
 };
+
+/** Um mês de uma linha do Quadro de Lotação do cenário (09/11/2026): os colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um. */
+export type MesDoQuadro = { colaboradores: number; salarioBruto: number; adicional: number };
+export type CampoDoMes = keyof MesDoQuadro;
+/** Uma linha da aba Quadro de Lotação: os cadastros (como no Lançamento Inicial), o grupo do centro (null: fora dos grupos) e os doze meses. */
+export type LinhaDoQuadroDoCenario = {
+  id: string;
+  unidadeNegocioId: string;
+  unidade: string;
+  vinculo: "CLT" | "PJ";
+  senioridadeId: string;
+  senioridade: string;
+  aprendiz: boolean;
+  funcaoId: string;
+  funcao: string;
+  centroCustoId: string;
+  centro: string;
+  grupo: string | null;
+  meses: MesDoQuadro[];
+};
+export type QuadroDoCenario = {
+  ano: number;
+  meses: Array<{ mes: number; rotulo: string }>;
+  editavel: boolean;
+  linhas: LinhaDoQuadroDoCenario[];
+  opcoes: {
+    unidades: Array<{ id: string; nome: string }>;
+    senioridades: Array<{ id: string; nome: string }>;
+    funcoes: Array<{ id: string; nome: string; senioridadeId: string | null }>;
+    centros: Array<{ id: string; nome: string; grupo: string }>;
+  };
+};
+/** Os dados de uma linha: os cadastros e, na nova, os doze meses. */
+export type DadosDaLinhaDoQuadro = Pick<LinhaDoQuadroDoCenario, "unidadeNegocioId" | "vinculo" | "senioridadeId" | "funcaoId" | "centroCustoId"> & { meses?: MesDoQuadro[] };
 export type SerieDoCentro = { referencia: number | null; valores: number[]; gravados: boolean[] };
 export type RateiosDoCenario = {
   ano: number;
@@ -291,7 +327,10 @@ export type AnaliseDePremissas = {
   alteracoes: Array<{ chave: string; mes: number; valor: number | null; bloco: string }>;
   justificativas: Array<{ chave: string; texto: string | null; bloco: string }>;
   investimentos: { novos: InvestimentoDaPlanilha[]; alterados: Array<InvestimentoDaPlanilha & { id: string }> };
+  /** As linhas da aba Quadro de Lotação (09/11/2026): as novas (sem código) e as alteradas, já com os cadastros. */
+  quadro: { novas: LinhaDoQuadroDaPlanilha[]; alteradas: Array<LinhaDoQuadroDaPlanilha & { id: string }> };
 };
+export type LinhaDoQuadroDaPlanilha = Required<DadosDaLinhaDoQuadro> & { descricao: string };
 /** Os departamentos do Exportar Premissas (15/10/2026). */
 export const DEPARTAMENTOS_DAS_PREMISSAS = [
   { chave: "PRODUCAO", nome: "Produção", detalhe: "Matriz, Filial, os centros de custo de produção e a depreciação e os investimentos da Matriz e da Filial" },
@@ -317,16 +356,20 @@ export const cenariosService = {
       })
     ).data.data,
   /** O Importar Valores, passo 2: grava as mudanças das planilhas válidas. */
-  importarPremissas: async (id: string, arquivos: Array<Pick<AnaliseDePremissas, "arquivo" | "alteracoes" | "justificativas" | "investimentos">>) =>
+  importarPremissas: async (id: string, arquivos: Array<Pick<AnaliseDePremissas, "arquivo" | "alteracoes" | "justificativas" | "investimentos" | "quadro">>) =>
     (
-      await api.post<{ data: { valores: number; justificativas: number; investimentosNovos: number; investimentosAlterados: number } }>(`/proxy/cenarios/${id}/premissas/importar`, {
-        arquivos: arquivos.map(({ arquivo, alteracoes, justificativas, investimentos }) => ({
+      await api.post<{ data: { valores: number; justificativas: number; investimentosNovos: number; investimentosAlterados: number; quadroNovas: number; quadroAlteradas: number } }>(`/proxy/cenarios/${id}/premissas/importar`, {
+        arquivos: arquivos.map(({ arquivo, alteracoes, justificativas, investimentos, quadro }) => ({
           arquivo,
           alteracoes: alteracoes.map(({ chave, mes, valor }) => ({ chave, mes, valor })),
           justificativas: justificativas.map(({ chave, texto }) => ({ chave, texto })),
           investimentos: {
             novos: investimentos.novos.map(({ numero: _n, ...i }) => i),
             alterados: investimentos.alterados.map(({ numero: _n, ...i }) => i),
+          },
+          quadro: {
+            novas: quadro.novas.map(({ descricao: _d, ...l }) => l),
+            alteradas: quadro.alteradas.map(({ descricao: _d, ...l }) => l),
           },
         })),
       })
@@ -338,6 +381,14 @@ export const cenariosService = {
   centro: async (id: string, grupo: string) => (await api.get<{ data: ContasDoCentro }>(`/proxy/cenarios/${id}/centros/contas`, { params: { grupo } })).data.data,
   gravarCentro: async (id: string, grupo: string, alteracoes: Array<{ linha: string; mes: number; valor: number | null }>, origem?: OrigemDaGravacao) =>
     (await api.put<{ data: { alteradas: number; meses: number[] } }>(`/proxy/cenarios/${id}/centros`, { grupo, alteracoes, origem })).data.data,
+  /** A aba Quadro de Lotação dos analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores). */
+  quadro: async (id: string) => (await api.get<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro`)).data.data,
+  criarLinhaDoQuadro: async (id: string, dados: DadosDaLinhaDoQuadro) => (await api.post<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro`, dados)).data.data,
+  alterarLinhaDoQuadro: async (id: string, linhaId: string, dados: DadosDaLinhaDoQuadro) => (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`, dados)).data.data,
+  excluirLinhaDoQuadro: async (id: string, linhaId: string) => (await api.delete<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`)).data.data,
+  excluirLinhasDoQuadro: async (id: string, ids: string[]) => (await api.post<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/excluir`, { ids })).data.data,
+  gravarMesesDoQuadro: async (id: string, alteracoes: Array<{ linha: string; mes: number; campo: CampoDoMes; valor: number | null }>) =>
+    (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/meses`, { alteracoes })).data.data,
   investimentos: async (id: string) => (await api.get<{ data: InvestimentosDoCenario }>(`/proxy/cenarios/${id}/investimentos`)).data.data,
   criarInvestimento: async (id: string, dados: DadosDoInvestimento) => (await api.post<{ data: InvestimentosDoCenario }>(`/proxy/cenarios/${id}/investimentos`, dados)).data.data,
   alterarInvestimento: async (id: string, investimentoId: string, dados: DadosDoInvestimento) =>

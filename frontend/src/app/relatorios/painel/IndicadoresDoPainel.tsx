@@ -8,6 +8,7 @@ import { ESTILOS_NOS_INDICADORES, type CenarioDoProva } from "../components/cena
 import type { TipoGrafico } from "../components/GraficoRealizadoOrcado";
 import { mensagemDeErro, relatoriosService, type Indicador, type MarcacaoComparavel } from "../services/relatoriosService";
 import { GraficoIndicadorDialog } from "../indicadores/GraficoIndicadorDialog";
+import { MovimentosDoQuadroDialog } from "../indicadores/MovimentosDoQuadroDialog";
 import { TabelaIndicadores, valor, valorCurto } from "../indicadores/TabelaIndicadores";
 
 /**
@@ -40,6 +41,8 @@ export function IndicadoresDoPainel({
   });
   const dados = consulta.data;
   const [comGrafico, setComGrafico] = useState<Indicador | null>(null);
+  // A lupa dos apurados no Quadro de Lotação (06/11/2026).
+  const [lupa, setLupa] = useState<{ mes: number; indicador: string } | null>(null);
   if (consulta.isError) {
     return (
       <div className="rounded-sm border border-red-200 bg-red-50 p-4">
@@ -60,7 +63,9 @@ export function IndicadoresDoPainel({
         comOrcado
         rotuloDoOrcado={dados.rotuloComparado}
         comparados={comparados}
+        lupa={(i, k) => (i.apurados?.[k] ? () => setLupa({ mes: dados.meses[k].mes, indicador: i.nome }) : null)}
       />
+      {lupa ? <MovimentosDoQuadroDialog ano={ano} mes={lupa.mes} indicador={lupa.indicador} onFechar={() => setLupa(null)} /> : null}
       {comGrafico ? (
         <GraficoIndicadorDialog
           indicador={comGrafico}

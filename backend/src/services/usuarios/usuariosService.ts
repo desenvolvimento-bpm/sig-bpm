@@ -43,6 +43,8 @@ export const RECURSOS: RecursoSistema[] = [
   "CONTESTACOES_GASTOS",
   "FECHAMENTO_MENSAL",
   "CADASTROS_APURACAO",
+  // A Gestão de Colaboradores (06/11/2026), nos Processos Administrativos, entre a Apuração e a Controladoria, como no menu.
+  "GESTAO_COLABORADORES",
   "CENTRAL_CONECTIVIDADE",
   "CADASTROS_CONTROLADORIA",
   // Os Arquivos Gerais (05/11/2026), acima do Controle de Usuários, como no menu.
@@ -62,6 +64,7 @@ const ROTULO_RECURSO: Record<RecursoSistema, string> = {
   CONTESTACOES_GASTOS: "Contestações de Gastos",
   REALIZADO_POR_OBRA: "Realizado por Obra",
   ARQUIVOS_GERAIS: "Arquivos Gerais",
+  GESTAO_COLABORADORES: "Gestão de Colaboradores",
 };
 const ACOES: AcaoPermissao[] = ["LER", "EDITAR"];
 const SETORES: Array<{ tipo: TipoImportacao; rotulo: string }> = [

@@ -59,6 +59,16 @@ async function responder(response: Response, fn: () => Promise<unknown>) {
   }
 }
 
+/** O recorte do modal Balancete (o do extrato): a linha, a conta do balancete, o centro, a filial e a conta que vale na DRE. */
+const filtroDoBalanceteSchema = z.object({
+  linha: z.string().trim().min(1).max(200),
+  conta: z.string().trim().min(1).max(50),
+  centro: z.string().trim().max(50).optional(),
+  filial: z.coerce.number().int().min(1).max(99).optional(),
+  // A conta que vale na DRE (27/10/2026): com a reclassificação ou a contestação, a do lançamento do extrato.
+  adotada: z.string().trim().max(50).optional(),
+});
+
 export const dreController = {
   async consultar(request: Request, response: Response) {
     const c = competencia(request, response);
@@ -161,23 +171,31 @@ export const dreController = {
     }
   },
 
-  /** As requisições e as notas fiscais de uma conta no mês: ?linha= (o recorte), ?conta= (reduzido), ?centro= (código RM) e ?filial=. */
+  /** O balancete de uma conta no mês: ?linha= (o recorte), ?conta= (reduzido), ?centro= (código RM) e ?filial=. */
   async documentos(request: Request, response: Response) {
     const c = competencia(request, response);
     if (!c) return;
-    const q = z
-      .object({
-        linha: z.string().trim().min(1).max(200),
-        conta: z.string().trim().min(1).max(50),
-        centro: z.string().trim().max(50).optional(),
-        filial: z.coerce.number().int().min(1).max(99).optional(),
-        // A conta que vale na DRE (27/10/2026): com a reclassificação ou a contestação, a do lançamento do extrato.
-        adotada: z.string().trim().max(50).optional(),
-      })
-      .safeParse(request.query);
+    const q = filtroDoBalanceteSchema.safeParse(request.query);
     if (!q.success) return response.status(400).json({ error: "Dados inválidos." });
     return responder(response, () =>
       documentosService.listar(c.ano, c.mes, { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null }, request.user!.acesso),
+    );
+  },
+
+  /** Os itens de um movimento do balancete (10/11/2026): o recorte do balancete e ?lancamento= (o movimento). */
+  async itensDoMovimento(request: Request, response: Response) {
+    const c = competencia(request, response);
+    if (!c) return;
+    const q = filtroDoBalanceteSchema.extend({ lancamento: z.string().uuid() }).safeParse(request.query);
+    if (!q.success) return response.status(400).json({ error: "Dados inválidos." });
+    return responder(response, () =>
+      documentosService.itens(
+        c.ano,
+        c.mes,
+        { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null },
+        q.data.lancamento,
+        request.user!.acesso,
+      ),
     );
   },
 

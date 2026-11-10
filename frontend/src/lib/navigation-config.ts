@@ -7,10 +7,12 @@ import {
   Calculator,
   CalendarCheck,
   ChartPie,
+  ClipboardList,
   SlidersHorizontal,
   Factory,
   FolderOpen,
   GraduationCap,
+  Network,
   Newspaper,
   FileSpreadsheet,
   HandCoins,
@@ -31,17 +33,20 @@ import {
   ListOrdered,
   ListTree,
   MessageSquareWarning,
-  NotebookPen,
   Percent,
   PanelsTopLeft,
   Presentation,
+  ReceiptText,
   Rows3,
   Scale,
+  ShieldPlus,
   Shuffle,
   Split,
   Table2,
   UserCog,
   Users,
+  UsersRound,
+  Wallet,
   Workflow,
 } from "lucide-react";
 
@@ -176,8 +181,7 @@ export const navGrupos: NavGrupo[] = [
         ],
       },
       { title: "Fechamento Mensal", href: "/competencias", icon: CalendarCheck, permission: "fechamento:ler", recurso: "FECHAMENTO_MENSAL" },
-      // Os Registros dos Indicadores (27/10/2026), em desenvolvimento, logo acima dos Cadastros da Apuração.
-      { title: "Registros dos Indicadores", href: "/registros-dos-indicadores", icon: NotebookPen, emDesenvolvimento: true },
+      // Os Registros dos Indicadores (em desenvolvimento desde 27/10/2026) saíram do menu em 06/11/2026 (pedido do Adão).
       {
         title: "Cadastros da Apuração",
         href: "/cadastros/reclassificacoes",
@@ -190,6 +194,56 @@ export const navGrupos: NavGrupo[] = [
           { title: "Tabela de Estacas", href: "/cadastros/tabela-estacas", icon: Columns3, permission: "cadastro_tabela_estacas:ler" },
         ],
       },
+    ],
+  },
+  {
+    // Os Processos Administrativos (06/11/2026, pedido do Adão), entre a Apuração e a Controladoria: a Gestão de
+    // Colaboradores (a tela Cadastros, com uma aba por cadastro) e, em desenvolvimento, o Fluxo de Caixa, a Gestão de
+    // Credores e a Gestão da Segurança.
+    titulo: "Processos Administrativos",
+    itens: [
+      { title: "Fluxo de Caixa", href: "/processos-administrativos/fluxo-de-caixa", icon: Wallet, emDesenvolvimento: true },
+      { title: "Gestão de Credores", href: "/processos-administrativos/gestao-de-credores", icon: ReceiptText, emDesenvolvimento: true },
+      {
+        title: "Gestão de Colaboradores",
+        href: "/gestao-de-colaboradores/cadastros/senioridades",
+        icon: UsersRound,
+        recurso: "GESTAO_COLABORADORES",
+        telas: [
+          {
+            title: "Cadastros",
+            href: "/gestao-de-colaboradores/cadastros/senioridades",
+            icon: ClipboardList,
+            permission: "colaboradores_cadastros:ler",
+            abas: [
+              { title: "Senioridades", href: "/gestao-de-colaboradores/cadastros/senioridades", icon: ClipboardList, permission: "colaboradores_cadastros.senioridades:ler" },
+              { title: "Funções", href: "/gestao-de-colaboradores/cadastros/funcoes", icon: ClipboardList, permission: "colaboradores_cadastros.funcoes:ler" },
+              { title: "Movimentações", href: "/gestao-de-colaboradores/cadastros/movimentacoes", icon: ClipboardList, permission: "colaboradores_cadastros.movimentacoes:ler" },
+              { title: "Classificações", href: "/gestao-de-colaboradores/cadastros/classificacoes", icon: ClipboardList, permission: "colaboradores_cadastros.classificacoes:ler" },
+              {
+                title: "Lançamento Inicial",
+                href: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+                icon: ClipboardList,
+                permission: "colaboradores_cadastros.lancamento_inicial:ler",
+              },
+            ],
+          },
+          // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências próprias; as abas Movimentações, Controle e
+          // Realizado ficam dentro de cada competência (/quadro-de-lotacao/aaaa-mm/<aba>).
+          { title: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao", icon: Network, permission: "colaboradores_quadro:ler" },
+          {
+            title: "Painel de Bordo",
+            href: "/gestao-de-colaboradores/painel/resultados",
+            icon: LayoutDashboard,
+            permission: "colaboradores_painel:ler",
+            abas: [
+              { title: "Resultados", href: "/gestao-de-colaboradores/painel/resultados", icon: LayoutDashboard, permission: "colaboradores_painel.resultados:ler" },
+              { title: "Indicadores", href: "/gestao-de-colaboradores/painel/indicadores", icon: LayoutDashboard, permission: "colaboradores_painel.indicadores:ler" },
+            ],
+          },
+        ],
+      },
+      { title: "Gestão da Segurança", href: "/processos-administrativos/gestao-da-seguranca", icon: ShieldPlus, emDesenvolvimento: true },
     ],
   },
   {
@@ -353,6 +407,19 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/analises-gerenciais\/relatorios-executivos(\/|$)/, "relatorios_executivos:ler"],
   [/^\/analises-gerenciais\/paineis-de-bordo(\/|$)/, "paineis_de_bordo:ler"],
   [/^\/central-de-conectividade\/biblioteca-de-apis(\/|$)/, "biblioteca_apis:ler"],
+  // A Gestão de Colaboradores (06/11/2026): as abas da tela Cadastros.
+  [/^\/gestao-de-colaboradores\/cadastros\/senioridades(\/|$)/, "colaboradores_cadastros.senioridades:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/funcoes(\/|$)/, "colaboradores_cadastros.funcoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/movimentacoes(\/|$)/, "colaboradores_cadastros.movimentacoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/classificacoes(\/|$)/, "colaboradores_cadastros.classificacoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/lancamento-inicial(\/|$)/, "colaboradores_cadastros.lancamento_inicial:ler"],
+  // O Quadro de Lotação (etapa 2): as abas de uma competência e a lista; o Painel de Bordo.
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/movimentacoes/, "colaboradores_quadro.movimentacoes:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/controle/, "colaboradores_quadro.controle:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/realizado/, "colaboradores_quadro.realizado:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao(\/|$)/, "colaboradores_quadro:ler"],
+  [/^\/gestao-de-colaboradores\/painel\/resultados(\/|$)/, "colaboradores_painel.resultados:ler"],
+  [/^\/gestao-de-colaboradores\/painel\/indicadores(\/|$)/, "colaboradores_painel.indicadores:ler"],
   // Os Arquivos Gerais (05/11/2026).
   [/^\/arquivos-gerais\/treinamentos(\/|$)/, "arquivos_treinamentos:ler"],
   [/^\/arquivos-gerais\/informativos(\/|$)/, "arquivos_informativos:ler"],
@@ -471,6 +538,17 @@ export function migalhas(pathname: string, rotuloDaEtapa: (chave: string) => str
   // Um painel de bordo (31/10/2026): "Painéis e Apresentações › Produção da Matriz"; o nome vem do painel (`rotuloDoRelatorio`).
   if (/^\/analises-gerenciais\/paineis-de-bordo\/[^/]+/.test(pathname)) {
     return [{ rotulo: "Painéis e Apresentações", href: "/analises-gerenciais/paineis-de-bordo" }, { rotulo: rotuloDoRelatorio ?? "Painel" }];
+  }
+  // Uma competência do Quadro de Lotação (06/11/2026): "Gestão de Colaboradores › Quadro de Lotação › 11/2026 › Movimentações".
+  const quadro = pathname.match(/^\/gestao-de-colaboradores\/quadro-de-lotacao\/(\d{4})-(\d{2})\/([^/]+)/);
+  if (quadro) {
+    const aba = { movimentacoes: "Movimentações", controle: "Controle", realizado: "Realizado" }[quadro[3]] ?? quadro[3];
+    return [
+      { rotulo: "Gestão de Colaboradores", href: "/gestao-de-colaboradores/cadastros/senioridades" },
+      { rotulo: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao" },
+      { rotulo: `${quadro[2]}/${quadro[1]}` },
+      { rotulo: aba },
+    ];
   }
   const doGrupo = grupoDaTela(pathname);
   if (doGrupo) return [{ rotulo: doGrupo.grupo.title, href: doGrupo.grupo.href }, { rotulo: doGrupo.tela.title }, ...(doGrupo.aba ? [{ rotulo: doGrupo.aba.title }] : [])];

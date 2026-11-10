@@ -28,6 +28,137 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 10/11/2026, 14:43
+  {
+    publicada: "2026-11-10T14:43",
+    processo: TODO_O_SIG,
+    itens: [
+      "O menu ganha o grupo Processos Administrativos, entre a Apuração dos Resultados e a Controladoria: a Gestão de Colaboradores, em uso, e o Fluxo de Caixa, a Gestão de Credores e a Gestão da Segurança, em desenvolvimento.",
+      "O Registros dos Indicadores, em desenvolvimento, saiu do menu.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    itens: [
+      "O processo entra em uso, com a tela Cadastros: as abas Senioridades, Funções, Movimentações (os tipos de movimentação, com a contagem Positiva, Negativa ou Nula e a aprovação Automática ou Manual), Classificações e Lançamento Inicial (o quadro de lotação do início, um colaborador por linha).",
+      "Funções e Lançamento Inicial têm o Importar, com a prévia de cada linha (Nova, Alterada, Igual ou Inválida); com uma linha inválida, a importação é cancelada. O Lançamento Inicial pede a competência.",
+      "No menu da coluna Ações, Editar, Inativar (ou Reativar) e Excluir, este só no registro que não está em uso.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "As competências do processo: Abrir Competência e, no menu Ações, Fechar, Reabrir e Excluir.",
+      "Em cada competência, as abas Movimentações (o Novo registra admissões, reposições, desligamentos e vagas; o desligamento pode gerar a vaga em aberto), Controle (Aprovar e Reprovar as de aprovação manual) e Realizado (os indicadores do mês e a tabela por centro de custo).",
+      "No Realizado, a lista Comparação, ao lado do título, compara com um cenário marcado (Previsão, Orçamento, Anterior ou Vendido): o mês e o acumulado nos cards e, com um cenário analítico que tem a aba Quadro de Lotação, as colunas Cenário e Diferença de cada centro de custo.",
+      "Com recorte por departamento ou por centro de custo, as abas mostram só os seus centros.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: [
+      "Os indicadores Quadro de Lotação, Turnover e Abertura de Vagas x Contratações: na aba Resultados, um card por indicador (o mês, o anterior, o ano e as barras dos meses); na aba Indicadores, a tabela dos meses com o Acumulado.",
+      "A lista Comparação, ao lado do título, traz o cenário marcado e a diferença nos cards e, na aba Indicadores, uma linha do cenário e outra da diferença abaixo de cada indicador.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Quadro de Lotação, entre Serviços e Centros de Custo: as linhas como as do Lançamento Inicial (Unidade, Tipo, Senioridade, Função e Centro de Custo) e, em cada mês, os Colaboradores e o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada um, com o Custo no Ano. Nova Linha, a edição dos meses na própria tabela e o Excel (Exportar Premissas e Importar Valores).",
+      "Na aba Centros de Custo, o grupo com linhas no Quadro de Lotação conta por elas os Colaboradores e as Remunerações CLT e PJ, que deixam de ser digitados; o grupo sem linhas fica como está.",
+      "Nos Encargos e Benefícios, o FGTS em duas linhas: Fundo de Garantia: Aprendiz (2%), sobre os salários dos aprendizes, e Fundo de Garantia: CLT (8%).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cadastros da Controladoria",
+    tela: "Indicadores",
+    rota: "/cadastros/estrutura-indicadores",
+    itens: [
+      "No montador da Metodologia, entram os itens Quadro de Lotação (por Departamento, com a Atribuição Geral, Direto ou Indireto, ou por Centro de Custo), Movimentos do QL (por movimentação, ou todas as de contagem Positiva ou Negativa) e Valor Registrado (o valor registrado no mês com o nome do indicador: importado, digitado ou apurado). O item Comercial e Administrativo saiu.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cadastros da Controladoria",
+    tela: "Centros de Custo",
+    rota: "/cadastros/centros-custo",
+    itens: [
+      "Um centro de custo usado na Gestão de Colaboradores (o Lançamento Inicial e as movimentações) ou na aba Quadro de Lotação de um cenário não se exclui: inative-o.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Fechamento Mensal",
+    tela: "Importações",
+    rota: "/competencias/0000-00/importar",
+    itens: [
+      "Nas linhas do Quadro de Lotação e dos Indicadores do Administrativo, o botão Apurar tira os valores do mês da Gestão de Colaboradores (a competência do Quadro de Lotação do mesmo mês), mostra o registrado hoje ao lado e os grava.",
+      "A DRE do Comercial tem o Importar da linha, e o Saldo Inicial do Estoque aparece só na primeira competência.",
+      "O balancete lê a coluna ID da aba Balancete (Lista), o ID do movimento no RM, que abre os itens da nota fiscal ou da requisição nos extratos.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No modal Balancete do extrato, a coluna ID (o ID do movimento no RM, a coluna ID da aba Balancete (Lista)) e, na coluna Ações, o botão Itens: os itens da nota fiscal ou da requisição do movimento, com o produto, o centro de custo, a conta, a quantidade e os valores.",
+      "Os Itens abrem só com os do centro de custo e da conta do movimento, que somam o valor dele; desmarcando a caixa, aparece o documento inteiro, com os do movimento em amarelo. O botão aparece nos meses cujo balancete foi importado com a coluna ID preenchida.",
+      "O Exportar do extrato e do Balancete leva a coluna ID na aba Detalhes.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No modal Balancete do extrato, a coluna ID (o ID do movimento no RM, a coluna ID da aba Balancete (Lista)) e, na coluna Ações, o botão Itens: os itens da nota fiscal ou da requisição do movimento, com o produto, o centro de custo, a conta, a quantidade e os valores.",
+      "Os Itens abrem só com os do centro de custo e da conta do movimento, que somam o valor dele; desmarcando a caixa, aparece o documento inteiro, com os do movimento em amarelo. O botão aparece nos meses cujo balancete foi importado com a coluna ID preenchida.",
+      "O Exportar do extrato e do Balancete leva a coluna ID na aba Detalhes.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "Na aba Indicadores, o valor de um mês apurado na Gestão de Colaboradores traz a lupa: as movimentações aprovadas do mês e a contagem de cada uma.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "No Ver Movimentos, a coluna ID e o botão Itens de cada movimento: os itens da nota fiscal ou da requisição dele, como no Balancete dos extratos.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Contestações de Gastos",
+    tela: "Validações",
+    rota: "/contestacoes-de-gastos/validacoes",
+    itens: [
+      "No Ver Movimentos, a coluna ID e o botão Itens de cada movimento; o Ver Movimentos também aparece na contestação de um movimento só, quando ele tem itens.",
+    ],
+  },
   // 06/11/2026, 15:50
   {
     publicada: "2026-11-06T15:50",

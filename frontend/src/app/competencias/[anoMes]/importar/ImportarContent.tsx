@@ -135,7 +135,8 @@ export function ImportarContent() {
     const lista = data?.itens ?? [];
     // Recorte por setor (Passo 22): o Alimentador só vê as listas dos seus setores.
     const alcanca = (t: string) => !user?.acesso.recorteSetor || user.acesso.setores.includes(t);
-    const tipos = [...TIPOS_DO_MES, ...TIPOS_EVENTUAIS].filter(alcanca);
+    // O Saldo Inicial do Estoque só na primeira competência do SIG (06/11/2026): a apuração do estoque parte dele só ali.
+    const tipos = [...TIPOS_DO_MES, ...TIPOS_EVENTUAIS].filter(alcanca).filter((t) => t !== "ESTOQUE_INICIAL" || data?.primeira);
     return situacaoPorTipo(lista, tipos);
   }, [data, user]);
   const vigor = useTabelaFiltravel(situacoes, COLUNAS_VIGOR);
@@ -177,13 +178,19 @@ export function ImportarContent() {
             <li>Uma aba sem diferença em relação à importação em vigor fica “Sem mudança” e não se importa de novo, a menos que nada tenha mudado no arquivo: aí “Importar” continua valendo e reimporta o mês atual assim mesmo (os meses anteriores ficam como estão). Um arquivo com vários meses atualiza todos eles; os meses já apurados que mudarem ganham a bola verde e pedem reapuração.</li>
             <li>A lista do arquivo avisa quando a importação muda competências fechadas (o balancete do ano inteiro, os preços da DRE do Comercial); as diferenças vão para Divergências.</li>
             <li>
-              Para importar só um tipo, use “Importar” (ou “Reimportar”) na linha dele: abre o mesmo diálogo, só com a aba daquele tipo. Escolha o arquivo
-              completo ou uma pasta de trabalho só com essa aba; a prévia mostra só essa aba, mês a mês, e nada é importado antes de você confirmar.
+              Para importar só um tipo, use “Importar” (ou “Reimportar”) na linha dele (também na DRE do Comercial): abre o mesmo diálogo, só com a aba
+              daquele tipo. Escolha o arquivo completo ou uma pasta de trabalho só com essa aba; a prévia mostra só essa aba, mês a mês, e nada é importado
+              antes de você confirmar.
+            </li>
+            <li>
+              No Quadro de Lotação e nos Indicadores do Administrativo, o diálogo da linha tem também o “Apurar”: os valores do mês saem da competência do
+              Quadro de Lotação (Gestão de Colaboradores), sem a planilha. O modal mostra o apurado e o registrado hoje; com “Gravar”, os indicadores ficam
+              por cima do importado (como os digitados nas Listas) e o quadro vira a importação em vigor. Uma nova importação da planilha sobrescreve o apurado.
             </li>
             <li>Na aba Em Vigor, clique numa linha para abrir o relatório: linhas aceitas, recusadas e avisos.</li>
             <li>
               A aba Em Vigor mostra sempre todos os tipos, também os não importados. Para fechar a competência, todos precisam estar importados, menos os
-              marcados como Opcional (a DRE do Comercial e o saldo inicial do estoque); os que faltam aparecem nos motivos do Fechar Competência, na tela Resultados. O
+              marcados como Opcional (a DRE do Comercial e, na primeira competência do SIG, a única em que aparece, o saldo inicial do estoque); os que faltam aparecem nos motivos do Fechar Competência, na tela Resultados. O
               arquivo recusado por não ter registros do mês (o mês sem movimento daquela lista) aparece como Sem Registros no Mês e conta como entregue.
             </li>
             <li>A aba Histórico guarda todas as importações, inclusive as recusadas e as substituídas.</li>
@@ -198,7 +205,7 @@ export function ImportarContent() {
               (Metalúrgica) e as demais do LISTAS REALIZADO (OPERAÇÃO) —, o Quadro de Lotação por centro de custo (a referência do
               quadro de lotação dos Cenários Analíticos, fora da apuração), os Créditos de Impostos (a aba Impostos (Lista) do LISTAS REALIZADO (RESULTADOS): o
               Creditado e o Estornado de cada conta da Matriz e da Filial, para a aba Impostos de Resultados, fora da apuração), os indicadores do Administrativo e do Comercial, a DRE do Comercial
-              e o saldo inicial do estoque entram por aqui (o balancete é detalhado: um movimento por linha, com o cliente ou fornecedor, a emissão e o histórico, que o extrato de uma conta na DRE abre no modal Balancete; nas abas Requisições (Lista) e Notas Fiscais (Lista), a tarefa dos itens leva os custos às linhas, na etapa Linhas da apuração) (as metas do orçamento ficam nos cenários: Criação de Cenários / Cenários Sintéticos). Reimportar um tipo substitui o
+              e o saldo inicial do estoque entram por aqui (o balancete é detalhado: um movimento por linha, com o cliente ou fornecedor, a emissão, o histórico e o ID do movimento no RM, que o extrato de uma conta na DRE abre no modal Balancete; nas abas Requisições (Lista) e Notas Fiscais (Lista), a tarefa dos itens leva os custos às linhas, na etapa Linhas da apuração, e o IDENTIFICADOR liga os itens ao ID do movimento do balancete, para o botão Itens dos extratos e das Contestações de Gastos) (as metas do orçamento ficam nos cenários: Criação de Cenários / Cenários Sintéticos). Reimportar um tipo substitui o
               lote anterior por inteiro.
             </p>
             <p>
@@ -287,7 +294,8 @@ export function ImportarContent() {
                       )}
                     </td>
                     <td className="px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      {podeEnviar(tipo) && TIPOS_DO_MES.includes(tipo) ? (
+                      {/* A DRE do Comercial também tem o Importar da linha (06/11/2026); o saldo inicial, só pelo Importar Arquivo. */}
+                      {podeEnviar(tipo) && (TIPOS_DO_MES.includes(tipo) || tipo === "DRE_COMERCIAL") ? (
                         <Button
                           type="button"
                           variant="outline"

@@ -107,6 +107,16 @@ function CampoForm({
             );
           })}
         </div>
+      ) : c.tipo === "texto" && c.multilinha ? (
+        // O texto longo (06/11/2026: as Competências e as Atividades das funções).
+        <textarea
+          id={id}
+          value={String(valor ?? "")}
+          disabled={travado}
+          rows={4}
+          onChange={(e) => onMuda(e.target.value)}
+          className="w-full rounded-sm border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50"
+        />
       ) : (
         <Input
           id={id}

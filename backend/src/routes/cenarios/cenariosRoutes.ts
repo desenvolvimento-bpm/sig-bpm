@@ -76,6 +76,13 @@ cenariosRoutes.get("/:id/centros/contas", autenticacao, tela("premissas", "ler",
 cenariosRoutes.put("/:id/centros", autenticacao, tela("premissas", "editar", "centros"), express.json({ limit: "2mb" }), asyncHandler(c.gravarCentro));
 // Os rateios: a aba Rateios das Premissas; o aviso dos rateios sem base também aparece nas outras abas e nos Resultados.
 cenariosRoutes.get("/:id/rateios", autenticacao, verificarPermissaoDoCenario("ler", "premissas"), asyncHandler(c.rateios));
+// A aba Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores).
+cenariosRoutes.get("/:id/quadro", autenticacao, tela("premissas", "ler", "quadro"), asyncHandler(c.quadro));
+cenariosRoutes.put("/:id/quadro/meses", autenticacao, tela("premissas", "editar", "quadro"), express.json({ limit: "4mb" }), asyncHandler(c.gravarMesesDoQuadro));
+cenariosRoutes.post("/:id/quadro/excluir", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.excluirLinhasDoQuadro));
+cenariosRoutes.post("/:id/quadro", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
+cenariosRoutes.put("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
+cenariosRoutes.delete("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), asyncHandler(c.gravarLinhaDoQuadro));
 // Os investimentos e o extra-operacional dos cenários analíticos (13/10/2026).
 cenariosRoutes.get("/:id/investimentos", autenticacao, tela("premissas", "ler", "investimentos"), asyncHandler(c.investimentos));
 cenariosRoutes.post("/:id/investimentos/excluir", autenticacao, tela("premissas", "editar", "investimentos"), express.json(), asyncHandler(c.excluirInvestimentos));

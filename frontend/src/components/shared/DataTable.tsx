@@ -21,6 +21,8 @@ type DataTableProps<T> = {
   /** Com cabeçalho filtrável: a tabela vazia por causa dos filtros mantém o cabeçalho e oferece limpá-los. */
   filtrosAtivos?: boolean;
   onLimparFiltros?: () => void;
+  /** Linhas fixas no pé da tabela, como o Total (06/11/2026: o Realizado do Quadro de Lotação). */
+  rodape?: ReactNode;
 };
 
 export function DataTable<T>({
@@ -34,6 +36,7 @@ export function DataTable<T>({
   cabecalho,
   filtrosAtivos,
   onLimparFiltros,
+  rodape,
 }: DataTableProps<T>) {
   // Os estados padrão (G12 do levantamento de layout).
   if (isLoading) return <Carregando />;
@@ -67,6 +70,7 @@ export function DataTable<T>({
       </thead>
       )}
       <tbody>{data.map((item) => renderRow(item))}</tbody>
+      {rodape ? <tfoot>{rodape}</tfoot> : null}
     </table>
   );
 }

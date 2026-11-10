@@ -18,14 +18,19 @@ import { Erro } from "../../../components/CenarioDialog";
 import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/InvestimentosDoCenario";
 import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
 import { BotaoApagarValores, BotaoImportarValores, BotaoReplicarMedias, ExportarPremissas } from "../../../components/PlanilhaPremissas";
+import { QuadroDoCenario } from "../../../components/QuadroDoCenario";
 import { TabelaPremissas } from "../../../components/TabelaPremissas";
 import { cenariosService } from "../../../services/cenariosService";
 
-/** As abas das premissas: as unidades, os centros de custo, os rateios, os investimentos, o extra-operacional e os indicadores manuais. */
+/**
+ * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os rateios, os investimentos,
+ * o extra-operacional e os indicadores manuais.
+ */
 const ABAS = [
   { chave: "1", rotulo: "Matriz" },
   { chave: "2", rotulo: "Filial" },
   { chave: "3", rotulo: "Serviços" },
+  { chave: "quadro", rotulo: "Quadro de Lotação" },
   { chave: "centros", rotulo: "Centros de Custo" },
   { chave: "rateios", rotulo: "Rateios" },
   { chave: "investimentos", rotulo: "Investimentos" },
@@ -48,6 +53,7 @@ export function PremissasContent() {
   const aba = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
   const editaAba = hasPermission(`cenarios_analiticos_premissas.${abaDaChave(aba)}:editar`);
   const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
+  const quadro = aba === "quadro";
   const centros = aba === "centros";
   const rateios = aba === "rateios";
   const investimentos = aba === "investimentos";
@@ -79,15 +85,30 @@ export function PremissasContent() {
           <ul>
             <li>Escolha a unidade nas abas: Matriz e Filial têm uma tabela para a venda Global e outra, embaixo, para a Mercantil; Serviços, só a Global. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
             <li>
+              Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
+              (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
+              Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
+              (colaboradores × Salário Total nos doze meses) e, no rodapé, os colaboradores e a folha de cada mês. Busque as linhas pela função, pelo
+              centro, pela unidade ou pela senioridade, e mostre todos os meses ou um só.
+              {podeEditar
+                ? " “Nova Linha” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, digite os valores de cada mês e clique em “Gravar” (ou “Descartar”). O menu Ações de cada linha edita os cadastros ou a exclui; para excluir várias, marque as caixas e clique em “Excluir Selecionadas”."
+                : null}{" "}
+              O grupo de centros com linhas conta por elas, na aba Centros de Custo, os Colaboradores CLT e PJ e as Remunerações CLT e PJ (colaboradores ×
+              Salário Total; na mão de obra da atribuição do centro da linha — Direta, a MOD; Indireta, a MOI; sem ela, a do grupo), que deixam de se
+              digitar ali; a senioridade Aprendiz tem o Fundo de Garantia: Aprendiz. O grupo sem linhas continua com os valores digitados.
+            </li>
+            <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
               estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo: o Quadro de Lotação (os Colaboradores CLT e PJ
-              de cada mês; o Total de Colaboradores é a soma); os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
-              Garantia (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 8%, 11,11% e 8,33%, até você digitar outro — e os
-              Benefícios Adicionais, em R$); e os valores mensais das contas: mão de obra direta e indireta e gastos
+              de cada mês; o Total de Colaboradores é a soma; nos grupos com linhas na aba Quadro de Lotação, eles, as Remunerações CLT e PJ e os
+              Salários dos Aprendizes vêm de lá e não se digitam); os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
+              Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
+              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas: mão de obra direta e indireta e gastos
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
               tabelas das unidades, em R$ por unidade; a depreciação, nos investimentos). A conta Encargos e Benefícios não se digita: é a base
-              (Remunerações CLT + Horas Extras) × [INSS + FGTS + Férias + Décimo Terceiro + (INSS + FGTS) × (Férias + Décimo Terceiro)] + os
-              Benefícios Adicionais (estes, na mão de obra da atribuição do grupo); as Remunerações PJ não têm encargos. Embaixo do título, os centros do grupo, o balde e para onde vai o valor; o grupo com centros de
+              (Remunerações CLT + Horas Extras) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo Terceiro)] + (FGTS
+              Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais (estes, na mão de obra da
+              atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ não têm encargos. Embaixo do título, os centros do grupo, o balde e para onde vai o valor; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
               Cadastros da Controladoria). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
@@ -139,9 +160,12 @@ export function PremissasContent() {
               indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz o Código, a descrição, a unidade, a Média de
               Referência, o Total da Referência (a média × 12), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
               (uma fórmula: Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência) e a Justificativa, em texto
-              livre. Nos centros de custo, o Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores em fórmula), os Encargos e Benefícios
-              (os percentuais; o mês em branco vale a Média de Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula (as linhas
-              calculadas não se importam nem se replicam). A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
+              livre. Nos centros de custo, o Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores em fórmula; os Salários dos
+              Aprendizes nos grupos com linhas na aba Quadro de Lotação), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
+              Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula (as linhas calculadas não se importam nem se replicam). A aba
+              Quadro de Lotação traz as linhas, com o Código da Linha (que a identifica na importação), os cadastros (o Centro de Custo pelo código) e,
+              em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), o Custo no Ano em fórmula
+              e linhas em branco para as novas; ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
               linhas em branco para os novos. No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
               conta somada em todas as abas dos centros (em fórmulas, que acompanham os valores das abas), para conferir com a DRE do cenário; o
               total bate, e a parte dos rateios que vai para Serviços está, na DRE, nas contas da CSM ou da CSC.
@@ -151,8 +175,11 @@ export function PremissasContent() {
               conferido no padrão (a coluna Código, a Média de Referência, os doze meses e a Justificativa) e mostra quantos valores, justificativas e
               investimentos mudam. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade…) aparece em mais de um arquivo, o
               quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último). Na aba Investimentos, os com o
-              Nome de Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. “Importar” grava os meses (em branco apaga), as
-              justificativas e os investimentos, recalcula a DRE e registra no histórico (tela Histórico, aba Alterações).
+              Nome de Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro
+              de Lotação, as linhas com o Código da Linha são atualizadas e as sem código entram como novas (os cadastros conferidos como no
+              Lançamento Inicial: uma unidade, senioridade, função ou centro de custo que não existe recusa o arquivo); para tirar uma linha, use a
+              tela. “Importar” grava os meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, recalcula a DRE
+              e registra no histórico (tela Histórico, aba Alterações).
             </li>
             <li>
               Cada tabela traz, mês a mês: a Jornada (os dias úteis, já calculados pelo calendário — segunda a sexta, menos os feriados nacionais), a
@@ -227,9 +254,11 @@ export function PremissasContent() {
             </p>
             <p>
               A conta Encargos e Benefícios da mão de obra (direta e indireta) de cada grupo é calculada mês a mês, com o INSS e o FGTS também sobre
-              as férias e o décimo terceiro: base × [INSS + FGTS + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS) × (Férias + Décimo Terceiro)] +
-              Benefícios Adicionais, com a base = Remunerações CLT + Horas Extras (com o padrão, 63,64% da base). Os percentuais têm o mesmo padrão
-              em todos os cenários (29% — a confirmar com a contabilidade —, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
+              as férias e o décimo terceiro: base × [INSS + FGTS CLT + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo
+              Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + Benefícios Adicionais, com a base =
+              Remunerações CLT + Horas Extras (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador sobre os seus salários, os
+              aprendizes (a senioridade Aprendiz, nas linhas CLT da aba Quadro de Lotação) a 2% e os demais a 8%. Os percentuais têm o mesmo padrão
+              em todos os cenários (29% — a confirmar com a contabilidade —, 2%, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
               Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo.
               Na referência realizada, os Benefícios Adicionais de cada mês fechado e a Média de Referência deles são a diferença entre os encargos
               realizados do grupo e o cálculo com os percentuais padrão (negativa quando o realizado fica abaixo dele): assim, a conta calculada bate
@@ -247,6 +276,8 @@ export function PremissasContent() {
       {cenario.data && travado && editaAba ? <AvisoMarcado cenario={cenario.data} oQue="as premissas" /> : null}
       {!abas.length ? (
         <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Seu perfil não tem acesso a nenhuma aba desta tela.</p>
+      ) : quadro ? (
+        <QuadroDoCenario id={id} editavel={podeEditar} />
       ) : centros ? (
         <CentrosDoCenario id={id} editavel={podeEditar} />
       ) : rateios ? (

@@ -56,6 +56,8 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "matriz", nome: "Matriz" },
               { codigo: "filial", nome: "Filial" },
               { codigo: "servicos", nome: "Serviços" },
+              // A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores); os perfis com a aba Centros de Custo a herdaram.
+              { codigo: "quadro", nome: "Quadro de Lotação" },
               { codigo: "centros", nome: "Centros de Custo" },
               { codigo: "rateios", nome: "Rateios" },
               { codigo: "investimentos", nome: "Investimentos" },
@@ -211,6 +213,38 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
       { codigo: "cadastro_precos_contrato", nome: "Preços do Contrato" },
       { codigo: "cadastro_tipos_movimento", nome: "Tipos de Movimento" },
       { codigo: "cadastro_tabela_estacas", nome: "Tabela de Estacas" },
+    ],
+  },
+  // A Gestão de Colaboradores (06/11/2026, pedido do Adão; Processos Administrativos, entre a Apuração e a Controladoria,
+  // como no menu): a tela Cadastros, com uma aba por cadastro. Editar cria, edita, inativa, exclui e importa.
+  {
+    recurso: "GESTAO_COLABORADORES",
+    nome: "Gestão de Colaboradores",
+    area: "gestao_colaboradores",
+    telas: [
+      {
+        codigo: "colaboradores_cadastros",
+        nome: "Cadastros",
+        abas: [
+          { codigo: "senioridades", nome: "Senioridades" },
+          { codigo: "funcoes", nome: "Funções" },
+          { codigo: "movimentacoes", nome: "Movimentações" },
+          { codigo: "classificacoes", nome: "Classificações" },
+          { codigo: "lancamento_inicial", nome: "Lançamento Inicial" },
+        ],
+      },
+      // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências (Editar abre, fecha, reabre e exclui) e as abas de
+      // uma competência — Movimentações (Editar registra e exclui), Controle (Editar aprova e reprova) e Realizado.
+      {
+        codigo: "colaboradores_quadro",
+        nome: "Quadro de Lotação",
+        abas: [
+          { codigo: "movimentacoes", nome: "Movimentações" },
+          { codigo: "controle", nome: "Controle" },
+          { codigo: "realizado", nome: "Realizado" },
+        ],
+      },
+      { codigo: "colaboradores_painel", nome: "Painel de Bordo", abas: [{ codigo: "resultados", nome: "Resultados" }, { codigo: "indicadores", nome: "Indicadores" }] },
     ],
   },
   // A Central de Conectividade (24/10/2026; desde 30/10/2026, um processo da Controladoria, acima dos Cadastros da

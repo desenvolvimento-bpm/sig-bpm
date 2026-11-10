@@ -88,6 +88,9 @@ export type MovimentoDoBalancete = {
   cliForn: string | null;
   emissao: string | null;
   historico: string | null;
+  /** O ID do movimento no RM (10/11/2026, a coluna ID do Balancete (Lista)) e quantos itens ele tem nas listas importadas. */
+  idMovimento: string | null;
+  itens: number;
   valor: string;
   /** O centro do balancete, quando o que vale é outro (a contestação; 27/10/2026), e a conta que vale na DRE, quando é outra. */
   centroOriginal: { codigoRM: string | null; nome: string | null } | null;
@@ -98,6 +101,34 @@ export type MovimentoDoBalancete = {
   /** O reflexo de um rateio (30/10/2026): o movimento é de outra linha da DRE (a de origem) e chega a esta pelo rateio. */
   rateioDe: { linha: string; grupo: string } | null;
 };
+/** Os itens de um movimento (10/11/2026): os das requisições e os das notas fiscais com o ID dele (o IDENTIFICADOR das listas). */
+export type ItemDaRequisicao = {
+  id: string;
+  competencia: string;
+  tipoMovimento: string | null;
+  nomeTipoMovimento: string | null;
+  data: string | null;
+  filial: number | null;
+  codigoCentroCusto: string | null;
+  nomeCentroCusto: string | null;
+  projeto: string | null;
+  contaContabil: string;
+  descricaoConta: string | null;
+  codigoProduto: string | null;
+  descricaoItem: string | null;
+  quantidade: string | null;
+  valorUnitario: string | null;
+  valorTotal: string;
+};
+export type ItemDaNotaFiscal = Omit<ItemDaRequisicao, "valorUnitario"> & {
+  numero: string | null;
+  fornecedor: string | null;
+  subtotal: string | null;
+  desconto: string | null;
+  cfop: string | null;
+};
+export type ItensDoMovimento = { id: string; requisicoes: ItemDaRequisicao[]; notas: ItemDaNotaFiscal[] };
+
 /** O balancete de uma conta no mês (15/10/2026; antes, as requisições e as notas fiscais). */
 export type BalanceteDaConta = {
   conta: { reduzido: string; descricao: string };
@@ -173,6 +204,20 @@ export const dreService = {
       ...(filtro.adotada ? { adotada: filtro.adotada } : {}),
     };
     const { data } = await api.get<{ data: BalanceteDaConta }>(`/proxy/competencias/${anoMes}/dre/documentos`, { params });
+    return data.data;
+  },
+
+  /** Os itens de um movimento do balancete (10/11/2026), no recorte do modal Balancete. */
+  itensDoMovimento: async (anoMes: string, filtro: { linha: string; conta: string; centro?: string | null; filial?: number | null; adotada?: string | null }, lancamento: string): Promise<ItensDoMovimento> => {
+    const params = {
+      linha: filtro.linha,
+      conta: filtro.conta,
+      ...(filtro.centro ? { centro: filtro.centro } : {}),
+      ...(filtro.filial ? { filial: filtro.filial } : {}),
+      ...(filtro.adotada ? { adotada: filtro.adotada } : {}),
+      lancamento,
+    };
+    const { data } = await api.get<{ data: ItensDoMovimento }>(`/proxy/competencias/${anoMes}/dre/documentos/itens`, { params });
     return data.data;
   },
 

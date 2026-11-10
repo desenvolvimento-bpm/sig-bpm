@@ -165,6 +165,12 @@ export const AREA_DO_CADASTRO: Record<string, string> = {
   "alocacao-linhas": "cadastro_controladoria.alocacao_linhas",
   "estrutura-indicadores": "cadastro_analitico.estrutura_indicadores",
   "painel-bordo": "cadastro_analitico.painel_bordo",
+  // A tela Cadastros da Gestão de Colaboradores (06/11/2026).
+  "colaboradores-senioridades": "colaboradores_cadastros.senioridades",
+  "colaboradores-funcoes": "colaboradores_cadastros.funcoes",
+  "colaboradores-movimentacoes": "colaboradores_cadastros.movimentacoes",
+  "colaboradores-classificacoes": "colaboradores_cadastros.classificacoes",
+  "colaboradores-lancamento-inicial": "colaboradores_cadastros.lancamento_inicial",
 };
 
 /** A permissão da tela do cadastro da rota (:entidade); entidade desconhecida segue adiante (a rota responde 404). */

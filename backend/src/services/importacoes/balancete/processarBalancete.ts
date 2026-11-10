@@ -212,6 +212,8 @@ export async function processarBalancete(importacaoId: string): Promise<void> {
               cliForn: a.cliForn,
               emissao: a.emissao,
               historico: a.historico,
+              // O ID do movimento no RM (10/11/2026).
+              idMovimento: a.idMovimento,
             })),
           });
         }

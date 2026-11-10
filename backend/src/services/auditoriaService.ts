@@ -68,6 +68,9 @@ export const ROTULO_ACAO: Record<string, string> = {
   TOKEN_API: "Token da API emitido",
   ACESSO_API: "Acesso pela API",
   ACESSO_API_NEGADO: "Acesso pela API recusado",
+  // O Quadro de Lotação (06/11/2026): a decisão sobre uma movimentação de aprovação manual.
+  APROVACAO: "Aprovação de movimentação",
+  REPROVACAO: "Reprovação de movimentação",
 };
 
 /** Entidades registradas, com o rótulo da tela de consulta. */
@@ -84,6 +87,7 @@ export const ROTULO_ENTIDADE: Record<string, string> = {
   lista_operacional: "Lista operacional",
   divergencia: "Divergência",
   cenario: "Cenário",
+  cenario_lotacao: "Quadro de Lotação do cenário",
   centro_custo: "Centro de custo",
   conta_resultado: "Conta de resultado",
   reclassificacao: "Reclassificação de conta",
@@ -99,6 +103,14 @@ export const ROTULO_ENTIDADE: Record<string, string> = {
   api_bloqueio: "Bloqueio nas APIs",
   contestacao: "Contestação de gasto",
   arquivo_geral: "Arquivo Geral",
+  // A Gestão de Colaboradores (06/11/2026): os cadastros e o Lançamento Inicial.
+  colaborador_senioridade: "Senioridade",
+  colaborador_funcao: "Função",
+  colaborador_tipo_movimentacao: "Tipo de movimentação",
+  colaborador_classificacao: "Classificação de movimentação",
+  colaborador_carga_inicial: "Lançamento Inicial",
+  colaborador_competencia: "Competência do Quadro de Lotação",
+  colaborador_movimentacao: "Movimentação do Quadro de Lotação",
 };
 
 /** Deixa o JSON gravável: Decimal e Date viram texto, undefined some. */

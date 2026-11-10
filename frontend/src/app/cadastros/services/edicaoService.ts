@@ -23,6 +23,8 @@ export type Campo = {
   filtradoPor?: string;
   /** Ocupa as duas colunas do formulário de edição. */
   larguraInteira?: boolean;
+  /** Um texto longo, em várias linhas (06/11/2026). */
+  multilinha?: boolean;
   /** Uma coluna estreita na tabela (a ordem e o código). */
   estreita?: boolean;
   /** Um valor em reais: "R$" e duas casas na tabela, duas casas no formulário. */

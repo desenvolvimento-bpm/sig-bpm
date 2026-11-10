@@ -230,3 +230,37 @@ describe("o balancete detalhado (15/10/2026)", () => {
     assert.match(conferirTotal(r.somaArquivo, r.totalGeral, r.tabelasDoMes) ?? "", /aparece em 2 tabelas/);
   });
 });
+
+describe("a coluna ID do balancete (10/11/2026)", () => {
+  // O ID do movimento no RM logo depois da FILIAL, como no LISTAS REALIZADO (RESULTADOS) de 10/11/2026.
+  const cab: ValorCelula[] = ["FILIAL", "ID", "COD_CUSTO", "C_CUSTO", "SUB_COD_CONTA_4", "REDUZIDO_CONTA", "CONTA", "CLI_FORN", "EMISSAO", "HISTORICO", AGO, SET, "Total Geral"];
+  const mov = (id: ValorCelula, valor: number): ValorCelula[] => [1, id, "1.01.00000001", "CENTRO", "3.02", "2855", "CONTA 2855", "FORNECEDOR A", 46240, "NF 123", valor, null, valor];
+  const linhas = [
+    cab,
+    mov(16310, -100),
+    mov("16311", -40),
+    // Sem o ID (a coluna vazia, como no arquivo de 10/11/2026): o movimento entra, sem o ID.
+    mov(null, -10),
+    [1, null, "1.01.00000001", "CENTRO", "3.02", "2855", "CONTA 2855", "FORNECEDOR A Total", null, null, -150, null, -150],
+    ["Total Geral", null, null, null, null, null, null, null, null, null, -150, null, -150],
+  ].map((celulas, i) => ({ numero: i + 1, celulas }));
+
+  it("lê o ID de cada movimento pelo nome da coluna, com as demais deslocadas", () => {
+    const r = interpretarBalancete(linhas, 2026, 8);
+    assert.ok(r.ok);
+    assert.equal(r.rejeicoes.length, 0);
+    assert.deepEqual(r.lancamentos.map((l) => l.idMovimento), ["16310", "16311", null]);
+    assert.equal(r.lancamentos[0].codigoCentroCusto, "1.01.00000001");
+    assert.equal(r.lancamentos[0].reduzido, "2855");
+    assert.equal(r.lancamentos[0].historico, "NF 123");
+    assert.equal(r.ignoradas.subtotais, 2);
+    assert.equal(conferirTotal(r.somaArquivo, r.totalGeral), null);
+  });
+
+  it("sem a coluna, o ID fica vazio", () => {
+    const semId = linhas.map((l) => ({ ...l, celulas: l.celulas.filter((_, i) => i !== 1) }));
+    const r = interpretarBalancete(semId, 2026, 8);
+    assert.ok(r.ok);
+    assert.deepEqual(r.lancamentos.map((l) => l.idMovimento), [null, null, null]);
+  });
+});

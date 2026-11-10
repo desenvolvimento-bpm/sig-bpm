@@ -64,6 +64,8 @@ export type Indicador = {
   metodologia: string;
   acumulado: "ACUM" | "ATUAL";
   meses: Array<number | null>;
+  /** Os meses com o valor apurado no Quadro de Lotação (06/11/2026): a lupa com as movimentações. */
+  apurados?: boolean[];
   total: number | null;
   /** O orçado de cada mês e o acumulado do orçado: o cenário Orçamento Empresarial do exercício (zero sem ele). */
   orcado: Array<number | null>;

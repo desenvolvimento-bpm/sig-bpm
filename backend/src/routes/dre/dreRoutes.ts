@@ -17,6 +17,7 @@ dreRoutes.get("/detalhe", autenticacao, lerDREDoMes, asyncHandler(c.detalhe));
 dreRoutes.get("/rateios", autenticacao, lerDREDoMes, asyncHandler(c.rateios));
 dreRoutes.get("/detalhe/exportar", autenticacao, lerDREDoMes, asyncHandler(c.exportarExtrato));
 dreRoutes.get("/documentos", autenticacao, lerDREDoMes, asyncHandler(c.documentos));
+dreRoutes.get("/documentos/itens", autenticacao, lerDREDoMes, asyncHandler(c.itensDoMovimento));
 dreRoutes.get("/volumes", autenticacao, lerDREDoMes, asyncHandler(c.volumes));
 dreRoutes.get("/exportar", autenticacao, lerDREDoMes, asyncHandler(c.exportar));
 dreRoutes.post("/apurar", autenticacao, verificarPermissao("dre:editar"), asyncHandler(c.apurar));

@@ -28,6 +28,19 @@ const visaoSchema = z.coerce.number().int().min(0).max(5);
 const marcacaoSchema = z.enum(["ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS", "PREVISAO"]).nullable();
 const visualizacaoSchema = z.enum(["PARTICULAR", "PUBLICA"]).optional();
 const tipoSchema = z.enum(["SINTETICO", "ANALITICO"]);
+/** Um mês de uma linha do Quadro de Lotação dos analíticos (09/11/2026): os colaboradores e os salários de cada um. */
+const mesDoQuadroSchema = z.object({
+  colaboradores: z.number().finite().min(0, "Os colaboradores não podem ser negativos.").max(1e9),
+  salarioBruto: z.number().finite().min(0, "O Salário Bruto não pode ser negativo.").max(1e9),
+  adicional: z.number().finite().min(0, "A Insalubridade / Periculosidade não pode ser negativa.").max(1e9),
+});
+const linhaDoQuadroSchema = z.object({
+  unidadeNegocioId: z.string().uuid("Escolha a unidade."),
+  vinculo: z.enum(["CLT", "PJ"], { message: "O tipo é CLT ou PJ." }),
+  senioridadeId: z.string().uuid("Escolha a senioridade."),
+  funcaoId: z.string().uuid("Escolha a função."),
+  centroCustoId: z.string().uuid("Escolha o centro de custo."),
+});
 
 /** Quem pede; o Administrador (Editar no Controle de Usuários) vê também os cenários particulares. */
 const usuario = (request: Request) => ({ id: request.user!.sub, nome: request.user!.nome, admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR });
@@ -217,6 +230,52 @@ export const cenariosController = {
     return responder(response, () => cenariosService.excluirInvestimentos(c, corpo.data.ids, usuario(request)));
   },
 
+  /** A aba Quadro de Lotação dos analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores). */
+  quadro(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.quadro(c, usuario(request))) : undefined;
+  },
+
+  /** Nova linha do Quadro de Lotação (POST, com os doze meses), alteração dos cadastros dela (PUT /:linhaId) ou exclusão (DELETE /:linhaId). */
+  gravarLinhaDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const linhaId = request.params.linhaId ? idSchema.safeParse(request.params.linhaId) : null;
+    if (linhaId && !linhaId.success) return response.status(400).json({ error: "Linha do Quadro de Lotação inválida." });
+    if (request.method === "DELETE") return responder(response, () => cenariosService.gravarLinhaDoQuadro(c, linhaId!.data!, null, usuario(request)));
+    const corpo = linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroSchema).length(12).optional() }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Linha do Quadro de Lotação inválida." });
+    return responder(response, () => cenariosService.gravarLinhaDoQuadro(c, linhaId?.data ?? null, corpo.data, usuario(request)), linhaId ? 200 : 201);
+  },
+
+  /** O Excluir Selecionados do Quadro de Lotação (09/11/2026). */
+  excluirLinhasDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ ids: z.array(idSchema).min(1).max(5000) }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Escolha as linhas a excluir." });
+    return responder(response, () => cenariosService.excluirLinhasDoQuadro(c, corpo.data.ids, usuario(request)));
+  },
+
+  /** Os meses das linhas do Quadro de Lotação (a edição da tabela): os colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade. */
+  gravarMesesDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z
+      .object({
+        alteracoes: z
+          .array(z.object({ linha: idSchema, mes: z.number().int().min(1).max(12), campo: z.enum(["colaboradores", "salarioBruto", "adicional"]), valor: z.number().finite().nullable() }))
+          .min(1)
+          .max(60_000),
+        origem: z
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .optional(),
+      })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Valores inválidos." });
+    return responder(response, () => cenariosService.gravarMesesDoQuadro(c, corpo.data.alteracoes, usuario(request), corpo.data.origem));
+  },
+
   rateios(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.rateios(c, usuario(request))) : undefined;
@@ -353,6 +412,13 @@ export const cenariosController = {
               alteracoes: z.array(z.object({ chave: z.string().min(1).max(400), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).max(200_000),
               justificativas: z.array(z.object({ chave: z.string().min(1).max(400), texto: z.string().max(2000).nullable() })).max(50_000),
               investimentos: z.object({ novos: z.array(investimento).max(2000), alterados: z.array(investimento.extend({ id: idSchema })).max(2000) }).optional(),
+              // O Quadro de Lotação (09/11/2026): as linhas novas e as alteradas (pelo Código da Linha), já conferidas na análise.
+              quadro: z
+                .object({
+                  novas: z.array(linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
+                  alteradas: z.array(linhaDoQuadroSchema.extend({ id: idSchema, meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
+                })
+                .optional(),
             }),
           )
           .min(1)
@@ -363,6 +429,7 @@ export const cenariosController = {
     const editaveis = abasDasPremissas(request, response, "editar");
     const abas = new Set(corpo.data.arquivos.flatMap((a) => [...a.alteracoes, ...a.justificativas].map((x) => abaDaChave(x.chave))));
     if (corpo.data.arquivos.some((a) => (a.investimentos?.novos.length ?? 0) + (a.investimentos?.alterados.length ?? 0) > 0)) abas.add("investimentos");
+    if (corpo.data.arquivos.some((a) => (a.quadro?.novas.length ?? 0) + (a.quadro?.alteradas.length ?? 0) > 0)) abas.add("quadro");
     if (abas.has(null)) return response.status(400).json({ error: "Há um Código de linha inválido." });
     const fora = [...abas].filter((a): a is AbaDasPremissas => !!a && !editaveis.includes(a));
     if (fora.length) return response.status(403).json({ error: `Seu perfil não edita ${fora.map((a) => NOME_DA_ABA[a]).join(", ")}.` });

@@ -941,6 +941,12 @@ export function ResultadosContent() {
               de custo e na filial do lançamento, com a soma ao lado do valor dele; desmarque a caixa para ver a conta inteira.
             </li>
             <li>
+              No Balancete, a coluna ID mostra o ID do movimento no RM (a coluna ID do Balancete (Lista)), e o botão Itens, na coluna Ações, abre os itens
+              da requisição ou da nota fiscal com esse ID (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas): o produto, o centro de custo, a
+              conta, a quantidade e os valores. Abre com os itens do centro de custo e da conta do movimento, que somam o valor dele; desmarque a caixa para
+              ver o documento inteiro, com os do movimento em amarelo.
+            </li>
+            <li>
               “Regras de Rateio”, no canto de baixo do extrato, mostra as regras de rateio vigentes no mês: em cada chave (Projeto, Produção,
               Metalurgia, Armadura e Acompanhamento), como o valor se divide entre as unidades, com um card por destino (o percentual do mês e o volume);
               e os baldes diretos, que não se dividem.

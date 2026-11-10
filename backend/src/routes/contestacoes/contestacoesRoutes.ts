@@ -2,7 +2,7 @@ import { Router } from "express";
 
 import { contestacoesController as c } from "../../controllers/contestacoes/contestacoesController.js";
 import { autenticacao } from "../../middlewares/autenticacao.js";
-import { verificarPermissao } from "../../middlewares/verificarPermissao.js";
+import { verificarAlgumaPermissao, verificarPermissao } from "../../middlewares/verificarPermissao.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 
 /**
@@ -18,6 +18,8 @@ contestacoesRoutes.get("/solicitadas", autenticacao, verificarPermissao("contest
 contestacoesRoutes.get("/recebidas", autenticacao, verificarPermissao("contestacoes.recebidas:ler"), asyncHandler(c.listar("recebidas")));
 contestacoesRoutes.get("/validacoes", autenticacao, verificarPermissao("contestacoes_validacoes:ler"), asyncHandler(c.listar("validacoes")));
 contestacoesRoutes.post("/processar", autenticacao, verificarPermissao("contestacoes_validacoes:editar"), asyncHandler(c.processar));
+// Os itens de um movimento (10/11/2026): Ler na aba em que a contestação aparece (?aba=).
+contestacoesRoutes.get("/:id/movimentos/:movimentoId/itens", autenticacao, verificarAlgumaPermissao("contestacoes.solicitadas:ler", "contestacoes.recebidas:ler", "contestacoes_validacoes:ler"), asyncHandler(c.itensDoMovimento));
 contestacoesRoutes.post("/:id/responder", autenticacao, verificarPermissao("contestacoes.recebidas:editar"), asyncHandler(c.responder));
 contestacoesRoutes.post("/:id/situacao", autenticacao, verificarPermissao("contestacoes_validacoes:editar"), asyncHandler(c.alterarSituacao));
 contestacoesRoutes.delete("/:id/importacao", autenticacao, verificarPermissao("lancamentos_manuais.contestacoes:editar"), asyncHandler(c.desfazerImportacao));

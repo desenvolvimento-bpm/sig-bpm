@@ -1,6 +1,6 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { acumular, type Parte } from "./indicadores.js";
-import { catalogoDeIndicadores } from "./catalogoIndicadores.js";
+import { catalogoDeIndicadores, ROTULO_DO_REGISTRADO, rotuloDoQuadro } from "./catalogoIndicadores.js";
 import { dadosDoMes, encadearMeses } from "./indicadoresService.js";
 import { orcamentoDoExercicio, type CenariosDoProva } from "./orcamento.js";
 import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
@@ -25,7 +25,7 @@ function bloco(item: ItemPainel, realizado: Valor, orcado: Valor, comOrcado = tr
 /** A Metodologia do item por extenso (os indicadores pelo nome; × e ÷ nas contas). */
 function metodologiaPorExtenso(formula: string) {
   try {
-    return formulaPorExtenso(formula, (x) => ("nome" in x ? x.nome : x.codigo));
+    return formulaPorExtenso(formula, (x) => ("nome" in x ? x.nome : "chave" in x ? rotuloDoQuadro(x.chave) : x.tipo === "REGISTRADO" ? ROTULO_DO_REGISTRADO : x.codigo));
   } catch {
     return formula;
   }

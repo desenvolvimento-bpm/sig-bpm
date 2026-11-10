@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, MessageSquareWarning } from "lucide-react";
+import { ArrowLeft, ListTree, MessageSquareWarning } from "lucide-react";
 
 import { IconeDaCorrecao } from "@/components/shared/IconeDaCorrecao";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePermissions } from "@/context/PermissionContext";
 import type { Coluna } from "@/lib/filtrosDeTabela";
+import { plural } from "@/lib/texto";
 
 import { ContestarDialog } from "@/app/contestacoes-de-gastos/components/ContestarDialog";
 import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestacoesService";
@@ -17,6 +18,7 @@ import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestac
 import { moeda } from "../../utils/formatacao";
 import { dreService, mensagemDeErro, type LancamentoDetalhe, type MovimentoDoBalancete, type VisaoDetalhe } from "../services/dreService";
 import { ExportarExtrato } from "./ExportarExtrato";
+import { ItensDoMovimentoDialog } from "./ItensDoMovimentoDialog";
 
 const dataCurta = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : null);
 const centroTexto = (d: MovimentoDoBalancete) => (d.codigoCentroCusto ? `${d.codigoCentroCusto}${d.nomeCentroCusto ? ` · ${d.nomeCentroCusto}` : ""}` : null);
@@ -32,6 +34,9 @@ const textoDe = (x: { codigoRM: string | null; nome: string | null }) => `${x.co
  * As contestações (27/10/2026): o centro e a conta mostrados são os que valem, com o ícone do original quando a
  * reclassificação ou uma contestação os mudou; a coluna Ações tem o Contestar (de quem edita Contestações › Solicitadas)
  * ou a situação da contestação em andamento.
+ *
+ * Os itens (10/11/2026): com a coluna ID do Balancete (Lista), o ID do movimento no RM numa coluna e o botão Itens, que abre
+ * os itens da requisição ou da nota fiscal com ele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas).
  */
 export function BalanceteDialog({
   anoMes,
@@ -53,6 +58,7 @@ export function BalanceteDialog({
   const { hasPermission } = usePermissions();
   const podeContestar = hasPermission("contestacoes.solicitadas:editar");
   const [contestando, setContestando] = useState<MovimentoDoBalancete | null>(null);
+  const [vendoItens, setVendoItens] = useState<MovimentoDoBalancete | null>(null);
   const temCentro = !!lancamento.centro?.codigoRM;
   const [soDoLancamento, setSoDoLancamento] = useState(true);
   const filtro = {
@@ -64,6 +70,8 @@ export function BalanceteDialog({
   const d = consulta.data;
   // A conta que vale na DRE, numa coluna, quando algum movimento está noutra (reclassificado ou contestado).
   const comContaNaDRE = !!d?.linhas.some((x) => x.contaNaDRE);
+  // O ID do movimento no RM (10/11/2026), numa coluna, quando o balancete o traz.
+  const comId = !!d?.linhas.some((x) => x.idMovimento);
   const contaDoBalancete = d ? `${d.conta.reduzido} · ${d.conta.descricao || lancamento.conta.descricao}` : "";
   const colunas = useMemo<Coluna<MovimentoDoBalancete>[]>(
     () => [
@@ -71,12 +79,13 @@ export function BalanceteDialog({
       { chave: "cliForn", rotulo: "Cliente/Fornecedor", valor: (x) => x.cliForn },
       { chave: "historico", rotulo: "Histórico", valor: (x) => x.historico },
       { chave: "filial", rotulo: "Filial", tipo: "numero", valor: (x) => x.filial },
+      ...(comId ? [{ chave: "id", rotulo: "ID", valor: (x: MovimentoDoBalancete) => x.idMovimento }] : []),
       { chave: "centro", rotulo: "Centro de Custo", valor: centroTexto },
       ...(comContaNaDRE ? [{ chave: "contaDRE", rotulo: "Conta na DRE", valor: (x: MovimentoDoBalancete) => (x.contaNaDRE ? `${x.contaNaDRE.reduzido} · ${x.contaNaDRE.descricao}` : contaDoBalancete) }] : []),
       { chave: "valor", rotulo: "Valor", tipo: "numero", alinhamento: "direita", valor: (x) => Number(x.valor), texto: (x) => moeda(x.valor) },
       { chave: "acoes", rotulo: "Ações", semFiltro: true },
     ],
-    [comContaNaDRE, contaDoBalancete],
+    [comContaNaDRE, comId, contaDoBalancete],
   );
   const tabela = useTabelaFiltravel(d?.linhas, colunas);
   const soma = useMemo(() => (d ? d.linhas.reduce((s, x) => s + Number(x.valor), 0) : 0), [d]);
@@ -104,35 +113,57 @@ export function BalanceteDialog({
         </span>
       );
     }
+    if (c.chave === "id") {
+      if (!m.idMovimento) return <span className="text-gray-400">—</span>;
+      return m.itens > 0 ? <span>{m.idMovimento}</span> : <span title="Nenhum item com este ID nas requisições e nas notas fiscais importadas">{m.idMovimento}</span>;
+    }
     if (c.chave === "acoes") {
-      // A contestação em andamento (pendente ou acatada): a situação; senão, o Contestar.
-      const andamento = m.contestacao && (m.contestacao.situacao === "PENDENTE" || m.contestacao.situacao === "ACATADA");
-      if (andamento) {
-        return (
-          <span className="inline-flex items-center gap-1 rounded-sm border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-amber-900" title="A contestação em andamento (Contestações de Gastos)">
-            Nº {m.contestacao!.numero} · {ROTULO_SITUACAO[m.contestacao!.situacao]}
-          </span>
-        );
-      }
-      // O reflexo de um rateio (30/10/2026): contesta-se o movimento na linha de origem, não aqui.
-      if (m.rateioDe) {
-        return podeContestar ? (
-          <span
-            className="inline-flex items-center rounded-sm border border-yellow-300 bg-yellow-50 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-yellow-800"
-            title={`Reflexo do rateio: o movimento é da linha "${m.rateioDe.linha}" (${m.rateioDe.grupo}) e chega a esta pelo rateio. Para contestá-lo, abra o extrato da linha de origem.`}
-          >
-            Rateio
-          </span>
+      // Os itens do movimento (10/11/2026), antes da contestação.
+      const itens =
+        m.idMovimento && m.itens > 0 ? (
+          <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-2 text-[11px]" onClick={() => setVendoItens(m)} title={`Os itens da requisição ou da nota fiscal do movimento (${m.itens} ${plural(m.itens, "item", "itens")})`}>
+            <ListTree className="size-3.5" />
+            Itens
+          </Button>
         ) : null;
-      }
-      return podeContestar ? (
-        <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-2 text-[11px]" onClick={() => setContestando(m)} title="Sugerir outro centro de custo e/ou outra conta para o movimento">
-          <MessageSquareWarning className="size-3.5" />
-          Contestar
-        </Button>
-      ) : null;
+      return (
+        <span className="inline-flex items-center gap-1">
+          {itens}
+          {acaoDaContestacao(m)}
+        </span>
+      );
     }
     return (c.texto ? c.texto(m) : c.valor?.(m)) ?? <span className="text-gray-400">—</span>;
+  };
+
+  /** A coluna Ações, na parte da contestação: a situação da em andamento, o Rateio do reflexo ou o Contestar. */
+  const acaoDaContestacao = (m: MovimentoDoBalancete) => {
+    // A contestação em andamento (pendente ou acatada): a situação; senão, o Contestar.
+    const andamento = m.contestacao && (m.contestacao.situacao === "PENDENTE" || m.contestacao.situacao === "ACATADA");
+    if (andamento) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-sm border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-amber-900" title="A contestação em andamento (Contestações de Gastos)">
+          Nº {m.contestacao!.numero} · {ROTULO_SITUACAO[m.contestacao!.situacao]}
+        </span>
+      );
+    }
+    // O reflexo de um rateio (30/10/2026): contesta-se o movimento na linha de origem, não aqui.
+    if (m.rateioDe) {
+      return podeContestar ? (
+        <span
+          className="inline-flex items-center rounded-sm border border-yellow-300 bg-yellow-50 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-yellow-800"
+          title={`Reflexo do rateio: o movimento é da linha "${m.rateioDe.linha}" (${m.rateioDe.grupo}) e chega a esta pelo rateio. Para contestá-lo, abra o extrato da linha de origem.`}
+        >
+          Rateio
+        </span>
+      ) : null;
+    }
+    return podeContestar ? (
+      <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-2 text-[11px]" onClick={() => setContestando(m)} title="Sugerir outro centro de custo e/ou outra conta para o movimento">
+        <MessageSquareWarning className="size-3.5" />
+        Contestar
+      </Button>
+    ) : null;
   };
 
   return (
@@ -150,7 +181,7 @@ export function BalanceteDialog({
             {rotuloMes ?? anoMes}
             {soDoLancamento ? ` · Filial ${lancamento.filial}${temCentro ? ` · ${lancamento.centro!.codigoRM} · ${lancamento.centro!.nome ?? ""}` : ""}` : " · todas as filiais e centros de custo"}. Os
             movimentos da conta no balancete do mês (aba Balancete (Lista) do LISTAS REALIZADO (RESULTADOS)): a emissão, o cliente ou fornecedor e o histórico de
-            cada um.
+            cada um{comId ? "; o botão Itens abre os itens da requisição ou da nota fiscal com o ID do movimento" : ""}.
             {lancamento.contaAdotada ? ` Na DRE, a conta é a ${lancamento.contaAdotada.reduzido}.` : ""}
           </DialogDescription>
         </DialogHeader>
@@ -221,6 +252,14 @@ export function BalanceteDialog({
           {/* O balancete da conta em Excel (24/10/2026): o lançamento numa aba e os movimentos, no recorte da caixa, em outra. */}
           <ExportarExtrato anoMes={anoMes} linha={linha} visao={visao} recorte={{ conta: lancamento.conta.reduzido, ...(soDoLancamento ? { centro: lancamento.centro?.codigoRM ?? null, filial: lancamento.filial } : {}) }} />
         </DialogFooter>
+        {vendoItens?.idMovimento ? (
+          <ItensDoMovimentoDialog
+            movimento={{ idMovimento: vendoItens.idMovimento, emissao: vendoItens.emissao, cliForn: vendoItens.cliForn, historico: vendoItens.historico, valor: vendoItens.valor, conta: lancamento.conta.reduzido, centro: vendoItens.centroOriginal ? vendoItens.centroOriginal.codigoRM : vendoItens.codigoCentroCusto }}
+            queryKey={["dre", anoMes, "balancete", "itens", filtro, vendoItens.id]}
+            carregar={() => dreService.itensDoMovimento(anoMes, filtro, vendoItens.id)}
+            onFechar={() => setVendoItens(null)}
+          />
+        ) : null}
         {contestando ? (
           <ContestarDialog
             movimento={{

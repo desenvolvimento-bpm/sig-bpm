@@ -18,7 +18,7 @@ import { useEdicaoCadastro } from "./EdicaoCadastro";
 const POR_PAGINA_INICIAL = 50;
 
 /** O texto da célula; sem valor, null (a célula mostra "—" e o filtro, vazias). */
-function textoDoCampo(c: Campo, v: unknown): string | null {
+export function textoDoCampo(c: Campo, v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   if (c.tipo === "booleano") return v ? "Sim" : "Não";
   if (c.tipo === "opcao") return c.opcoes?.find((o) => o.valor === String(v))?.rotulo ?? String(v);
@@ -29,7 +29,7 @@ function textoDoCampo(c: Campo, v: unknown): string | null {
   return String(v);
 }
 
-function formatar(c: Campo, v: unknown) {
+export function formatar(c: Campo, v: unknown) {
   return textoDoCampo(c, v) ?? <span className="text-gray-400">—</span>;
 }
 
@@ -45,9 +45,9 @@ function valorDoCampo(c: Campo, v: unknown): string | number | null {
 }
 
 /** Os números à direita (12/10/2026), como nas demais tabelas: o rótulo e as células. */
-const ehNumero = (c: Campo) => c.tipo === "inteiro" || c.tipo === "decimal";
+export const ehNumero = (c: Campo) => c.tipo === "inteiro" || c.tipo === "decimal";
 
-function colunaDoCampo(c: Campo): Coluna<Registro> {
+export function colunaDoCampo(c: Campo): Coluna<Registro> {
   return {
     chave: c.nome,
     rotulo: c.rotuloColuna ?? c.rotulo,
