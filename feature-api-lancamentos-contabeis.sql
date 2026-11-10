@@ -104,12 +104,15 @@ CREATE TABLE IF NOT EXISTS sig_lancamentos_contabeis_rm (
 
 CREATE INDEX IF NOT EXISTS sig_lancamentos_contabeis_rm_competencia_idx ON sig_lancamentos_contabeis_rm (competencia);
 
+-- Coluna VALOR (BPM.CONTR.002): para tabelas que já existem. Idempotente.
+ALTER TABLE sig_lancamentos_contabeis_rm ADD COLUMN IF NOT EXISTS valor NUMERIC(18,2);
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sig_lancamentos_contabeis_rm TO sig_dev;
 GRANT USAGE, SELECT ON SEQUENCE public.sig_lancamentos_contabeis_rm_id_seq TO sig_dev;
 
 COMMIT;
 
--- Conferência (deve retornar 11 linhas):
+-- Conferência (deve retornar 12 linhas):
 -- SELECT column_name, data_type FROM information_schema.columns
 --  WHERE table_name = 'sig_lancamentos_contabeis_rm' ORDER BY ordinal_position;
 
@@ -152,5 +155,22 @@ CREATE INDEX IF NOT EXISTS sig_produto_codigoreduzido_idx ON sig_produto (codcol
 CREATE INDEX IF NOT EXISTS sig_produto_nome_idx ON sig_produto (codcoligada, nome_fantasia);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sig_produto TO sig_dev;
+
+COMMIT;
+
+-- 6) Tabela sig_tipo_movimento (espelho dos tipos de movimento do TOTVS RM, sentença BPM.TI.TMOV: TTMV).
+--    Idempotente: pode rodar mais de uma vez sem erro.
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS sig_tipo_movimento (
+  codcoligada     INTEGER      NOT NULL,
+  codtmv          TEXT         NOT NULL,
+  nome            TEXT,
+  classificacao   TEXT,
+  sincronizado_em TIMESTAMP(3) NOT NULL,
+  PRIMARY KEY (codcoligada, codtmv)
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sig_tipo_movimento TO sig_dev;
 
 COMMIT;

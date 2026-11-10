@@ -156,22 +156,7 @@ export type ImportacoesDaCompetencia = {
 /** Resposta de erro do backend: mensagem pronta e, às vezes, um código. */
 export type ErroImportacao = { error?: string; codigo?: string };
 
-/** Lançamentos contábeis do RM Saldus (BPM.CONTR.002) do mês. */
-export type StatusLancamentosRm = { competencia: string; linhas: number; sincronizadoEm: string | null };
-export type ResultadoLancamentosRm = { competencia: string; lidas: number; gravadas: number };
-
 export const importacoesService = {
-  statusLancamentosRm: async (anoMes: string): Promise<StatusLancamentosRm> => {
-    const { data } = await api.get<{ data: StatusLancamentosRm }>(`/proxy/competencias/${anoMes}/importacoes/lancamentos-rm`);
-    return data.data;
-  },
-
-  /** Importa o mês do RM Saldus; substitui as linhas da competência. */
-  importarLancamentosRm: async (anoMes: string): Promise<ResultadoLancamentosRm> => {
-    const { data } = await api.post<{ data: ResultadoLancamentosRm }>(`/proxy/competencias/${anoMes}/importacoes/lancamentos-rm/importar`);
-    return data.data;
-  },
-
   listar: async (anoMes: string): Promise<ImportacoesDaCompetencia> => {
     const { data } = await api.get<{ data: ImportacoesDaCompetencia }>(
       `/proxy/competencias/${anoMes}/importacoes`,
