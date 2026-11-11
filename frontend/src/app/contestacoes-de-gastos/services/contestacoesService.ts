@@ -20,6 +20,9 @@ export type MovimentoDaContestacao = {
   /** O ID do movimento no RM (10/11/2026) e quantos itens ele tem nas requisições e nas notas fiscais importadas. */
   idMovimento: string | null;
   itens: number;
+  /** A contestação de itens (10/11/2026): quantos itens do movimento e o valor dele inteiro (nulo na do movimento inteiro). */
+  itensContestados: number;
+  valorDoMovimento: string | null;
 };
 
 /** Uma contestação de gasto (27/10/2026): os movimentos, o antes e o depois, a situação e quem fez o quê. */
@@ -33,14 +36,26 @@ export type Contestacao = {
   competenciaFechada: boolean;
   /** O item ainda está no balancete (uma reimportação pode tê-lo tirado). */
   comItem: boolean;
+  /** O Editar das Validações (10/11/2026): o centro e a conta de antes e os novos, os departamentos e por que não se edita (nulo se edita). */
+  edicao: {
+    centroAntesId: string | null;
+    contaAntesId: string;
+    centroNovoId: string | null;
+    contaNovaId: string | null;
+    departamentoDoCentroAntes: DepartamentoDoRecorte | null;
+    departamentoDaContaAntes: DepartamentoDoRecorte | null;
+    motivoNaoEditar: string | null;
+  };
   filial: number;
   emissao: string | null;
   cliForn: string | null;
   historico: string | null;
-  /** O valor dos movimentos todos. */
+  /** O valor dos movimentos todos (na contestação de itens, o deles). */
   valor: string;
-  /** O valor do movimento contestado. */
+  /** O valor do movimento contestado (o inteiro, também na contestação de itens). */
   valorDoMovimento: string;
+  /** Na contestação de itens do movimento (10/11/2026), quantos itens; 0 na do movimento inteiro. */
+  itensContestados: number;
   anteriores: boolean;
   posteriores: boolean;
   movimentos: MovimentoDaContestacao[];
@@ -49,6 +64,8 @@ export type Contestacao = {
     noBalancete: number;
     porLancamentos: number;
     diretos: number;
+    /** Os de itens (10/11/2026) que o Processar corrige pelos lançamentos na competência deles. */
+    itensNoMes: number;
     paraLancamentos: number;
     valorParaLancamentos: string;
     competenciasParaLancamentos: string[];
@@ -145,6 +162,8 @@ export const ROTULO_DEPARTAMENTO: Record<DepartamentoDoRecorte, string> = {
 export type ResumoDaCombinacao = { movimentos: number; valor: string; competencias: Array<{ competencia: string; movimentos: number; valor: string }> };
 export type PreviaDaContestacao = {
   departamentoDoCentro: DepartamentoDoRecorte | null;
+  /** A conta do movimento e o departamento dela (10/11/2026): com um centro novo de outro departamento, a nova conta é obrigatória. */
+  contaDoMovimento: { reduzido: string; descricao: string; departamento: DepartamentoDoRecorte | null };
   semFornecedor: boolean;
   valor: string;
   anteriores: ResumoDaCombinacao;
@@ -187,6 +206,8 @@ export const contestacoesService = {
     motivo: string | null;
     anteriores: boolean;
     posteriores: boolean;
+    /** Contestar Selecionados (10/11/2026): só estes itens do movimento. */
+    itens?: Array<{ origem: "REQUISICAO" | "NOTA_FISCAL"; id: string }>;
   }): Promise<Contestacao> => (await api.post("/proxy/contestacoes", d)).data.data,
   listar: async (aba: "solicitadas" | "recebidas" | "validacoes"): Promise<Contestacao[]> => (await api.get(`/proxy/contestacoes/${aba}`)).data.data,
   /** Os itens de um movimento da contestação (10/11/2026), na aba em que ela aparece. */
@@ -194,7 +215,17 @@ export const contestacoesService = {
     (await api.get(`/proxy/contestacoes/${id}/movimentos/${movimentoId}/itens`, { params: { aba } })).data.data,
   responder: async (id: string, d: { acatar: boolean; justificativa: string | null }): Promise<Contestacao> => (await api.post(`/proxy/contestacoes/${id}/responder`, d)).data.data,
   alterarSituacao: async (id: string, d: { situacao: SituacaoContestacao; justificativa: string }): Promise<Contestacao> => (await api.post(`/proxy/contestacoes/${id}/situacao`, d)).data.data,
-  processar: async (): Promise<{ validadas: number; movimentos: number; paraLancamentos: number; reclassificadas: string[]; reapurar: string[] }> =>
+  /** O Editar das Validações (10/11/2026): o centro e/ou a conta novos da contestação. */
+  editar: async (id: string, d: { centroNovoId: string | null; contaNovaId: string | null }): Promise<Contestacao> => (await api.put(`/proxy/contestacoes/${id}`, d)).data.data,
+  processar: async (): Promise<{
+    validadas: number;
+    movimentos: number;
+    porLancamentos: number;
+    paraLancamentos: number;
+    reclassificadas: string[];
+    reapurar: string[];
+    recusadas: Array<{ numero: number; motivo: string }>;
+  }> =>
     (await api.post("/proxy/contestacoes/processar")).data.data,
   paraLancamentos: async (anoMes: string): Promise<Contestacao[]> => (await api.get(`/proxy/competencias/${anoMes}/contestacoes/pendentes`)).data.data,
   importar: async (anoMes: string, ids: string[]): Promise<{ importadas: number; recusadas: Array<{ numero: number; motivo: string }> }> =>

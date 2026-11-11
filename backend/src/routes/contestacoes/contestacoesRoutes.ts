@@ -21,6 +21,8 @@ contestacoesRoutes.post("/processar", autenticacao, verificarPermissao("contesta
 // Os itens de um movimento (10/11/2026): Ler na aba em que a contestação aparece (?aba=).
 contestacoesRoutes.get("/:id/movimentos/:movimentoId/itens", autenticacao, verificarAlgumaPermissao("contestacoes.solicitadas:ler", "contestacoes.recebidas:ler", "contestacoes_validacoes:ler"), asyncHandler(c.itensDoMovimento));
 contestacoesRoutes.post("/:id/responder", autenticacao, verificarPermissao("contestacoes.recebidas:editar"), asyncHandler(c.responder));
+// O Editar das Validações (10/11/2026): o centro e/ou a conta novos, com Editar nas Validações.
+contestacoesRoutes.put("/:id", autenticacao, verificarPermissao("contestacoes_validacoes:editar"), asyncHandler(c.editar));
 contestacoesRoutes.post("/:id/situacao", autenticacao, verificarPermissao("contestacoes_validacoes:editar"), asyncHandler(c.alterarSituacao));
 contestacoesRoutes.delete("/:id/importacao", autenticacao, verificarPermissao("lancamentos_manuais.contestacoes:editar"), asyncHandler(c.desfazerImportacao));
 

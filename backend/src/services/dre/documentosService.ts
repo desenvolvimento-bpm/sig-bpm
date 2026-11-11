@@ -119,7 +119,8 @@ export const documentosService = {
 
   /**
    * Os itens de um movimento do balancete (10/11/2026): o movimento tem de estar no recorte do extrato (o mesmo acesso do
-   * modal Balancete); os itens são os das requisições e das notas fiscais com o ID dele.
+   * modal Balancete); os itens são os das requisições e das notas fiscais com o ID dele, com os já contestados (as contestações
+   * de itens do movimento não recusadas: o Contestar Selecionados não os leva de novo).
    */
   async itens(ano: number, mes: number, filtro: FiltroDoBalancete, lancamentoId: string, acesso: Acesso = ACESSO_TOTAL) {
     const prisma = getPrismaClient();
@@ -130,6 +131,7 @@ export const documentosService = {
     });
     if (!l) throw new RegraDREError(404, "O movimento não está no balancete da conta.");
     if (!l.idMovimento) throw new RegraDREError(404, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)).");
-    return itensDoMovimentoService.listar(l.idMovimento);
+    const lista = await itensDoMovimentoService.listar(l.idMovimento);
+    return { ...lista, contestados: await contestacoesService.itensContestados(lancamentoId, lista) };
   },
 };

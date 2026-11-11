@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { plural } from "@/lib/texto";
 
 import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
+import type { ItensSelecionados } from "@/app/competencias/[anoMes]/dre/components/ItensDoMovimentoDialog";
 import { moeda } from "@/app/competencias/[anoMes]/utils/formatacao";
 
 import {
@@ -31,8 +32,8 @@ import { RegrasDeRateioDialog } from "./RegrasDeRateioDialog";
 const dataCurta = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : null);
 const somar = (...xs: string[]) => (xs.reduce((s, x) => s + Math.round(Number(x) * 100), 0) / 100).toFixed(2);
 /** As opções das listas com busca: o centro com o grupo da DRE; a conta com o departamento, a atribuição e o balde. */
-const opcaoDoCentro = (c: CentroOpcao): OpcaoDaBusca => ({ id: c.id, codigo: c.codigoRM ?? "—", nome: c.nomeRM, detalhe: c.departamento });
-const opcaoDaConta = (c: ContaOpcao): OpcaoDaBusca => ({
+export const opcaoDoCentro = (c: CentroOpcao): OpcaoDaBusca => ({ id: c.id, codigo: c.codigoRM ?? "—", nome: c.nomeRM, detalhe: c.departamento });
+export const opcaoDaConta = (c: ContaOpcao): OpcaoDaBusca => ({
   id: c.id,
   codigo: c.reduzido,
   nome: c.descricao,
@@ -67,9 +68,25 @@ function competenciasDoResumo(r: ResumoDaCombinacao | undefined) {
  * de centro e/ou de conta. A contestação vai para o responsável pelo centro (o novo; sem ele, o de hoje) — ou já fica
  * acatada, quando quem pede é o responsável. Desde 04/11/2026 (pedido do Adão), a lupa ao lado de cada campo abre a lista
  * inteira (os centros de custo; as Contas de Resultado), e clicar num item o escolhe; no canto de baixo, Regras de Rateio (as
- * vigentes no mês do movimento, `anoMes`).
+ * vigentes no mês do movimento, `anoMes`). Com um centro novo de outro departamento (10/11/2026, pedido do Adão), a conta do
+ * movimento não serve: a nova conta, do departamento do centro novo ou do Extra-Operacional, passa a ser obrigatória.
+ *
+ * Com `itens` (10/11/2026, pedido do Adão: o Contestar Selecionados do modal dos itens), a contestação é só dos itens
+ * marcados do movimento: o valor deles muda de centro e/ou de conta (sem as anteriores e as posteriores).
  */
-export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { movimento: MovimentoContestado; anoMes: string; onFechar: () => void; onCriada: () => void }) {
+export function ContestarDialog({
+  movimento,
+  anoMes,
+  itens,
+  onFechar,
+  onCriada,
+}: {
+  movimento: MovimentoContestado;
+  anoMes: string;
+  itens?: ItensSelecionados;
+  onFechar: () => void;
+  onCriada: () => void;
+}) {
   const opcoes = useQuery({ queryKey: ["contestacoes", "opcoes"], queryFn: contestacoesService.opcoes, staleTime: 5 * 60_000 });
   const [centro, setCentro] = useState<OpcaoDaBusca | null>(null);
   const [conta, setConta] = useState<OpcaoDaBusca | null>(null);
@@ -96,6 +113,9 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
     const c = conta ? contasDoCadastro.find((x) => x.id === conta.id) : null;
     if (c && !contaCabeNoCentro(d, c.departamentoDoRecorte)) setConta(null);
   };
+  // O centro novo de outro departamento com a conta do movimento (10/11/2026): a nova conta é obrigatória.
+  const contaObrigatoria = !!centro && !!p && !contaCabeNoCentro(departamentoDoCentro, p.contaDoMovimento.departamento);
+  const faltaConta = contaObrigatoria && !conta;
   const ant = p?.anteriores;
   const pos = p?.posteriores;
   const comOutras = (anteriores && !!ant?.movimentos) || (posteriores && !!pos?.movimentos);
@@ -109,11 +129,12 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
         centroNovoId: centro?.id ?? null,
         contaNovaId: conta?.id ?? null,
         motivo: motivo.trim() || null,
-        anteriores: anteriores && !!ant?.movimentos,
-        posteriores: posteriores && !!pos?.movimentos,
+        anteriores: !itens && anteriores && !!ant?.movimentos,
+        posteriores: !itens && posteriores && !!pos?.movimentos,
+        ...(itens ? { itens: itens.itens } : {}),
       }),
     onSuccess: (c) => {
-      const quantos = c.movimentos.length > 1 ? ` (${c.movimentos.length} movimentos)` : "";
+      const quantos = c.itensContestados ? ` (${c.itensContestados} ${plural(c.itensContestados, "item", "itens")})` : c.movimentos.length > 1 ? ` (${c.movimentos.length} movimentos)` : "";
       toast.success(
         c.situacao === "ACATADA"
           ? `Contestação nº ${c.numero}${quantos} acatada: você é o responsável pelo centro de custo. Ela espera a validação da Controladoria.`
@@ -139,9 +160,9 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
       <DialogContent avisoAoSair className="rounded-sm sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Contestar o Movimento</DialogTitle>
+          <DialogTitle>{itens ? "Contestar os Itens do Movimento" : "Contestar o Movimento"}</DialogTitle>
           <DialogDescription>
-            Sugira o novo centro de custo e/ou a nova conta de resultado do movimento. A contestação vai para o responsável do novo centro de custo, que a
+            Sugira o novo centro de custo e/ou a nova conta de resultado {itens ? "dos itens marcados (só o valor deles muda; o resto do movimento fica)" : "do movimento"}. A contestação vai para o responsável do novo centro de custo, que a
             acata ou recusa (se em branco, fica o atual). Se acatada, a Controladoria valida e corrige o movimento. Se recusada, a contestação é cancelada, e
             o movimento contábil permanece como está.
           </DialogDescription>
@@ -156,6 +177,15 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
           <dd className="text-gray-900">{movimento.centro ?? "—"}</dd>
           <dt className="text-gray-500">Conta</dt>
           <dd className="text-gray-900">{movimento.conta}</dd>
+          {itens ? (
+            <>
+              <dt className="text-gray-500">Itens</dt>
+              <dd className="text-gray-900">
+                {itens.quantidade} de {itens.doMovimento} {plural(itens.doMovimento, "item", "itens")} do movimento · Valor a migrar{" "}
+                <span className="font-semibold">{moeda(itens.valor)}</span>
+              </dd>
+            </>
+          ) : null}
         </dl>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -182,8 +212,15 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
                 <Search className="size-4" />
               </Button>
             </div>
+            {faltaConta && p && departamentoDoCentro ? (
+              <p className="text-xs text-red-700">
+                A conta do movimento ({p.contaDoMovimento.reduzido} · {p.contaDoMovimento.descricao}) é{" "}
+                {p.contaDoMovimento.departamento ? `do departamento ${ROTULO_DEPARTAMENTO[p.contaDoMovimento.departamento]}` : "de fora dos departamentos da DRE"}: com um centro de custo do
+                departamento {ROTULO_DEPARTAMENTO[departamentoDoCentro]}, escolha também a nova conta de resultado.
+              </p>
+            ) : null}
           </div>
-          <div className="space-y-1.5">
+          <div className={itens ? "hidden" : "space-y-1.5"}>
             {caixa(anteriores, setAnteriores, "Contestar Anteriores", ant, "ct-anteriores")}
             {caixa(posteriores, setPosteriores, "Contestar Posteriores", pos, "ct-posteriores")}
             {p && (p.emAndamento || p.foraDoAcesso) ? (
@@ -253,7 +290,10 @@ export function ContestarDialog({ movimento, anoMes, onFechar, onCriada }: { mov
             <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
               Cancelar
             </Button>
-            <Button type="button" className={botaoPrimario} disabled={(!centro && !conta) || enviar.isPending} onClick={() => enviar.mutate()} title={!centro && !conta ? "Escolha o novo centro de custo e/ou a nova conta" : undefined}>
+            <Button type="button" className={botaoPrimario} disabled={(!centro && !conta) || faltaConta || enviar.isPending}
+              onClick={() => enviar.mutate()}
+              title={!centro && !conta ? "Escolha o novo centro de custo e/ou a nova conta" : faltaConta ? "Escolha a nova conta: a do movimento não é do departamento do novo centro de custo" : undefined}
+            >
               {enviar.isPending ? "Enviando…" : "Contestar"}
             </Button>
           </div>

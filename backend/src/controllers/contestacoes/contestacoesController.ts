@@ -18,12 +18,15 @@ const criarSchema = z.object({
   // Contestar Anteriores e Posteriores (30/10/2026): o mesmo fornecedor, conta e centro nas outras competências.
   anteriores: z.boolean().default(false),
   posteriores: z.boolean().default(false),
+  // Contestar Selecionados (10/11/2026): só os itens escolhidos do movimento (a lista e o id de cada um).
+  itens: z.array(z.object({ origem: z.enum(["REQUISICAO", "NOTA_FISCAL"]), id: idSchema })).max(2000).default([]),
 });
 const previaSchema = z.object({
   lancamentoId: idSchema,
   centroNovoId: idSchema.nullable().catch(null).default(null),
   contaNovaId: idSchema.nullable().catch(null).default(null),
 });
+const editarSchema = z.object({ centroNovoId: idSchema.nullable().default(null), contaNovaId: idSchema.nullable().default(null) });
 const responderSchema = z.object({ acatar: z.boolean(), justificativa: z.string().trim().max(500).nullable().default(null) });
 const situacaoSchema = z.object({
   situacao: z.enum(["PENDENTE", "ACATADA", "RECUSADA", "VALIDADA"]),
@@ -123,6 +126,13 @@ export const contestacoesController = {
     const b = responderSchema.safeParse(request.body);
     if (!b.success) return invalido(response, b.error);
     return responder(response, () => contestacoesService.responder(String(request.params.id), b.data, usuario(request)));
+  },
+
+  /** O Editar das Validações (10/11/2026): o centro e/ou a conta novos da contestação. */
+  async editar(request: Request, response: Response) {
+    const b = editarSchema.safeParse(request.body);
+    if (!b.success) return invalido(response, b.error);
+    return responder(response, () => contestacoesService.editar(String(request.params.id), b.data, usuario(request)));
   },
 
   async alterarSituacao(request: Request, response: Response) {

@@ -2851,6 +2851,10 @@ model ContestacaoMovimento {
   formaValidacao       FormaValidacaoContestacao? @map("forma_validacao")
   /// A última mudança da correção (a validação ou o desfazer): pede a reapuração da competência do movimento.
   corrigidoEm          DateTime? @map("corrigido_em")
+  /// DECIMAL: o valor do movimento inteiro no balancete, na contestação de itens dele (10/11/2026, Contestar Selecionados):
+  /// `valor` é então o dos itens (o que muda de centro e/ou de conta), e este, o da identidade do movimento. Nulo na
+  /// contestação do movimento inteiro.
+  valorMovimento       Decimal?  @map("valor_movimento")
 
   contestacao        Contestacao         @relation(fields: [contestacaoId], references: [id], onDelete: Cascade)
   competencia        Competencia         @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
@@ -2858,11 +2862,43 @@ model ContestacaoMovimento {
   contaBalancete     ContaResultado      @relation("ContestacaoMovimentoContaBalancete", fields: [contaBalanceteId], references: [id])
   centroAntes        CentroCusto?        @relation("ContestacaoMovimentoCentroAntes", fields: [centroAntesId], references: [id])
   contaAntes         ContaResultado      @relation("ContestacaoMovimentoContaAntes", fields: [contaAntesId], references: [id])
+  /// Os itens contestados (10/11/2026): na contestação de itens do movimento, só eles mudam; sem itens, o movimento inteiro.
+  itens              ContestacaoItem[]
 
   @@index([contestacaoId])
   @@index([competenciaId])
   @@index([lancamentoContabilId])
   @@map("contestacoes_movimentos")
+}
+
+/// ENUM: a lista de que vem um item do movimento (10/11/2026): a aba Requisições (Lista) ou a Notas Fiscais (Lista).
+enum OrigemItemMovimento {
+  REQUISICAO
+  NOTA_FISCAL
+}
+
+/// Um item contestado (10/11/2026, pedido do Adão): no modal dos itens de um movimento do balancete, Contestar Selecionados
+/// leva só os itens marcados — o valor deles muda de centro de custo e/ou de conta, pelos lançamentos manuais (o estorno e o
+/// novo), e o resto do movimento fica. A identidade do item, como veio da lista (o item é regravado a cada importação dela):
+/// o ID do movimento (o IDENTIFICADOR), o produto, o centro de custo, a conta e o valor.
+model ContestacaoItem {
+  id                     String              @id @default(uuid())
+  contestacaoMovimentoId String              @map("contestacao_movimento_id")
+  origem                 OrigemItemMovimento
+  identificador          String
+  codigoProduto          String?             @map("codigo_produto")
+  descricaoItem          String?             @map("descricao_item")
+  codigoCentroCusto      String?             @map("codigo_centro_custo")
+  contaContabil          String              @map("conta_contabil")
+  quantidade             Decimal?
+  /// DECIMAL: o valor total do item, como na lista (positivo).
+  valorTotal             Decimal             @map("valor_total")
+
+  movimento ContestacaoMovimento @relation(fields: [contestacaoMovimentoId], references: [id], onDelete: Cascade)
+
+  @@index([contestacaoMovimentoId])
+  @@index([identificador])
+  @@map("contestacoes_itens")
 }
 
 /// A tela dos Arquivos Gerais em que o arquivo fica (05/11/2026).

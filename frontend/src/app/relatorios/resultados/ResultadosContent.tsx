@@ -944,7 +944,9 @@ export function ResultadosContent() {
               No Balancete, a coluna ID mostra o ID do movimento no RM (a coluna ID do Balancete (Lista)), e o botão Itens, na coluna Ações, abre os itens
               da requisição ou da nota fiscal com esse ID (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas): o produto, o centro de custo, a
               conta, a quantidade e os valores. Abre com os itens do centro de custo e da conta do movimento, que somam o valor dele; desmarque a caixa para
-              ver o documento inteiro, com os do movimento em amarelo.
+              ver o documento inteiro, com os do movimento em amarelo. Quem contesta marca os itens do movimento e clica em “Contestar Selecionados” (no
+              rodapé, à direita): a contestação leva só o valor deles para o novo centro de custo e/ou a nova conta (o item já contestado mostra o número
+              da contestação). “Voltar aos Movimentos” (à esquerda) volta ao Balancete.
             </li>
             <li>
               “Regras de Rateio”, no canto de baixo do extrato, mostra as regras de rateio vigentes no mês: em cada chave (Projeto, Produção,
@@ -964,7 +966,8 @@ export function ResultadosContent() {
             <li>
               No balancete, a coluna Ações tem “Contestar” (de quem edita Contestações de Gastos › Contestações › Solicitadas): o modal sugere o novo centro
               de custo (os de um departamento da DRE, com o código de três níveis, como 1.01.00000001) e/ou a nova conta de resultado (as do departamento do centro e as do Extra-Operacional) do movimento
-              (as listas buscam por código ou nome) e, se quiser, o motivo. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
+              (as listas buscam por código ou nome) e, se quiser, o motivo. Com um centro novo de outro departamento, a conta do movimento não serve, e a nova
+              conta é obrigatória. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
               mesmo fornecedor, conta e centro de custo nas competências anteriores e nas seguintes, com o total que muda. O movimento com uma contestação
               em andamento mostra o número e a situação dela; o que chega à linha pelo rateio de outra (como os da Metalurgia nas linhas de Serviços)
               mostra “Rateio”: contesta-se na linha de origem. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.

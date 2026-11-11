@@ -97,7 +97,11 @@ export type MovimentoDoBalancete = {
   contaNaDRE: { reduzido: string; descricao: string } | null;
   /** A contestação aplicada no movimento (o número e o que mudou) e a última contestação dele (a situação). */
   contestacaoAplicada: { numero: number; centro: boolean; conta: boolean } | null;
-  contestacao: { numero: number; situacao: SituacaoContestacao } | null;
+  /**
+   * A última contestação do movimento (a situação, na coluna Ações): se é de itens dele (10/11/2026) e se o movimento tem itens
+   * numa contestação não recusada (que barra a do movimento inteiro).
+   */
+  contestacao: { numero: number; situacao: SituacaoContestacao; deItens: boolean; comItensContestados: boolean } | null;
   /** O reflexo de um rateio (30/10/2026): o movimento é de outra linha da DRE (a de origem) e chega a esta pelo rateio. */
   rateioDe: { linha: string; grupo: string } | null;
 };
@@ -127,7 +131,9 @@ export type ItemDaNotaFiscal = Omit<ItemDaRequisicao, "valorUnitario"> & {
   desconto: string | null;
   cfop: string | null;
 };
-export type ItensDoMovimento = { id: string; requisicoes: ItemDaRequisicao[]; notas: ItemDaNotaFiscal[] };
+/** Um item contestado (10/11/2026): o item da lista, a contestação (o número e a situação) e se é a contestação aberta na tela. */
+export type ItemContestado = { id: string; origem: "REQUISICAO" | "NOTA_FISCAL"; numero: number; situacao: SituacaoContestacao; desta: boolean };
+export type ItensDoMovimento = { id: string; requisicoes: ItemDaRequisicao[]; notas: ItemDaNotaFiscal[]; contestados: ItemContestado[] };
 
 /** O balancete de uma conta no mês (15/10/2026; antes, as requisições e as notas fiscais). */
 export type BalanceteDaConta = {

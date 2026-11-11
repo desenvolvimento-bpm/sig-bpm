@@ -18,7 +18,7 @@ import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestac
 import { moeda } from "../../utils/formatacao";
 import { dreService, mensagemDeErro, type LancamentoDetalhe, type MovimentoDoBalancete, type VisaoDetalhe } from "../services/dreService";
 import { ExportarExtrato } from "./ExportarExtrato";
-import { ItensDoMovimentoDialog } from "./ItensDoMovimentoDialog";
+import { ItensDoMovimentoDialog, type ItensSelecionados } from "./ItensDoMovimentoDialog";
 
 const dataCurta = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : null);
 const centroTexto = (d: MovimentoDoBalancete) => (d.codigoCentroCusto ? `${d.codigoCentroCusto}${d.nomeCentroCusto ? ` · ${d.nomeCentroCusto}` : ""}` : null);
@@ -36,7 +36,8 @@ const textoDe = (x: { codigoRM: string | null; nome: string | null }) => `${x.co
  * ou a situação da contestação em andamento.
  *
  * Os itens (10/11/2026): com a coluna ID do Balancete (Lista), o ID do movimento no RM numa coluna e o botão Itens, que abre
- * os itens da requisição ou da nota fiscal com ele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas).
+ * os itens da requisição ou da nota fiscal com ele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas). Lá, quem
+ * contesta marca os itens e clica em Contestar Selecionados: a contestação só dos itens (o valor deles muda).
  */
 export function BalanceteDialog({
   anoMes,
@@ -142,8 +143,23 @@ export function BalanceteDialog({
     const andamento = m.contestacao && (m.contestacao.situacao === "PENDENTE" || m.contestacao.situacao === "ACATADA");
     if (andamento) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-sm border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-amber-900" title="A contestação em andamento (Contestações de Gastos)">
-          Nº {m.contestacao!.numero} · {ROTULO_SITUACAO[m.contestacao!.situacao]}
+        <span
+          className="inline-flex items-center gap-1 rounded-sm border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-amber-900"
+          title={m.contestacao!.deItens ? "A contestação de itens do movimento em andamento (Contestações de Gastos): os itens dela no botão Itens" : "A contestação em andamento (Contestações de Gastos)"}
+        >
+          Nº {m.contestacao!.numero} · {m.contestacao!.deItens ? "Itens · " : ""}
+          {ROTULO_SITUACAO[m.contestacao!.situacao]}
+        </span>
+      );
+    }
+    // O movimento com itens contestados (10/11/2026): os demais itens se contestam pelo botão Itens, não o movimento inteiro.
+    if (m.contestacao?.comItensContestados) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 rounded-sm border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-gray-700"
+          title="O movimento tem itens contestados: conteste os demais itens pelo botão Itens"
+        >
+          Itens Contestados
         </span>
       );
     }
@@ -165,6 +181,38 @@ export function BalanceteDialog({
       </Button>
     ) : null;
   };
+
+  /** Por que os itens do movimento não se contestam (nulo se se contestam): o reflexo de um rateio ou o movimento inteiro em contestação. */
+  const bloqueioDosItens = (m: MovimentoDoBalancete) => {
+    if (m.rateioDe) return `Reflexo do rateio: o movimento é da linha "${m.rateioDe.linha}". Para contestar os itens, abra o extrato da linha de origem.`;
+    const andamento = m.contestacao && !m.contestacao.deItens && (m.contestacao.situacao === "PENDENTE" || m.contestacao.situacao === "ACATADA");
+    return andamento ? `O movimento inteiro está na contestação nº ${m.contestacao!.numero} (${ROTULO_SITUACAO[m.contestacao!.situacao].toLowerCase()}).` : null;
+  };
+  /** O Contestar só dos itens marcados (10/11/2026). */
+  const contestarItens = (m: MovimentoDoBalancete, sel: ItensSelecionados, fechar: () => void, concluir: () => void) => (
+    <ContestarDialog
+      movimento={movimentoContestado(m)}
+      anoMes={anoMes}
+      itens={sel}
+      onFechar={fechar}
+      onCriada={() => {
+        concluir();
+        void queryClient.invalidateQueries({ queryKey: ["dre", anoMes, "balancete"] });
+        void queryClient.invalidateQueries({ queryKey: ["contestacoes"] });
+      }}
+    />
+  );
+  /** O movimento para o Contestar: o centro e a conta que valem hoje. */
+  const movimentoContestado = (m: MovimentoDoBalancete) => ({
+    id: m.id,
+    filial: m.filial,
+    emissao: m.emissao,
+    cliForn: m.cliForn,
+    historico: m.historico,
+    valor: m.valor,
+    centro: centroTexto(m),
+    conta: m.contaNaDRE ? `${m.contaNaDRE.reduzido} · ${m.contaNaDRE.descricao}` : contaDoBalancete,
+  });
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? onVoltar() : undefined)}>
@@ -258,20 +306,12 @@ export function BalanceteDialog({
             queryKey={["dre", anoMes, "balancete", "itens", filtro, vendoItens.id]}
             carregar={() => dreService.itensDoMovimento(anoMes, filtro, vendoItens.id)}
             onFechar={() => setVendoItens(null)}
+            contestar={podeContestar ? { bloqueio: bloqueioDosItens(vendoItens), render: (sel, fechar, concluir) => contestarItens(vendoItens, sel, fechar, concluir) } : undefined}
           />
         ) : null}
         {contestando ? (
           <ContestarDialog
-            movimento={{
-              id: contestando.id,
-              filial: contestando.filial,
-              emissao: contestando.emissao,
-              cliForn: contestando.cliForn,
-              historico: contestando.historico,
-              valor: contestando.valor,
-              centro: centroTexto(contestando),
-              conta: contestando.contaNaDRE ? `${contestando.contaNaDRE.reduzido} · ${contestando.contaNaDRE.descricao}` : contaDoBalancete,
-            }}
+            movimento={movimentoContestado(contestando)}
             anoMes={anoMes}
             onFechar={() => setContestando(null)}
             onCriada={() => {

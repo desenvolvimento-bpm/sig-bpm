@@ -25,6 +25,7 @@ import { ItensDoMovimentoDialog } from "@/app/competencias/[anoMes]/dre/componen
 import { moeda } from "@/app/competencias/[anoMes]/utils/formatacao";
 
 import { contestacoesService, mensagemDeErro, quemResponde, ROTULO_SITUACAO, type Contestacao, type SituacaoContestacao } from "../services/contestacoesService";
+import { EditarContestacaoDialog } from "./EditarContestacaoDialog";
 
 export type AbaDasContestacoes = "solicitadas" | "recebidas" | "validacoes";
 
@@ -40,8 +41,16 @@ const periodoCurto = (c: Contestacao) => {
   const [p, u] = [c.competencias[0], c.competencias[c.competencias.length - 1]];
   return c.competencias.length > 1 && p.slice(3) === u.slice(3) ? `${p.slice(0, 2)} a ${u}` : periodo(c);
 };
-/** O valor e, com mais de um movimento, quantos ("R$ 1.200,00 em 6 movimentos"). */
-const valorEMovimentos = (c: Contestacao) => `${moeda(c.valor)}${c.movimentos.length > 1 ? ` em ${c.movimentos.length} movimentos` : ""}`;
+/** O valor e, com mais de um movimento, quantos ("R$ 1.200,00 em 6 movimentos"); na de itens, quantos itens. */
+const valorEMovimentos = (c: Contestacao) =>
+  `${moeda(c.valor)}${c.itensContestados ? ` em ${c.itensContestados} ${plural(c.itensContestados, "item", "itens")} do movimento` : c.movimentos.length > 1 ? ` em ${c.movimentos.length} movimentos` : ""}`;
+/** O título do Valor: os movimentos e o contestado, ou (na de itens, 10/11/2026) o valor dos itens e o do movimento inteiro. */
+const tituloDoValor = (c: Contestacao) =>
+  c.itensContestados
+    ? `${c.itensContestados} ${plural(c.itensContestados, "item", "itens")} do movimento: ${moeda(c.valor)} de ${moeda(c.valorDoMovimento)}`
+    : c.movimentos.length > 1
+      ? `Em ${c.movimentos.length} movimentos; o contestado: ${moeda(c.valorDoMovimento)}`
+      : undefined;
 const anterioresEPosteriores = (c: Contestacao) =>
   [c.anteriores ? "anteriores" : null, c.posteriores ? "posteriores" : null].filter(Boolean).join(" e ");
 
@@ -95,6 +104,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
   const [acatando, setAcatando] = useState<Contestacao | null>(null);
   const [recusando, setRecusando] = useState<Contestacao | null>(null);
   const [alterando, setAlterando] = useState<Contestacao | null>(null);
+  const [editando, setEditando] = useState<Contestacao | null>(null);
   const [vendo, setVendo] = useState<Contestacao | null>(null);
   const [lendo, setLendo] = useState<{ c: Contestacao; o: "motivo" | "justificativa" } | null>(null);
   const [processando, setProcessando] = useState(false);
@@ -131,23 +141,33 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
           { chave: "acoes", rotulo: "Ações", semFiltro: true },
         ] as Coluna<Contestacao>[]
       ).map((c) => ({ ...c, classe: "px-2!" }))
-    : [
-        { chave: "numero", rotulo: "Nº", tipo: "numero", valor: (c) => c.numero },
-        { chave: "competencia", rotulo: "Competência", valor: (c) => c.competencias.join(", "), texto: periodo },
-        { chave: "movimento", rotulo: "Movimento", valor: movimento },
-        { chave: "valor", rotulo: "Valor", tipo: "numero", alinhamento: "direita", valor: (c) => Number(c.valor), texto: (c) => moeda(c.valor) },
-        { chave: "de", rotulo: "De", valor: de },
-        { chave: "para", rotulo: "Para", valor: para },
-        { chave: "solicitante", rotulo: "Solicitante", valor: (c) => c.solicitante },
-        { chave: "motivo", rotulo: "Motivo", valor: (c) => c.motivo },
-        { chave: "situacao", rotulo: "Situação", valor: (c) => ROTULO_SITUACAO[c.situacao] },
-        { chave: "responsavel", rotulo: "Responsável", valor: responsavel },
-        { chave: "justificativa", rotulo: "Justificativa", valor: (c) => c.justificativa },
-        { chave: "acoes", rotulo: "Ações", semFiltro: true },
-      ];
+    : (
+        [
+          { chave: "numero", rotulo: "Nº", tipo: "numero", valor: (c) => c.numero },
+          { chave: "competencia", rotulo: "Competência", valor: (c) => c.competencias.join(", "), texto: periodo },
+          { chave: "movimento", rotulo: "Movimento", valor: movimento },
+          { chave: "valor", rotulo: "Valor", tipo: "numero", alinhamento: "direita", valor: (c) => Number(c.valor), texto: (c) => moeda(c.valor) },
+          { chave: "de", rotulo: "De", valor: de },
+          { chave: "para", rotulo: "Para", valor: para },
+          { chave: "solicitante", rotulo: "Solicitante", valor: (c) => c.solicitante },
+          { chave: "situacao", rotulo: "Situação", valor: (c) => ROTULO_SITUACAO[c.situacao] },
+          { chave: "responsavel", rotulo: "Responsável", valor: responsavel },
+          { chave: "acoes", rotulo: "Ações", semFiltro: true },
+        ] as Coluna<Contestacao>[]
+      ).map((c) => ({ ...c, classe: "px-2!" }));
+  // O Exportar da Validações leva também o Motivo e a Justificativa (na tela, no menu Ações).
+  // E os dois, os itens contestados (10/11/2026: a contestação de itens do movimento) e o valor do movimento inteiro.
+  const doMovimento: Coluna<Contestacao>[] = [
+    { chave: "itens", rotulo: "Itens Contestados", tipo: "numero", valor: (c) => c.itensContestados || null },
+    { chave: "valorDoMovimento", rotulo: "Valor do Movimento", tipo: "numero", alinhamento: "direita", valor: (c) => Number(c.valorDoMovimento), texto: (c) => moeda(c.valorDoMovimento) },
+  ];
+  const colunasDoExportar: Coluna<Contestacao>[] = enxuta
+    ? [...colunas, ...doMovimento]
+    : [...colunas, ...doMovimento, { chave: "motivo", rotulo: "Motivo", valor: (c) => c.motivo }, { chave: "justificativa", rotulo: "Justificativa", valor: (c) => c.justificativa }];
   const tabela = useTabelaFiltravel(consulta.data, colunas);
   const acatadas = (consulta.data ?? []).filter((c) => c.situacao === "ACATADA");
   const diretos = acatadas.reduce((s, c) => s + c.correcao.diretos, 0);
+  const itensNoMes = acatadas.reduce((s, c) => s + c.correcao.itensNoMes, 0);
   const paraLancamentos = acatadas.reduce((s, c) => s + c.correcao.paraLancamentos, 0);
 
   const titulos: Record<AbaDasContestacoes, { titulo: string; sobre: string }> = {
@@ -156,14 +176,14 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
       titulo: "Contestações",
       sobre: "As contestações pedidas por outros usuários para os centros de custo do seu recorte (as suas ficam em Solicitadas): acate ou recuse as pendentes.",
     },
-    validacoes: { titulo: "Validações", sobre: "Todas as contestações, de todos os usuários e de todas as competências: processe as acatadas e mude a situação de qualquer uma." },
+    validacoes: { titulo: "Validações", sobre: "Todas as contestações, de todos os usuários e de todas as competências: processe as acatadas, edite o centro e a conta novos das pendentes e das acatadas e mude a situação de qualquer uma." },
   };
 
   return (
     <div className="space-y-6">
       <CabecalhoDaTela
         titulo={titulos[aba].titulo}
-        exportar={<ExportarTabela titulo={`Contestações de Gastos · ${aba === "validacoes" ? "Validações" : aba === "solicitadas" ? "Solicitadas" : "Recebidas"}`} colunas={colunas} linhas={tabela.filtradas} />}
+        exportar={<ExportarTabela titulo={`Contestações de Gastos · ${aba === "validacoes" ? "Validações" : aba === "solicitadas" ? "Solicitadas" : "Recebidas"}`} colunas={colunasDoExportar} linhas={tabela.filtradas} />}
         sobre={<p>{titulos[aba].sobre}</p>}
         comoUsar={
           <ul>
@@ -171,16 +191,22 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
               Para contestar um movimento, abra o extrato de uma linha (a lupa) na tela Resultados do Fechamento Mensal ou nos Resultados Empresariais e
               clique na conta de um lançamento: no balancete da conta, “Contestar”, na coluna Ações, abre o modal para sugerir o novo centro de custo e/ou
               a nova conta de resultado (as listas buscam por código ou nome) e, se quiser, o motivo. Os centros são os de um departamento da DRE com o código de três níveis (como 1.01.00000001; sem os genéricos, como 1.01, e sem os sem código); as
-              contas, as do departamento do centro (o novo; sem ele, o do movimento) e as do Extra-Operacional. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.
+              contas, as do departamento do centro (o novo; sem ele, o do movimento) e as do Extra-Operacional; com um centro novo de outro departamento, a conta do movimento não serve, e a nova conta é obrigatória. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.
             </li>
             <li>
               “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do mesmo fornecedor, na mesma conta e no mesmo centro de custo,
               nas competências anteriores e nas seguintes já importadas (sem os que já têm uma contestação em andamento); marcadas, o modal mostra o
               total que muda de centro e/ou de conta, competência por competência. A contestação é uma só: a coluna Competência mostra da primeira à
-              última, o Valor é o total, e “Ver Movimentos”{enxuta ? ", no menu da coluna Ações," : ", na coluna Movimento,"} lista cada um (a emissão, o
+              última, o Valor é o total, e “Ver Movimentos”, no menu da coluna Ações, lista cada um (a emissão, o
               histórico e o valor), com a correção dele. Com o ID do movimento no RM (a coluna ID do Balancete (Lista)), o botão Itens abre os itens da
-              requisição ou da nota fiscal dele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas)
-              {enxuta ? "" : "; nesta tela, o Ver Movimentos também aparece na contestação de um movimento só, quando ele tem itens"}.
+              requisição ou da nota fiscal dele (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas).
+            </li>
+            <li>
+              Para contestar só alguns itens de um movimento: no balancete da conta, o botão Itens abre os itens da requisição ou da nota fiscal; marque
+              os itens do movimento e clique em “Contestar Selecionados”. A contestação leva só o valor deles (o resto do movimento fica no centro e na
+              conta de hoje), sem anteriores e posteriores; o Valor mostra o dos itens, com quantos são, e os itens contestados aparecem com o número da
+              contestação no Itens do Ver Movimentos. Um item fica numa contestação só (a recusada o libera), e o movimento com itens contestados não se
+              contesta inteiro.
             </li>
             <li>
               A contestação vai para quem responde pelo centro de custo (o novo; sem centro novo, o do movimento): os usuários com Editar em Contestações
@@ -192,9 +218,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
             <li>
               As situações: Pendente (o responsável ainda não respondeu), Acatada (o responsável aceitou; espera a Controladoria), Recusada e Validada (a
               Controladoria corrigiu o movimento — no balancete, ou pelos lançamentos da aba Contestações dos Lançamentos).{" "}
-              {enxuta
-                ? "O motivo (de quem pediu) e a justificativa (da recusa ou da mudança de situação em Validações) ficam no menu da coluna Ações."
-                : "O motivo e a justificativa (da recusa ou da mudança de situação) ficam nas colunas Motivo e Justificativa."}
+              O motivo (de quem pediu) e a justificativa (da recusa ou da mudança de situação em Validações) ficam no menu da coluna Ações.
             </li>
             {aba === "recebidas" ? (
               <li>
@@ -209,11 +233,17 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
                   “Processar” corrige os movimentos das acatadas: com a competência do movimento aberta, no próprio balancete (a classificação aplica o
                   centro e a conta novos; a competência apurada pede reapuração); com ela fechada, o movimento fica para o Importar da aba Contestações
                   dos Lançamentos, para virar o estorno e o lançamento novo numa competência aberta (com rateio, divididos entre as unidades pelos
-                  percentuais da competência do movimento). A contestação fica validada quando todos os movimentos dela estão corrigidos; o detalhe da
-                  situação mostra onde estão.
+                  percentuais da competência do movimento). A contestação de itens vira o estorno e o lançamento novo, com o valor dos itens, nos
+                  lançamentos da competência do movimento (a aba Contestações dos Lançamentos; com ela fechada, também fica para o Importar), e o balancete
+                  não muda. A contestação fica validada quando todos os movimentos dela estão corrigidos; o detalhe da situação mostra onde estão.
                 </li>
                 <li>
-                  Na coluna Ações, “Alterar Status” muda a situação de qualquer contestação, com a justificativa (obrigatória). Tirar uma validada (ou
+                  No menu da coluna Ações, “Editar” troca o novo centro de custo e/ou a nova conta de resultado de uma contestação pendente ou acatada,
+                  sem movimento corrigido, com as mesmas listas e regras do Contestar (com um centro novo de outro departamento, a nova conta é
+                  obrigatória); a situação não muda, e a alteração fica na Auditoria.
+                </li>
+                <li>
+                  No menu da coluna Ações, “Alterar Status” muda a situação de qualquer contestação, com a justificativa (obrigatória). Tirar uma validada (ou
                   uma acatada com movimentos já corrigidos) desfaz as correções (no balancete, na próxima apuração; os lançamentos manuais saem); pôr
                   como validada por aqui não corrige nada no SIG.
                 </li>
@@ -258,93 +288,15 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
                 onRecusar={() => setRecusando(c)}
               />
             ) : (
-            <tr key={c.id} className="border-b border-gray-100 align-top text-xs hover:bg-gray-50">
-              <td className="px-3 py-2 font-medium">{c.numero}</td>
-              <td className="px-3 py-2 whitespace-nowrap">
-                {periodo(c)}
-                {c.competencias.length > 1 ? (
-                  <div className="text-gray-500">
-                    {c.competencias.length} {plural(c.competencias.length, "competência", "competências")}
-                  </div>
-                ) : null}
-              </td>
-              <td className="px-3 py-2">
-                {movimento(c)}
-                <div className="text-gray-500">
-                  Filial {c.filial}
-                  {c.contaBalancete ? ` · Conta do balancete ${c.contaBalancete}` : ""}
-                  {!c.comItem ? " · fora do balancete reimportado" : ""}
-                </div>
-                {/* Com um movimento só, o Ver Movimentos também aparece quando ele tem itens (10/11/2026: o botão Itens). */}
-                {c.movimentos.length > 1 || c.movimentos.some((m) => m.itens > 0) ? (
-                  <div className="mt-1">
-                    <button
-                      type="button"
-                      onClick={() => setVendo(c)}
-                      className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-gray-900 underline underline-offset-2"
-                      title="Os movimentos da contestação, com a correção de cada um"
-                    >
-                      <ListTree className="size-3.5" />
-                      Ver Movimentos ({c.movimentos.length})
-                    </button>
-                    {c.movimentos.length > 1 ? <div className="text-gray-500">com as {anterioresEPosteriores(c)}</div> : null}
-                  </div>
-                ) : null}
-              </td>
-              <td className="px-3 py-2 text-right whitespace-nowrap">
-                {moeda(c.valor)}
-                {c.movimentos.length > 1 ? <div className="text-gray-500">o movimento: {moeda(c.valorDoMovimento)}</div> : null}
-              </td>
-              <td className="px-3 py-2">
-                {c.centroNovo ? <div>{c.centroAntes ?? "—"}</div> : null}
-                {c.contaNova ? <div>{c.contaAntes ?? "—"}</div> : null}
-              </td>
-              <td className="px-3 py-2 font-medium">
-                {c.centroNovo ? <div>{c.centroNovo}</div> : null}
-                {c.contaNova ? <div>{c.contaNova}</div> : null}
-              </td>
-              <td className="px-3 py-2">
-                {c.solicitante}
-                <div className="text-gray-500">{dataHora(c.solicitadaEm)}</div>
-              </td>
-              <td className="px-3 py-2 text-gray-700">{c.motivo ?? <span className="text-gray-400">—</span>}</td>
-              <td className="px-3 py-2">
-                <Situacao c={c} />
-              </td>
-              <td className="px-3 py-2">
-                {c.situacao === "PENDENTE" ? (
-                  <span className="text-gray-600">Aguarda {quemResponde(c)}</span>
-                ) : c.respondidaPor ? (
-                  <>
-                    {c.respondidaPor}
-                    <div className="text-gray-500">{dataHora(c.respondidaEm)}</div>
-                  </>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </td>
-              <td className="px-3 py-2 text-gray-700">
-                {c.justificativa ? (
-                  <>
-                    {c.justificativa}
-                    <div className="text-gray-500">
-                      {c.justificadaPor ?? "SIG"}
-                      {c.justificadaEm ? `, ${dataHora(c.justificadaEm)}` : ""}
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </td>
-              <td className="px-3 py-2 whitespace-nowrap">
-                {hasPermission("contestacoes_validacoes:editar") ? (
-                  <Button type="button" size="sm" variant="outline" className="h-7 rounded-sm px-2 text-xs" onClick={() => setAlterando(c)}>
-                    <PencilLine className="size-3.5" />
-                    Alterar Status
-                  </Button>
-                ) : null}
-              </td>
-            </tr>
+              <LinhaDaValidacao
+                key={c.id}
+                c={c}
+                podeEditar={hasPermission("contestacoes_validacoes:editar")}
+                onVerMovimentos={() => setVendo(c)}
+                onLer={(o) => setLendo({ c, o })}
+                onEditar={() => setEditando(c)}
+                onAlterar={() => setAlterando(c)}
+              />
             )
           }
         />
@@ -354,6 +306,16 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
       {lendo ? <TextoDaContestacaoDialog c={lendo.c} o={lendo.o} onFechar={() => setLendo(null)} /> : null}
       {acatando ? <AcatarDialog c={acatando} pendente={responder.isPending} onFechar={() => setAcatando(null)} onAcatar={() => responder.mutate({ id: acatando.id, acatar: true, justificativa: null })} /> : null}
       {recusando ? <RecusarDialog c={recusando} pendente={responder.isPending} onFechar={() => setRecusando(null)} onRecusar={(j) => responder.mutate({ id: recusando.id, acatar: false, justificativa: j })} /> : null}
+      {editando ? (
+        <EditarContestacaoDialog
+          c={editando}
+          onFechar={() => setEditando(null)}
+          onEditada={() => {
+            setEditando(null);
+            void atualizar();
+          }}
+        />
+      ) : null}
       {alterando ? (
         <AlterarStatusDialog
           c={alterando}
@@ -368,6 +330,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
         <ProcessarDialog
           acatadas={acatadas.length}
           diretos={diretos}
+          itensNoMes={itensNoMes}
           paraLancamentos={paraLancamentos}
           onFechar={() => setProcessando(false)}
           onProcessado={() => {
@@ -377,6 +340,130 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A linha da tela Validações (10/11/2026, pedido do Adão): como as das abas da tela Contestações — o Movimento em até quatro
+ * linhas (três quebras; o texto inteiro no título), o antes e o depois com espaço —, sem as colunas Motivo e Justificativa, que
+ * ficam no menu Ações com o Ver Movimentos, o Editar (o centro e/ou a conta novos) e o Alterar Status.
+ */
+function LinhaDaValidacao({
+  c,
+  podeEditar,
+  onVerMovimentos,
+  onLer,
+  onEditar,
+  onAlterar,
+}: {
+  c: Contestacao;
+  podeEditar: boolean;
+  onVerMovimentos: () => void;
+  onLer: (o: "motivo" | "justificativa") => void;
+  onEditar: () => void;
+  onAlterar: () => void;
+}) {
+  const detalhe = [`Filial ${c.filial}`, c.contaBalancete ? `Conta do balancete ${c.contaBalancete}` : null, !c.comItem ? "fora do balancete reimportado" : null].filter(Boolean).join(" · ");
+  return (
+    <tr className="border-b border-gray-100 align-top text-xs hover:bg-gray-50">
+      <td className="px-2 py-2 font-medium">{c.numero}</td>
+      <td className="px-2 py-2 whitespace-nowrap" title={c.competencias.join(", ")}>
+        {periodoCurto(c)}
+        {c.competencias.length > 1 ? (
+          <div className="text-gray-500">
+            {c.competencias.length} {plural(c.competencias.length, "competência", "competências")}
+          </div>
+        ) : null}
+      </td>
+      {/* O Movimento em até quatro linhas: três do movimento e uma da filial e da conta (o texto inteiro no título). */}
+      <td className="min-w-56 px-2 py-2">
+        <div className="line-clamp-3" title={movimento(c)}>
+          {movimento(c)}
+        </div>
+        <div className="line-clamp-1 text-gray-500" title={detalhe}>
+          {detalhe}
+        </div>
+      </td>
+      <td className="px-2 py-2 text-right whitespace-nowrap" title={tituloDoValor(c)}>
+        {moeda(c.valor)}
+        {c.itensContestados ? (
+          <div className="text-gray-500">
+            {c.itensContestados} {plural(c.itensContestados, "item", "itens")}
+          </div>
+        ) : c.movimentos.length > 1 ? (
+          <div className="text-gray-500">
+            {c.movimentos.length} {plural(c.movimentos.length, "movimento", "movimentos")}
+          </div>
+        ) : null}
+      </td>
+      <td className="min-w-44 px-2 py-2">
+        {c.centroNovo ? <TextoEmLinhas texto={c.centroAntes ?? "—"} duas={!!c.contaNova} /> : null}
+        {c.contaNova ? <TextoEmLinhas texto={c.contaAntes ?? "—"} duas={!!c.centroNovo} /> : null}
+      </td>
+      <td className="min-w-44 px-2 py-2 font-medium">
+        {c.centroNovo ? <TextoEmLinhas texto={c.centroNovo} duas={!!c.contaNova} /> : null}
+        {c.contaNova ? <TextoEmLinhas texto={c.contaNova} duas={!!c.centroNovo} /> : null}
+      </td>
+      <td className="px-2 py-2">
+        <span className="whitespace-nowrap">{c.solicitante}</span>
+        <div className="whitespace-nowrap text-gray-500">{dataHora(c.solicitadaEm)}</div>
+      </td>
+      <td className="px-2 py-2">
+        <Situacao c={c} />
+      </td>
+      <td className="px-2 py-2">
+        {c.situacao === "PENDENTE" ? (
+          <span className="line-clamp-4 text-gray-600" title={`Aguarda ${quemResponde(c)}`}>
+            Aguarda {quemResponde(c)}
+          </span>
+        ) : c.respondidaPor ? (
+          <>
+            <span className="whitespace-nowrap">{c.respondidaPor}</span>
+            <div className="whitespace-nowrap text-gray-500">{dataHora(c.respondidaEm)}</div>
+          </>
+        ) : (
+          <span className="text-gray-400">—</span>
+        )}
+      </td>
+      <td className="px-2 py-2 whitespace-nowrap">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button type="button" size="icon" variant="outline" className="size-7 rounded-sm" aria-label={`Ações da contestação nº ${c.numero}`} title="Ações: Motivo, Justificativa, Ver Movimentos, Editar e Alterar Status">
+                <EllipsisVertical className="size-4" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-auto min-w-44">
+            <DropdownMenuItem disabled={!c.motivo} onClick={() => onLer("motivo")}>
+              <MessageSquareText />
+              Motivo
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!c.justificativa} onClick={() => onLer("justificativa")}>
+              <FileText />
+              Justificativa
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onVerMovimentos}>
+              <ListTree />
+              Ver Movimentos
+            </DropdownMenuItem>
+            {podeEditar ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={!!c.edicao.motivoNaoEditar} title={c.edicao.motivoNaoEditar ?? "Trocar o novo centro de custo e/ou a nova conta de resultado"} onClick={onEditar}>
+                  <PencilLine />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onAlterar}>
+                  <Cog />
+                  Alterar Status
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </td>
+    </tr>
   );
 }
 
@@ -421,8 +508,13 @@ function LinhaEnxuta({
         </div>
       </td>
       <td className="px-2 py-2">{c.filial}</td>
-      <td className="px-2 py-2 text-right whitespace-nowrap" title={c.movimentos.length > 1 ? `Em ${c.movimentos.length} movimentos; o contestado: ${moeda(c.valorDoMovimento)}` : undefined}>
+      <td className="px-2 py-2 text-right whitespace-nowrap" title={tituloDoValor(c)}>
         {moeda(c.valor)}
+        {c.itensContestados ? (
+          <div className="text-gray-500">
+            {c.itensContestados} {plural(c.itensContestados, "item", "itens")}
+          </div>
+        ) : null}
       </td>
       {/* De e Para com a maior parte da largura: até quatro linhas — com o centro e a conta, duas para cada (o nome inteiro no título). */}
       <td className="min-w-52 px-2 py-2">
@@ -566,7 +658,12 @@ function MovimentosDialog({ c, aba, onFechar }: { c: Contestacao; aba: AbaDasCon
           <DialogTitle>Movimentos da Contestação nº {c.numero}</DialogTitle>
           <DialogDescription>
             {c.cliForn ?? "—"} · {c.contaBalancete ?? "—"} · {c.centroAntes ?? "sem centro de custo"}:{" "}
-            {c.movimentos.length > 1 ? `o movimento contestado e os das ${anterioresEPosteriores(c)}. Todos vão` : "o movimento contestado. Ele vai"} para{" "}
+            {c.itensContestados
+              ? `${c.itensContestados} ${plural(c.itensContestados, "item", "itens")} do movimento contestado (${moeda(c.valor)} de ${moeda(c.valorDoMovimento)}; os itens no botão Itens). Eles vão`
+              : c.movimentos.length > 1
+                ? `o movimento contestado e os das ${anterioresEPosteriores(c)}. Todos vão`
+                : "o movimento contestado. Ele vai"}{" "}
+            para{" "}
             {para(c) || "—"}.
           </DialogDescription>
         </DialogHeader>
@@ -602,7 +699,14 @@ function MovimentosDialog({ c, aba, onFechar }: { c: Contestacao; aba: AbaDasCon
                       {m.idMovimento ?? <span className="text-gray-400">—</span>}
                     </td>
                   ) : null}
-                  <td className="px-3 py-1.5 text-right whitespace-nowrap">{moeda(m.valor)}</td>
+                  <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                    {moeda(m.valor)}
+                    {m.valorDoMovimento ? (
+                      <div className="text-gray-500">
+                        {m.itensContestados} {plural(m.itensContestados, "item", "itens")} de {moeda(m.valorDoMovimento)}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-1.5 whitespace-nowrap">{correcao(m)}</td>
                   {comId ? (
                     <td className="px-3 py-1.5 whitespace-nowrap">
@@ -632,7 +736,15 @@ function MovimentosDialog({ c, aba, onFechar }: { c: Contestacao; aba: AbaDasCon
         </p>
         {vendoItens?.idMovimento ? (
           <ItensDoMovimentoDialog
-            movimento={{ idMovimento: vendoItens.idMovimento, emissao: vendoItens.emissao, cliForn: vendoItens.cliForn, historico: vendoItens.historico, valor: vendoItens.valor, conta: c.contaBalanceteReduzido, centro: c.codigoCentroCusto }}
+            movimento={{
+              idMovimento: vendoItens.idMovimento,
+              emissao: vendoItens.emissao,
+              cliForn: vendoItens.cliForn,
+              historico: vendoItens.historico,
+              valor: vendoItens.valorDoMovimento ?? vendoItens.valor,
+              conta: c.contaBalanceteReduzido,
+              centro: c.codigoCentroCusto,
+            }}
             queryKey={["contestacoes", aba, c.id, "itens", vendoItens.id]}
             carregar={() => contestacoesService.itensDoMovimento(aba, c.id, vendoItens.id)}
             onFechar={() => setVendoItens(null)}
@@ -790,12 +902,14 @@ function AlterarStatusDialog({ c, onFechar, onAlterada }: { c: Contestacao; onFe
 function ProcessarDialog({
   acatadas,
   diretos,
+  itensNoMes,
   paraLancamentos,
   onFechar,
   onProcessado,
 }: {
   acatadas: number;
   diretos: number;
+  itensNoMes: number;
   paraLancamentos: number;
   onFechar: () => void;
   onProcessado: () => void;
@@ -805,11 +919,13 @@ function ProcessarDialog({
     onSuccess: (r) => {
       const partes = [
         `${r.movimentos} ${plural(r.movimentos, "movimento corrigido", "movimentos corrigidos")} no balancete`,
+        r.porLancamentos ? `${r.porLancamentos} de itens ${plural(r.porLancamentos, "lançado", "lançados")} na competência do movimento` : null,
         `${r.validadas} ${plural(r.validadas, "contestação validada", "contestações validadas")}`,
         r.paraLancamentos ? `${r.paraLancamentos} ${plural(r.paraLancamentos, "espera", "esperam")} o Importar dos Lançamentos` : null,
         r.reapurar.length ? `reapure ${r.reapurar.join(", ")}` : null,
       ].filter(Boolean);
       toast.success(`${partes.join("; ")}.`);
+      for (const x of r.recusadas) toast.error(`Contestação nº ${x.numero}: ${x.motivo}`);
       onProcessado();
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível processar as contestações.")),
@@ -822,7 +938,14 @@ function ProcessarDialog({
           <DialogDescription>
             {acatadas} {plural(acatadas, "contestação acatada", "contestações acatadas")}: {diretos}{" "}
             {plural(diretos, "movimento com a competência aberta fica corrigido", "movimentos com a competência aberta ficam corrigidos")} no balancete (a
-            classificação aplica o centro e a conta novos; a competência apurada pede reapuração), e {paraLancamentos}{" "}
+            classificação aplica o centro e a conta novos; a competência apurada pede reapuração),{" "}
+            {itensNoMes ? (
+              <>
+                {itensNoMes} {plural(itensNoMes, "contestação de itens vira", "contestações de itens viram")} o estorno e o lançamento novo, com o valor dos
+                itens, nos lançamentos da competência do movimento,{" "}
+              </>
+            ) : null}
+            e {paraLancamentos}{" "}
             {plural(paraLancamentos, "movimento com a competência fechada fica", "movimentos com a competência fechada ficam")} para o Importar da aba
             Contestações dos Lançamentos de uma competência aberta. A contestação com todos os movimentos corrigidos fica validada.
           </DialogDescription>

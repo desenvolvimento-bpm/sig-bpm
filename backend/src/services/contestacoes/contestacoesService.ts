@@ -1,12 +1,12 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import type { DepartamentoAcesso, FormaValidacaoContestacao, SituacaoContestacao } from "../../generated/prisma/enums.js";
+import type { DepartamentoAcesso, FormaValidacaoContestacao, OrigemItemMovimento, SituacaoContestacao } from "../../generated/prisma/enums.js";
 import { carregarUsuariosAtivos, type Acesso } from "../acesso/acesso.js";
 import { departamentoDaLinha, gestaoDoCentro, MENSAGEM_SENSIVEL, podeVerCentro, podeVerMovimentos, podeVerSensiveis, ROTULO_DEPARTAMENTO } from "../acesso/recorteDepartamento.js";
 import { auditar } from "../auditoriaService.js";
 import { classificacaoService } from "../classificacao/classificacaoService.js";
 import { manualNoSinalDoBalancete } from "../dre/apuracaoUnidades.js";
-import { itensDoMovimentoService } from "../dre/itensDoMovimento.js";
+import { itensDoMovimentoService, type ItensDoMovimento } from "../dre/itensDoMovimento.js";
 import { lancamentosManuaisService } from "../lancamentosManuais/lancamentosManuaisService.js";
 
 /**
@@ -93,6 +93,9 @@ const MOVIMENTO_SEL = {
   competencia: { select: { id: true, ano: true, mes: true, status: true, apuradaEm: true } },
   // O ID do movimento no RM (10/11/2026), pelo item do balancete: abre os itens do movimento.
   lancamentoContabil: { select: { idMovimento: true } },
+  // A contestação de itens (10/11/2026): o valor do movimento inteiro e quantos itens.
+  valorMovimento: true,
+  _count: { select: { itens: true } },
 } satisfies Prisma.ContestacaoMovimentoSelect;
 type MovimentoDaContestacao = Prisma.ContestacaoMovimentoGetPayload<{ select: typeof MOVIMENTO_SEL }>;
 const SELECAO = {
@@ -127,7 +130,7 @@ const SELECAO = {
   competencia: { select: { id: true, ano: true, mes: true, status: true } },
   contaBalancete: contaSel,
   centroAntes: centroSel,
-  contaAntes: contaSel,
+  contaAntes: { select: { id: true, reduzido: true, descricao: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } } },
   centroNovo: centroSel,
   contaNova: contaSel,
   solicitante: { select: { nome: true } },
@@ -152,8 +155,76 @@ const LANCAMENTO_SEL = {
   valorMovimento: true,
   linhaDRE: { select: { grupoSigla: true, descricao: true, atribuicaoSigla: true } },
   competencia: { select: { ano: true, mes: true } },
+  // Os itens do movimento (10/11/2026): o ID do RM e a conta do balancete (o código reduzido).
+  idMovimento: true,
+  contaResultado: { select: { reduzido: true } },
 } satisfies Prisma.LancamentoContabilSelect;
 type LancamentoDoMovimento = Prisma.LancamentoContabilGetPayload<{ select: typeof LANCAMENTO_SEL }>;
+
+/**
+ * A conta que vale hoje no item (a adotada; sem ela, a do balancete) e o departamento dela, pela linha da DRE (10/11/2026): com
+ * um centro novo e sem conta nova, ela precisa caber no departamento do centro novo.
+ */
+async function contaDoItem(l: LancamentoDoMovimento) {
+  return contaComDepartamento(l.contaAdotadaId ?? l.contaResultadoId);
+}
+/** Uma conta, com o departamento dela pela linha da DRE (nulo sem linha). */
+async function contaComDepartamento(id: string) {
+  const c = await getPrismaClient().contaResultado.findUniqueOrThrow({
+    where: { id },
+    select: { reduzido: true, descricao: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } },
+  });
+  return { reduzido: c.reduzido, descricao: c.descricao, departamento: c.linhaDRE ? departamentoDaLinha(c.linhaDRE) : null };
+}
+
+/**
+ * O destino de uma contestação — o centro e/ou a conta novos —, conferido contra o centro e a conta que valem hoje no item (a
+ * mesma regra no Contestar e no Editar das Validações, 10/11/2026): o centro novo ativo, de um departamento da DRE e com o
+ * código de três níveis; a conta nova analítica, ativa, com destino na DRE e do departamento do centro (o novo; sem ele, o de
+ * hoje) ou do Extra-Operacional; e, com o centro novo sem a conta nova, a conta de hoje do departamento do centro novo.
+ */
+async function conferirDestino(atual: { centroId: string | null; contaId: string }, d: { centroNovoId: string | null; contaNovaId: string | null }) {
+  const prisma = getPrismaClient();
+  if (!d.centroNovoId && !d.contaNovaId) throw new RegraContestacaoError(400, "Sugira o novo centro de custo e/ou a nova conta de resultado.");
+  if (d.centroNovoId && d.centroNovoId === atual.centroId) throw new RegraContestacaoError(400, "O novo centro de custo é o mesmo do movimento.");
+  if (d.contaNovaId && d.contaNovaId === atual.contaId) throw new RegraContestacaoError(400, "A nova conta de resultado é a mesma do movimento.");
+  // O centro que vale depois: o novo (de um departamento da DRE) ou o do movimento.
+  let departamentoAlvo: DepartamentoAcesso | null;
+  if (d.centroNovoId) {
+    const c = await prisma.centroCusto.findUnique({ where: { id: d.centroNovoId }, select: { ativo: true, codigoRM: true, nomeRM: true, departamento: true } });
+    if (!c) throw new RegraContestacaoError(400, "Centro de custo não encontrado.");
+    if (!c.ativo) throw new RegraContestacaoError(400, `O centro de custo ${c.nomeRM} está inativo no cadastro.`);
+    const fora = centroForaDaContestacao(c.codigoRM);
+    if (fora) throw new RegraContestacaoError(400, `O centro de custo ${[c.codigoRM, c.nomeRM].filter(Boolean).join(" ")} ${fora}: escolha outro centro do departamento.`);
+    departamentoAlvo = gestaoDoCentro(c.departamento);
+    if (!departamentoAlvo) throw new RegraContestacaoError(400, `O centro de custo ${c.nomeRM} não é de um departamento da DRE.`);
+  } else {
+    const c = atual.centroId ? await prisma.centroCusto.findUnique({ where: { id: atual.centroId }, select: { departamento: true } }) : null;
+    departamentoAlvo = gestaoDoCentro(c?.departamento ?? null);
+  }
+  // O centro novo sem a conta nova (10/11/2026, pedido do Adão): a conta do movimento continua e tem de caber no departamento
+  // do centro novo; senão, a nova conta é obrigatória (antes, passava e virava erro de departamento na classificação).
+  if (d.centroNovoId && !d.contaNovaId) {
+    const conta = await contaComDepartamento(atual.contaId);
+    if (!contaCabeNoCentro(departamentoAlvo, conta.departamento)) {
+      throw new RegraContestacaoError(
+        400,
+        `A conta do movimento (${conta.reduzido} ${conta.descricao}) não é do departamento do novo centro de custo (${ROTULO_DEPARTAMENTO[departamentoAlvo!]}) nem do Extra-Operacional: escolha também a nova conta de resultado.`,
+      );
+    }
+  }
+  if (d.contaNovaId) {
+    const c = await prisma.contaResultado.findUnique({
+      where: { id: d.contaNovaId },
+      select: { ativo: true, reduzido: true, tipoConta: true, linhaDREId: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } },
+    });
+    if (!c) throw new RegraContestacaoError(400, "Conta de resultado não encontrada.");
+    if (!c.ativo || c.tipoConta !== "ANALITICA" || !c.linhaDREId) throw new RegraContestacaoError(400, `A conta ${c.reduzido} não é uma conta analítica ativa com destino na DRE.`);
+    if (!contaCabeNoCentro(departamentoAlvo, c.linhaDRE ? departamentoDaLinha(c.linhaDRE) : null)) {
+      throw new RegraContestacaoError(400, `A conta ${c.reduzido} não é do departamento do centro de custo (${ROTULO_DEPARTAMENTO[departamentoAlvo!]}) nem do Extra-Operacional.`);
+    }
+  }
+}
 
 /** O centro que decide a contestação: o novo; sem ele, o do item. */
 const centroAlvo = (c: { centroNovoId: string | null; centroAntesId: string | null }) => c.centroNovoId ?? c.centroAntesId;
@@ -280,10 +351,22 @@ async function nomes(ids: Array<string | null | undefined>) {
 
 const centroTexto = (c: { codigoRM: string | null; nomeRM: string } | null) => (c ? `${c.codigoRM ?? "—"} · ${c.nomeRM}` : null);
 const contaTexto = (c: { reduzido: string; descricao: string } | null) => (c ? `${c.reduzido} · ${c.descricao}` : null);
+/**
+ * A contestação de itens do movimento (10/11/2026, Contestar Selecionados): só o valor dos itens muda, pelos lançamentos
+ * manuais (o estorno e o novo) — o balancete não se divide.
+ */
+const ehDeItens = (m: { valorMovimento: Prisma.Decimal | null }) => m.valorMovimento !== null;
 /** O movimento sem correção que espera os lançamentos manuais: a competência dele fechada, ou ele fora do balancete reimportado. */
 const esperaLancamentos = (m: MovimentoDaContestacao) => !m.formaValidacao && (m.competencia.status === "FECHADA" || !m.lancamentoContabilId);
-/** O movimento sem correção que o Processar corrige no balancete: a competência dele aberta e ele no balancete. */
-const corrigivelNoBalancete = (m: MovimentoDaContestacao) => !m.formaValidacao && m.competencia.status !== "FECHADA" && !!m.lancamentoContabilId;
+/** O movimento inteiro sem correção que o Processar corrige no balancete: a competência dele aberta e ele no balancete. */
+const corrigivelNoBalancete = (m: MovimentoDaContestacao) => !m.formaValidacao && m.competencia.status !== "FECHADA" && !!m.lancamentoContabilId && !ehDeItens(m);
+/**
+ * O de itens sem correção que o Processar corrige pelos lançamentos manuais na competência dele (10/11/2026): ela aberta e ele no
+ * balancete (o estorno e o novo, com o valor dos itens).
+ */
+const lancavelNoMes = (m: MovimentoDaContestacao) => !m.formaValidacao && m.competencia.status !== "FECHADA" && !!m.lancamentoContabilId && ehDeItens(m);
+/** O movimento para os lançamentos manuais, com quantos itens (a descrição deles). */
+const paraOsLancamentos = (m: MovimentoDaContestacao) => ({ ...m, itens: m._count.itens });
 
 /** A contestação para as telas: os movimentos, o antes e o depois, a situação, quem fez o quê e os responsáveis. */
 async function apresentar(ls: Linha[], usuarioId: string) {
@@ -305,14 +388,29 @@ async function apresentar(ls: Linha[], usuarioId: string) {
       competenciaFechada: c.competencia.status === "FECHADA",
       /** O item ainda está no balancete (uma reimportação pode tê-lo tirado). */
       comItem: c.lancamentoContabilId !== null,
+      /**
+       * O Editar das Validações (10/11/2026): o centro e a conta de antes e os novos (os ids e os departamentos), e por que
+       * não dá para editar (nulo se dá) — só a pendente ou a acatada sem movimento corrigido.
+       */
+      edicao: {
+        centroAntesId: c.centroAntesId,
+        contaAntesId: c.contaAntes.id,
+        centroNovoId: c.centroNovoId,
+        contaNovaId: c.contaNovaId,
+        departamentoDoCentroAntes: gestaoDoCentro(c.centroAntes?.departamento ?? null),
+        departamentoDaContaAntes: c.contaAntes.linhaDRE ? departamentoDaLinha(c.contaAntes.linhaDRE) : null,
+        motivoNaoEditar: motivoNaoEditar(c),
+      },
       filial: c.filial,
       emissao: c.emissao,
       cliForn: c.cliForn,
       historico: c.historico,
-      /** O valor dos movimentos todos (o que muda de centro e/ou de conta). */
+      /** O valor dos movimentos todos (o que muda de centro e/ou de conta; na contestação de itens, o deles). */
       valor: soma(c.movimentos).toFixed(2),
-      /** O valor do movimento contestado. */
+      /** O valor do movimento contestado (o inteiro, também na contestação de itens). */
       valorDoMovimento: c.valor.toFixed(2),
+      /** Na contestação de itens do movimento (10/11/2026), quantos itens; 0 na do movimento inteiro. */
+      itensContestados: c.movimentos.reduce((s, m) => s + m._count.itens, 0),
       anteriores: c.anteriores,
       posteriores: c.posteriores,
       movimentos: c.movimentos.map((m) => ({
@@ -330,12 +428,19 @@ async function apresentar(ls: Linha[], usuarioId: string) {
         /** O ID do movimento no RM e quantos itens ele tem nas requisições e nas notas fiscais importadas. */
         idMovimento: m.lancamentoContabil?.idMovimento ?? null,
         itens: m.lancamentoContabil?.idMovimento ? (itens.get(m.lancamentoContabil.idMovimento) ?? 0) : 0,
+        /** A contestação de itens (10/11/2026): quantos itens do movimento e o valor dele inteiro (nulo na do movimento inteiro). */
+        itensContestados: m._count.itens,
+        valorDoMovimento: m.valorMovimento?.toFixed(2) ?? null,
       })),
-      /** A correção dos movimentos: no balancete, pelos lançamentos, os que o Processar corrige e os que esperam o Importar. */
+      /**
+       * A correção dos movimentos: no balancete, pelos lançamentos, os que o Processar corrige (no balancete; os de itens, pelos
+       * lançamentos na competência deles) e os que esperam o Importar.
+       */
       correcao: {
         noBalancete: c.movimentos.filter((m) => m.formaValidacao === "NO_BALANCETE").length,
         porLancamentos: c.movimentos.filter((m) => m.formaValidacao === "LANCAMENTO_MANUAL").length,
         diretos: acatada ? c.movimentos.filter(corrigivelNoBalancete).length : 0,
+        itensNoMes: acatada ? c.movimentos.filter(lancavelNoMes).length : 0,
         paraLancamentos: paraLancamentos.length,
         valorParaLancamentos: soma(paraLancamentos).toFixed(2),
         competenciasParaLancamentos: [...new Set(paraLancamentos.map((m) => rotulo(m.competencia.ano, m.competencia.mes)))],
@@ -397,6 +502,13 @@ async function ondeDaAba(aba: AbaDaContestacao, u: UsuarioDaContestacao): Promis
   return {};
 }
 
+/** Por que a contestação não se edita (nulo se edita): só a pendente ou a acatada, sem movimento corrigido nem lançamento manual. */
+function motivoNaoEditar(c: Pick<Linha, "situacao" | "movimentos" | "lancamentosManuais">) {
+  if (c.situacao !== "PENDENTE" && c.situacao !== "ACATADA") return `A contestação está ${ROTULO_SITUACAO[c.situacao].toLowerCase()}: só a pendente ou a acatada se edita (mude antes a situação em Alterar Status).`;
+  if (c.movimentos.some((m) => m.formaValidacao) || c.lancamentosManuais.length) return "A contestação já tem movimentos corrigidos: desfaça a correção em Alterar Status antes de editar.";
+  return null;
+}
+
 async function exigirContestacao(id: string) {
   const c = await getPrismaClient().contestacao.findUnique({ where: { id }, select: SELECAO });
   if (!c) throw new RegraContestacaoError(404, "Contestação não encontrada.");
@@ -415,17 +527,27 @@ async function exigirLancamento(id: string) {
  * (a que a aba Contestações dos Lançamentos mostra e, com rateio, a dos percentuais). Na ordem das competências.
  */
 export function agruparParaLancamentos<
-  M extends { filial: number; centroAntesId: string | null; contaAntesId: string; valor: Prisma.Decimal; competencia: { id: string; ano: number; mes: number } },
+  M extends { filial: number; centroAntesId: string | null; contaAntesId: string; valor: Prisma.Decimal; competencia: { id: string; ano: number; mes: number }; itens?: number },
 >(ms: M[]) {
   const grupos = new Map<
     string,
-    { competencia: { id: string; ano: number; mes: number }; filial: number; centroAntesId: string | null; contaAntesId: string; valor: Prisma.Decimal; movimentos: number }
+    {
+      competencia: { id: string; ano: number; mes: number };
+      filial: number;
+      centroAntesId: string | null;
+      contaAntesId: string;
+      valor: Prisma.Decimal;
+      movimentos: number;
+      /** Os itens contestados (10/11/2026: a contestação de itens do movimento); 0 na do movimento inteiro. */
+      itens: number;
+    }
   >();
   for (const m of ms) {
     const k = `${m.competencia.id}|${m.filial}|${m.centroAntesId ?? ""}|${m.contaAntesId}`;
-    const g = grupos.get(k) ?? { competencia: m.competencia, filial: m.filial, centroAntesId: m.centroAntesId, contaAntesId: m.contaAntesId, valor: new Prisma.Decimal(0), movimentos: 0 };
+    const g = grupos.get(k) ?? { competencia: m.competencia, filial: m.filial, centroAntesId: m.centroAntesId, contaAntesId: m.contaAntesId, valor: new Prisma.Decimal(0), movimentos: 0, itens: 0 };
     g.valor = g.valor.add(m.valor);
     g.movimentos++;
+    g.itens += m.itens ?? 0;
     grupos.set(k, g);
   }
   return [...grupos.values()].sort((a, b) => a.competencia.ano - b.competencia.ano || a.competencia.mes - b.competencia.mes);
@@ -438,7 +560,7 @@ export function agruparParaLancamentos<
  */
 async function lancamentosDaContestacao(
   c: { numero: number; historico: string | null; cliForn: string | null; centroNovoId: string | null; contaNovaId: string | null },
-  movimentos: Array<{ filial: number; centroAntesId: string | null; contaAntesId: string; valor: Prisma.Decimal; competencia: { id: string; ano: number; mes: number } }>,
+  movimentos: Array<{ filial: number; centroAntesId: string | null; contaAntesId: string; valor: Prisma.Decimal; competencia: { id: string; ano: number; mes: number }; itens?: number }>,
 ) {
   const prisma = getPrismaClient();
   const grupos = agruparParaLancamentos(movimentos);
@@ -448,7 +570,9 @@ async function lancamentosDaContestacao(
   const naDRE = (contaId: string, valor: Prisma.Decimal) => manualNoSinalDoBalancete(contas.find((x) => x.id === contaId)?.linhaDRE?.grupoSigla ?? "", valor);
   const item = (c.historico || c.cliForn || "").slice(0, 120);
   return grupos.flatMap((g) => {
-    const quando = ` · ${g.movimentos > 1 ? `${g.movimentos} movimentos de ` : ""}${rotulo(g.competencia.ano, g.competencia.mes)}`;
+    // Na contestação de itens (10/11/2026), quantos itens do movimento: "· 3 itens de 09/2026".
+    const quantos = g.itens ? `${g.itens} ${g.itens === 1 ? "item" : "itens"} de ` : g.movimentos > 1 ? `${g.movimentos} movimentos de ` : "";
+    const quando = ` · ${quantos}${rotulo(g.competencia.ano, g.competencia.mes)}`;
     const contaNovaId = c.contaNovaId ?? g.contaAntesId;
     return [
       {
@@ -471,6 +595,100 @@ async function lancamentosDaContestacao(
   });
 }
 
+const reais = (v: Prisma.Decimal) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** A identidade de um item da lista (10/11/2026): a origem, o produto, o centro, a conta e o valor (o ID é o do movimento). */
+const chaveDoItem = (origem: OrigemItemMovimento, x: { codigoProduto: string | null; codigoCentroCusto: string | null; contaContabil: string; valorTotal: string }) =>
+  [origem, x.codigoProduto ?? "", x.codigoCentroCusto ?? "", x.contaContabil, Number(x.valorTotal).toFixed(2)].join("|");
+
+/** Um item contestado na lista de hoje: o item, a contestação (o número e a situação) e se é a contestação aberta na tela. */
+export type ItemContestado = { id: string; origem: OrigemItemMovimento; numero: number; situacao: SituacaoContestacao; desta: boolean };
+
+/**
+ * Os itens contestados na lista de hoje (10/11/2026): os itens das contestações de itens pedidas em `onde`, reconhecidos pela
+ * identidade (o item é regravado a cada importação da lista; o mesmo item duas vezes conta duas vezes).
+ */
+async function marcarContestados(lista: ItensDoMovimento, onde: Prisma.ContestacaoItemWhereInput, destaMovimentoId: string | null): Promise<ItemContestado[]> {
+  const xs = await getPrismaClient().contestacaoItem.findMany({
+    where: onde,
+    select: {
+      origem: true,
+      codigoProduto: true,
+      codigoCentroCusto: true,
+      contaContabil: true,
+      valorTotal: true,
+      contestacaoMovimentoId: true,
+      movimento: { select: { contestacao: { select: { numero: true, situacao: true } } } },
+    },
+    orderBy: [{ movimento: { contestacao: { numero: "asc" } } }],
+  });
+  if (!xs.length) return [];
+  const livres = [
+    ...lista.notas.map((n) => ({ id: n.id, origem: "NOTA_FISCAL" as const, chave: chaveDoItem("NOTA_FISCAL", n) })),
+    ...lista.requisicoes.map((r) => ({ id: r.id, origem: "REQUISICAO" as const, chave: chaveDoItem("REQUISICAO", r) })),
+  ];
+  const usados = new Set<string>();
+  const r: ItemContestado[] = [];
+  for (const x of xs) {
+    const k = chaveDoItem(x.origem, { ...x, valorTotal: x.valorTotal.toFixed(2) });
+    const item = livres.find((i) => i.chave === k && !usados.has(i.id));
+    if (!item) continue;
+    usados.add(item.id);
+    r.push({ id: item.id, origem: item.origem, numero: x.movimento.contestacao.numero, situacao: x.movimento.contestacao.situacao, desta: x.contestacaoMovimentoId === destaMovimentoId });
+  }
+  return r;
+}
+
+/** Os itens de um movimento nas contestações de itens não recusadas (os que não se contestam de novo). */
+const contestadosDoMovimento = (lancamentoId: string): Prisma.ContestacaoItemWhereInput => ({ movimento: { lancamentoContabilId: lancamentoId, contestacao: { situacao: { not: "RECUSADA" } } } });
+
+/**
+ * Os itens escolhidos no Contestar Selecionados (10/11/2026), conferidos: do movimento (o ID, a conta do balancete e o centro de
+ * custo do RM), fora de outra contestação de itens não recusada e, somados, até o valor do movimento. O valor que muda é a soma
+ * deles, no sinal do movimento; a identidade de cada um fica na contestação.
+ */
+async function itensEscolhidos(l: LancamentoDoMovimento, escolhidos: Array<{ origem: OrigemItemMovimento; id: string }>) {
+  if (!l.idMovimento) throw new RegraContestacaoError(400, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)): não há itens para contestar.");
+  const prisma = getPrismaClient();
+  const ids = (origem: OrigemItemMovimento) => [...new Set(escolhidos.filter((x) => x.origem === origem).map((x) => x.id))];
+  const sel = { id: true, identificador: true, codigoProduto: true, descricaoItem: true, codigoCentroCusto: true, contaContabil: true, quantidade: true, valorTotal: true } as const;
+  const [rs, ns] = await Promise.all([
+    prisma.requisicaoItem.findMany({ where: { id: { in: ids("REQUISICAO") } }, select: sel }),
+    prisma.notaFiscalItem.findMany({ where: { id: { in: ids("NOTA_FISCAL") } }, select: sel }),
+  ]);
+  if (rs.length + ns.length !== ids("REQUISICAO").length + ids("NOTA_FISCAL").length) {
+    throw new RegraContestacaoError(404, "Algum item escolhido não está mais nas listas importadas (Requisições e Notas Fiscais): abra os itens de novo.");
+  }
+  const todos = [...ns.map((x) => ({ ...x, origem: "NOTA_FISCAL" as const })), ...rs.map((x) => ({ ...x, origem: "REQUISICAO" as const }))];
+  for (const x of todos) {
+    if (x.identificador !== l.idMovimento || x.contaContabil !== l.contaResultado.reduzido || (!!l.codigoCentroCusto && x.codigoCentroCusto !== l.codigoCentroCusto)) {
+      throw new RegraContestacaoError(400, `O item ${[x.codigoProduto, x.descricaoItem].filter(Boolean).join(" ")} não é do movimento (do ID, do centro de custo e da conta dele no balancete).`);
+    }
+  }
+  const lista = await itensDoMovimentoService.listar(l.idMovimento);
+  const ja = (await marcarContestados(lista, contestadosDoMovimento(l.id), null)).find((c) => todos.some((x) => x.id === c.id));
+  if (ja) throw new RegraContestacaoError(409, `Um item escolhido já está na contestação nº ${ja.numero} (${ROTULO_SITUACAO[ja.situacao].toLowerCase()}).`);
+  const total = todos.reduce((s, x) => s.add(x.valorTotal), new Prisma.Decimal(0));
+  if (total.lte(0)) throw new RegraContestacaoError(400, "Os itens escolhidos não têm valor.");
+  const doMovimento = l.valorMovimento.abs();
+  if (total.gt(doMovimento.add("0.005"))) {
+    throw new RegraContestacaoError(400, `Os itens escolhidos somam ${reais(total)}, mais que o movimento (${reais(doMovimento)}): conteste o movimento inteiro.`);
+  }
+  return {
+    valor: l.valorMovimento.isNegative() ? total.neg() : total,
+    itens: todos.map((x) => ({
+      origem: x.origem,
+      identificador: x.identificador!,
+      codigoProduto: x.codigoProduto,
+      descricaoItem: x.descricaoItem,
+      codigoCentroCusto: x.codigoCentroCusto,
+      contaContabil: x.contaContabil,
+      quantidade: x.quantidade,
+      valorTotal: x.valorTotal,
+    })),
+  };
+}
+
 export const contestacoesService = {
   /**
    * O que o modal Contestar mostra do movimento (30/10/2026): o departamento do centro dele (a lista das contas novas,
@@ -485,6 +703,8 @@ export const contestacoesService = {
     const c = await combinacao(l, u.acesso, d);
     return {
       departamentoDoCentro: gestaoDoCentro(centro?.departamento ?? null),
+      /** A conta do movimento e o departamento dela (10/11/2026): com um centro novo de outro departamento, a nova conta é obrigatória. */
+      contaDoMovimento: await contaDoItem(l),
       semFornecedor: !l.cliForn,
       valor: l.valorMovimento.toFixed(2),
       anteriores: resumo(c.anteriores),
@@ -495,49 +715,49 @@ export const contestacoesService = {
     };
   },
 
-  /** Contesta um item do balancete (o botão Contestar do modal), com as anteriores e as posteriores, se marcadas. */
+  /**
+   * Contesta um item do balancete (o botão Contestar do modal), com as anteriores e as posteriores, se marcadas. Com `itens`
+   * (10/11/2026, o Contestar Selecionados do modal dos itens), só os itens escolhidos do movimento: o valor deles muda.
+   */
   async criar(
-    d: { lancamentoId: string; centroNovoId: string | null; contaNovaId: string | null; motivo: string | null; anteriores: boolean; posteriores: boolean },
+    d: {
+      lancamentoId: string;
+      centroNovoId: string | null;
+      contaNovaId: string | null;
+      motivo: string | null;
+      anteriores: boolean;
+      posteriores: boolean;
+      itens?: Array<{ origem: OrigemItemMovimento; id: string }>;
+    },
     u: UsuarioDaContestacao,
   ) {
     const prisma = getPrismaClient();
     const l = await exigirLancamento(d.lancamentoId);
     const recusa = recusaDoAcesso(l, u.acesso);
     if (recusa) throw new RegraContestacaoError(403, recusa);
-    if (!d.centroNovoId && !d.contaNovaId) throw new RegraContestacaoError(400, "Sugira o novo centro de custo e/ou a nova conta de resultado.");
     const contaAntesId = l.contaAdotadaId ?? l.contaResultadoId;
-    if (d.centroNovoId && d.centroNovoId === l.centroCustoId) throw new RegraContestacaoError(400, "O novo centro de custo é o mesmo do movimento.");
-    if (d.contaNovaId && d.contaNovaId === contaAntesId) throw new RegraContestacaoError(400, "A nova conta de resultado é a mesma do movimento.");
-    // O centro que vale depois: o novo (de um departamento da DRE) ou o do movimento.
-    let departamentoAlvo: DepartamentoAcesso | null;
-    if (d.centroNovoId) {
-      const c = await prisma.centroCusto.findUnique({ where: { id: d.centroNovoId }, select: { ativo: true, codigoRM: true, nomeRM: true, departamento: true } });
-      if (!c) throw new RegraContestacaoError(400, "Centro de custo não encontrado.");
-      if (!c.ativo) throw new RegraContestacaoError(400, `O centro de custo ${c.nomeRM} está inativo no cadastro.`);
-      const fora = centroForaDaContestacao(c.codigoRM);
-      if (fora) throw new RegraContestacaoError(400, `O centro de custo ${[c.codigoRM, c.nomeRM].filter(Boolean).join(" ")} ${fora}: escolha outro centro do departamento.`);
-      departamentoAlvo = gestaoDoCentro(c.departamento);
-      if (!departamentoAlvo) throw new RegraContestacaoError(400, `O centro de custo ${c.nomeRM} não é de um departamento da DRE.`);
-    } else {
-      const c = l.centroCustoId ? await prisma.centroCusto.findUnique({ where: { id: l.centroCustoId }, select: { departamento: true } }) : null;
-      departamentoAlvo = gestaoDoCentro(c?.departamento ?? null);
-    }
-    if (d.contaNovaId) {
-      const c = await prisma.contaResultado.findUnique({
-        where: { id: d.contaNovaId },
-        select: { ativo: true, reduzido: true, tipoConta: true, linhaDREId: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } },
-      });
-      if (!c) throw new RegraContestacaoError(400, "Conta de resultado não encontrada.");
-      if (!c.ativo || c.tipoConta !== "ANALITICA" || !c.linhaDREId) throw new RegraContestacaoError(400, `A conta ${c.reduzido} não é uma conta analítica ativa com destino na DRE.`);
-      if (!contaCabeNoCentro(departamentoAlvo, c.linhaDRE ? departamentoDaLinha(c.linhaDRE) : null)) {
-        throw new RegraContestacaoError(400, `A conta ${c.reduzido} não é do departamento do centro de custo (${ROTULO_DEPARTAMENTO[departamentoAlvo!]}) nem do Extra-Operacional.`);
-      }
-    }
-    const aberta = await prisma.contestacaoMovimento.findFirst({
-      where: { lancamentoContabilId: l.id, contestacao: { situacao: { in: ABERTAS } } },
-      select: { contestacao: { select: { numero: true } } },
+    await conferirDestino({ centroId: l.centroCustoId, contaId: contaAntesId }, d);
+    const deItens = !!d.itens?.length;
+    if (deItens && (d.anteriores || d.posteriores)) throw new RegraContestacaoError(400, "A contestação de itens é só do movimento: sem anteriores e posteriores.");
+    // As contestações de hoje do movimento: a do movimento inteiro em andamento barra as duas; a de itens em andamento ou
+    // validada barra a do movimento inteiro (a de outros itens, não); a do inteiro validada pelos lançamentos barra a de itens.
+    const outras = await prisma.contestacaoMovimento.findMany({
+      where: { lancamentoContabilId: l.id, contestacao: { situacao: { not: "RECUSADA" } } },
+      select: { valorMovimento: true, formaValidacao: true, contestacao: { select: { numero: true, situacao: true } } },
+      orderBy: { contestacao: { numero: "asc" } },
     });
-    if (aberta) throw new RegraContestacaoError(409, `O movimento já tem a contestação nº ${aberta.contestacao.numero} em andamento.`);
+    const inteiraAberta = outras.find((m) => !ehDeItens(m) && ABERTAS.includes(m.contestacao.situacao));
+    if (inteiraAberta) throw new RegraContestacaoError(409, `O movimento já tem a contestação nº ${inteiraAberta.contestacao.numero} em andamento.`);
+    if (!deItens) {
+      const deItensAberta = outras.find((m) => ehDeItens(m) && ABERTAS.includes(m.contestacao.situacao));
+      if (deItensAberta) throw new RegraContestacaoError(409, `O movimento já tem a contestação nº ${deItensAberta.contestacao.numero} em andamento.`);
+      const comItens = outras.find(ehDeItens);
+      if (comItens) throw new RegraContestacaoError(409, `O movimento tem itens contestados (a contestação nº ${comItens.contestacao.numero}): conteste os demais itens pelo botão Itens.`);
+    } else {
+      const inteiraLancada = outras.find((m) => !ehDeItens(m) && m.formaValidacao !== "NO_BALANCETE");
+      if (inteiraLancada) throw new RegraContestacaoError(409, `O movimento inteiro já foi contestado (a contestação nº ${inteiraLancada.contestacao.numero}).`);
+    }
+    const escolhidos = deItens ? await itensEscolhidos(l, d.itens!) : null;
     if ((d.anteriores || d.posteriores) && !l.cliForn) throw new RegraContestacaoError(400, "O movimento não tem fornecedor: não há anteriores nem posteriores para contestar.");
     const outros = d.anteriores || d.posteriores ? await combinacao(l, u.acesso, d) : null;
     const extras = [...(d.anteriores ? (outros?.anteriores ?? []) : []), ...(d.posteriores ? (outros?.posteriores ?? []) : [])];
@@ -567,7 +787,12 @@ export const contestacoesService = {
         solicitanteId: u.id,
         anteriores: d.anteriores,
         posteriores: d.posteriores,
-        movimentos: { create: [movimentoDoItem(l, true), ...extras.map((x) => movimentoDoItem(x, false))] },
+        movimentos: {
+          create: escolhidos
+            ? // A de itens (10/11/2026): o valor deles (o que muda), o do movimento inteiro (a identidade) e os itens.
+              [{ ...movimentoDoItem(l, true), valor: escolhidos.valor, valorMovimento: l.valorMovimento, itens: { create: escolhidos.itens } }]
+            : [movimentoDoItem(l, true), ...extras.map((x) => movimentoDoItem(x, false))],
+        },
         ...(acatada ? { respondidaPorId: u.id, respondidaEm: agora } : {}),
       },
       select: SELECAO,
@@ -580,7 +805,14 @@ export const contestacoesService = {
       entidade: "contestacao",
       entidadeId: criada.id,
       depois: r,
-      metadados: { numero: criada.numero, competencia: rotulo(l.competencia.ano, l.competencia.mes), movimentos: criada.movimentos.length, anteriores: d.anteriores, posteriores: d.posteriores },
+      metadados: {
+        numero: criada.numero,
+        competencia: rotulo(l.competencia.ano, l.competencia.mes),
+        movimentos: criada.movimentos.length,
+        anteriores: d.anteriores,
+        posteriores: d.posteriores,
+        ...(escolhidos ? { itens: escolhidos.itens.length, valorDosItens: escolhidos.valor.toFixed(2) } : {}),
+      },
     });
     return r;
   },
@@ -591,29 +823,67 @@ export const contestacoesService = {
     return apresentar(ls, u.id);
   },
 
-  /** Os itens de um movimento da contestação (10/11/2026): a contestação tem de estar na aba do usuário, como na lista. */
+  /**
+   * Os itens de um movimento da contestação (10/11/2026): a contestação tem de estar na aba do usuário, como na lista. Com os
+   * itens contestados (os desta contestação e os das outras de itens do movimento, não recusadas).
+   */
   async itensDoMovimento(id: string, movimentoId: string, aba: AbaDaContestacao, u: UsuarioDaContestacao) {
     const c = await getPrismaClient().contestacao.findFirst({
       where: { AND: [{ id }, await ondeDaAba(aba, u)] },
-      select: { movimentos: { where: { id: movimentoId }, select: { lancamentoContabil: { select: { idMovimento: true } } } } },
+      select: { movimentos: { where: { id: movimentoId }, select: { id: true, lancamentoContabilId: true, lancamentoContabil: { select: { idMovimento: true } } } } },
     });
     if (!c) throw new RegraContestacaoError(404, "Contestação não encontrada.");
     const m = c.movimentos[0];
     if (!m) throw new RegraContestacaoError(404, "O movimento não está na contestação.");
     if (!m.lancamentoContabil?.idMovimento) throw new RegraContestacaoError(404, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)).");
-    return itensDoMovimentoService.listar(m.lancamentoContabil.idMovimento);
+    const lista = await itensDoMovimentoService.listar(m.lancamentoContabil.idMovimento);
+    const onde: Prisma.ContestacaoItemWhereInput = m.lancamentoContabilId ? { OR: [{ contestacaoMovimentoId: m.id }, contestadosDoMovimento(m.lancamentoContabilId)] } : { contestacaoMovimentoId: m.id };
+    return { ...lista, contestados: await marcarContestados(lista, onde, m.id) };
   },
 
-  /** Os movimentos contestados de um balancete (o modal): a situação da última contestação de cada um, para a coluna Ações. */
+  /** Os itens contestados de um movimento do balancete (10/11/2026): os das contestações de itens dele não recusadas. */
+  async itensContestados(lancamentoId: string, lista: ItensDoMovimento) {
+    return marcarContestados(lista, contestadosDoMovimento(lancamentoId), null);
+  },
+
+  /**
+   * Os movimentos contestados de um balancete (o modal): a situação da última contestação de cada um, para a coluna Ações — se
+   * ela é de itens do movimento (10/11/2026) e se o movimento tem itens numa contestação não recusada (que barra a do inteiro).
+   */
   async doBalancete(lancamentoIds: string[]) {
-    if (!lancamentoIds.length) return new Map<string, { numero: number; situacao: SituacaoContestacao }>();
+    const r = new Map<string, { numero: number; situacao: SituacaoContestacao; deItens: boolean; comItensContestados: boolean }>();
+    if (!lancamentoIds.length) return r;
     const ms = await getPrismaClient().contestacaoMovimento.findMany({
       where: { lancamentoContabilId: { in: lancamentoIds } },
-      select: { lancamentoContabilId: true, contestacao: { select: { numero: true, situacao: true } } },
+      select: { lancamentoContabilId: true, valorMovimento: true, contestacao: { select: { numero: true, situacao: true } } },
       orderBy: { contestacao: { solicitadaEm: "asc" } },
     });
     // A última de cada movimento.
-    return new Map(ms.map((m) => [m.lancamentoContabilId!, { numero: m.contestacao.numero, situacao: m.contestacao.situacao }]));
+    for (const m of ms) {
+      const antes = r.get(m.lancamentoContabilId!);
+      const comItens = (antes?.comItensContestados ?? false) || (ehDeItens(m) && m.contestacao.situacao !== "RECUSADA");
+      r.set(m.lancamentoContabilId!, { numero: m.contestacao.numero, situacao: m.contestacao.situacao, deItens: ehDeItens(m), comItensContestados: comItens });
+    }
+    return r;
+  },
+
+  /**
+   * O Editar das Validações (10/11/2026, pedido do Adão): troca o centro e/ou a conta novos da contestação pendente ou acatada,
+   * sem movimento corrigido, com as mesmas conferências do Contestar (contra o centro e a conta de antes). A situação não muda;
+   * a Auditoria guarda o antes e o depois.
+   */
+  async editar(id: string, d: { centroNovoId: string | null; contaNovaId: string | null }, u: UsuarioDaContestacao) {
+    const prisma = getPrismaClient();
+    const c = await exigirContestacao(id);
+    const motivo = motivoNaoEditar(c);
+    if (motivo) throw new RegraContestacaoError(409, motivo);
+    if (d.centroNovoId === c.centroNovoId && d.contaNovaId === c.contaNovaId) throw new RegraContestacaoError(400, "Nada mudou: escolha outro centro de custo e/ou outra conta.");
+    await conferirDestino({ centroId: c.centroAntesId, contaId: c.contaAntes.id }, d);
+    await prisma.contestacao.update({ where: { id }, data: { centroNovoId: d.centroNovoId, contaNovaId: d.contaNovaId } });
+    const depois = await exigirContestacao(id);
+    const texto = (x: Linha) => ({ centroNovo: x.centroNovo ? `${x.centroNovo.codigoRM ?? ""} ${x.centroNovo.nomeRM}`.trim() : null, contaNova: x.contaNova ? `${x.contaNova.reduzido} ${x.contaNova.descricao}` : null });
+    await auditar({ usuarioId: u.id, usuarioNome: u.nome, acao: "ALTERACAO", entidade: "contestacao", entidadeId: id, antes: texto(c), depois: texto(depois), metadados: { numero: c.numero, situacao: c.situacao, tela: "Validações" } });
+    return (await apresentar([depois], u.id))[0];
   },
 
   /** O responsável acata ou recusa a pendente (aba Recebidas). */
@@ -703,15 +973,24 @@ export const contestacoesService = {
    * Processar (Validações): os movimentos das acatadas com a competência aberta (e no balancete) ficam corrigidos no
    * balancete — a classificação aplica o centro e a conta novos (já, na competência ainda não apurada; nas apuradas, na
    * reapuração, que a situação pede); os demais (competência fechada, ou o item fora do balancete reimportado) esperam a
-   * importação para os lançamentos manuais de uma competência aberta. A contestação com todos corrigidos fica validada.
+   * importação para os lançamentos manuais de uma competência aberta. Os de itens (10/11/2026), com a competência aberta e no
+   * balancete, viram já o estorno e o lançamento novo, com o valor dos itens, nos lançamentos manuais da competência deles (a
+   * aba Contestações; a apurada pede reapuração). A contestação com todos corrigidos fica validada. `ids` limita a algumas
+   * acatadas (os roteiros de conferência; a tela processa todas).
    */
-  async processar(u: UsuarioDaContestacao) {
+  async processar(u: UsuarioDaContestacao, ids?: string[]) {
     const prisma = getPrismaClient();
-    const acatadas = await prisma.contestacao.findMany({ where: { situacao: "ACATADA" }, select: { id: true, numero: true, movimentos: { select: MOVIMENTO_SEL } } });
+    const acatadas = await prisma.contestacao.findMany({
+      where: { situacao: "ACATADA", ...(ids ? { id: { in: ids } } : {}) },
+      select: { id: true, numero: true, historico: true, cliForn: true, centroNovoId: true, contaNovaId: true, movimentos: { select: MOVIMENTO_SEL } },
+    });
     const agora = new Date();
     const competencias = new Map<string, MovimentoDaContestacao["competencia"]>();
+    const dosLancamentos = new Map<string, MovimentoDaContestacao["competencia"]>();
     const validadas: number[] = [];
+    const recusadas: Array<{ numero: number; motivo: string }> = [];
     let movimentos = 0;
+    let porLancamentos = 0;
     let paraLancamentos = 0;
     for (const c of acatadas) {
       const diretos = c.movimentos.filter(corrigivelNoBalancete);
@@ -720,13 +999,29 @@ export const contestacoesService = {
         for (const m of diretos) competencias.set(m.competencia.id, m.competencia);
         movimentos += diretos.length;
       }
-      const depois = c.movimentos.map((m) => (diretos.includes(m) ? { ...m, formaValidacao: "NO_BALANCETE" as const } : m));
+      // Os de itens: o estorno e o novo na competência do movimento (a que um lançamento não aceita fica, com o motivo).
+      const lancados: MovimentoDaContestacao[] = [];
+      for (const m of c.movimentos.filter(lancavelNoMes)) {
+        try {
+          const pares = await lancamentosDaContestacao(c, [paraOsLancamentos(m)]);
+          await lancamentosManuaisService.criarDeContestacao(m.competencia.id, c.id, MOTIVO_CONTESTACAO, pares, u.id);
+          await prisma.contestacaoMovimento.update({ where: { id: m.id }, data: { formaValidacao: "LANCAMENTO_MANUAL" } });
+          dosLancamentos.set(m.competencia.id, m.competencia);
+          lancados.push(m);
+        } catch (e) {
+          recusadas.push({ numero: c.numero, motivo: e instanceof Error ? e.message : String(e) });
+        }
+      }
+      porLancamentos += lancados.length;
+      const depois = c.movimentos.map((m) =>
+        diretos.includes(m) ? { ...m, formaValidacao: "NO_BALANCETE" as const } : lancados.includes(m) ? { ...m, formaValidacao: "LANCAMENTO_MANUAL" as const } : m,
+      );
       if (depois.every((m) => m.formaValidacao)) {
         await prisma.contestacao.update({ where: { id: c.id }, data: { situacao: "VALIDADA", formaValidacao: formaDaContestacao(depois), validadaPorId: u.id, validadaEm: agora } });
         validadas.push(c.numero);
       } else paraLancamentos++;
     }
-    // As competências ainda não apuradas se reclassificam já; as apuradas pedem reapuração.
+    // As competências ainda não apuradas se reclassificam já; as apuradas pedem reapuração (também as dos lançamentos dos itens).
     const reclassificadas: string[] = [];
     const reapurar: string[] = [];
     for (const comp of competencias.values()) {
@@ -736,7 +1031,11 @@ export const contestacoesService = {
         reclassificadas.push(rotulo(comp.ano, comp.mes));
       }
     }
-    const resumoDoProcessar = { validadas: validadas.length, movimentos, paraLancamentos, reclassificadas, reapurar };
+    for (const comp of dosLancamentos.values()) {
+      if (comp.apuradaEm && !competencias.has(comp.id)) reapurar.push(rotulo(comp.ano, comp.mes));
+    }
+    reapurar.sort((a, b) => a.slice(3).localeCompare(b.slice(3)) || a.localeCompare(b));
+    const resumoDoProcessar = { validadas: validadas.length, movimentos, porLancamentos, paraLancamentos, reclassificadas, reapurar, recusadas };
     await auditar({ usuarioId: u.id, usuarioNome: u.nome, acao: "PROCESSAR", entidade: "contestacao", entidadeId: null, metadados: { ...resumoDoProcessar, numeros: validadas } });
     return resumoDoProcessar;
   },
@@ -776,7 +1075,7 @@ export const contestacoesService = {
       const pendentes = c.movimentos.filter(esperaLancamentos);
       if (!pendentes.length) continue;
       try {
-        const pares = await lancamentosDaContestacao(c, pendentes);
+        const pares = await lancamentosDaContestacao(c, pendentes.map(paraOsLancamentos));
         await lancamentosManuaisService.criarDeContestacao(destino.id, c.id, MOTIVO_CONTESTACAO, pares, u.id);
         await prisma.contestacaoMovimento.updateMany({ where: { id: { in: pendentes.map((m) => m.id) } }, data: { formaValidacao: "LANCAMENTO_MANUAL" } });
         const depois = c.movimentos.map((m) => (pendentes.includes(m) ? { ...m, formaValidacao: "LANCAMENTO_MANUAL" as const } : m));
@@ -833,6 +1132,7 @@ export const contestacoesService = {
         cliForn: true,
         historico: true,
         valor: true,
+        valorMovimento: true,
         contestacao: { select: { situacao: true } },
       },
       orderBy: [{ contestacao: { numero: "asc" } }],
@@ -853,7 +1153,8 @@ export const contestacoesService = {
           emissao: m.emissao,
           cliForn: m.cliForn,
           historico: m.historico,
-          valorMovimento: m.valor,
+          // Na contestação de itens (10/11/2026), o valor do movimento inteiro.
+          valorMovimento: m.valorMovimento ?? m.valor,
         },
         select: { id: true },
         orderBy: { linhaArquivo: "asc" },

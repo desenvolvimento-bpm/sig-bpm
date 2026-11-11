@@ -28,6 +28,59 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 10/11/2026, 21:27
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No modal Balancete do extrato, o botão Itens abre os itens do movimento com uma caixa em cada um: marque os itens e clique em Contestar Selecionados (no rodapé, à direita) para contestar só eles — o valor deles muda de centro de custo e/ou de conta, e o resto do movimento fica. O item já contestado mostra o número da contestação.",
+      "Voltar aos Movimentos (no rodapé dos Itens, à esquerda) volta ao Balancete.",
+      "No Contestar, ao escolher um centro de custo de outro departamento, a nova conta de resultado passa a ser obrigatória (a do movimento não serve no departamento novo).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No modal Balancete do extrato, o botão Itens abre os itens do movimento com uma caixa em cada um: marque os itens e clique em Contestar Selecionados (no rodapé, à direita) para contestar só eles — o valor deles muda de centro de custo e/ou de conta, e o resto do movimento fica. O item já contestado mostra o número da contestação.",
+      "Voltar aos Movimentos (no rodapé dos Itens, à esquerda) volta ao Balancete.",
+      "No Contestar, ao escolher um centro de custo de outro departamento, a nova conta de resultado passa a ser obrigatória (a do movimento não serve no departamento novo).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Fechamento Mensal",
+    tela: "Lançamentos Manuais › Contestações",
+    rota: "/competencias/0000-00/lancamentos-contestacoes",
+    itens: [
+      "A contestação de itens de um movimento chega aqui pelo Processar das Validações, na competência do movimento: o estorno e o lançamento novo com o valor dos itens, e a descrição diz quantos itens.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "Na contestação de itens de um movimento, o Valor é o dos itens, com quantos são; no Ver Movimentos, os Itens mostram o número da contestação nos itens contestados, e Voltar aos Movimentos volta à lista.",
+      "O Exportar leva também os Itens Contestados e o Valor do Movimento.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Contestações de Gastos",
+    tela: "Validações",
+    rota: "/contestacoes-de-gastos/validacoes",
+    itens: [
+      "O botão Alterar Status virou o menu Ações (⋮): Motivo, Justificativa, Ver Movimentos, Editar e Alterar Status. As colunas Motivo e Justificativa saíram da tabela (estão no menu e no Exportar), e o Movimento ocupa até quatro linhas.",
+      "Editar troca o novo centro de custo e/ou a nova conta de resultado de uma contestação pendente ou acatada, sem movimento corrigido, com as mesmas listas e regras do Contestar; a situação não muda, e a alteração fica na Auditoria.",
+      "O Processar lança a contestação de itens de um movimento na competência dele (aberta): o estorno e o lançamento novo com o valor dos itens, na aba Contestações dos Lançamentos Manuais.",
+    ],
+  },
   // 10/11/2026, 14:43
   {
     publicada: "2026-11-10T14:43",
