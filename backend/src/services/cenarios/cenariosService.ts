@@ -302,7 +302,9 @@ async function contasPorIndice(c: { indicesReajuste: unknown; indicesDoComparati
 function linhasDosReajustes(est: Awaited<ReturnType<typeof estruturaDRE>>) {
   const { linhas } = totaisDaDRE(est);
   const ps = linhas.find((l) => l.linha.tipo === "SECAO" && l.linha.codigo.startsWith("PS."))?.linha.codigo;
-  return linhas.filter((l) => l.linha.codigo !== ps && l.acima[0] !== ps).map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" }));
+  // Produção e Serviços (12/11/2026, pedido do Adão: aparece, como em Resultados Empresariais; antes, ficava fora): só para
+  // leitura — os volumes não são contas que se reajustam.
+  return linhas.map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" && l.linha.codigo !== ps && l.acima[0] !== ps }));
 }
 
 type ComReajustes = { reajustesAplicados: boolean; indicesDosReajustes: unknown; aplicacaoDosReajustes: unknown };

@@ -110,8 +110,8 @@ export function ConfiguracoesContent() {
                 : ""}
               Na aba Comparativo, escolha o cenário com que este se compara e a variação máxima (em %, para mais ou para menos) de cada conta, na
               estrutura da DRE vigente (totais, atribuições e contas, desde Produção e Serviços (PS), com os volumes; sem os totais que só somam
-              outros, como CPV, MB, MC, DFO, EBITDA, EBIT, NOPAT, RF, DF e RL; a seta no rótulo da coluna escolhe até que nível mostrar, e as setas das linhas
-              abrem e fecham cada grupo). A variação digitada num total ou numa atribuição vale para todas as contas abaixo dele; com contas de
+              outros, como CPV, MB, MC, DFO, EBITDA, EBIT, NOPAT, RF, DF e RL; a seta no rótulo da coluna escolhe até que nível mostrar — em Totais e em Atribuições, Produção e Serviços (PS) aparece
+              recolhida, como em Resultados Empresariais —, e as setas das linhas abrem e fecham cada grupo). A variação digitada num total ou numa atribuição vale para todas as contas abaixo dele; com contas de
               variações diferentes, o campo dele fica em branco (“Várias”). Em branco, a conta não se verifica. Para preencher várias de uma vez, marque as
               linhas (a caixa de um total ou de uma atribuição marca as contas abaixo dele; a do rótulo, todas), digite o percentual em
               “Preencher Selecionados” e clique em “Aplicar”; “Limpar” deixa as marcadas em branco. Clique em “Gravar Comparativo”. “Nenhum” desliga o comparativo (as variações ficam guardadas). Com o cenário

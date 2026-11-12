@@ -161,7 +161,7 @@ export function PremissasContent() {
               Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro
               e 2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante).
               {podeEditar ? " Use “Incluir Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista." : ""}{" "}
-              Em Aplicação dos Reajustes, cada conta da DRE (sem Produção e Serviços) escolhe um índice; o de um total ou de uma atribuição vale
+              Em Aplicação dos Reajustes, cada conta da DRE escolhe um índice (Produção e Serviços aparece, recolhida em Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam); o de um total ou de uma atribuição vale
               para as contas abaixo dele{podeEditar ? ", e “Preencher Selecionados” aplica um índice às contas marcadas; “Gravar Aplicação” grava os índices das contas" : ""}.
               Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada
               conta com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; com eles aplicados, o botão vira “Remover Reajustes”,

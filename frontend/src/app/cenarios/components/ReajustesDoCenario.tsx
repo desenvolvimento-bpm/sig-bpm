@@ -368,7 +368,8 @@ type LinhaDaAplicacao = ReajustesDasPremissas["linhas"][number];
 
 /**
  * A Aplicação dos Reajustes (o quadro de baixo): como as Variações Máximas das Configurações, o índice de cada conta na
- * estrutura da DRE vigente (sem Produção e Serviços: os volumes não se reajustam). O índice de um total ou de uma
+ * estrutura da DRE vigente (desde 12/11/2026, com Produção e Serviços, como em Resultados Empresariais, só para leitura: os volumes
+ * não se reajustam). O índice de um total ou de uma
  * atribuição vale para as contas abaixo dele; “Preencher Selecionados” aplica um índice às contas marcadas.
  */
 function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasPremissas; podeEditar: boolean }) {
@@ -378,7 +379,9 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
   const [escolhas, setEscolhas] = useState<Record<string, string>>(() => Object.fromEntries(verificadas.map((l) => [l.codigo, l.indice ?? ""])));
   const [todos, setTodos] = useState("");
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
-  const niveis = useNiveisDRE(dados.linhas, "sig.cenarios.reajustes.nivel");
+  // PRODUÇÃO E SERVIÇOS (PS) também em Totais e em Atribuições, recolhida (12/11/2026, pedido do Adão: como em Resultados
+  // Empresariais), só para leitura: os volumes não recebem índice.
+  const niveis = useNiveisDRE(dados.linhas, "sig.cenarios.reajustes.nivel", undefined, "recolhida");
   const mudou = verificadas.some((l) => (escolhas[l.codigo] ?? "") !== (l.indice ?? ""));
   const comIndice = verificadas.filter((l) => !!escolhas[l.codigo]).length;
   useAlteracoesPendentes(mudou);
@@ -449,7 +452,7 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
         <div className="min-w-0">
           <h2 className={TITULO}>Aplicação dos Reajustes</h2>
           <p className="mt-1 text-xs text-gray-600">
-            O índice de reajuste de cada conta, na estrutura da DRE vigente (sem Produção e Serviços). Contas sem índice não se reajustam.
+            O índice de reajuste de cada conta, na estrutura da DRE vigente (Produção e Serviços aparece só para leitura: os volumes não se reajustam). Contas sem índice não se reajustam.
           </p>
           {indices.length === 0 ? <p className="mt-1 text-xs font-medium text-red-700">Nenhum índice cadastrado: inclua os índices no quadro Índices de Reajuste, acima.</p> : null}
         </div>
@@ -541,7 +544,7 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
                         ))}
                       </select>
                     ) : (
-                      <span className="text-sm text-gray-400" title="Sem contas para reajustar">
+                      <span className="text-sm text-gray-400" title={/^(PS|P|S)\./.test(l.codigo) ? "Os volumes não se reajustam" : "Sem contas para reajustar"}>
                         —
                       </span>
                     )}

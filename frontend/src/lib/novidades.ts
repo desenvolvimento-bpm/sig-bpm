@@ -28,6 +28,21 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 15:24
+  {
+    publicada: "2026-11-12T15:24",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: ["No Comparativo, a PRODUÇÃO E SERVIÇOS (PS) aparece também nos níveis Totais e Atribuições, recolhida (a seta a abre), como em Resultados Empresariais."],
+  },
+  {
+    publicada: "2026-11-12T15:24",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Na aba Reajustes, a Aplicação dos Reajustes mostra a PRODUÇÃO E SERVIÇOS (PS), recolhida em Totais e Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam."],
+  },
   // 12/11/2026, 14:22
   {
     publicada: "2026-11-12T14:22",

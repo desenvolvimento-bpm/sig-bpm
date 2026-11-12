@@ -75,8 +75,9 @@ function Formulario({ id, dados, podeEditar, quadroDosIndices }: { id: string; d
   // As contas marcadas (15/10/2026): o Preencher Selecionados e o Limpar valem só para elas (antes, para todas).
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
   const [escolhendo, setEscolhendo] = useState(false);
-  // Os níveis da DRE (14/10/2026): totais, atribuições e contas, com as setas de abrir e fechar.
-  const niveis = useNiveisDRE(dados.linhas, "sig.cenarios.variacaoMaxima.nivel");
+  // Os níveis da DRE (14/10/2026): totais, atribuições e contas, com as setas de abrir e fechar. PRODUÇÃO E SERVIÇOS (PS)
+  // também em Totais e em Atribuições, recolhida (12/11/2026, pedido do Adão: como em Resultados Empresariais).
+  const niveis = useNiveisDRE(dados.linhas, "sig.cenarios.variacaoMaxima.nivel", undefined, "recolhida");
   const escolhido = dados.opcoes.find((o) => o.id === comparado) ?? null;
   const lidos = Object.fromEntries(Object.entries(limites).map(([c, t]) => [c, analitico ? t || null : lerNumero(t)]));
   const invalidos = analitico ? [] : verificadas.filter((l) => lidos[l.codigo] === undefined || ((lidos[l.codigo] as number | null) ?? 0) < 0);
