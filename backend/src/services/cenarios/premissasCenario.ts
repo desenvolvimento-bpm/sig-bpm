@@ -5,10 +5,11 @@ import { estrutura } from "../dre/dreService.js";
 import { diasUteis } from "./calendario.js";
 import { alocarCentros, contasDoGrupo, gruposDoCadastro } from "./centrosCenario.js";
 import { ehContaDeEncargos, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
-import { VENDA_LOTACAO_CLT, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
+import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { linhasDoQuadro, quadroDosGrupos, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
+import { fatoresDasContas, resumoVazio } from "./reajustesCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
 
 type Tx = Prisma.TransactionClient;
@@ -365,7 +366,7 @@ async function materializarEncargos(
   for (const g of grupos) {
     doCadastro.add(g.grupo);
     const codigos = contasDoGrupo(est, g).map((l) => l.codigo);
-    // Os salários dos aprendizes (09/11/2026): os do Quadro de Lotação do cenário, por mão de obra.
+    // Os salários dos aprendizes (09/11/2026) e dos estagiários (11/11/2026): os do Quadro de Lotação do cenário, por mão de obra.
     const q = quadro.get(g.grupo);
     const r = encargosDoGrupo(
       codigos,
@@ -373,6 +374,7 @@ async function materializarEncargos(
       (codigo, mes) => valor.get(`${g.grupo}|${codigo}|${mes}`) ?? 0,
       (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`),
       (prefixo, mes) => q?.maos.get(prefixo)?.aprendizes[mes - 1] ?? 0,
+      (prefixo, mes) => q?.maos.get(prefixo)?.estagiarios[mes - 1] ?? 0,
     );
     for (const [codigo, lista] of r) lista.forEach((v, k) => (Math.abs(v) >= 0.00005 ? calculados.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
   }
@@ -386,9 +388,11 @@ async function materializarEncargos(
 }
 
 /**
- * O Quadro de Lotação do cenário nos grupos com linhas (09/11/2026, quadroDoCenario.ts): grava os Colaboradores CLT e PJ
- * (as premissas LOTACAO_CLT e LOTACAO_PJ) e as Remunerações CLT e PJ de cada mão de obra (os centros) dos meses 1 a 12,
- * no lugar do que havia (a Média de Referência, o mês 0, fica). Devolve os valores dos meses dos centros com elas.
+ * O Quadro de Lotação do cenário (09/11/2026, quadroDoCenario.ts): nos grupos com linhas, grava os Colaboradores
+ * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO); em todos os grupos (11/11/2026, pedido do
+ * Adão: as Remunerações sempre vêm do Quadro de Lotação e não se digitam; antes, só nos grupos com linhas), as Remunerações
+ * CLT e PJ de cada mão de obra (os centros) dos meses 1 a 12 — sem linhas, zero —, no lugar do que havia (a Média de
+ * Referência, o mês 0, fica). Devolve os valores dos meses dos centros com elas.
  */
 async function materializarQuadro(
   tx: Tx,
@@ -398,35 +402,45 @@ async function materializarQuadro(
   quadro: Map<string, QuadroDoGrupo>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
 ) {
-  if (!quadro.size) return meses;
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
   const comQuadro = [...quadro.keys()];
   const premissas: Array<{ cenarioId: string; unidade: number; venda: string; chave: string; mes: number; valor: Prisma.Decimal }> = [];
   const centros: Array<{ grupo: string; codigo: string; mes: number; valor: number }> = [];
-  const remuneracoes = new Set<string>();
+  // As contas das Remunerações de cada grupo (11/11/2026: todos; sem linhas no Quadro de Lotação, zero).
+  const remuneracoesDo = new Map<string, Set<string>>();
   for (const g of grupos) {
     const q = quadro.get(g.grupo);
-    if (!q) continue;
-    for (const [venda, lista] of [[VENDA_LOTACAO_CLT, q.clt], [VENDA_LOTACAO_PJ, q.pj]] as const)
-      lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
+    // Os colaboradores, só nos grupos com linhas (11/11/2026: os Aprendizes e os Estagiários à parte; os CLT e os PJ sem eles).
+    if (q)
+      for (const [venda, lista] of [
+        [VENDA_LOTACAO_APRENDIZ, q.aprendizes],
+        [VENDA_LOTACAO_ESTAGIARIO, q.estagiarios],
+        [VENDA_LOTACAO_CLT, q.clt],
+        [VENDA_LOTACAO_PJ, q.pj],
+      ] as const)
+        lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
+    const doGrupo = new Set<string>();
     for (const mo of maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao)) {
-      const s = q.maos.get(mo.prefixo);
+      const s = q?.maos.get(mo.prefixo);
       for (const [codigo, lista] of [[mo.remuneracoes, s?.clt], [mo.remuneracoesPJ, s?.pj]] as const) {
         if (!idDaConta.has(codigo)) continue;
-        remuneracoes.add(codigo);
+        doGrupo.add(codigo);
         lista?.forEach((v, k) => (Math.abs(v) >= 0.00005 ? centros.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
       }
     }
+    if (doGrupo.size) remuneracoesDo.set(g.grupo, doGrupo);
   }
-  await tx.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_LOTACAO }, chave: { in: comQuadro }, mes: { gte: 1, lte: 12 } } });
-  if (premissas.length) await tx.cenarioPremissa.createMany({ data: premissas });
-  const ids = [...remuneracoes].map((c) => idDaConta.get(c)!);
-  await tx.cenarioCentro.deleteMany({ where: { cenarioId, grupo: { in: comQuadro }, mes: { gte: 1, lte: 12 }, linhaDREId: { in: ids } } });
+  if (comQuadro.length) {
+    await tx.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_LOTACAO }, chave: { in: comQuadro }, mes: { gte: 1, lte: 12 } } });
+    if (premissas.length) await tx.cenarioPremissa.createMany({ data: premissas });
+  }
+  const ids = [...new Set([...remuneracoesDo.values()].flatMap((x) => [...x]))].map((c) => idDaConta.get(c)!);
+  if (ids.length) await tx.cenarioCentro.deleteMany({ where: { cenarioId, grupo: { in: [...remuneracoesDo.keys()] }, mes: { gte: 1, lte: 12 }, linhaDREId: { in: ids } } });
   for (let i = 0; i < centros.length; i += 500)
     await tx.cenarioCentro.createMany({
       data: centros.slice(i, i + 500).map((x) => ({ cenarioId, grupo: x.grupo, linhaDREId: idDaConta.get(x.codigo)!, mes: x.mes, valor: new Prisma.Decimal(x.valor.toFixed(4)) })),
     });
-  return [...meses.filter((x) => !(quadro.has(x.grupo) && remuneracoes.has(x.codigo))), ...centros];
+  return [...meses.filter((x) => !remuneracoesDo.get(x.grupo)?.has(x.codigo)), ...centros];
 }
 
 /**
@@ -435,9 +449,11 @@ async function materializarQuadro(
  * das bases das premissas (centrosCenario.ts) —, e a depreciação (a base e a dos investimentos) e o extra-operacional
  * (investimentosCenario.ts) substituem a DRE inteira do cenário, e os totais e o Consolidado se
  * recalculam pela Estrutura da DRE. Como a DRE do analítico não se edita, ela é sempre a soma das premissas e dos centros.
+ * Com os reajustes aplicados (11/11/2026, reajustesCenario.ts), as contas com índice na Aplicação dos Reajustes saem
+ * multiplicadas pelo fator do índice em cada mês; devolve o resumo deles (as contas, os meses e as somas sem e com).
  */
 export async function calcularAnalitico(tx: Tx, cenarioId: string) {
-  const cenario = await tx.cenario.findUniqueOrThrow({ where: { id: cenarioId }, select: { ano: true } });
+  const cenario = await tx.cenario.findUniqueOrThrow({ where: { id: cenarioId }, select: { ano: true, reajustesAplicados: true, indicesDosReajustes: true, aplicacaoDosReajustes: true } });
   const [est, linhas, gravadas, grupos, valoresCentros, investimentos, regras] = await Promise.all([
     estrutura(),
     linhasDoCadastro(),
@@ -471,17 +487,33 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     investimentos.map((i) => ({ ...i, valorTotal: Number(i.valorTotal), valorPosUso: Number(i.valorPosUso) })),
   );
   for (const [k, lista] of outros) juntar(somas, k, lista);
+  // Os reajustes (11/11/2026): o fator do índice de cada conta em cada mês. O resumo diz o que eles mudam (aplicados
+  // ou não); só com eles aplicados os valores gravados saem reajustados.
+  const fatores = fatoresDasContas(cenario);
+  const resumo = resumoVazio();
   const novos: Array<{ cenarioId: string; visao: number; linhaDREId: string; mes: number; valor: Prisma.Decimal }> = [];
   for (const [k, lista] of somas) {
     const [us, codigo] = k.split("|");
     const u = Number(us);
     const l = porCodigo.get(codigo);
     if (!l || l.tipo !== "ITEM" || !l.unidades.includes(u)) continue;
+    const f = fatores.get(codigo);
     lista.forEach((x, m) => {
-      if (Math.abs(x) >= 0.00005) novos.push({ cenarioId, visao: u, linhaDREId: l.id, mes: m + 1, valor: new Prisma.Decimal(x.toFixed(4)) });
+      if (Math.abs(x) < 0.00005) return;
+      const reajustado = f ? x * f[m] : x;
+      if (reajustado !== x) {
+        resumo.contas.add(codigo);
+        resumo.meses.add(m + 1);
+        resumo.valores++;
+        resumo.somaSem += x;
+        resumo.somaCom += reajustado;
+      }
+      const valor = cenario.reajustesAplicados ? reajustado : x;
+      if (Math.abs(valor) >= 0.00005) novos.push({ cenarioId, visao: u, linhaDREId: l.id, mes: m + 1, valor: new Prisma.Decimal(valor.toFixed(4)) });
     });
   }
   await tx.cenarioResultado.deleteMany({ where: { cenarioId } });
   for (let i = 0; i < novos.length; i += 500) await tx.cenarioResultado.createMany({ data: novos.slice(i, i + 500) });
   await recalcular(tx, cenarioId, Array.from({ length: 12 }, (_, k) => k + 1), UNIDADES, est);
+  return { aplicados: cenario.reajustesAplicados, reajustes: resumo };
 }

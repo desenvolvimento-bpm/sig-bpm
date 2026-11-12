@@ -31,7 +31,7 @@ export function ConfiguracoesContent() {
           <ul>
             <li>Na aba Cenário, mude o nome, a descrição e a visualização (Particular ou Pública) e clique em “Gravar Configurações”. Depois da primeira revisão, o nome fica travado: é o mesmo em todas as versões do cenário. Com o cenário marcado ou com a versão congelada, o nome e a descrição não mudam (a visualização, sim).</li>
             <li>
-              Também na aba Cenário: “Marcar Cenário” marca o cenário como Orçamento, Anterior, Vendido ou Previsão (cada
+              Também na aba Cenário: “Marcar Cenário” marca o cenário como Orçamento, Anterior, Vendido ou Forecast (cada
               marcação fica ativa em um cenário só: marcar este tira a do anterior), e “Excluir Cenário” o exclui (um cenário marcado não se exclui).
             </li>
             {analitico ? (
@@ -42,7 +42,11 @@ export function ConfiguracoesContent() {
                   lotação), da depreciação base, do extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
                   cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, na tela Premissas, para levar as médias aos
                   meses. Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. A média de cada conta dos centros de
-                  custo divide a soma do período só pelos meses em que a conta teve movimentação. Os avisos do que não coube aparecem embaixo.
+                  custo divide a soma do período só pelos meses em que a conta teve movimentação. Os avisos do que não coube aparecem embaixo. Marque
+                  “Manter os Valores dos Meses” para trocar só as Médias de Referência: os doze meses do cenário (digitados ou importados), os
+                  investimentos e as linhas do Quadro de Lotação ficam, e o Justificar? do Exportar Premissas passa a comparar os meses com as médias
+                  novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Com os reajustes aplicados na DRE
+                  (Premissas / Reajustes), a referência não se carrega nem se realoca, com o aviso na aba: use “Remover Reajustes” antes.
                 </li>
                 <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros da Controladoria / Linhas, no botão “Tarefas”.</li>
                 <li>
@@ -90,15 +94,16 @@ export function ConfiguracoesContent() {
             <li>Na Referência, os meses fechados do exercício aparecem resumidos (por exemplo, “Fechada: de Janeiro a Agosto.”).</li>
             {analitico ? (
               <li>
-                Na aba Índices, cadastre os Índices de Reajuste do cenário: a Descrição, a Observação e a Variação Máxima (em %, para mais ou para
-                menos). Use “Incluir Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas do Comparativo só se exclui
-                depois de trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. No Comparativo, cada conta escolhe um
-                índice no lugar da variação digitada.
+                A aba Comparativo dos analíticos tem três quadros: Cenário Comparado, Índices de Referência e Variações Máximas. Em Índices de
+                Referência, cadastre os índices do cenário: a Descrição, a Observação e a Variação Máxima (em %, para mais ou para menos). Use “Incluir
+                Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas das Variações Máximas só se exclui depois de
+                trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Variações Máximas, cada conta escolhe um índice
+                no lugar da variação digitada.
               </li>
             ) : null}
             <li>
               {analitico
-                ? "Na aba Comparativo dos analíticos, a coluna Índice de Reajuste traz, em cada conta (ou num total ou numa atribuição, para as contas abaixo dele), a lista dos índices da aba Índices; o “Preencher Selecionados” aplica um índice às contas marcadas. O resto funciona como abaixo. "
+                ? "Nas Variações Máximas dos analíticos, a coluna Índice de Referência traz, em cada conta (ou num total ou numa atribuição, para as contas abaixo dele), a lista dos Índices de Referência, acima; o “Preencher Selecionados” aplica um índice às contas marcadas, e “Gravar Comparativo” grava o Cenário Comparado e as Variações Máximas. O resto funciona como abaixo. "
                 : ""}
               Na aba Comparativo, escolha o cenário com que este se compara e a variação máxima (em %, para mais ou para menos) de cada conta, na
               estrutura da DRE vigente (totais, atribuições e contas, desde Produção e Serviços (PS), com os volumes; sem os totais que só somam
@@ -113,7 +118,7 @@ export function ConfiguracoesContent() {
               Com um cenário comparado, a tela Resultados e a aba Indicadores do Painel de Bordo trazem, em preto e cinza depois do total, os totais dele (e, nos Resultados, a
               Diferença, o Atingimento e a Eficiência), e a tela {analitico ? "Histórico" : "Reajustes"} ganha a aba Justificativas, com as contas acima da variação.
             </li>
-            <li>“Exportar”, o último botão do quadro (no Comparativo, depois do Limpar; nos Índices, depois do Incluir Índice), leva o que está gravado em Excel ou PDF.</li>
+            <li>“Exportar”, o último botão do quadro (nas Variações Máximas, depois do Limpar; nos Índices de Referência, depois do Incluir Índice), leva o que está gravado em Excel ou PDF.</li>
           </ul>
         }
         sobre={

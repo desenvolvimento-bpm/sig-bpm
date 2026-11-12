@@ -27,6 +27,11 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  *   + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º) + Benefícios Adicionais
  *
  * — o mesmo que o FGTS de cada um sobre os seus salários; sem aprendizes, o de antes.
+ *
+ * Os estagiários e os bolsistas (11/11/2026, pedido do Adão; a senioridade Estagiário, Lei 11.788/2008) não têm INSS, FGTS,
+ * férias com o terço nem 13º: os salários deles nas Remunerações CLT saem da base,
+ *
+ *   base = Remunerações CLT + Horas Extras − Salários dos Estagiários.
  */
 
 export type ItemDosEncargos = "INSS" | "FGTS_APRENDIZ" | "FGTS" | "FERIAS" | "DECIMO_TERCEIRO" | "BENEFICIOS";
@@ -103,7 +108,7 @@ export function valorDoItem(item: (typeof ITENS_DOS_ENCARGOS)[number], gravado: 
 /**
  * Os Encargos e Benefícios de um grupo nos doze meses (conta → os doze meses): `conta(codigo, mes)` lê o valor das contas
  * do grupo; `gravado(venda, mes)`, as premissas dos encargos; `aprendizes(prefixo, mes)`, os salários dos aprendizes da mão
- * de obra (09/11/2026; sem eles, zero).
+ * de obra (09/11/2026; sem eles, zero); `estagiarios(prefixo, mes)`, os dos estagiários, que saem da base (11/11/2026).
  */
 export function encargosDoGrupo(
   codigos: string[],
@@ -111,6 +116,7 @@ export function encargosDoGrupo(
   conta: (codigo: string, mes: number) => number,
   gravado: (venda: string, mes: number) => number | undefined,
   aprendizes: (prefixo: string, mes: number) => number = () => 0,
+  estagiarios: (prefixo: string, mes: number) => number = () => 0,
 ) {
   const r = new Map<string, number[]>();
   const beneficios = ITENS_DOS_ENCARGOS.find((i) => i.item === "BENEFICIOS")!;
@@ -119,7 +125,7 @@ export function encargosDoGrupo(
       mo.encargos,
       Array.from({ length: 12 }, (_, k) => {
         const mes = k + 1;
-        const base = conta(mo.remuneracoes, mes) + conta(mo.horasExtras, mes);
+        const base = conta(mo.remuneracoes, mes) + conta(mo.horasExtras, mes) - estagiarios(mo.prefixo, mes);
         const valor = (item: ItemDosEncargos) => valorDoItem(itemDosEncargos(item)!, gravado, mes);
         return encargosDaBase(base, aprendizes(mo.prefixo, mes), valor) + (mo.beneficios ? valorDoItem(beneficios, gravado, mes) : 0);
       }),

@@ -26,6 +26,8 @@ type CadastroShellProps = {
   apenasAtivas?: ControleApenasAtivas;
   /** O Exportar da tabela (30/10/2026, `ExportarTabela`). */
   exportar?: ReactNode;
+  /** Um aviso entre o cabeçalho e a tabela, como o resumo do Lançamento Inicial da Gestão de Colaboradores. */
+  aviso?: ReactNode;
   children: ReactNode;
 };
 
@@ -47,6 +49,7 @@ export function CadastroShell({
   acoes,
   apenasAtivas,
   exportar,
+  aviso,
   children,
 }: CadastroShellProps) {
   return (
@@ -67,6 +70,7 @@ export function CadastroShell({
           )
         }
       />
+      {aviso}
       <QuadroTabela
         rodape={<Paginacao total={total} pagina={pagina} porPagina={porPagina} onPagina={onPaginaChange} onPorPagina={onPorPaginaChange} carregando={carregando} />}
       >

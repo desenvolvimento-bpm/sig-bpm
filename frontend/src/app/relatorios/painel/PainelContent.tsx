@@ -18,7 +18,7 @@ import { ConfigurarGraficos } from "../components/ConfigurarGraficos";
 import { ExportarRelatorio } from "../components/ExportarRelatorio";
 import { IndicadoresDoPainel } from "./IndicadoresDoPainel";
 import { CopiarComoImagem } from "../components/CopiarComoImagem";
-import { useComparaCom } from "../components/ComparaCom";
+import { SeletorComparaCom, useComparaCom } from "../components/ComparaCom";
 import type { CenarioDoProva } from "../components/cenariosDoProva";
 import { MiniGrafico } from "../components/MiniGrafico";
 import {
@@ -63,6 +63,9 @@ function formatar(v: number | null, f: FormatoPainel) {
       return moeda(v, (x) => `${n0.format(x)}/m³`);
   }
 }
+
+/** O valor como o card mostra (11/11/2026: o Testar dos cadastros do Painel de Bordo). */
+export const formatarValorDoPainel = formatar;
 
 /**
  * O valor sem a unidade (13/10/2026: os rótulos e a escala dos gráficos), com as mesmas casas de `formatar`: os
@@ -378,7 +381,7 @@ function CardIndicador({
         O nome e, à direita dele, a Metodologia e o comportamento entre parênteses, no texto do Atual e do Acumulado
         (21/10/2026; antes, a abreviação e a seta); o mês fica no nome do grupo (13/10/2026).
       */}
-      <header className="flex min-w-0 items-baseline justify-between gap-3 lg:col-span-2 lg:pr-3">
+      <header data-cabecalho-do-card className="flex min-w-0 items-baseline justify-between gap-3 lg:col-span-2 lg:pr-3">
         <h3 className="shrink-0 text-xl leading-snug font-bold text-gray-900" title={i.titulo}>
           {i.titulo}
         </h3>
@@ -388,10 +391,10 @@ function CardIndicador({
           {i.metodologia ? `${i.metodologia} ` : ""}({sentido})
         </p>
       </header>
-      <div className="self-end lg:col-start-1 lg:row-start-2 lg:pr-3">
+      <div data-valor-atual className="self-end lg:col-start-1 lg:row-start-2 lg:pr-3">
         <GrupoPeriodo periodo="Atual" b={i.mes} f={fm} base={percentualDaBase(i, i.mes)} dica={`Atual: ${rotuloMes}`} comparacoes={doPeriodo("mes")} />
       </div>
-      <div className={`self-end lg:col-start-2 lg:row-start-2 lg:pr-3 ${coluna}`}>
+      <div data-valor-acumulado className={`self-end lg:col-start-2 lg:row-start-2 lg:pr-3 ${coluna}`}>
         <GrupoPeriodo periodo="Acumulado" b={i.acumulado} f={fa} base={percentualDaBase(i, i.acumulado)} dica={`Acumulado: ${acumulado}`} comparacoes={doPeriodo("acumulado")} />
       </div>
       {/*
@@ -463,6 +466,7 @@ export function CardDoPainel({
   cores,
   comGrafico,
   soAcumulado = false,
+  periodos,
   comRotulos = false,
   formatacao,
   comparacoes,
@@ -475,6 +479,11 @@ export function CardDoPainel({
   comGrafico: boolean;
   /** Só o gráfico do acumulado (22/10/2026), na terceira coluna, da largura dos valores. */
   soAcumulado?: boolean;
+  /**
+   * Os dados antes do gráfico (12/11/2026): só o Atual ou só o Acumulado (sem ele, os dois). Com um só, ele ocupa a primeira
+   * coluna, o gráfico vem logo depois, e o nome fica em cima da Metodologia, na largura dele.
+   */
+  periodos?: "ATUAL" | "ACUMULADO";
   comRotulos?: boolean;
   /** A formatação do indicador (os cards de Indicadores dos Relatórios Executivos, 22/10/2026). */
   formatacao?: { mes: FormatacaoDoCard; acumulado: FormatacaoDoCard };
@@ -483,14 +492,31 @@ export function CardDoPainel({
   /** A cor do orçado no gráfico do card padrão (31/10/2026: a do cenário, nos slides com cards PROVA). */
   corDoOrcado?: string;
 }) {
+  // Os nomes inteiros das classes (o Tailwind só gera as que aparecem no código).
+  const umPeriodo = periodos === "ATUAL" || periodos === "ACUMULADO";
   const doGrafico = !comGrafico
-    ? "[&_[data-grafico-do-card]]:hidden lg:[&_[data-card-indicador]]:grid-cols-2"
+    ? umPeriodo
+      ? "[&_[data-grafico-do-card]]:hidden lg:[&_[data-card-indicador]]:grid-cols-1"
+      : "[&_[data-grafico-do-card]]:hidden lg:[&_[data-card-indicador]]:grid-cols-2"
     : soAcumulado
-      ? "[&_[data-grafico-dos-meses]]:hidden lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
-      : "";
+      ? umPeriodo
+        ? "[&_[data-grafico-dos-meses]]:hidden lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
+        : "[&_[data-grafico-dos-meses]]:hidden lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
+      : umPeriodo
+        ? "lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]"
+        : "";
+  // Um período só: o outro some, o que fica vai à primeira coluna (o Acumulado sem a linha da esquerda), o gráfico à segunda
+  // e o cabeçalho, na largura dos valores, com a Metodologia embaixo do nome.
+  const doPeriodo = !umPeriodo
+    ? ""
+    : `lg:[&_[data-cabecalho-do-card]]:col-span-1 lg:[&_[data-grafico-do-card]]:col-start-2 [&_[data-cabecalho-do-card]]:flex-col [&_[data-cabecalho-do-card]]:items-start [&_[data-cabecalho-do-card]]:gap-0.5 [&_[data-metodologia]]:text-left [&_[data-metodologia]]:max-w-none! ${
+        periodos === "ATUAL"
+          ? "[&_[data-valor-acumulado]]:hidden"
+          : "[&_[data-valor-atual]]:hidden lg:[&_[data-valor-acumulado]]:col-start-1 lg:[&_[data-valor-acumulado]]:border-l-0 lg:[&_[data-valor-acumulado]]:pl-0"
+      }`;
   return (
     <CoresDoPainel.Provider value={cores}>
-      <div className={`h-full [&>article]:h-full ${doGrafico}`}>
+      <div className={`h-full [&>article]:h-full ${doGrafico} ${doPeriodo}`}>
         <CardIndicador i={i} rotuloMes={rotuloMes} tipo={tipo} comRotulos={comRotulos} formatacao={formatacao} comparacoes={comparacoes} corDoOrcado={corDoOrcado} />
       </div>
     </CoresDoPainel.Provider>
@@ -757,8 +783,8 @@ export function PainelContent() {
             <li>
               Na aba Indicadores, os indicadores do exercício mês a mês até o Período, com o acumulado e, nas colunas de
               rótulo preto, o orçado do último mês e o acumulado do orçado. O Exercício, o Período, os Rótulos e o Tipo do Configurar Gráficos valem
-              também nela; fora do Orçamento, as colunas do orçado trazem o nome da marcação escolhida na Comparação (Previsão SET/26, Previsão
-              Acum.…), como em Resultados. Na Comparação PROVA, cada cenário dela tem as duas colunas (Previsão SET/26, Previsão Acum., Orçado
+              também nela; fora do Orçamento, as colunas do orçado trazem o nome da marcação escolhida na Comparação (Forecast SET/26, Forecast
+              Acum.…), como em Resultados. Na Comparação PROVA, cada cenário dela tem as duas colunas (Forecast SET/26, Forecast Acum., Orçado
               SET/26…), lado a lado e na cor dele, como em Resultados, e o gráfico do indicador traz uma série por cenário. Na lista antes do rótulo Indicador (a seta), escolha Todos os Grupos ou um grupo; use os filtros nos rótulos das colunas;
               as colunas Indicador, Sent. e Und. ficam fixas. Clique num indicador para abrir o gráfico dele (o realizado e o orçado mês a mês e o
               acumulado), que o botão ao lado do nome copia como imagem. Nesta aba, “Exportar” baixa os indicadores em Excel ou PDF.
@@ -779,15 +805,16 @@ export function PainelContent() {
             <li>Passe o mouse sobre o gráfico para ver os valores do mês, sobre o selo para ler o sinal e sobre a seta para ver o sentido do indicador.</li>
             <li>A seta antes do nome de cada grupo recolhe e expande os cards dele; a escolha fica guardada no navegador.</li>
             <li>
-              A comparação é a escolhida na “Comparação” da tela Resultados (a escolha fica guardada neste navegador), entre os cenários marcados, de
-              qualquer exercício (Previsão, Orçamento, Anterior e Vendido). Na Comparação Padrão, um cenário (de início, a primeira marcação que houver,
+              “Comparação”, à esquerda do Configurar Gráficos, escolhe a comparação, como na tela Resultados: a escolha vale nas duas telas (mudar
+              numa muda a outra, que recarrega sozinha) e fica guardada neste navegador. Ela é feita entre os cenários marcados, de
+              qualquer exercício (Forecast, Orçamento, Anterior e Vendido). Na Comparação Padrão, um cenário (de início, a primeira marcação que houver,
               nessa ordem): o nome dele aparece no fim da legenda, “(vs. …)”, e, fora do Orçamento, os cards dizem “vs.” e o nome da marcação.
             </li>
             <li>
               Na Comparação PROVA (dois a quatro dos cenários marcados), os cards PROVA, como os dos Relatórios Executivos: embaixo do Atual e do
               Acumulado, uma linha por cenário — “vs.” e o nome dele, com o quadradinho da cor, o valor dele e a variação com o ícone do sinal, com a
               faixa na cor do sinal à direita —, e, nos gráficos, uma série por cenário (na Área, só o realizado em área; os cenários em linhas). As
-              cores: a Previsão em cinza, o Orçado em preto, o Vendido em ouro forte e o Anterior em ouro fraco. A legenda troca o Orçado pelos
+              cores: o Forecast em cinza, o Orçado em preto, o Vendido em ouro forte e o Anterior em ouro fraco. A legenda troca o Orçado pelos
               cenários, cada um na cor dele (passe o mouse para ver o nome do cenário).
             </li>
             <li>
@@ -796,7 +823,7 @@ export function PainelContent() {
               imagem, para colar num e-mail ou numa apresentação; o botão seguinte (o mesmo ícone, com um asterisco: “Copiar o grupo como imagem (sem
               gráficos)”) copia só os valores dos cards, com a borda de cada um. Se o navegador não deixar copiar, a imagem é baixada.
             </li>
-            <li>O orçado vem do cenário escolhido na Comparação (de início, o marcado como Previsão ou, sem ele, como Orçamento, Anterior ou Vendido, em Criação de Cenários / Cenários Sintéticos); sem nenhum cenário marcado, o orçado fica zero.</li>
+            <li>O orçado vem do cenário escolhido na Comparação (de início, o marcado como Forecast ou, sem ele, como Orçamento, Anterior ou Vendido, em Análises Gerenciais / Cenários Sintéticos); sem nenhum cenário marcado, o orçado fica zero.</li>
             <li>Sem os Rótulos, a escala à esquerda de cada gráfico usa marcas práticas, sem casas decimais: múltiplos de 1, 2, 5, 10, 25, 50, 100, 250, 500, 1.000… (ou 0,1, 0,2, 0,5 quando os valores são pequenos), na unidade do card (milhões, milhares, %, m³…).</li>
           </ul>
         }
@@ -808,8 +835,8 @@ export function PainelContent() {
             </p>
             <p>
               O realizado sai dos mesmos valores da aba Indicadores, só das competências fechadas: a DRE apurada, os volumes da apuração e os indicadores importados (ou
-              digitados nas Listas Operacionais). O orçado sai das Metas do cenário escolhido na Comparação (de início, o marcado como Previsão ou,
-              sem ele, como Orçamento, Anterior ou Vendido, em Criação de Cenários / Cenários Sintéticos), calculadas como o realizado, e o acumulado do orçado também. Sem nenhum cenário
+              digitados nas Listas Operacionais). O orçado sai das Metas do cenário escolhido na Comparação (de início, o marcado como Forecast ou,
+              sem ele, como Orçamento, Anterior ou Vendido, em Análises Gerenciais / Cenários Sintéticos), calculadas como o realizado, e o acumulado do orçado também. Sem nenhum cenário
               marcado, ou sem o valor no cenário, o orçado é zero.
             </p>
             <p>
@@ -844,6 +871,8 @@ export function PainelContent() {
               ) : (
                 <LegendaDoPainel tipo={tipoGrafico} cores={cores} comparado={prova ? null : dados?.cenarioOrcado} comparados={comparados} />
               )}
+              {/* A Comparação (11/11/2026, pedido do Adão: também aqui, como em Resultados; a escolha vale nas duas abas). */}
+              <SeletorComparaCom comparacao={comparacao} />
               <ConfigurarGraficos>
               <Seletor
                 rotulo="Exercício"
@@ -898,7 +927,7 @@ export function PainelContent() {
             // da Comparação Padrão (na PROVA, os cenários são só os marcados).
             prova ? null : !dados.cenarioOrcado ? (
               <div className={AVISO_DO_PAINEL}>
-                Nenhum cenário está marcado (Orçamento, Anterior, Vendido ou Previsão): o orçado aparece como zero. Marque um cenário em Criação de
+                Nenhum cenário está marcado (Orçamento, Anterior, Vendido ou Forecast): o orçado aparece como zero. Marque um cenário em Criação de
                 Cenários / Cenários Sintéticos.
               </div>
             ) : dados.mesesSemMeta.length > 0 ? (

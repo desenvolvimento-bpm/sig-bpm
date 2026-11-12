@@ -31,6 +31,11 @@ export default function PainelBordoPage() {
                 indicadores, a fórmula dá o realizado; com as metas do orçamento, o orçado; com os acumulados, o acumulado.
               </li>
               <li>
+                Na lista de indicadores da Metodologia, ao lado de cada um, o valor acumulado de janeiro até a competência fechada mais recente em
+                Resultados Empresariais (#.##0,00, ou 0,00% nos indicadores em %). “Testar”, antes de “Gravar”, mostra o Realizado (Atual) do card
+                nessa competência, no Formato escolhido (e o Percentual sob o Valor, quando há), com a fórmula do formulário, sem gravar.
+              </li>
+              <li>
                 O Formato diz a unidade do Atual e do Acumulado (R$ em milhões ou milhares, m³, pistas, percentual, R$/m³), que aparece no rótulo
                 deles, e não nos valores; é o mesmo no Atual e no Acumulado. O Percentual sob o Valor é opcional: uma segunda fórmula, mostrada sob o realizado com o rótulo (/RL), com uma ou duas casas.
                 Espaço Antes começa um novo bloco no quadro.

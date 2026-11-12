@@ -59,7 +59,7 @@ export function MovimentacoesContent() {
           <ul>
             <li>
               Use Novo, à direita do título, para registrar uma movimentação: a classificação (que já escolhe a movimentação) ou a movimentação, a data (hoje,
-              por padrão), o centro de custo, o tipo (CLT ou PJ), a função, o nível (o da função, por padrão) e o motivo.
+              por padrão), o centro de custo, o tipo (CLT ou PJ), a função, a senioridade (a da função, por padrão) e o motivo.
             </li>
             <li>
               Num desligamento, escolha a Origem (Iniciativa da Empresa ou Pedido do Colaborador). Com Gerar Vaga em Aberto, marcada por padrão, o SIG cria a

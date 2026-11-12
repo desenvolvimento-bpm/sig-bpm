@@ -74,7 +74,7 @@ function guardar(valor: string) {
 }
 
 /**
- * A Comparação do Quadro de Lotação (09/11/2026, etapa 4): um dos cenários marcados (Previsão, Orçamento, Anterior e
+ * A Comparação do Quadro de Lotação (09/11/2026, etapa 4): um dos cenários marcados (Forecast, Orçamento, Anterior e
  * Vendido), como a de Resultados Empresariais, ou nenhum. A escolha fica guardada neste navegador e vale no Quadro de
  * Lotação e no Painel de Bordo; de início, a de Resultados (ou a primeira marcação que houver).
  */

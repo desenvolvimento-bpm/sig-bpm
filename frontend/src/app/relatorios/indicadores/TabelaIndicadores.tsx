@@ -231,7 +231,7 @@ type Props<T extends Indicador> = {
   comOrcado?: boolean;
   /**
    * O nome do orçado nos rótulos dessas colunas (23/10/2026): "Orçado" no Orçamento; nas outras marcações da Comparação, o
-   * nome dela (Previsão SET/26, Previsão Acum.), como em Resultados.
+   * nome dela (Forecast SET/26, Forecast Acum.), como em Resultados.
    */
   rotuloDoOrcado?: string;
   /** Nos cenários (13/10/2026): o cenário comparado, cujo acumulado vem no lugar do orçado (só ele, sem o do mês). */

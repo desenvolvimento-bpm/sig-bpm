@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { LinhaPlanilha, ValorCelula } from "../src/lib/xlsx.js";
 import { limiteDaLinha, mesesAcima, totaisDaDRE } from "../src/services/cenarios/comparativoCenario.js";
-import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, lerArquivoDePremissas, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
+import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, chaveDaDescricao, lerArquivoDePremissas, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
 import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
 import { classificar } from "../src/services/cenarios/indicadoresDoCenario.js";
 import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leituraCenario.js";
@@ -151,11 +151,39 @@ describe("comparativo entre cenários", () => {
     const xlsx = gerarXlsx([abaDaPlanilha("Centros de Custo", "centros", linhas, Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste")]);
     const [lido] = lerArquivoDePremissas("p.xlsx", xlsx);
     assert.deepEqual(lido.erros, []);
-    assert.deepEqual(lido.linhas.map((l) => [l.chave, l.meses[0], l.meses[1], l.meses[2], l.justificativa]), [
-      ["C|ESTRUTURA|CPP.MOD.REMUNERACOES_CLT", 1000, 1200, null, "Dissídio"],
-      ["L|ESTRUTURA", 44, 44, 44, null],
+    // 11/11/2026: sem a coluna Código, a linha pela aba e pelas descrições.
+    assert.deepEqual(lido.linhas.map((l) => [l.chave, l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.meses[2], l.justificativa]), [
+      [null, "centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, null, "Dissídio"],
+      [null, "centros|ESTRUTURA › Quadro de Lotação › Colaboradores", 44, 44, 44, null],
     ]);
+    // As abas das unidades (os mesmos rótulos) pelo título; os arquivos de antes, com o Código, pela chave.
+    const unidade: LinhaDaPlanilha = { aba: "2", chave: "P|2|GLOBAL|DEMANDA:X", descricao: ["Global", "Produção", "Estrutura (m³)", "Demanda Diária"], und: "m³/dia", conta: null, limite: null, media: 10, meses: Array(12).fill(10), justificativa: null };
+    const [daFilial] = lerArquivoDePremissas("f.xlsx", gerarXlsx([abaDaPlanilha("Filial", "2", [unidade], Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste")]));
+    assert.deepEqual([daFilial.linhas[0].doTipo, daFilial.linhas[0].chave], ["2", null]);
+    const antiga = abaDaPlanilha("Filial", "2", [unidade], Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste");
+    antiga.linhas[4].unshift({ valor: "Código (não altere)" });
+    antiga.linhas[5].unshift({ valor: unidade.chave });
+    const [daAntiga] = lerArquivoDePremissas("a.xlsx", gerarXlsx([antiga]));
+    assert.deepEqual([daAntiga.erros, daAntiga.linhas[0].chave, daAntiga.linhas[0].meses[0]], [[], "P|2|GLOBAL|DEMANDA:X", 10]);
     assert.match(lerArquivoDePremissas("x.xlsx", gerarXlsx([{ nome: "Outra", larguras: [10], linhas: [[{ valor: "a" }]] }]))[0].erros[0], /não está no padrão/);
+  });
+  it("os meses da referência (11/11/2026): doze colunas antes da Média de Referência, que não se importam; as fórmulas acompanham", () => {
+    const meses = Array.from({ length: 12 }, (_, k) => `M${k + 1}`);
+    const linhas: LinhaDaPlanilha[] = [
+      { aba: "centros", chave: "C|ESTRUTURA|X", descricao: ["ESTRUTURA", "Mão de Obra Direta", "Remunerações CLT"], und: "R$", conta: "X", limite: 5, media: 1000, meses: [1000, 1200, ...Array(10).fill(null)], justificativa: "Dissídio", referencia: [900, 950, ...Array(10).fill(null)] },
+    ];
+    const aba = abaDaPlanilha("Centros de Custo", "centros", linhas, meses, "teste", { rotulo: "Realizado", meses: meses.map((m) => `R${m}`), descricao: "o realizado" });
+    const cab = aba.linhas[4].map((c) => c.valor);
+    // As três descrições (11/11/2026: sem o Código antes), a Und. e os doze da referência; depois a Média (Q).
+    assert.equal(cab[4], "Realizado · RM1");
+    assert.equal(cab[16], "Média de Referência");
+    assert.deepEqual([aba.linhas[5][4].valor, aba.linhas[5][5].valor, aba.linhas[5][16].valor, aba.linhas[5][19].valor], [900, 950, 1000, 1000]);
+    // O Total da Referência e o Justificar? apontam para as colunas deslocadas.
+    assert.equal(aba.linhas[5][17].formula, "IF(Q6=\"\",\"\",Q6*12)");
+    assert.ok(String(aba.linhas[5][31].formula).includes("SUM(T6:AE6)"));
+    const [lido] = lerArquivoDePremissas("p.xlsx", gerarXlsx([aba]));
+    assert.deepEqual(lido.erros, []);
+    assert.deepEqual(lido.linhas.map((l) => [l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.justificativa]), [["centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, "Dissídio"]]);
   });
   it("a aba Investimentos (15/10/2026): a lista volta igual; o Nome de Referência obrigatório e sem repetir; a conta tem de ser a da unidade", () => {
     const inv = { id: "abc", nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24 };

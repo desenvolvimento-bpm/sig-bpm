@@ -2,7 +2,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState, useLayoutEffect } from "react";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { ChartColumn, CircleAlert, CirclePlay, ClipboardPaste, Copy, Crop, ImagePlus, Redo2, Settings, SlidersHorizontal, ThumbsDown, ThumbsUp, Trash2, Undo2, ZoomIn } from "lucide-react";
+import { CalendarDays, ChartColumn, CircleAlert, CirclePlay, ClipboardPaste, Columns2, Copy, Crop, ImagePlus, Redo2, Settings, Sigma, SlidersHorizontal, ThumbsDown, ThumbsUp, Trash2, Undo2, ZoomIn } from "lucide-react";
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -20,7 +20,7 @@ import { valor, valorCurto } from "@/app/relatorios/indicadores/TabelaIndicadore
 import { fatorDaEscalaDa } from "@/app/relatorios/services/relatoriosService";
 import type { TipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
 
-import { enderecoDaFoto, type Bloco, type DadosDoRelatorio, type Fundo, type Nota, type TelaDoSumario } from "../services/relatoriosExecutivosService";
+import { enderecoDaFoto, type Bloco, type DadosDoRelatorio, type Fundo, type Nota, type PeriodosDoCard, type TelaDoSumario } from "../services/relatoriosExecutivosService";
 import { AjustesDaImagemDialog, ImagemComMoldura } from "./AjustesDaImagem";
 import { CortarImagemDialog, type CorteDaImagem } from "./CortarImagem";
 import { CamadaDoFundo } from "./FundoDoSlide";
@@ -51,20 +51,47 @@ export function modoDoGrafico(b: Pick<Bloco, "tipo"> & { comGrafico?: boolean; s
   if (b.tipo === "INDICADOR") return b.grafico ?? "NENHUM";
   return "NENHUM";
 }
-const PARTES: Record<ModoDoGrafico, number> = { MESES: 5, ACUMULADO: 3, NENHUM: 2 };
+/** As partes do gráfico na largura do card: o dos meses e do acumulado, 3; o só do acumulado, 1. */
+const PARTES_DO_GRAFICO: Record<ModoDoGrafico, number> = { MESES: 3, ACUMULADO: 1, NENHUM: 0 };
 const PROXIMO: Record<ModoDoGrafico, ModoDoGrafico> = { MESES: "ACUMULADO", ACUMULADO: "NENHUM", NENHUM: "MESES" };
-/** A largura mínima dos cards em cada modo do gráfico. */
+
+/**
+ * Os dados do card antes do gráfico (12/11/2026, pedido do Adão): o Atual e o Acumulado, só o Atual ou só o Acumulado. O
+ * ícone dos dados passa de um ao outro, nessa ordem, e o card muda de largura na proporção, como no gráfico: os dois
+ * valores são 2 partes, um só, 1.
+ */
+export type DadosDoCard = "AMBOS" | PeriodosDoCard;
+export const dadosDoCard = (b: { periodos?: PeriodosDoCard }): DadosDoCard => b.periodos ?? "AMBOS";
+const PROXIMOS_DADOS: Record<DadosDoCard, DadosDoCard> = { AMBOS: "ATUAL", ATUAL: "ACUMULADO", ACUMULADO: "AMBOS" };
+/** As partes do card: as dos valores (2, ou 1 com um período só) e as do gráfico. */
+const partesDoCard = (modo: ModoDoGrafico, dados: DadosDoCard) => (dados === "AMBOS" ? 2 : 1) + PARTES_DO_GRAFICO[modo];
+
+/** A largura mínima dos cards em cada modo do gráfico, com os dois valores e com um só (12/11/2026). */
 const MINIMO: Record<"PAINEL" | "INDICADOR", Record<ModoDoGrafico, number>> = {
   PAINEL: { MESES: 10, ACUMULADO: 6, NENHUM: 5 },
   // O card de indicador é o card do Painel (22/10/2026): as mesmas larguras.
   INDICADOR: { MESES: 10, ACUMULADO: 6, NENHUM: 5 },
 };
+const MINIMO_COM_UM_PERIODO: Record<ModoDoGrafico, number> = { MESES: 8, ACUMULADO: 4, NENHUM: 3 };
+const minimoDoCard = (tipo: "PAINEL" | "INDICADOR", modo: ModoDoGrafico, dados: DadosDoCard) => (dados === "AMBOS" ? MINIMO[tipo][modo] : MINIMO_COM_UM_PERIODO[modo]);
+/** A largura do card de `antes` partes com `depois` partes, entre o mínimo e a grade. */
+const larguraNaProporcao = (w: number, antes: number, depois: number, minimo: number) => Math.min(COLUNAS, Math.max(minimo, Math.round((w * depois) / antes)));
+
 /** O próximo modo do gráfico do card e a largura dele nesse modo (na proporção das partes, entre o mínimo e a grade). */
 function proximoGrafico(b: Extract<Bloco, { tipo: "PAINEL" | "INDICADOR" }>): Partial<Bloco> {
   const atual = modoDoGrafico(b);
   const novo = PROXIMO[atual];
-  const w = Math.min(COLUNAS, Math.max(MINIMO[b.tipo][novo], Math.round((b.w * PARTES[novo]) / PARTES[atual])));
+  const dados = dadosDoCard(b);
+  const w = larguraNaProporcao(b.w, partesDoCard(atual, dados), partesDoCard(novo, dados), minimoDoCard(b.tipo, novo, dados));
   return (b.tipo === "PAINEL" ? { comGrafico: novo !== "NENHUM", soAcumulado: novo === "ACUMULADO", w } : { grafico: novo === "NENHUM" ? undefined : novo, w }) as Partial<Bloco>;
+}
+/** Os próximos dados do card (12/11/2026) e a largura dele com eles (na proporção das partes, entre o mínimo e a grade). */
+function proximosDados(b: Extract<Bloco, { tipo: "PAINEL" | "INDICADOR" }>): Partial<Bloco> {
+  const modo = modoDoGrafico(b);
+  const atual = dadosDoCard(b);
+  const novo = PROXIMOS_DADOS[atual];
+  const w = larguraNaProporcao(b.w, partesDoCard(modo, atual), partesDoCard(modo, novo), minimoDoCard(b.tipo, modo, novo));
+  return { periodos: novo === "AMBOS" ? undefined : novo, w } as Partial<Bloco>;
 }
 
 /** O tamanho inicial de cada tipo de bloco (colunas × linhas); o card do Painel sem o gráfico, 2/5 dele com o gráfico. */
@@ -92,8 +119,7 @@ const alturaMinimaDoCard = (b: Extract<Bloco, { tipo: "PAINEL" | "INDICADOR" }>,
  * `cenariosProva`, os da Comparação PROVA do relatório.
  */
 function tamanhoMinimo(b: Bloco, largura: number, cenariosProva: number) {
-  if (b.tipo === "PAINEL") return { minW: MINIMO.PAINEL[modoDoGrafico(b)], minH: alturaMinimaDoCard(b, cenariosProva) };
-  if (b.tipo === "INDICADOR") return { minW: MINIMO.INDICADOR[modoDoGrafico(b)], minH: alturaMinimaDoCard(b, cenariosProva) };
+  if (b.tipo === "PAINEL" || b.tipo === "INDICADOR") return { minW: minimoDoCard(b.tipo, modoDoGrafico(b), dadosDoCard(b)), minH: alturaMinimaDoCard(b, cenariosProva) };
   // A Imagem Livre (22/10/2026) diminui até duas linhas de altura ou uma coluna de largura, o que vier antes (a altura
   // acompanha a largura, na proporção da imagem); a com legenda, até 2 × 2.
   if (b.tipo === "FOTO" && b.recorte) return { minW: 2, minH: 2 };
@@ -296,6 +322,19 @@ function nomeDoBloco(b: Bloco) {
 
 /** O campo de texto de quando nenhum bloco com texto está escolhido (estável, para a barra do texto). */
 const semCampo = () => null;
+
+/** O ícone dos dados do card (12/11/2026): os de agora e, na dica, os próximos. */
+function BotaoDosDados({ dados, botao, onClicar }: { dados: DadosDoCard; botao: string; onClicar: () => void }) {
+  const AGORA: Record<DadosDoCard, string> = { AMBOS: "Atual e Acumulado", ATUAL: "Apenas o Atual", ACUMULADO: "Apenas o Acumulado" };
+  const PROXIMA: Record<DadosDoCard, string> = { AMBOS: "clique para mostrar apenas o Atual", ATUAL: "clique para mostrar apenas o Acumulado", ACUMULADO: "clique para mostrar o Atual e o Acumulado" };
+  const dica = `Dados do card: ${AGORA[dados]}; ${PROXIMA[dados]}`;
+  const Icone = dados === "ATUAL" ? CalendarDays : dados === "ACUMULADO" ? Sigma : Columns2;
+  return (
+    <button type="button" className={`${botao} ${dados === "AMBOS" ? "" : "text-gray-900"}`} title={dica} aria-label={dica} onClick={onClicar}>
+      <Icone className="size-4" />
+    </button>
+  );
+}
 
 /** O ícone do gráfico do card (22/10/2026): o modo de agora e, na dica, o próximo. */
 function BotaoDoGrafico({ modo, botao, onClicar }: { modo: ModoDoGrafico; botao: string; onClicar: () => void }) {
@@ -1122,6 +1161,14 @@ export function BarraDeEdicao({
         <ClipboardPaste className="size-4" />
       </button>
       {separador}
+      {/* Os dados do card (12/11/2026), em ciclo, antes do gráfico: o Atual e o Acumulado → só o Atual → só o Acumulado → os dois. */}
+      {card ? (
+        <BotaoDosDados dados={dadosDoCard(card)} botao={botao} onClicar={() => onMudar(proximosDados(card))} />
+      ) : (
+        <button type="button" className={botao} disabled title="Dados do card" aria-label="Dados do card">
+          <Columns2 className="size-4" />
+        </button>
+      )}
       {/* O gráfico do card (22/10/2026), em ciclo: os meses e o acumulado → só o acumulado → sem gráfico → os meses e o acumulado. */}
       {card ? (
         <BotaoDoGrafico modo={modoDoGrafico(card)} botao={botao} onClicar={() => onMudar(proximoGrafico(card))} />
@@ -1417,7 +1464,7 @@ function ConteudoDoBloco({
   if (!dados) return <div className="h-full animate-pulse rounded-sm bg-gray-100" />;
   // O card PROVA (31/10/2026): os cenários da Comparação PROVA do relatório (Configurações); sem nenhum marcado, o aviso.
   const cenarios = ehProva(b) ? comCor(dados.prova.cenarios) : null;
-  if (cenarios && !cenarios.length) return indisponivel("Nenhum cenário da Comparação PROVA (Configurações) está marcado (Criação de Cenários / Cenários Sintéticos).");
+  if (cenarios && !cenarios.length) return indisponivel("Nenhum cenário da Comparação PROVA (Configurações) está marcado (Análises Gerenciais / Cenários Sintéticos).");
   if (b.tipo === "PAINEL") {
     const item = dados.painel.abas.find((a) => a.chave === b.aba)?.quadros.find((q) => q.titulo === b.quadro)?.itens.find((i) => i.titulo === b.titulo && i.sigla === b.sigla);
     if (!item) return indisponivel(`O card ${b.titulo} (${b.quadro}) não está mais no Painel de Bordo.`);
@@ -1433,6 +1480,7 @@ function ConteudoDoBloco({
         cores={cores}
         comGrafico={b.comGrafico && !semGrafico}
         soAcumulado={!!b.soAcumulado}
+        periodos={b.periodos}
         comRotulos={b.comRotulos ?? false}
         comparacoes={comparacoes}
         corDoOrcado={cenarios ? undefined : corDoOrcado}
@@ -1487,6 +1535,7 @@ function ConteudoDoBloco({
         cores={cores}
         comGrafico={modo !== "NENHUM" && !semGrafico}
         soAcumulado={modo === "ACUMULADO"}
+        periodos={b.periodos}
         comRotulos={b.comRotulos ?? false}
         formatacao={{ mes: f, acumulado: f }}
         comparacoes={comparacoes}

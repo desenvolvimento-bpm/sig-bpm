@@ -116,7 +116,7 @@ export const importacoesService = {
     if (input.tipo === "METAS_ORCAMENTO") {
       throw new RegraImportacaoError(
         400,
-        "As metas do orçamento não se importam mais no mês: importe a aba Metas (Orçamento) num cenário (Criação de Cenários / Cenários Sintéticos) e marque-o como Orçamento.",
+        "As metas do orçamento não se importam mais no mês: importe a aba Metas (Orçamento) num cenário (Análises Gerenciais / Cenários Sintéticos) e marque-o como Orçamento.",
       );
     }
     if (!TIPOS_DISPONIVEIS.includes(input.tipo)) {

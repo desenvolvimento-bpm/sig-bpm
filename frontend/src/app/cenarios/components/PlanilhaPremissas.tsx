@@ -265,21 +265,28 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
   const [ignorar, setIgnorar] = useState<Set<string>>(() => new Set());
   const vencedor = new Map(repetidos.map((r) => [r.bloco, ignorar.has(r.bloco) ? r.em[0] : r.em[r.em.length - 1]]));
   const doVencedor = (i: number) => (x: { bloco: string }) => !vencedor.has(x.bloco) || vencedor.get(x.bloco) === i;
-  const aImportar = validas.map((a, i) => ({ ...a, alteracoes: a.alteracoes.filter(doVencedor(i)), justificativas: a.justificativas.filter(doVencedor(i)) }));
+  // O Quadro de Lotação que substitui as linhas (11/11/2026) é um trecho: em dois arquivos, vale o do arquivo escolhido.
+  const semQuadro = { novas: [], alteradas: [], excluidas: [] };
+  const aImportar = validas.map((a, i) => ({
+    ...a,
+    alteracoes: a.alteracoes.filter(doVencedor(i)),
+    justificativas: a.justificativas.filter(doVencedor(i)),
+    quadro: doVencedor(i)({ bloco: "Quadro de Lotação" }) ? a.quadro : semQuadro,
+  }));
   const valores = aImportar.reduce((s, a) => s + a.alteracoes.length, 0);
   const justificativas = aImportar.reduce((s, a) => s + a.justificativas.length, 0);
   const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length, 0);
-  // As linhas do Quadro de Lotação (09/11/2026): as novas e as alteradas.
-  const doQuadro = aImportar.reduce((s, a) => s + a.quadro.novas.length + a.quadro.alteradas.length, 0);
+  // As linhas do Quadro de Lotação (09/11/2026): as novas, as alteradas e (11/11/2026) as que saem.
+  const doQuadro = aImportar.reduce((s, a) => s + a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length, 0);
   const analisando = itens.some((x) => x.estado === "analisando");
   const importar = useMutation({
     mutationFn: () => cenariosService.importarPremissas(id, aImportar),
     onSuccess: (r) => {
       invalidar(queryClient);
       const inv = r.investimentosNovos + r.investimentosAlterados;
-      const ql = r.quadroNovas + r.quadroAlteradas;
+      const ql = r.quadroNovas + r.quadroAlteradas + r.quadroExcluidas;
       toast.success(
-        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")} e ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
+        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
       );
       onFechar();
     },
@@ -293,8 +300,10 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
             Escolha os arquivos (ou uma pasta) gerados pelo Exportar Premissas: planilhas .xlsx ou o .zip de um arquivo por centro. Cada arquivo é
             conferido assim que entra na lista; os valores mensais, as justificativas e os investimentos se gravam só em “Importar” (em branco, o mês
             fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. Na aba Investimentos, os com o Nome de
-            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro de
-            Lotação, as linhas com o Código da Linha são atualizadas e as sem código entram como novas; um cadastro que não existe recusa o arquivo.
+            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Nas outras abas, a
+            linha se acha pelas colunas que a descrevem (as antes da Und.). Na aba Quadro de Lotação, as linhas da planilha substituem as do cenário
+            nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com outros valores são alteradas, as novas entram e as que não
+            estão na planilha saem; um cadastro que não existe recusa o arquivo.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2">
@@ -380,8 +389,8 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {!a.valido
                         ? "—"
-                        : a.quadro.novas.length + a.quadro.alteradas.length
-                          ? `${a.quadro.novas.length} ${plural(a.quadro.novas.length, "nova", "novas")} · ${a.quadro.alteradas.length} ${plural(a.quadro.alteradas.length, "alterada", "alteradas")}`
+                        : a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length
+                          ? `${a.quadro.novas.length} ${plural(a.quadro.novas.length, "nova", "novas")} · ${a.quadro.alteradas.length} ${plural(a.quadro.alteradas.length, "alterada", "alteradas")} · ${a.quadro.excluidas.length} ${plural(a.quadro.excluidas.length, "excluída", "excluídas")}`
                           : "0"}
                     </td>
                     <td className="px-2 py-2 text-right">{k === 0 ? remover : null}</td>

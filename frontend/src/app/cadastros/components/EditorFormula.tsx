@@ -6,7 +6,7 @@ import { Delete, Eraser, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import type { Opcao } from "../services/edicaoService";
+import type { Opcao, ValoresDaMetodologia } from "../services/edicaoService";
 
 /**
  * O montador da fórmula de um indicador (Estrutura dos Indicadores, 11/10/2026): a fórmula aparece por extenso, item a
@@ -62,12 +62,31 @@ const OPERADORES: Array<{ valor: string; rotulo: string; dica: string }> = [
   { valor: ")", rotulo: ")", dica: "Fechar parêntese" },
 ];
 
+const numero2 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** O valor acumulado do item (11/11/2026): #.##0,00 ou, nos indicadores e metas em %, 0,00%. */
+export const formatarValorDoItem = (v: number, percentual: boolean) => (percentual ? `${numero2.format(v * 100)}%` : numero2.format(v));
+
 /** Os pedaços da fórmula: itens entre colchetes, números, operadores e parênteses. */
 const pedacos = (formula: string) => formula.match(/\[[^\]]*\]|\d+(?:[.,]\d+)?|[-+*/()]/g) ?? [];
 
 const classeSelect = "h-9 rounded-sm border border-gray-300 bg-white px-2 text-sm";
 
-export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: string; onMuda: (v: string) => void; opcoes: Opcao[]; travado?: boolean; id?: string }) {
+export function EditorFormula({
+  valor,
+  onMuda,
+  opcoes,
+  travado,
+  id,
+  valores,
+}: {
+  valor: string;
+  onMuda: (v: string) => void;
+  opcoes: Opcao[];
+  travado?: boolean;
+  id?: string;
+  /** Os valores acumulados dos itens (11/11/2026: os cards do Painel de Bordo e os indicadores), ao lado de cada um na lista. */
+  valores?: ValoresDaMetodologia;
+}) {
   // Os tipos que as opções trazem, na ordem de TIPOS.
   const tipos = useMemo(() => TIPOS.filter((t) => opcoes.some((o) => o.grupos?.includes(t.valor))), [opcoes]);
   const [tipo, setTipo] = useState(() => tipos[0]?.valor ?? "DRE");
@@ -111,6 +130,16 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
     if (partes[0] === "REGISTRADO") return rotulos.get("REGISTRADO|") ?? "Valor registrado no mês";
     const r = rotulos.get(`${partes[0]}|${partes[1]}`) ?? partes[1];
     return partes[0] === "META" ? `Meta: ${r}${noAno}` : partes[0] === "LISTA" ? `${r} [Listas]` : r;
+  };
+  // O valor acumulado da opção (11/11/2026), pela chave do item que ela insere: a linha da DRE com a unidade escolhida e o
+  // departamento do Quadro de Lotação com a atribuição; o Valor Registrado é o do próprio indicador, sem valor aqui.
+  const percentuais = useMemo(() => new Set(valores?.percentuais ?? []), [valores]);
+  const valorDaOpcao = (o: Opcao) => {
+    if (!valores?.competencia) return "";
+    const [t, chave] = [o.valor.slice(0, o.valor.indexOf("|")), o.valor.slice(o.valor.indexOf("|") + 1)];
+    const k = t === "DRE" ? `DRE|${visao}|${chave}` : t === "QL" && chave.startsWith("DEP|") ? `QL|${chave}|${atribuicao}` : o.valor;
+    const v = valores.valores[k];
+    return v === undefined || v === null ? (k in valores.valores ? " · —" : "") : ` · ${formatarValorDoItem(v, percentuais.has(k))}`;
   };
   const inserir = (p: string) => onMuda([...lista, p].join(" "));
   const inserirItem = () => {
@@ -226,6 +255,7 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
               {doTipo.map((o) => (
                 <option key={o.valor} value={o.valor}>
                   {o.rotulo}
+                  {valorDaOpcao(o)}
                 </option>
               ))}
             </select>
@@ -234,6 +264,12 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
               Inserir Item
             </Button>
           </div>
+          {valores?.competencia ? (
+            <p className="text-xs text-gray-500">
+              Ao lado de cada item, o valor acumulado de janeiro até {valores.competencia} (a competência fechada mais recente em Resultados Empresariais)
+              {tipo === "QL" ? "; no Quadro de Lotação, a posição do mês" : ""}.
+            </p>
+          ) : null}
           {/* Os operadores, os números e a correção; Apagar e Limpar na linha do Inserir (20/10/2026: nomes curtos para caberem). */}
           <div className="flex flex-wrap items-center gap-1.5">
             {OPERADORES.map((o) => (

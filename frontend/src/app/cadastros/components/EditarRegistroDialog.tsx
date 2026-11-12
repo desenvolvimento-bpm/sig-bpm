@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { FlaskConical, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,32 @@ import { Label } from "@/components/ui/label";
 import { atualizarCompetencia } from "@/lib/atualizarCompetencia";
 import { iniciaisMaiusculas } from "@/lib/texto";
 
-import { edicaoService, mensagemDeErro, sugestoesDoErro, textoDoEfeito, type Campo, type DefinicaoCadastro, type Registro, type Sugestao } from "../services/edicaoService";
-import { EditorFormula } from "./EditorFormula";
+import { formatarValorDoPainel } from "@/app/relatorios/painel/PainelContent";
+import { fatorDaEscalaDa, type FormatoPainel } from "@/app/relatorios/services/relatoriosService";
+
+import {
+  edicaoService,
+  mensagemDeErro,
+  sugestoesDoErro,
+  textoDoEfeito,
+  type Campo,
+  type DefinicaoCadastro,
+  type Registro,
+  type Sugestao,
+  type TesteDaFormula,
+  type ValoresDaMetodologia,
+} from "../services/edicaoService";
+import { EditorFormula, formatarValorDoItem } from "./EditorFormula";
+
+/** Os cadastros com a Metodologia testável (11/11/2026): os cards do Painel de Bordo e os indicadores. */
+const COM_TESTE = ["painel-bordo", "estrutura-indicadores"];
+
+/** O valor do indicador no teste: em %, 0,00%; nos demais, #.##0,00 na escala da unidade (R$ M, R$ K), com ela. */
+function formatarDoIndicador(v: number | null, unidade?: string) {
+  if (v === null) return "—";
+  if (unidade === "%") return formatarValorDoItem(v, true);
+  return `${formatarValorDoItem(v * fatorDaEscalaDa(unidade ?? ""), false)}${unidade ? ` ${unidade}` : ""}`;
+}
 
 type Props = { entidade: string; id: string | null; onFechar: () => void };
 
@@ -44,6 +68,7 @@ function CampoForm({
   comMovimento,
   opcoes,
   semFiltro,
+  valoresDaMetodologia,
 }: {
   c: Campo;
   valor: unknown;
@@ -54,6 +79,8 @@ function CampoForm({
   opcoes: Campo["opcoes"];
   /** O rótulo do campo que filtra a lista, ainda sem valor. */
   semFiltro?: string;
+  /** Os valores acumulados dos itens da Metodologia (11/11/2026). */
+  valoresDaMetodologia?: ValoresDaMetodologia;
 }) {
   // Travado: calculado, só na criação, ou campo-chave de um registro com movimentos (11/10/2026).
   const travado = c.derivado || (editando && c.somenteNaCriacao) || comMovimento;
@@ -75,7 +102,7 @@ function CampoForm({
         {c.obrigatorio && !travado ? <span className="text-red-700"> *</span> : null}
       </Label>
       {c.tipo === "formula" ? (
-        <EditorFormula id={id} valor={String(valor ?? "")} onMuda={onMuda} opcoes={c.opcoes ?? []} travado={travado} />
+        <EditorFormula id={id} valor={String(valor ?? "")} onMuda={onMuda} opcoes={c.opcoes ?? []} travado={travado} valores={valoresDaMetodologia} />
       ) : c.tipo === "opcao" && !travado ? (
         // Com a ajuda ao lado (21/10/2026), a lista na metade da linha e a explicação na outra.
         <div className={c.ajudaAoLado ? "grid items-center gap-x-4 gap-y-1.5 sm:grid-cols-2" : undefined}>
@@ -142,6 +169,23 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
   // A gravação recusada com as correções possíveis (24/10/2026: a conta que nenhuma aba de resultado lê).
   const [recusa, setRecusa] = useState<{ mensagem: string; sugestoes: Sugestao[] } | null>(null);
   const travas = registro?.__travas;
+  // A Metodologia testável (11/11/2026): os valores dos itens ao lado de cada um e o Testar, com o resultado até mudar o formulário.
+  const comTeste = COM_TESTE.includes(entidade);
+  const valoresDaMetodologia = useQuery({
+    queryKey: ["edicao", entidade, "valores-da-metodologia"],
+    queryFn: () => edicaoService.valoresDaMetodologia(entidade),
+    enabled: comTeste,
+    staleTime: 5 * 60_000,
+  });
+  const [teste, setTeste] = useState<TesteDaFormula | null>(null);
+  const testar = useMutation({
+    mutationFn: () => edicaoService.testar(entidade, valores, registro?.id ?? null),
+    onSuccess: setTeste,
+    onError: (e) => {
+      setTeste(null);
+      toast.error(mensagemDeErro(e, "Não foi possível testar."));
+    },
+  });
   const aplicar = (s: Sugestao) => {
     setValores((x) => {
       const novo = { ...x };
@@ -205,8 +249,10 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
               comMovimento={!!travas?.campos.includes(c.nome)}
               opcoes={opcoesVisiveis(c, valores)}
               semFiltro={c.filtradoPor && !valores[c.filtradoPor] ? def.campos.find((x) => x.nome === c.filtradoPor)?.rotulo : undefined}
+              valoresDaMetodologia={valoresDaMetodologia.data}
               onMuda={(v) => {
                 setRecusa(null);
+                setTeste(null);
                 setValores((x) => {
                   const novo = { ...x, [c.nome]: v };
                   // A lista que depende deste campo perde a escolha que não é mais dele; fica a equivalente, quando a
@@ -243,6 +289,25 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
           </ul>
         </div>
       ) : null}
+      {teste ? (
+        // O resultado do Testar (11/11/2026), num destaque; some ao mudar o formulário.
+        // A margem de rolagem deixa o destaque acima do rodapé fixo do modal.
+        <div ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="scroll-mb-24 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2.5 text-sm text-gray-700">
+          <p className="font-medium text-gray-900">Teste em {teste.competencia} (a competência fechada mais recente em Resultados Empresariais)</p>
+          {entidade === "painel-bordo" ? (
+            <p>
+              Realizado (Atual): <span className="font-semibold text-gray-900">{formatarValorDoPainel(teste.realizado, (teste.formato ?? "MILHOES") as FormatoPainel)}</span>
+              {teste.percentual !== null && teste.percentual !== undefined ? <> · Percentual sob o Valor: {formatarValorDoItem(teste.percentual, true)}</> : null}
+            </p>
+          ) : (
+            <p>
+              Realizado (Atual): <span className="font-semibold text-gray-900">{formatarDoIndicador(teste.realizado, teste.unidade)}</span> · Acumulado:{" "}
+              <span className="font-semibold text-gray-900">{formatarDoIndicador(teste.acumulado ?? null, teste.unidade)}</span>
+            </p>
+          )}
+          {teste.realizado === null ? <p className="text-xs text-gray-500">Sem valor: falta o dado de algum item no mês, ou há uma divisão por zero.</p> : null}
+        </div>
+      ) : null}
       {def.reclassifica ? (
         <p className="text-xs text-gray-500">
           Este cadastro classifica os lançamentos: ao gravar, as competências ainda não apuradas são reclassificadas; as apuradas só mudam se forem
@@ -274,6 +339,13 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
+          {/* O Testar (11/11/2026), logo antes do Gravar: o Realizado (Atual) com a fórmula do formulário. */}
+          {comTeste ? (
+            <Button type="button" variant="outline" className="rounded-sm" disabled={testar.isPending} onClick={() => testar.mutate()}>
+              <FlaskConical className="size-4" />
+              {testar.isPending ? "Testando…" : "Testar"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             disabled={salvar.isPending}

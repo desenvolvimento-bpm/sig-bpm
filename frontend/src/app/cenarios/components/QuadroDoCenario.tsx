@@ -18,6 +18,7 @@ import { plural } from "@/lib/texto";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type CampoDoMes, type LinhaDoQuadroDoCenario, type MesDoQuadro, type QuadroDoCenario as Dados } from "../services/cenariosService";
+import { funcaoNaSenioridade, opcoesDeFuncao } from "@/app/gestao-de-colaboradores/services/funcaoPorSenioridade";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero } from "./EdicaoDialogs";
 
@@ -116,34 +117,34 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   const largura = acumulado + meses.length * (CAMPOS.reduce((s, c) => s + c.largura, 0) + LARGURA_TOTAL) + LARGURA_CUSTO + (pode ? 56 : 0);
   const todasMarcadas = linhas.length > 0 && linhas.every((l) => marcadas.has(l.id));
   const classeFixa = "sticky z-10 bg-white";
+  const explicacao = `${dados.linhas.length} ${plural(dados.linhas.length, "linha", "linhas")} · os grupos de centros com linhas contam por elas os Colaboradores CLT e PJ e as Remunerações CLT e PJ (aba Centros de Custo); a senioridade Aprendiz tem o Fundo de Garantia: Aprendiz.`;
 
   return (
     <section className="space-y-3">
-      <div>
-        <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">Quadro de Lotação</h2>
-        <p className="text-xs text-gray-600">
-          {dados.linhas.length} {plural(dados.linhas.length, "linha", "linhas")} · os grupos de centros com linhas contam por elas os Colaboradores CLT e PJ e as Remunerações CLT e PJ (aba
-          Centros de Custo); a senioridade Aprendiz tem o Fundo de Garantia: Aprendiz.
-        </p>
-      </div>
+      <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">Quadro de Lotação</h2>
       {foraDosGrupos ? (
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">
           {foraDosGrupos} {plural(foraDosGrupos, "linha tem um centro de custo que não é", "linhas têm centros de custo que não são")} de um grupo do cenário (inativo, sem código ou de
           estoque e investimento) e não {plural(foraDosGrupos, "conta", "contam")}. Edite o centro da linha.
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-3">
-        <CampoBusca rotulo="Buscar linha" valor={busca} onMudar={setBusca} placeholder="Função, centro, unidade, senioridade…" />
-        <select aria-label="Meses da tabela" value={mesVisivel ?? ""} onChange={(e) => setMesVisivel(e.target.value ? Number(e.target.value) : null)} className={`${classeSelect} sm:w-44`}>
-          <option value="">Todos os Meses</option>
-          {dados.meses.map((m) => (
-            <option key={m.mes} value={m.mes}>
-              {m.rotulo}
-            </option>
-          ))}
-        </select>
-        {pode ? (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+      {/* O destaque (11/11/2026, pedido do Adão): o texto em até duas linhas (inteiro no título) e, à direita, dentro dele, a busca, os meses e os botões. */}
+      <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2">
+        <p className="line-clamp-2 min-w-72 flex-1 text-xs text-gray-700" title={explicacao}>
+          {explicacao}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <CampoBusca rotulo="Buscar linha" valor={busca} onMudar={setBusca} placeholder="Função, centro, unidade, senioridade…" largura="sm:w-48" />
+          <select aria-label="Meses da tabela" value={mesVisivel ?? ""} onChange={(e) => setMesVisivel(e.target.value ? Number(e.target.value) : null)} className={`${classeSelect} sm:w-40`}>
+            <option value="">Todos os Meses</option>
+            {dados.meses.map((m) => (
+              <option key={m.mes} value={m.mes}>
+                {m.rotulo}
+              </option>
+            ))}
+          </select>
+          {pode ? (
+            <>
             {marcadas.size ? (
               <Button type="button" variant="outline" className="rounded-sm" onClick={() => setExcluindo(dados.linhas.filter((l) => marcadas.has(l.id)))}>
                 <Trash2 className="size-4" />
@@ -162,10 +163,11 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
             ) : null}
             <Button type="button" className={botaoPrimario} onClick={() => setDialogo({ linha: null })}>
               <Plus className="size-4" />
-              Nova Linha
+              Nova Entrada
             </Button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
       {invalidos ? <p className="text-sm text-red-700">{invalidos} {plural(invalidos, "valor digitado não é", "valores digitados não são")} um número de zero para cima: corrija antes de gravar.</p> : null}
       <div className="max-h-[70vh] overflow-auto rounded-sm border border-gray-200 bg-white">
@@ -276,7 +278,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
             {linhas.length === 0 ? (
               <tr>
                 <td colSpan={DESCRICAO.length + meses.length * 4 + 3} className="px-4 py-6 text-center text-sm text-gray-500">
-                  {dados.linhas.length ? "Nenhuma linha com essa busca." : pode ? "Nenhuma linha: inclua as linhas em Nova Linha ou importe a aba Quadro de Lotação em Importar Valores." : "Nenhuma linha no Quadro de Lotação deste cenário."}
+                  {dados.linhas.length ? "Nenhuma linha com essa busca." : pode ? "Nenhuma linha: inclua as linhas em Nova Entrada ou importe a aba Quadro de Lotação em Importar Valores." : "Nenhuma linha no Quadro de Lotação deste cenário."}
                 </td>
               </tr>
             ) : null}
@@ -389,7 +391,7 @@ function CelulasDoMes({
 }
 
 /**
- * A Nova Linha e o Editar Linha do Quadro de Lotação: a Unidade, o Tipo, a Senioridade, a Função e o Centro de Custo (dos
+ * A Nova Entrada e o Editar Linha do Quadro de Lotação: a Unidade, o Tipo, a Senioridade, a Função e o Centro de Custo (dos
  * grupos do cenário); na nova, os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um, a partir
  * do mês escolhido (os meses se editam depois na tabela).
  */
@@ -449,7 +451,7 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
       <DialogContent avisoAoSair className="max-h-[90vh] overflow-y-auto rounded-sm sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{linha ? "Editar Linha do Quadro de Lotação" : "Nova Linha do Quadro de Lotação"}</DialogTitle>
+          <DialogTitle>{linha ? "Editar Linha do Quadro de Lotação" : "Nova Entrada do Quadro de Lotação"}</DialogTitle>
           <DialogDescription>
             {linha
               ? "Os cadastros da linha; os colaboradores e os salários de cada mês se editam na tabela."
@@ -465,18 +467,29 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
               <option value="PJ">PJ</option>
             </select>
           </div>
-          {select("Senioridade", "ql-senioridade", senioridade, setSenioridade, comAtual(dados.opcoes.senioridades, linha?.senioridadeId, linha?.senioridade))}
+          {select(
+            "Senioridade",
+            "ql-senioridade",
+            senioridade,
+            (s) => {
+              setSenioridade(s);
+              // A função acompanha a senioridade: a do mesmo nome na nova (ou nenhuma).
+              setFuncao(funcaoNaSenioridade(dados.opcoes.funcoes, funcao, s));
+            },
+            comAtual(dados.opcoes.senioridades, linha?.senioridadeId, linha?.senioridade),
+          )}
           {select(
             "Função",
             "ql-funcao",
             funcao,
             (f) => {
               setFuncao(f);
-              // O nível da função, quando a senioridade ainda não foi escolhida.
-              const nivel = dados.opcoes.funcoes.find((x) => x.id === f)?.senioridadeId;
-              if (!senioridade && nivel) setSenioridade(nivel);
+              // A senioridade da função (11/11/2026: a mesma função tem uma por senioridade).
+              const daFuncao = dados.opcoes.funcoes.find((x) => x.id === f)?.senioridadeId;
+              if (daFuncao) setSenioridade(daFuncao);
             },
-            comAtual(dados.opcoes.funcoes, linha?.funcaoId, linha?.funcao),
+            // A função com a senioridade ao lado; com a senioridade escolhida, só as dela.
+            comAtual(opcoesDeFuncao(dados.opcoes.funcoes, dados.opcoes.senioridades, senioridade), linha?.funcaoId, linha?.funcao),
           )}
           <div className="sm:col-span-2">
             {select(

@@ -34,10 +34,12 @@ export function abaConsolidado(o: {
   total: [number, number];
   origens: OrigensDasContas;
   rodape: string;
+  /** Os rótulos com a quebra de texto automática (11/11/2026: o Exportar Premissas). */
+  quebra?: boolean;
 }): AbaEscrita {
   const n = o.rotulos.length;
-  const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalho });
-  const cabDireita = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoDireita });
+  const cab = (valor: string): Celula => ({ valor, estilo: o.quebra ? ESTILO.cabecalhoQuebra : ESTILO.cabecalho });
+  const cabDireita = (valor: string): Celula => ({ valor, estilo: o.quebra ? ESTILO.cabecalhoDireitaQuebra : ESTILO.cabecalhoDireita });
   const linhas: Celula[][] = [
     [{ valor: "Consolidado", estilo: ESTILO.titulo }],
     ...o.informacoes.map((t): Celula[] => [{ valor: t, estilo: ESTILO.informacao }]),

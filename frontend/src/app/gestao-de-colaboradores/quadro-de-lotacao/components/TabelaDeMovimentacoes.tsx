@@ -45,7 +45,7 @@ export function colunasDasMovimentacoes(): Coluna<Movimentacao>[] {
     { chave: "centro", rotulo: "Centro de Custo", valor: (m) => m.centroCusto },
     { chave: "vinculo", rotulo: "Tipo", valor: (m) => m.vinculo },
     { chave: "funcao", rotulo: "Função", valor: (m) => m.funcao },
-    { chave: "nivel", rotulo: "Nível", valor: (m) => m.senioridade },
+    { chave: "senioridade", rotulo: "Senioridade", valor: (m) => m.senioridade },
     { chave: "motivo", rotulo: "Motivo", valor: (m) => m.motivo },
     { chave: "situacao", rotulo: "Situação", valor: (m) => ROTULO_STATUS[m.status] },
   ];

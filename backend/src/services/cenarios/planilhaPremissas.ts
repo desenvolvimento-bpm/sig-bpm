@@ -16,8 +16,14 @@ import { salarioTotal, type MesDaLinha } from "./quadroDoCenario.js";
  * Justificativa das linhas pela coluna Código; as colunas da referência e Justificar? não se importam. A aba
  * Investimentos (15/10/2026) traz a lista dos investimentos, com as listas suspensas da Unidade e da Conta e as fórmulas
  * da Depreciação Mensal; importada, atualiza os investimentos pelo Nome de Referência e inclui os de nome novo. A aba
- * Quadro de Lotação (09/11/2026) traz as linhas da aba de mesmo nome, com o Código da Linha; importada, atualiza as linhas
- * pelo código e inclui as sem código.
+ * Quadro de Lotação (09/11/2026) traz as linhas da aba de mesmo nome. Desde 11/11/2026 (pedido do Adão), sem as colunas
+ * Código e Código da Linha: o Importar Valores acha cada linha pelas colunas que a descrevem (as antes da Und., que não se
+ * repetem numa aba; a unidade das abas Matriz, Filial e Serviços pelo título da aba), e a aba Quadro de Lotação substitui as
+ * linhas do cenário nos departamentos do arquivo (a linha 4 os diz). Os arquivos de antes, com a coluna Código, continuam
+ * valendo (pelo código; o Quadro de Lotação, pelo Código da Linha, sem excluir). Com a referência do cenário, os doze meses dela logo
+ * antes da Média de Referência (Realizado: o resultado realizado de cada mês do período; Referência: os meses do outro
+ * cenário) e, na aba Quadro de Lotação, depois do Centro de Custo, o QL Realizado da competência mais recente (ou os
+ * colaboradores do último mês do outro cenário); nada disso se importa.
  */
 
 export type AbaDasPremissas = "1" | "2" | "3" | "quadro" | "centros" | "investimentos" | "extra" | "manuais";
@@ -54,6 +60,12 @@ export type LinhaDaPlanilha = {
   chave: string;
   descricao: string[];
   und: string;
+  /**
+   * Nos grupos com linhas no Quadro de Lotação (11/11/2026, pedido do Adão): a soma da aba Quadro de Lotação do arquivo que a
+   * linha é, em fórmula — os centros (os códigos), o Tipo e a senioridade das linhas que entram e o que somar (os
+   * Colaboradores ou os salários, colaboradores × (Salário Bruto + Insalubridade / Periculosidade)).
+   */
+  doQuadro?: { centros: string[]; tipo?: "CLT" | "PJ"; senioridade?: "APRENDIZ" | "ESTAGIARIO" | "OUTRAS"; soma: "COLABORADORES" | "SALARIOS" };
   /** A conta da DRE (a variação máxima do Comparativo); nula nas linhas sem conta (volumes, dias úteis, quadros). */
   conta: string | null;
   limite: number | null;
@@ -73,8 +85,10 @@ export type LinhaDaPlanilha = {
    * A fórmula de um mês da linha, com `ref(chave)`, a célula do mesmo mês de outra linha da aba (`ref(chave, true)`: a
    * Média de Referência dela).
    */
-  formula?: (ref: (chave: string, media?: boolean) => string) => string;
+  formula?: (ref: (chave: string, media?: boolean) => string, doQuadroNoMes?: (d: NonNullable<LinhaDaPlanilha["doQuadro"]>) => string) => string;
   justificativa: string | null;
+  /** Os doze meses da referência do cenário (11/11/2026: o realizado ou o outro cenário); sem referência, ausente. */
+  referencia?: Array<number | null>;
 };
 
 /** A aba das premissas de uma chave da planilha (a permissão de editar é a dela). */
@@ -173,46 +187,105 @@ export function precisaJustificar(l: Pick<LinhaDaPlanilha, "limite" | "media" | 
   return Math.round((Math.abs(total - referencia) / Math.abs(referencia)) * 10000) / 100 > l.limite;
 }
 
-/** Uma aba da planilha: o título, a explicação, os rótulos e as linhas. */
-export function abaDaPlanilha(nome: string, aba: AbaDasPremissas, linhas: LinhaDaPlanilha[], meses: string[], identificacao: string): AbaEscrita {
-  const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalho });
-  const cabDireita = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoDireita });
+/** Os meses da referência nas abas (11/11/2026): o prefixo das colunas, os rótulos dos meses e a referência, para a explicação. */
+export type ReferenciaDasAbas = { rotulo: string; meses: string[]; descricao: string };
+/** As colunas dos meses da referência: doze, com ela; nenhuma, sem. */
+const colunasDaReferencia = (r: ReferenciaDasAbas | undefined) => (r ? 12 : 0);
+
+/** A aba Quadro de Lotação no arquivo (11/11/2026): o nome, as linhas (da primeira à última, com as em branco) e as colunas de cada mês. */
+export type QuadroDoArquivo = { aba: string; primeira: number; ultima: number; doMes: (k: number, campo: 0 | 1 | 2) => string };
+/** A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, a coluna dela. */
+export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroDoArquivo {
+  const R = comReferencia ? 1 : 0;
+  return { aba: NOME_DA_ABA.quadro, primeira: PRIMEIRA_LINHA, ultima: PRIMEIRA_LINHA + linhas + LINHAS_NOVAS - 1, doMes: (k, campo) => coluna(CAMPOS_DO_QUADRO.length + R + k * 4 + campo) };
+}
+
+/**
+ * A fórmula de um mês (k) de uma linha calculada pela aba Quadro de Lotação (11/11/2026): a soma das linhas da aba dos centros
+ * dela (o Centro de Custo é o código ou "código - nome", como o Exportar escreve), do Tipo e da senioridade (Aprendiz;
+ * Estagiário; ou as outras), dos Colaboradores ou dos salários (colaboradores × (Salário Bruto + Insalubridade /
+ * Periculosidade)), como o SIG calcula.
+ */
+export function formulaDoQuadro(d: NonNullable<LinhaDaPlanilha["doQuadro"]>, q: QuadroDoArquivo, k: number): string {
+  const aba = `'${q.aba.replace(/'/g, "''")}'`;
+  // As linhas fixas ($): a fórmula copiada para outra célula continua na mesma faixa da aba.
+  const faixa = (c: string) => `${aba}!${c}$${q.primeira}:${c}$${q.ultima}`;
+  const texto = (x: string) => `"${x.replace(/"/g, '""')}"`;
+  // As colunas da aba (a partir de A): Unidade, Tipo, Senioridade, Função e Centro de Custo.
+  const [tipo, senioridade, centro] = [faixa(coluna(1)), faixa(coluna(2)), faixa(coluna(4))];
+  const centros = d.centros.length
+    ? `((${d.centros.map((c) => `(${centro}=${texto(c)})+(LEFT(${centro},${c.length + 3})=${texto(`${c} - `)})`).join("+")})>0)`
+    : "0";
+  const aprendiz = `(${senioridade}="Aprendiz")`;
+  const estagiario = `((${senioridade}="Estagiário")+(${senioridade}="Estagiario"))`;
+  const filtros = [
+    centros,
+    ...(d.tipo ? [`(${tipo}="${d.tipo}")`] : []),
+    ...(d.senioridade === "APRENDIZ" ? [aprendiz] : d.senioridade === "ESTAGIARIO" ? [estagiario] : d.senioridade === "OUTRAS" ? [`(1-${aprendiz})`, `(1-${estagiario})`] : []),
+  ];
+  const doMes = (campo: 0 | 1 | 2) => faixa(q.doMes(k, campo));
+  const valor = d.soma === "COLABORADORES" ? doMes(0) : `${doMes(0)}*(${doMes(1)}+${doMes(2)})`;
+  return `SUMPRODUCT(${filtros.join("*")}*${valor})`;
+}
+
+/**
+ * Uma aba da planilha: o título, a explicação, os rótulos e as linhas. Com `referencia` (11/11/2026, pedido do Adão), os doze
+ * meses da referência do cenário (o realizado ou o outro cenário) logo antes da Média de Referência; não se importam. Com
+ * `quadro` (11/11/2026: a aba Quadro de Lotação no mesmo arquivo), as linhas calculadas por ela (`doQuadro`) vão em fórmula.
+ */
+export function abaDaPlanilha(
+  nome: string,
+  aba: AbaDasPremissas,
+  linhas: LinhaDaPlanilha[],
+  meses: string[],
+  identificacao: string,
+  referencia?: ReferenciaDasAbas,
+  quadro?: QuadroDoArquivo,
+): AbaEscrita {
+  // Os rótulos (a linha 5) com a quebra de texto automática (11/11/2026, pedido do Adão), como em todas as abas da planilha.
+  const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoQuebra });
+  const cabDireita = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoDireitaQuebra });
   const numero = (l: LinhaDaPlanilha, v: number | null): Celula => ({ valor: v, estilo: l.percentual ? ESTILO.itemPercentual : ESTILO.itemNumero });
-  // As colunas (a partir de 0): o Código, as descrições, a Und., a Média, o Total da Referência, a Variação Máxima, os
-  // doze meses, Justificar? e a Justificativa.
+  // As colunas (a partir de 0): as descrições (11/11/2026: sem o Código antes delas), a Und., os meses da referência (com
+  // ela), a Média, o Total da Referência, a Variação Máxima, os doze meses, Justificar? e a Justificativa.
   const n = COLUNAS[aba].length;
-  const [cMedia, cTotal, cVariacao, cJan, cDez] = [n + 2, n + 3, n + 4, n + 5, n + 16].map(coluna);
+  const R = colunasDaReferencia(referencia);
+  const [cMedia, cTotal, cVariacao, cJan, cDez] = [n + 1 + R, n + 2 + R, n + 3 + R, n + 4 + R, n + 15 + R].map(coluna);
   // As linhas calculadas (19/10/2026): a fórmula de cada mês aponta para as linhas da mesma aba pela chave.
   const linhaDa = new Map(linhas.map((l, i) => [l.chave, PRIMEIRA_LINHA + i]));
   const mesEmFormula = (l: LinhaDaPlanilha, k: number): string | undefined => {
+    // Pela aba Quadro de Lotação do arquivo (11/11/2026); sem ela no arquivo, o valor.
+    if (l.doQuadro) return quadro ? formulaDoQuadro(l.doQuadro, quadro, k) : undefined;
     if (!l.formula) return undefined;
     let falta = false;
     const ref = (chave: string, media = false) => {
       const r = linhaDa.get(chave);
       if (r === undefined) falta = true;
-      return `${media ? cMedia : coluna(n + 5 + k)}${r ?? 0}`;
+      return `${media ? cMedia : coluna(n + 4 + R + k)}${r ?? 0}`;
     };
-    const f = l.formula(ref);
+    // A soma da aba Quadro de Lotação do arquivo no mês (11/11/2026), quando ela está no arquivo.
+    const f = l.formula(ref, quadro ? (d) => formulaDoQuadro(d, quadro, k) : undefined);
     return falta ? undefined : f;
   };
   return {
     nome,
-    larguras: [30, ...COLUNAS[aba].map(([, w]) => w), 10, 14, 14, 12, ...meses.map(() => 13), 12, 60],
+    larguras: [...COLUNAS[aba].map(([, w]) => w), 10, ...Array.from({ length: R }, () => 13), 14, 14, 12, ...meses.map(() => 13), 12, 60],
     linhas: [
       [{ valor: `Premissas · ${nome}`, estilo: ESTILO.titulo }],
       [{ valor: identificacao, estilo: ESTILO.informacao }],
       [
         {
           valor:
-            "Preencha os meses e a Justificativa e importe o arquivo em Premissas / Importar Valores. Em branco, o mês fica sem valor. A coluna Código identifica a linha: não a altere. Justificar? é Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência (a Média de Referência × 12). A Média, o Total da Referência, a Variação Máxima e Justificar? não se importam.",
+            "Preencha os meses e a Justificativa e importe o arquivo em Premissas / Importar Valores. Em branco, o mês fica sem valor. As colunas antes da Und. identificam a linha: não as altere (nem o nome desta aba). Justificar? é Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência (a Média de Referência × 12). A Média, o Total da Referência, a Variação Máxima e Justificar? não se importam." +
+            (referencia ? ` As colunas ${referencia.rotulo}, antes da Média, são os meses da referência do cenário (${referencia.descricao}) e também não se importam.` : ""),
           estilo: ESTILO.informacao,
         },
       ],
       [],
       [
-        cab(COLUNA_CODIGO),
         ...COLUNAS[aba].map(([c]) => cab(c)),
         cab("Und."),
+        ...(referencia ? referencia.meses.map((m) => cabDireita(`${referencia.rotulo} · ${m}`)) : []),
         cabDireita(COLUNA_MEDIA),
         cabDireita(COLUNA_TOTAL_REFERENCIA),
         cabDireita(COLUNA_VARIACAO),
@@ -225,9 +298,9 @@ export function abaDaPlanilha(nome: string, aba: AbaDasPremissas, linhas: LinhaD
         const soma = `SUM(${cJan}${r}:${cDez}${r})`;
         const [m, t, v] = [`${cMedia}${r}`, `${cTotal}${r}`, `${cVariacao}${r}`];
         return [
-          { valor: l.chave },
           ...l.descricao.map((d) => ({ valor: d })),
           { valor: l.und },
+          ...Array.from({ length: R }, (_, k) => numero(l, l.referencia?.[k] ?? null)),
           numero(l, l.media),
           { ...numero(l, l.media === null ? null : l.media * 12), formula: `IF(${m}="","",${m}*12)` },
           { valor: l.limite, estilo: ESTILO.itemNumero },
@@ -243,6 +316,8 @@ export function abaDaPlanilha(nome: string, aba: AbaDasPremissas, linhas: LinhaD
     linhaCabecalho: 5,
     rodape: `Premissas · ${nome}`,
     paisagem: true,
+    // As descrições e a Und. presas ao rolar para os lados (11/11/2026, pedido do Adão), antes da referência e das médias.
+    congelarColunas: n + 1,
   };
 }
 
@@ -253,20 +328,39 @@ const PRIMEIRA_LINHA = 6;
  * As contas de uma aba de centros da planilha (15/10/2026), para o Consolidado: as linhas das contas (C|grupo|conta) e as
  * colunas da Média de Referência e dos doze meses. `aba` é o nome final da aba no arquivo.
  */
-export function origensDaAba(origens: OrigensDasContas, aba: string, linhas: LinhaDaPlanilha[]) {
-  const iMedia = 1 + COLUNAS.centros.length + 1;
-  // A Média de Referência e os meses (depois do Total da Referência e da Variação Máxima).
-  const colunas = [coluna(iMedia), ...Array.from({ length: 12 }, (_, k) => coluna(iMedia + 3 + k))];
+export function origensDaAba(origens: OrigensDasContas, aba: string, linhas: LinhaDaPlanilha[], referencia?: ReferenciaDasAbas) {
+  // Os meses da referência (11/11/2026: com ela, as doze colunas logo depois da Und.), a Média de Referência e os meses
+  // (depois do Total da Referência e da Variação Máxima).
+  const R = colunasDaReferencia(referencia);
+  // As descrições (11/11/2026: sem o Código antes delas) e a Und.
+  const iReferencia = COLUNAS.centros.length + 1;
+  const iMedia = iReferencia + R;
+  const colunas = [...Array.from({ length: R }, (_, k) => coluna(iReferencia + k)), coluna(iMedia), ...Array.from({ length: 12 }, (_, k) => coluna(iMedia + 3 + k))];
   linhas.forEach((l, i) => {
-    if (l.chave.startsWith("C|") && l.conta) juntarOrigem(origens, l.conta, { aba, linha: PRIMEIRA_LINHA + i, colunas, valores: [l.media, ...l.meses] });
+    const daReferencia = Array.from({ length: R }, (_, k) => l.referencia?.[k] ?? null);
+    if (l.chave.startsWith("C|") && l.conta) juntarOrigem(origens, l.conta, { aba, linha: PRIMEIRA_LINHA + i, colunas, valores: [...daReferencia, l.media, ...l.meses] });
   });
 }
 
 /** O nome da aba Consolidado: o Importar Valores a ignora sem aviso. */
 export const ABA_CONSOLIDADO = "Consolidado";
 
-/** Uma linha lida de um arquivo: a chave, os doze meses (null: em branco) e a justificativa. */
-export type LinhaLida = { aba: string; numero: number; chave: string; meses: Array<number | null>; justificativa: string | null };
+/**
+ * Uma linha lida de um arquivo: a chave (nos arquivos com a coluna Código, de antes de 11/11/2026) ou a aba e as descrições
+ * que a identificam (`doTipo` e `descricao`; a chave sai delas no serviço, chaveDaDescricao), os doze meses (null: em branco)
+ * e a justificativa.
+ */
+export type LinhaLida = {
+  aba: string;
+  numero: number;
+  chave: string | null;
+  doTipo: AbaDasPremissas | null;
+  descricao: string[];
+  meses: Array<number | null>;
+  justificativa: string | null;
+};
+/** A chave de uma linha pela aba e pelas descrições (11/11/2026): sem diferença de espaços. */
+export const chaveDaDescricao = (aba: AbaDasPremissas, descricao: string[]) => `${aba}|${descricao.map((d) => String(d ?? "").replace(/\s+/g, " ").trim()).join(" › ")}`;
 /** Um investimento lido da aba Investimentos: o Nome de Referência (o do investimento a atualizar, ou o de um novo) e os campos, já validados. */
 export type InvestimentoLido = {
   aba: string;
@@ -282,9 +376,22 @@ export type InvestimentoLido = {
 };
 /** Os campos de uma linha do Quadro de Lotação lida (09/11/2026): os textos dos cadastros, como no Lançamento Inicial. */
 export type CamposDoQuadro = { unidade: string; tipo: string; senioridade: string; funcao: string; centro: string };
-/** Uma linha lida da aba Quadro de Lotação: o Código da Linha (null: nova), os campos e os doze meses. */
+/** Uma linha lida da aba Quadro de Lotação: o Código da Linha (nos arquivos de antes de 11/11/2026; null: nova), os campos e os doze meses. */
 export type LinhaDoQuadroLida = { aba: string; numero: number; id: string | null; campos: CamposDoQuadro; meses: MesDaLinha[] };
-export type ArquivoLido = { arquivo: string; linhas: LinhaLida[]; investimentos: InvestimentoLido[]; quadro: LinhaDoQuadroLida[]; abas: string[]; erros: string[]; avisos: string[] };
+export type ArquivoLido = {
+  arquivo: string;
+  linhas: LinhaLida[];
+  investimentos: InvestimentoLido[];
+  quadro: LinhaDoQuadroLida[];
+  /**
+   * A aba Quadro de Lotação sem o Código da Linha (11/11/2026): os departamentos do arquivo, cujas linhas do cenário ela
+   * substitui; null sem a aba ou no arquivo de antes (com o código).
+   */
+  substituiQuadro: Departamento[] | null;
+  abas: string[];
+  erros: string[];
+  avisos: string[];
+};
 
 /** O número de uma célula: o do Excel ou um texto no formato brasileiro ("1.234,5", "25%"); vazio, null; inválido, undefined. */
 function numeroDa(v: ValorCelula): number | null | undefined {
@@ -332,7 +439,8 @@ export type InvestimentoDaPlanilha = Omit<InvestimentoLido, "aba" | "numero"> & 
  * branco para os investimentos novos.
  */
 export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], identificacao: string): AbaEscrita {
-  const cab = (valor: string, direita = false): Celula => ({ valor, estilo: direita ? ESTILO.cabecalhoDireita : ESTILO.cabecalho });
+  // Os rótulos com a quebra de texto automática (11/11/2026).
+  const cab = (valor: string, direita = false): Celula => ({ valor, estilo: direita ? ESTILO.cabecalhoDireitaQuebra : ESTILO.cabecalhoQuebra });
   const nomeDaUnidade = (u: number) => CONTAS_DEPRECIACAO.find((c) => c.unidade === u)?.nomeUnidade ?? "";
   const rotuloDaConta = (u: number) => CONTAS_DEPRECIACAO.find((c) => c.unidade === u)?.rotulo ?? "";
   const formulas = (r: number) => ({
@@ -384,6 +492,8 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
     linhaCabecalho: 5,
     rodape: `Premissas · ${ABA_INVESTIMENTOS}`,
     paisagem: true,
+    // O Nome de Referência, a Unidade, a Conta e a Descrição presos ao rolar para os lados (11/11/2026, pedido do Adão).
+    congelarColunas: 4,
     validacoes: [
       { celulas: intervalo("B"), lista: CONTAS_DEPRECIACAO.map((c) => c.nomeUnidade) },
       { celulas: intervalo("C"), lista: [...new Set(CONTAS_DEPRECIACAO.map((c) => c.rotulo))] },
@@ -477,8 +587,10 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
   }
 }
 
-/** A primeira coluna da aba Quadro de Lotação (09/11/2026): o id da linha; em branco, uma linha nova. */
+/** A primeira coluna da aba Quadro de Lotação nos arquivos de antes de 11/11/2026: o id da linha; em branco, uma linha nova. */
 const COLUNA_CODIGO_DA_LINHA = "Código da Linha (não altere)";
+/** A linha 4 da aba Quadro de Lotação (11/11/2026): os departamentos do arquivo, cujas linhas do cenário a aba substitui. */
+const DEPARTAMENTOS_DO_ARQUIVO = "Departamentos do arquivo:";
 const CAMPOS_DO_QUADRO: Array<[keyof CamposDoQuadro, string, number]> = [
   ["unidade", "Unidade", 16],
   ["tipo", "Tipo", 8],
@@ -490,21 +602,44 @@ const CAMPOS_DO_QUADRO: Array<[keyof CamposDoQuadro, string, number]> = [
 const DO_MES = ["Colaboradores", "Salário Bruto (R$)", "Insalubridade / Periculosidade (R$)", "Salário Total (R$)"] as const;
 const COLUNA_CUSTO_ANUAL = "Custo no Ano (R$)";
 /** Uma linha do Quadro de Lotação do cenário para a planilha: o id e os nomes dos cadastros. */
-export type LinhaDoQuadroDaPlanilha = { id: string; unidade: string; tipo: string; senioridade: string; funcao: string; centro: string; meses: MesDaLinha[] };
+export type LinhaDoQuadroDaPlanilha = {
+  id: string;
+  unidade: string;
+  tipo: string;
+  senioridade: string;
+  funcao: string;
+  centro: string;
+  meses: MesDaLinha[];
+  /** A coluna da referência (11/11/2026): o QL Realizado ou os colaboradores do último mês do cenário de origem. */
+  referencia?: number | null;
+};
 
 /**
- * A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores): as linhas da aba do cenário, com o Código da
- * Linha (que a identifica na importação), a Unidade, o Tipo, a Senioridade, a Função e o Centro de Custo (pelo código, como
- * no Lançamento Inicial) e, em cada mês, os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um e
- * o Salário Total (a soma, em fórmula); no fim, o Custo no Ano (colaboradores × Salário Total nos doze meses, em fórmula).
- * Abaixo, linhas em branco para as linhas novas.
+ * A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores): as linhas da aba do cenário, com a Unidade, o
+ * Tipo, a Senioridade, a Função e o Centro de Custo (pelo código, como no Lançamento Inicial) e, em cada mês, os
+ * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um e o Salário Total (a soma, em fórmula); no
+ * fim, o Custo no Ano (colaboradores × Salário Total nos doze meses, em fórmula). Abaixo, linhas em branco para as linhas
+ * novas. Sem o Código da Linha (11/11/2026, pedido do Adão): na importação, as linhas da aba substituem as do cenário nos
+ * departamentos do arquivo (a linha 4, `departamentos`; sem eles, todos).
  */
-export function abaDoQuadroDeLotacao(linhas: LinhaDoQuadroDaPlanilha[], meses: string[], identificacao: string, listas: { unidades: string[]; senioridades: string[] }): AbaEscrita {
-  const cab = (valor: string, direita = false): Celula => ({ valor, estilo: direita ? ESTILO.cabecalhoDireita : ESTILO.cabecalho });
+export function abaDoQuadroDeLotacao(
+  linhas: LinhaDoQuadroDaPlanilha[],
+  meses: string[],
+  identificacao: string,
+  listas: { unidades: string[]; senioridades: string[] },
+  /** A coluna da referência (11/11/2026), depois do Centro de Custo: o rótulo e a explicação. */
+  referencia?: { rotulo: string; explicacao: string },
+  /** Os departamentos do arquivo (11/11/2026; os nomes): as linhas do cenário que a aba substitui na importação. */
+  departamentos: string[] = DEPARTAMENTOS.map((d) => d.nome),
+): AbaEscrita {
+  // Os rótulos com a quebra de texto automática (11/11/2026).
+  const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoQuebra });
   const n = CAMPOS_DO_QUADRO.length;
   // A coluna de um campo do mês k (0 a 11): f = 0 Colaboradores, 1 Salário Bruto, 2 Insalubridade, 3 Salário Total.
-  const col = (k: number, f: number) => coluna(1 + n + k * 4 + f);
-  const cCusto = coluna(1 + n + 48);
+  const R = referencia ? 1 : 0;
+  // 11/11/2026: sem o Código da Linha antes dos campos.
+  const col = (k: number, f: number) => coluna(n + R + k * 4 + f);
+  const cCusto = coluna(n + R + 48);
   const formulas = (r: number) => ({
     total: (k: number) => `IF(AND(${col(k, 1)}${r}="",${col(k, 2)}${r}=""),"",N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`,
     custo: Array.from({ length: 12 }, (_, k) => `N(${col(k, 0)}${r})*(N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`).join("+"),
@@ -516,23 +651,30 @@ export function abaDoQuadroDeLotacao(linhas: LinhaDoQuadroDaPlanilha[], meses: s
     [
       {
         valor:
-          "Altere as linhas ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: com o Código da Linha, a linha é atualizada; sem ele, é incluída. A Unidade, o Tipo (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Para tirar uma linha, use a tela.",
+          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
+          (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
         estilo: ESTILO.informacao,
       },
     ],
-    [],
-    [cab(COLUNA_CODIGO_DA_LINHA), ...CAMPOS_DO_QUADRO.map(([, c]) => cab(c)), ...meses.flatMap((m) => DO_MES.map((d) => cab(`${m} · ${d}`, true))), cab(COLUNA_CUSTO_ANUAL, true)],
+    [{ valor: `${DEPARTAMENTOS_DO_ARQUIVO} ${departamentos.join(", ")}`, estilo: ESTILO.informacao }],
+    // Os rótulos dos meses e o Custo no Ano com a quebra de texto automática (11/11/2026, pedido do Adão).
+    [
+      ...CAMPOS_DO_QUADRO.map(([, c]) => cab(c)),
+      ...(referencia ? [{ valor: referencia.rotulo, estilo: ESTILO.cabecalhoDireitaQuebra }] : []),
+      ...meses.flatMap((m) => DO_MES.map((d): Celula => ({ valor: `${m} · ${d}`, estilo: ESTILO.cabecalhoDireitaQuebra }))),
+      { valor: COLUNA_CUSTO_ANUAL, estilo: ESTILO.cabecalhoDireitaQuebra },
+    ],
   ];
   linhas.forEach((l, i) => {
     const r = PRIMEIRA_LINHA + i;
     const f = formulas(r);
     linhasDaAba.push([
-      { valor: l.id },
       { valor: l.unidade },
       { valor: l.tipo },
       { valor: l.senioridade },
       { valor: l.funcao },
       { valor: l.centro },
+      ...(referencia ? [{ valor: l.referencia ?? null, estilo: ESTILO.itemNumero }] : []),
       ...l.meses.flatMap((m, k): Celula[] => [
         { valor: vazio(m.colaboradores), estilo: ESTILO.itemNumero },
         { valor: vazio(m.salarioBruto), estilo: ESTILO.itemNumero },
@@ -546,7 +688,7 @@ export function abaDoQuadroDeLotacao(linhas: LinhaDoQuadroDaPlanilha[], meses: s
     const r = PRIMEIRA_LINHA + linhas.length + k;
     const f = formulas(r);
     linhasDaAba.push([
-      ...Array.from({ length: 1 + n }, (): Celula => ({ valor: null })),
+      ...Array.from({ length: n + R }, (): Celula => ({ valor: null })),
       ...Array.from({ length: 12 }, (_, m): Celula[] => [
         { valor: null, estilo: ESTILO.itemNumero },
         { valor: null, estilo: ESTILO.itemNumero },
@@ -562,22 +704,38 @@ export function abaDoQuadroDeLotacao(linhas: LinhaDoQuadroDaPlanilha[], meses: s
   const cabe = (xs: string[]) => xs.length > 0 && xs.join(",").length <= 250 && !xs.some((x) => x.includes(","));
   return {
     nome: NOME_DA_ABA.quadro,
-    larguras: [38, ...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...meses.flatMap(() => [13, 15, 17, 15]), 17],
+    larguras: [...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...(referencia ? [15] : []), ...meses.flatMap(() => [13, 15, 17, 15]), 17],
     linhas: linhasDaAba,
     linhaCabecalho: 5,
     rodape: `Premissas · ${NOME_DA_ABA.quadro}`,
     paisagem: true,
+    // Os cadastros presos ao rolar para os lados (11/11/2026, pedido do Adão), antes da referência e dos meses.
+    congelarColunas: n,
     validacoes: [
-      { celulas: intervalo(coluna(2)), lista: ["CLT", "PJ"] },
-      ...(cabe(listas.unidades) ? [{ celulas: intervalo(coluna(1)), lista: listas.unidades }] : []),
-      ...(cabe(listas.senioridades) ? [{ celulas: intervalo(coluna(3)), lista: listas.senioridades }] : []),
+      { celulas: intervalo(coluna(1)), lista: ["CLT", "PJ"] },
+      ...(cabe(listas.unidades) ? [{ celulas: intervalo(coluna(0)), lista: listas.unidades }] : []),
+      ...(cabe(listas.senioridades) ? [{ celulas: intervalo(coluna(2)), lista: listas.senioridades }] : []),
     ],
   };
 }
 
-/** Lê a aba Quadro de Lotação (09/11/2026): as linhas com algum campo ou valor (o Salário Total e o Custo no Ano, fórmulas, não contam). */
+/**
+ * Lê a aba Quadro de Lotação (09/11/2026): as linhas com algum campo ou valor (o Salário Total e o Custo no Ano, fórmulas,
+ * não contam). Sem o Código da Linha (11/11/2026), também os departamentos do arquivo (a linha antes dos rótulos).
+ */
 function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celulas: ValorCelula[] }>, i: number, r: ArquivoLido) {
   const rotulos = linhas[i].celulas.map((c) => String(c ?? "").trim());
+  const comCodigo = rotulos[0] === COLUNA_CODIGO_DA_LINHA;
+  if (!comCodigo) {
+    const linha = linhas.slice(0, i).map((l) => String(l.celulas[0] ?? "").trim()).find((t) => t.startsWith(DEPARTAMENTOS_DO_ARQUIVO));
+    const nomes = (linha ?? "").slice(DEPARTAMENTOS_DO_ARQUIVO.length).split(",").map((x) => x.trim()).filter(Boolean);
+    const departamentos = nomes.map((x) => DEPARTAMENTOS.find((d) => chaveSemAcento(d.nome) === chaveSemAcento(x))?.chave);
+    if (!linha || !nomes.length || departamentos.some((d) => !d)) {
+      r.erros.push(`A aba ${nome} não tem a linha dos departamentos do arquivo (“${DEPARTAMENTOS_DO_ARQUIVO} …”, antes dos rótulos), ou ela foi alterada: exporte as premissas de novo.`);
+      return;
+    }
+    r.substituiQuadro = departamentos as Departamento[];
+  }
   const iCampos = CAMPOS_DO_QUADRO.map(([, c]) => rotulos.indexOf(c));
   // As colunas de cada campo do mês, na ordem dos meses.
   const doMes = (d: string) => rotulos.flatMap((x, k) => (x.endsWith(` · ${d}`) ? [k] : []));
@@ -592,9 +750,9 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
   for (const l of linhas.slice(i + 1)) {
     const c = l.celulas;
     const doMesLido = [...iColaboradores, ...iBruto, ...iAdicional];
-    if (texto(c[0]) === "" && iCampos.every((k) => texto(c[k]) === "") && doMesLido.every((k) => texto(c[k]) === "")) continue;
+    if ((!comCodigo || texto(c[0]) === "") && iCampos.every((k) => texto(c[k]) === "") && doMesLido.every((k) => texto(c[k]) === "")) continue;
     const erro = (m: string) => r.erros.push(`${nome}, linha ${l.numero}: ${m}`);
-    const id = texto(c[0]) || null;
+    const id = comCodigo ? texto(c[0]) || null : null;
     if (id && ids.has(id)) {
       erro(`o Código da Linha ${id} se repete na aba.`);
       continue;
@@ -621,9 +779,23 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
   }
 }
 
-/** Lê um .xlsx do Exportar Premissas: as abas com a coluna Código; as outras são ignoradas, com um aviso. */
+/** A aba de uma tabela pelos rótulos das descrições (11/11/2026); as das unidades (os mesmos rótulos) pelo título ou pelo nome. */
+function tipoDaAba(descricoes: string[], titulo: string, nome: string): AbaDasPremissas | null {
+  const tipos = ABAS_DAS_PREMISSAS.filter((a) => COLUNAS[a].length && COLUNAS[a].map(([c]) => c).join("|") === descricoes.join("|"));
+  if (tipos.length === 1) return tipos[0];
+  if (!tipos.length) return null;
+  const doNome = (x: string) => tipos.find((a) => chaveSemAcento(NOME_DA_ABA[a]) === chaveSemAcento(x));
+  return doNome(titulo.replace(/^Premissas\s*·\s*/, "")) ?? doNome(nome) ?? null;
+}
+/** Sem diferença de maiúsculas, acentos e espaços. */
+const chaveSemAcento = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Lê um .xlsx do Exportar Premissas: as abas no padrão (as tabelas, pelos rótulos — 11/11/2026: sem a coluna Código; os
+ * arquivos de antes, com ela —, a Investimentos e a Quadro de Lotação); as outras são ignoradas, com um aviso.
+ */
 function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
-  const r: ArquivoLido = { arquivo, linhas: [], investimentos: [], quadro: [], abas: [], erros: [], avisos: [] };
+  const r: ArquivoLido = { arquivo, linhas: [], investimentos: [], quadro: [], substituiQuadro: null, abas: [], erros: [], avisos: [] };
   let abas: string[];
   try {
     abas = listarAbas(buffer);
@@ -634,9 +806,13 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
   for (const nome of abas) {
     if (nome === ABA_CONSOLIDADO) continue;
     const { linhas } = lerAba(buffer, () => nome);
-    const i = linhas.findIndex((l) => [COLUNA_CODIGO, COLUNA_NOME_REFERENCIA, COLUNA_CODIGO_DA_LINHA].includes(String(l.celulas[0] ?? "").trim()));
+    const ehRotulo = (cs: string[]) =>
+      [COLUNA_CODIGO, COLUNA_NOME_REFERENCIA, COLUNA_CODIGO_DA_LINHA].includes(cs[0]) ||
+      (cs.includes("Und.") && cs.includes(COLUNA_MEDIA) && cs.includes(COLUNA_JUSTIFICATIVA)) ||
+      CAMPOS_DO_QUADRO.every(([, c], k) => cs[k] === c);
+    const i = linhas.findIndex((l) => ehRotulo(l.celulas.map((c) => String(c ?? "").trim())));
     if (i < 0) {
-      r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem a coluna “${COLUNA_CODIGO}”) e foi ignorada.`);
+      r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem os rótulos dele) e foi ignorada.`);
       continue;
     }
     const rotulos = linhas[i].celulas.map((c) => String(c ?? "").trim());
@@ -645,8 +821,8 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
       lerInvestimentos(nome, linhas, i, r);
       continue;
     }
-    // A aba Quadro de Lotação (09/11/2026): pelo Código da Linha na primeira coluna.
-    if (rotulos[0] === COLUNA_CODIGO_DA_LINHA) {
+    // A aba Quadro de Lotação (09/11/2026): pelo Código da Linha na primeira coluna; desde 11/11/2026, sem ele.
+    if (rotulos[0] === COLUNA_CODIGO_DA_LINHA || CAMPOS_DO_QUADRO.every(([, c], k) => rotulos[k] === c)) {
       lerQuadroDeLotacao(nome, linhas, i, r);
       continue;
     }
@@ -659,10 +835,20 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
       r.erros.push(`A aba ${nome} não tem as colunas do padrão (“${COLUNA_MEDIA}”, os doze meses e “${COLUNA_JUSTIFICATIVA}”).`);
       continue;
     }
+    // As descrições (as colunas antes da Und.; nos arquivos de antes, depois do Código) e a aba delas.
+    const comCodigo = rotulos[0] === COLUNA_CODIGO;
+    const iUnd = rotulos.indexOf("Und.");
+    const [d0, d1] = [comCodigo ? 1 : 0, iUnd];
+    const doTipo = comCodigo ? null : tipoDaAba(rotulos.slice(d0, d1), String(linhas[0]?.celulas[0] ?? ""), nome);
+    if (!comCodigo && !doTipo) {
+      r.erros.push(`A aba ${nome} não é uma das abas do Exportar Premissas (os rótulos antes da Und. ou o nome dela mudaram).`);
+      continue;
+    }
     r.abas.push(nome);
     for (const l of linhas.slice(i + 1)) {
-      const chave = String(l.celulas[0] ?? "").trim();
-      if (!chave) continue;
+      const chave = comCodigo ? String(l.celulas[0] ?? "").trim() : null;
+      const descricao = l.celulas.slice(d0, d1).map((c) => String(c ?? "").trim());
+      if (comCodigo ? !chave : descricao.every((d) => !d)) continue;
       const meses: Array<number | null> = [];
       for (let k = 0; k < 12; k++) {
         const v = numeroDa(l.celulas[iJan + k] ?? null);
@@ -672,10 +858,10 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
         } else meses.push(v);
       }
       const j = l.celulas[iJustificativa];
-      r.linhas.push({ aba: nome, numero: l.numero, chave, meses, justificativa: j === null || j === undefined || String(j).trim() === "" ? null : String(j).trim().slice(0, 2000) });
+      r.linhas.push({ aba: nome, numero: l.numero, chave, doTipo, descricao, meses, justificativa: j === null || j === undefined || String(j).trim() === "" ? null : String(j).trim().slice(0, 2000) });
     }
   }
-  if (!r.abas.length && !r.erros.length) r.erros.push(`O arquivo não está no padrão do Exportar Premissas: nenhuma aba tem a coluna “${COLUNA_CODIGO}”.`);
+  if (!r.abas.length && !r.erros.length) r.erros.push("O arquivo não está no padrão do Exportar Premissas: nenhuma aba tem os rótulos dele.");
   return r;
 }
 
@@ -686,10 +872,10 @@ export function lerArquivoDePremissas(arquivo: string, buffer: Uint8Array): Arqu
     try {
       itens = unzipSync(buffer);
     } catch {
-      return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O arquivo .zip não pôde ser aberto."], avisos: [], quadro: [] }];
+      return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O arquivo .zip não pôde ser aberto."], avisos: [], quadro: [], substituiQuadro: null }];
     }
     const xlsx = Object.entries(itens).filter(([n]) => /\.xlsx$/i.test(n) && !n.startsWith("__MACOSX"));
-    if (!xlsx.length) return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O .zip não tem nenhuma planilha (.xlsx)."], avisos: [], quadro: [] }];
+    if (!xlsx.length) return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O .zip não tem nenhuma planilha (.xlsx)."], avisos: [], quadro: [], substituiQuadro: null }];
     return xlsx.map(([n, b]) => lerXlsx(`${arquivo} › ${n.split("/").pop()}`, b));
   }
   return [lerXlsx(arquivo, buffer)];

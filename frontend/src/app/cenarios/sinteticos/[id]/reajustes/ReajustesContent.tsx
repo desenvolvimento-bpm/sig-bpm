@@ -131,7 +131,7 @@ export function ReajustesContent() {
             </li>
             <li>
               Na aba Justificativas (só com um cenário comparado, em Configurações / Comparativo): escolha a aba da DRE (Consolidado ou cada unidade); acima
-              da tabela, quantas contas da aba passam da variação{analitico ? " — a variação máxima de cada conta é a do Índice de Reajuste escolhido para ela no Comparativo (Configurações / Índices)" : ""}. Cada linha é uma conta com algum mês acima da variação máxima dela: os meses
+              da tabela, quantas contas da aba passam da variação{analitico ? " — a variação máxima de cada conta é a do Índice de Referência escolhido para ela nas Variações Máximas (Configurações / Comparativo)" : ""}. Cada linha é uma conta com algum mês acima da variação máxima dela: os meses
               mostram a variação (passe o mouse para ver o valor do cenário e o do comparado; “sem base”: o comparado é zero no mês). Digite a
               justificativa e clique em “Gravar”; apagar o texto e gravar a apaga. “Só Sem Justificativa” esconde as já justificadas. Uma conta que
               deixa de passar da variação sai da lista (a justificativa fica guardada). Com o cenário marcado ou com a versão congelada, as

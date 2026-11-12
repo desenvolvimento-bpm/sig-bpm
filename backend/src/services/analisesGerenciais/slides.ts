@@ -59,14 +59,14 @@ export type FonteDoTexto = (typeof FONTES_DO_TEXTO)[number];
 export type EstiloDoSumario = { negrito?: boolean; italico?: boolean; sublinhado?: boolean; tamanho?: number; cor?: string; fonte?: FonteDoTexto };
 
 /**
- * Os cenários dos cards PROVA (31/10/2026, pedido do Adão), na ordem deles: Previsão, Orçado (o Orçamento Empresarial),
+ * Os cenários dos cards PROVA (31/10/2026, pedido do Adão), na ordem deles: Forecast, Orçado (o Orçamento Empresarial),
  * Vendido e Anterior — o realizado contra até os quatro cenários marcados.
  */
 export const MARCACOES_DO_PROVA: MarcacaoCenario[] = ["PREVISAO", "ORCAMENTO_EMPRESARIAL", "RESULTADOS_VENDIDOS", "RESULTADOS_ANTERIORES"];
 
 /** Um bloco da grade: a posição e o tamanho (em colunas e linhas) e o conteúdo. */
 export type BlocoDoRelatorio = { id: string; x: number; y: number; w: number; h: number } & (
-  | { tipo: "PAINEL"; aba: "resultados" | "performance"; quadro: string; titulo: string; sigla: string; comGrafico: boolean; /** As opções do gráfico do card (16/10/2026), como no Configurar Gráficos do Painel; sem elas, as do navegador. */ tipoGrafico?: "barras" | "area"; comRotulos?: boolean; cores?: "padrao" | "daltonismo"; /** O Zoom do card (30/10/2026): de 1,25 a 3; sem ele, 1. */ zoom?: number; /** O card PROVA (31/10/2026): os cenários são os da Comparação PROVA do relatório (a lista de marcações é de antes dela e vale o mesmo); sem ele, o card padrão. */ prova?: true | MarcacaoCenario[] }
+  | { tipo: "PAINEL"; aba: "resultados" | "performance"; quadro: string; titulo: string; sigla: string; comGrafico: boolean; /** As opções do gráfico do card (16/10/2026), como no Configurar Gráficos do Painel; sem elas, as do navegador. */ tipoGrafico?: "barras" | "area"; comRotulos?: boolean; cores?: "padrao" | "daltonismo"; /** O Zoom do card (30/10/2026): de 1,25 a 3; sem ele, 1. */ zoom?: number; /** Os dados antes do gráfico (12/11/2026): só o Atual ou só o Acumulado; sem ele, os dois. */ periodos?: "ATUAL" | "ACUMULADO"; /** O card PROVA (31/10/2026): os cenários são os da Comparação PROVA do relatório (a lista de marcações é de antes dela e vale o mesmo); sem ele, o card padrão. */ prova?: true | MarcacaoCenario[] }
   | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; /** As opções do gráfico, como nos cards do Painel (22/10/2026). */ tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoCenario[] }
   | { tipo: "ANOTACAO"; nota: "POSITIVO" | "NEGATIVO" | "ATENCAO"; texto: string; /** O título (16/10/2026; sem ele, o nome da nota). */ titulo?: string; /** O texto formatado (17/10/2026), em HTML (limpo na tela, ao mostrar). */ html?: string; tamanhoTitulo?: number; /** A fonte do título e o espaçamento entre as linhas (20/10/2026). */ fonteTitulo?: FonteDoTexto; espacamento?: number }
   /** Uma foto (16/10/2026): o arquivo (na pasta do relatório; vazio, o quadro esperando a imagem), a legenda e a proporção (largura ÷ altura). */
@@ -111,7 +111,7 @@ export type TransicaoDoGrupo = "ESMAECER" | "ROLAR_VERTICAL" | "ROLAR_HORIZONTAL
  * na coluna `blocos` da aba; a lista antiga (só os blocos, de antes das páginas) vira uma página. O nome da página
  * (16/10/2026) é o do slide na apresentação; sem ele, "Página N".
  */
-export type PaginaDoRelatorio = { id: string; nome?: string; blocos: BlocoDoRelatorio[]; fundo?: FundoDaPagina; transicao?: TransicaoDoGrupo; /** Avançar Após (30/10/2026), em segundos. */ avancarApos?: number };
+export type PaginaDoRelatorio = { id: string; nome?: string; blocos: BlocoDoRelatorio[]; fundo?: FundoDaPagina; transicao?: TransicaoDoGrupo; /** Avançar Após (30/10/2026), em segundos. */ avancarApos?: number; /** Recomeçar ao Terminar (11/11/2026, os painéis). */ recomecarAoTerminar?: boolean };
 export function paginasDe(json: unknown): PaginaDoRelatorio[] {
   const lista = Array.isArray(json) ? json : [];
   if (!lista.length) return [{ id: "p1", blocos: [] }];

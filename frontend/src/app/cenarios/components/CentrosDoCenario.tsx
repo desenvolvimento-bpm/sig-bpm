@@ -22,8 +22,10 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * Quadro de Lotação (Colaboradores CLT e PJ e o Total de Colaboradores, de onde saem os quadros de lotação dos
  * indicadores), os Encargos e Benefícios (os percentuais e os Benefícios Adicionais) e as contas (mão de obra e gastos
  * gerais, por atribuição; a Encargos e Benefícios, calculada). O grupo com centros de baldes diferentes traz o aviso: o
- * valor vai pelo balde mais comum. O grupo com linhas na aba Quadro de Lotação (09/11/2026) tem os colaboradores, as
- * Remunerações CLT e PJ e os Salários dos Aprendizes calculados por elas, com o aviso.
+ * valor vai pelo balde mais comum. As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (11/11/2026, pedido do Adão:
+ * em todos os grupos; sem linhas do grupo lá, zero) e não se digitam. O grupo com linhas na aba Quadro de Lotação (09/11/2026)
+ * tem também os colaboradores (11/11/2026: Aprendizes, Estagiários, CLT e PJ) e os Salários dos Aprendizes e dos Estagiários
+ * calculados por elas, com o aviso.
  */
 export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const [busca, setBusca] = useState("");
@@ -78,16 +80,19 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
                 {contas.data.grupo.balde ?? "—"}. Revise o agrupamento no cadastro Centros de Custo para que o grupo tenha um balde só.
               </p>
             ) : null}
+            {/* O aviso só nos grupos com linhas na aba Quadro de Lotação (11/11/2026: sem linhas, sem aviso). */}
             {contas.data.lotacao.linhasDoQuadro ? (
               <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
-                Este grupo tem {contas.data.lotacao.linhasDoQuadro} {plural(contas.data.lotacao.linhasDoQuadro, "linha", "linhas")} na aba Quadro de Lotação: os
-                Colaboradores CLT e PJ, as Remunerações CLT e PJ e os Salários dos Aprendizes vêm de lá e não se digitam aqui.
+                Este grupo tem {contas.data.lotacao.linhasDoQuadro} {plural(contas.data.lotacao.linhasDoQuadro, "linha", "linhas")} na aba Quadro de
+                Lotação: os Colaboradores Aprendizes, Estagiários, CLT e PJ, as Remunerações CLT e PJ e os Salários dos Aprendizes e dos Estagiários vêm
+                de lá e não se digitam aqui.
               </p>
             ) : null}
             <TabelaEditavel
               key={grupo ?? ""}
               titulo={contas.data.grupo.grupo}
               subtitulo={`${contas.data.grupo.centros.map((c) => c.codigo ?? c.nome).join(", ")} · Balde ${contas.data.grupo.balde ?? "—"} · Vai para: ${contas.data.grupo.destino}`}
+              tituloNoDestaque
               meses={dados.meses}
               linhas={linhasDoCentro(contas.data)}
               editavel={editavel && dados.editavel}
@@ -104,12 +109,14 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
 }
 
 /**
- * As linhas da tabela Premissas do grupo (19/10/2026): o Quadro de Lotação (Colaboradores CLT e PJ e o Total de
- * Colaboradores, a soma), os Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o
- * total do centro no fim.
+ * As linhas da tabela Premissas do grupo (19/10/2026): o Quadro de Lotação (Colaboradores CLT e PJ — com linhas na aba
+ * Quadro de Lotação, também os Aprendizes e os Estagiários antes deles, 11/11/2026 — e o Total de Colaboradores, a soma), os
+ * Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o total do centro no fim.
  */
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
-  const { clt, pj } = dados.lotacao;
+  const { aprendizes, estagiarios, clt, pj } = dados.lotacao;
+  // Os colaboradores do grupo (11/11/2026: com linhas na aba Quadro de Lotação, os Aprendizes e os Estagiários à parte).
+  const series = [aprendizes, estagiarios, clt, pj].filter((x): x is NonNullable<typeof x> => !!x);
   // Com linhas na aba Quadro de Lotação (09/11/2026), os colaboradores são calculados.
   const doQuadro = dados.lotacao.linhasDoQuadro > 0;
   const premissa = (chave: string, secao: string, rotulo: string, und: string, casas: number, x: SerieDoCentro): LinhaDaPremissa => ({
@@ -125,6 +132,8 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     gravados: x.gravados,
   });
   const lotacao: LinhaDaPremissa[] = [
+    ...(aprendizes ? [{ ...premissa("LOTACAO|APRENDIZES", "QUADRO DE LOTAÇÃO", "Colaboradores Aprendizes", "colab.", 0, aprendizes), tipo: "CALCULO" as const }] : []),
+    ...(estagiarios ? [{ ...premissa("LOTACAO|ESTAGIARIOS", "QUADRO DE LOTAÇÃO", "Colaboradores Estagiários", "colab.", 0, estagiarios), tipo: "CALCULO" as const }] : []),
     { ...premissa("LOTACAO|CLT", "QUADRO DE LOTAÇÃO", "Colaboradores CLT", "colab.", 0, clt), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
     { ...premissa("LOTACAO|PJ", "QUADRO DE LOTAÇÃO", "Colaboradores PJ", "colab.", 0, pj), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
     {
@@ -136,14 +145,15 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
       tipo: "CALCULO",
       negrito: true,
       casas: 0,
-      referencia: clt.referencia === null && pj.referencia === null ? null : (clt.referencia ?? 0) + (pj.referencia ?? 0),
-      valores: clt.valores.map((v, k) => v + (pj.valores[k] ?? 0)),
+      referencia: series.every((x) => x.referencia === null) ? null : series.reduce((s, x) => s + (x.referencia ?? 0), 0),
+      valores: clt.valores.map((_, k) => series.reduce((s, x) => s + (x.valores[k] ?? 0), 0)),
       gravados: clt.valores.map(() => false),
     },
-    // Os Salários dos Aprendizes de cada mão de obra (a base do FGTS Aprendiz), da aba Quadro de Lotação.
-    ...dados.aprendizes.map(
+    // Os Salários dos Aprendizes de cada mão de obra (a base do FGTS Aprendiz) e os dos Estagiários (11/11/2026: saem da
+    // base dos encargos), da aba Quadro de Lotação.
+    ...[...dados.aprendizes.map((a) => ({ ...a, tipo: "APRENDIZ" })), ...dados.estagiarios.map((a) => ({ ...a, tipo: "ESTAGIARIO" }))].map(
       (a): LinhaDaPremissa => ({
-        chave: `LOTACAO|APRENDIZ|${a.prefixo}`,
+        chave: `LOTACAO|${a.tipo}|${a.prefixo}`,
         secao: "QUADRO DE LOTAÇÃO",
         grupo: null,
         rotulo: a.rotulo,
@@ -216,7 +226,8 @@ export function RateiosDoCenario({ id }: { id: string }) {
   return (
     <TabelaEditavel
       titulo="Rateios"
-      subtitulo="Bases das premissas: Produção pelo m³ produzido; Projeto pelo m³ produzido da venda Global; Metalurgia e Armadura pelo kg das linhas (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos Acompanhamentos por Dia de Serviços. Sem base no mês, o percentual é zero."
+      // Sem o título e a explicação acima da tabela (11/11/2026, pedido do Adão): as bases estão no Como Usar da tela.
+      semTitulo
       meses={consulta.data.meses}
       linhas={linhasDosRateios(consulta.data.rateios)}
       editavel={false}

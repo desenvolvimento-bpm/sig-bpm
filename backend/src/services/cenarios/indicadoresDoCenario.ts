@@ -88,7 +88,7 @@ export async function calcularCenario(cenarioId: string): Promise<CalculoDoCenar
     for (const p of lotacao) {
       if (p.mes < 1 || p.mes > 12) continue;
       const lista = porGrupo.get(p.chave) ?? Array<number>(12).fill(0);
-      // O Total de Colaboradores: CLT + PJ (19/10/2026).
+      // O Total de Colaboradores: CLT + PJ (19/10/2026; 11/11/2026: também os Aprendizes e os Estagiários).
       lista[p.mes - 1] += Number(p.valor);
       porGrupo.set(p.chave, lista);
     }
@@ -192,14 +192,14 @@ export const ROTULO_DA_MARCACAO: Record<MarcacaoCenario, string> = {
   ORCAMENTO_EMPRESARIAL: "Orçamento",
   RESULTADOS_ANTERIORES: "Anterior",
   RESULTADOS_VENDIDOS: "Vendido",
-  PREVISAO: "Previsão",
+  PREVISAO: "Forecast",
 };
 
 /** Os cenários marcados do exercício (21/10/2026): as opções do Compara Com de Resultados Empresariais. */
 export async function cenariosMarcados() {
   // De qualquer exercício (22/10/2026), com o ano dele.
   const cs = await getPrismaClient().cenario.findMany({ where: { marcacao: { not: null } }, select: { id: true, nome: true, ano: true, marcacao: true } });
-  // Na ordem do padrão da Comparação (23/10/2026): Previsão, Orçamento, Anterior e Vendido.
+  // Na ordem do padrão da Comparação (23/10/2026): Forecast, Orçamento, Anterior e Vendido.
   const ordem: MarcacaoCenario[] = ["PREVISAO", "ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS"];
   return cs
     .map((c) => ({ marcacao: c.marcacao!, rotulo: ROTULO_DA_MARCACAO[c.marcacao!], cenario: { id: c.id, nome: c.nome, ano: c.ano } }))

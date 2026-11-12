@@ -27,12 +27,12 @@ import { ImportarColaboradoresDialog } from "./ImportarColaboradoresDialog";
 
 const ACOES: Coluna<Registro> = { chave: "acoes", rotulo: "Ações", semFiltro: true, classe: "w-20" };
 
-/** A competência e os totais do Lançamento Inicial, acima da tabela. */
+/** A competência e os totais do Lançamento Inicial, no destaque amarelo-ouro acima da tabela. */
 function ResumoDaCarga({ lista }: { lista: Registro[] }) {
   const clt = lista.filter((r) => r.vinculo === "CLT").length;
   const pj = lista.length - clt;
   return (
-    <p className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-700">
+    <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
       Quadro do início de <span className="font-medium text-gray-900">{String(lista[0].competencia ?? "")}</span>: {lista.length}{" "}
       {plural(lista.length, "colaborador", "colaboradores")} ({clt} CLT e {pj} PJ).
     </p>
@@ -133,8 +133,8 @@ export function CadastroDeColaboradores({ entidade, aba, rota, titulo, descricao
       onPorPaginaChange={tabela.setPorPagina}
       onPaginaChange={tabela.setPagina}
       carregando={def.isPending || lista.isPending}
+      aviso={lancamentoInicial && lista.data?.length ? <ResumoDaCarga lista={lista.data} /> : null}
     >
-      {lancamentoInicial && lista.data?.length ? <ResumoDaCarga lista={lista.data} /> : null}
       <DataTable<Registro>
         data={tabela.visiveis}
         cabecalho={tabela.cabecalho}

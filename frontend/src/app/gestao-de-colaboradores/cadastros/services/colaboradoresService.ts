@@ -14,6 +14,12 @@ export type PreviaColaboradores = {
   /** O Lançamento Inicial: a competência escolhida (MM/AAAA) e o que ele substitui. */
   competencia?: string;
   substitui?: { competencia: string; colaboradores: number } | null;
+  /** As funções (11/11/2026: a importação substitui o cadastro inteiro): as que saem (até 200 nomes, "Função · Senioridade"). */
+  excluidas?: { total: number; nomes: string[] };
+  /** As funções que saem e estão em movimentações do Quadro de Lotação ou nos cenários: a importação é recusada. */
+  bloqueio?: string | null;
+  /** O Lançamento Inicial que usa funções que saem: é apagado junto. */
+  apagaLancamentoInicial?: { competencia: string; colaboradores: number; funcoes: number } | null;
 };
 
 export const colaboradoresService = {

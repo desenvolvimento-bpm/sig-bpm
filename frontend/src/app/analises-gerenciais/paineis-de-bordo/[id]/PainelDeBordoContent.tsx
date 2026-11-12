@@ -70,7 +70,7 @@ function ComoUsarDoPainel() {
         para outro cenário, o painel volta ao marcado como Orçamento; num cenário de outro exercício, valem os mesmos meses dele). No painel com a
         competência automática, vale a marcação do cenário escolhido: se ela passar para outro cenário (por exemplo, o do exercício novo), os objetos
         padrão comparam com ele. A Comparação PROVA são os cenários dos Cards PROVA e das Tabelas PROVA: marque dois ou mais dos
-        cenários marcados (Previsão, Orçado, Vendido e Anterior, cada um com o quadradinho da cor dele; de início, todos); com dois marcados, eles não se
+        cenários marcados (Forecast, Orçado, Vendido e Anterior, cada um com o quadradinho da cor dele; de início, todos); com dois marcados, eles não se
         desmarcam antes de se marcar outro. Ela acompanha as marcações: se uma marcação passar para outro cenário, os objetos PROVA comparam com ele. As
         mudanças das duas abas se salvam na hora (“Salvo às…”), também no painel finalizado.
       </li>

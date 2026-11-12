@@ -154,7 +154,7 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
             <li>A aba Resultados mostra um card por indicador: o valor do mês, o do mês anterior, o do ano e as barras dos meses; passe o mouse para ver a conta.</li>
             <li>A aba Indicadores mostra a tabela dos meses do ano, com o acumulado: o Quadro de Lotação do último mês, e a soma dos meses nos demais.</li>
             <li>
-              “Comparação” escolhe o cenário marcado (Previsão, Orçamento, Anterior ou Vendido) ou Sem Comparação; a escolha fica guardada neste navegador e
+              “Comparação” escolhe o cenário marcado (Forecast, Orçamento, Anterior ou Vendido) ou Sem Comparação; a escolha fica guardada neste navegador e
               vale também no Quadro de Lotação. Nos cards, o cenário e a diferença (realizado − cenário) do mês e do acumulado; na tabela, abaixo de cada
               indicador, a linha do cenário (todos os meses) e a da diferença. O acumulado do cenário usa os mesmos meses do realizado (os do ano com
               competência do Quadro de Lotação).

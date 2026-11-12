@@ -12,6 +12,7 @@ import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
 import { mensagemDeErro } from "@/app/cadastros/services/edicaoService";
 
 import { quadroService, ROTULO_ORIGEM, type NovaMovimentacao } from "../../services/quadroService";
+import { funcaoNaSenioridade, opcoesDeFuncao } from "../../services/funcaoPorSenioridade";
 import { rotuloDoMes } from "./CabecalhoDoQuadro";
 
 const classeSelect = "h-9 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm";
@@ -37,7 +38,8 @@ function Campo({ id, rotulo, obrigatorio, children, largo }: { id: string; rotul
 
 /**
  * O modal Nova Movimentação (06/11/2026): a Classificação (que escolhe também a movimentação) ou a Movimentação, a data
- * (hoje, por padrão), o centro de custo, o tipo (CLT ou PJ), a função, o nível (o da função, por padrão), o motivo e, num
+ * (hoje, por padrão), o centro de custo, o tipo (CLT ou PJ), a função (com a senioridade ao lado: a mesma função tem uma por
+ * senioridade), a senioridade (a da função; trocá-la troca a função pela do mesmo nome), o motivo e, num
  * desligamento (contagem Negativa), a Origem e a caixa "Gerar Vaga em Aberto", marcada.
  */
 export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; onFechar: () => void }) {
@@ -151,22 +153,29 @@ export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; o
                 id="mov-funcao"
                 value={v.funcaoId}
                 onChange={(e) => {
-                  // O nível da função, quando ela tem um.
+                  // A senioridade da função, quando ela tem uma.
                   const f = o?.funcoes.find((x) => x.id === e.target.value);
                   muda({ funcaoId: e.target.value, ...(f?.senioridadeId && o?.senioridades.some((s) => s.id === f.senioridadeId) ? { senioridadeId: f.senioridadeId } : {}) });
                 }}
                 className={classeSelect}
               >
                 <option value="">Escolha…</option>
-                {o?.funcoes.map((f) => (
+                {/* A função com a senioridade ao lado; com a senioridade escolhida, só as dela (11/11/2026). */}
+                {opcoesDeFuncao(o?.funcoes ?? [], o?.senioridades ?? [], v.senioridadeId).map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.nome}
                   </option>
                 ))}
               </select>
             </Campo>
-            <Campo id="mov-nivel" rotulo="Nível" obrigatorio>
-              <select id="mov-nivel" value={v.senioridadeId} onChange={(e) => muda({ senioridadeId: e.target.value })} className={classeSelect}>
+            <Campo id="mov-senioridade" rotulo="Senioridade" obrigatorio>
+              <select
+                id="mov-senioridade"
+                value={v.senioridadeId}
+                // A função acompanha a senioridade: a do mesmo nome na nova (ou nenhuma).
+                onChange={(e) => muda({ senioridadeId: e.target.value, funcaoId: funcaoNaSenioridade(o?.funcoes ?? [], v.funcaoId, e.target.value) })}
+                className={classeSelect}
+              >
                 <option value="">Escolha…</option>
                 {o?.senioridades.map((s) => (
                   <option key={s.id} value={s.id}>

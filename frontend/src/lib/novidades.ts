@@ -28,6 +28,133 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 09:00
+  {
+    publicada: "2026-11-12T09:00",
+    processo: TODO_O_SIG,
+    itens: [
+      "O menu mudou: os Cenários Analíticos e os Cenários Sintéticos passaram para as Análises Gerenciais; a Criação de Cenários ficou com os Resultados Vendidos; o grupo Processos Administrativos se chama Processos Auxiliares e recebeu a Auditoria de Investimentos, os Inventários e Cíclicas e a Ociosidade do Maquinário (em desenvolvimento), e o grupo Gestão do Patrimônio saiu.",
+      "A marcação Previsão dos cenários se chama Forecast nas etiquetas e nos cards (“vs. Forecast”).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Pesquisar, antes do Exportar: os movimentos do balancete de um fornecedor ou cliente (digite ao menos três letras) ou de uma conta de resultado (escolha na lista do plano de contas), nas competências fechadas do exercício até o mês escolhido e só os que o seu perfil vê — o Mês, o Centro de Custo, a Atribuição, a Conta do DRE, a Conta de Resultado ou o Fornecedor/Cliente e o Valor, com a soma. Em cada movimento, Itens e Contestar, como no Balancete.",
+      "A Comparação escolhida aqui vale também no Painel de Bordo, na hora.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "O botão Comparação (Padrão ou PROVA) também aqui, antes do Configurar Gráficos; mudar numa tela muda a outra.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "Nos cards do Painel e dos Indicadores, padrão e PROVA, o botão Dados do Card (no menu da edição, antes do gráfico) passa em ciclo de Atual e Acumulado a Apenas o Atual e Apenas o Acumulado; com um só, o card fica mais estreito, na proporção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Nos cards do Painel e dos Indicadores, padrão e PROVA, o botão Dados do Card (no menu da edição, antes do gráfico) passa em ciclo de Atual e Acumulado a Apenas o Atual e Apenas o Acumulado; com um só, o card fica mais estreito, na proporção.",
+      "No modal Transições, no Cronômetro, a caixa Recomeçar ao Terminar: ao fim do Avançar Após do último slide, a apresentação volta ao primeiro, em ciclo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Reajustes, depois de Indicadores Manuais: os Índices de Reajuste (até quatro reajustes por índice, cada um com o Valor e o mês em que inicia) e a Aplicação dos Reajustes (o índice de cada conta), com Aplicar Reajustes / Remover Reajustes. Aplicados, os reajustes entram na DRE do cenário, e as demais abas das Premissas (menos Indicadores Manuais) e a Referência ficam bloqueadas até Remover Reajustes.",
+      "Na aba Centros de Custo, os Colaboradores Aprendizes e Estagiários aparecem à parte dos CLT; os salários dos estagiários saem da base dos Encargos e Benefícios. As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação e não se digitam (sem linhas no Quadro de Lotação, ficam zeradas). O grupo, os centros e o destino ficam no card de destaque.",
+      "Na aba Quadro de Lotação, o texto num destaque e o botão Nova Entrada.",
+      "Exportar Premissas: sem as colunas de código; as primeiras colunas presas ao rolar; os rótulos com quebra de texto; com a referência carregada, os doze meses dela (Realizado ou Referência) antes da Média de Referência e o QL Realizado no Quadro de Lotação; os colaboradores e as Remunerações em fórmula sobre a aba Quadro de Lotação do arquivo.",
+      "Importar Valores acha cada linha pelas descrições; a aba Quadro de Lotação do arquivo substitui as linhas do cenário nos departamentos dele (as iguais ficam, as alteradas mudam, as novas entram e as que faltam saem). Os arquivos de antes continuam valendo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: [
+      "A aba Índices saiu: o Comparativo traz o Cenário Comparado, os Índices de Referência e as Variações Máximas, cada um com o seu Gravar.",
+      "Na Referência, a caixa Manter os Valores dos Meses: a referência troca só as Médias de Referência, e os meses digitados ou importados ficam.",
+      "O Novo Cenário copiando outro leva também o Comparativo (o Cenário Comparado, os Índices e as Variações Máximas) e as realocações.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    itens: [
+      "Cada função se cadastra uma vez por senioridade, com a sua descrição, competências e atividades; as listas mostram a função com a senioridade (“Conferente · Pleno”), e escolher a função escolhe a senioridade. O Nível passou a se chamar Senioridade.",
+      "O Importar das Funções substitui o cadastro: as funções fora da planilha são excluídas (a prévia diz quais), e o Lançamento Inicial que usa alguma delas é apagado junto; a planilha que exclui uma função das movimentações ou dos cenários é recusada.",
+      "No Lançamento Inicial, o resumo do quadro fica num destaque, acima da tabela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Arquivos Gerais",
+    tela: "Treinamentos",
+    rota: "/arquivos-gerais/treinamentos",
+    itens: [
+      "Cada arquivo tem o Processo (Geral ou um processo do menu), escolhido ao adicionar ou no Editar, novo no menu Ações; a lista mostra a coluna Processo e só os arquivos Gerais e os dos processos em que você vê alguma tela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Arquivos Gerais",
+    tela: "Informativos",
+    rota: "/arquivos-gerais/informativos",
+    itens: [
+      "Cada arquivo tem o Processo (Geral ou um processo do menu), escolhido ao adicionar ou no Editar, novo no menu Ações; a lista mostra a coluna Processo e só os arquivos Gerais e os dos processos em que você vê alguma tela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cadastros da Controladoria",
+    tela: "Analítico",
+    rota: "/cadastros/painel-bordo",
+    itens: [
+      "Nos modais dos cards do Painel de Bordo e dos Indicadores, a lista de itens da Metodologia mostra, ao lado de cada item, o valor acumulado até a competência fechada mais recente; o Testar, antes do Gravar, mostra o Realizado (Atual) com a fórmula do formulário, sem gravar.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cadastros da Controladoria",
+    tela: "Controladoria",
+    rota: "/cadastros/departamentos",
+    itens: [
+      "A aba Departamentos: a Ordem, a Unidade, o Departamento e os Departamentos da DRE (os grupos da DRE de cada um), com a carga da Produção (Matriz e Filial), da Montagem e dos Complementares, das despesas (Logística, Técnico, Comercial e Administrativo) e do Extra-Operacional.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "Na confirmação do Excluir Competência, o campo da competência fica à direita, alinhado com o Excluir.",
+    ],
+  },
   // 10/11/2026, 21:27
   {
     publicada: "2026-11-10T21:27",

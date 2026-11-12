@@ -18,7 +18,7 @@ export default function SenioridadesPage() {
           descricao="As senioridades (os níveis) das funções permitidas no Quadro de Lotação: Aprendiz, Júnior, Pleno, Sênior… As funções e o Lançamento Inicial usam estes nomes."
           comoUsar={
             <ul>
-              <li>Use Novo, à direita do título, para criar uma senioridade, com o nome e a descrição do nível.</li>
+              <li>Use Novo, à direita do título, para criar uma senioridade, com o nome e a descrição.</li>
               <li>No menu Ações de cada linha, Editar muda a senioridade e Inativar a tira das listas de escolha; Reativar a devolve.</li>
               <li>Excluir só vale para a senioridade que nenhuma função nem o Lançamento Inicial usam; nas demais, o motivo aparece ao passar o mouse.</li>
               <li>Marque Apenas Ativas para esconder as inativas, e use os filtros nos rótulos das colunas.</li>

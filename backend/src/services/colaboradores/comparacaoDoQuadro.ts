@@ -5,7 +5,7 @@ import { mesesDaLinha } from "../cenarios/quadroDoCenario.js";
 
 /**
  * A Comparação do Quadro de Lotação com um cenário (09/11/2026, etapa 4 da Gestão de Colaboradores): os cenários marcados
- * (Previsão, Orçamento, Anterior e Vendido, de qualquer exercício, como a Comparação de Resultados Empresariais; num de outro
+ * (Forecast, Orçamento, Anterior e Vendido, de qualquer exercício, como a Comparação de Resultados Empresariais; num de outro
  * exercício, valem os mesmos meses). Do cenário escolhido:
  *
  * - os indicadores do Painel de Bordo, mês a mês, pelo nome no cadastro dos indicadores (os mesmos do Apurar): Quadro de

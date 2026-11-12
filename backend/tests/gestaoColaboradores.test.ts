@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { gerarXlsx, type AbaEscrita } from "../src/lib/xlsxEscrita.js";
 import { CHAVES_DA_MATRIZ } from "../src/services/acesso/telas.js";
 import { chaveDoNome, ImportacaoColaboradoresError, lerCompetencia, lerPlanilha } from "../src/services/colaboradores/importacaoCadastros.js";
+import { funcaoServeNaSenioridade, recusaDaFuncao, rotuloDaFuncao } from "../src/services/colaboradores/funcaoPorSenioridade.js";
 import { calcularQuadros, departamentosDoGrupo, indicadoresDoMes } from "../src/services/colaboradores/quadroService.js";
 import { formulaEfetiva, montarIndicador } from "../src/services/relatorios/catalogoIndicadores.js";
 import { lerItem } from "../src/services/relatorios/formulaIndicador.js";
@@ -48,12 +49,17 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
     const { aba: lida, itens } = lerPlanilha(arquivo, "funcoes");
     assert.equal(lida, "Funções");
     assert.deepEqual(
-      itens.map((i) => [i.linha, i.valores.funcao, i.valores.nivel, i.valores.descricao]),
+      itens.map((i) => [i.linha, i.valores.funcao, i.valores.senioridade, i.valores.descricao]),
       [
         [3, "Analista Contábil", "Pleno", "Fecha o mês"],
         [5, "Aprendiz Administrativo", "Aprendiz", ""],
       ],
     );
+  });
+
+  it("a planilha de Funções com a coluna Senioridade (11/11/2026)", () => {
+    const arquivo = gerarXlsx([aba("Funções", [["Função", "Descrição", "Senioridade", "Competências", "Atividades"], ["Analista Contábil", null, "Pleno", null, null]])]);
+    assert.equal(lerPlanilha(arquivo, "funcoes").itens[0].valores.senioridade, "Pleno");
   });
 
   it("o Lançamento Inicial exige as cinco colunas; a competência no formato aaaa-mm", () => {
@@ -138,5 +144,38 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
   it("os nomes da planilha batem com os cadastros sem diferença de acento, maiúsculas e espaços", () => {
     assert.equal(chaveDoNome("  Analista   Contábil "), chaveDoNome("ANALISTA CONTABIL"));
     assert.notEqual(chaveDoNome("Júnior"), chaveDoNome("Pleno"));
+  });
+});
+
+describe("Gestão de Colaboradores: a função por senioridade (11/11/2026)", () => {
+  it("a planilha com várias abas: vale a que tem mais das colunas esperadas; as linhas só com 0 ficam de fora", () => {
+    const arquivo = gerarXlsx([
+      // A aba dos colaboradores tem Função, Descrição e Senioridade (vazia); a das funções, as cinco colunas.
+      aba("QL (Corrigido)", [["Unidade", "CLT/PJ", "Função", "Descrição", "Senioridade"], ["Filial", "CLT", "Conferente", "Conferente", null], ["Filial", "CLT", "Conferente", "Conferente", null]]),
+      aba("Carga Inicial das Funções", [
+        ["Função", "Descrição", "Senioridade", "Competências", "Atividades"],
+        ["Conferente", "Conferente", "Júnior", "<Descrever>", "<Descrever>"],
+        ["Conferente", "Conferente", "Pleno", "<Descrever>", "<Descrever>"],
+        [0, 0, 0, 0, 0],
+      ]),
+    ]);
+    const { aba: lida, itens } = lerPlanilha(arquivo, "funcoes");
+    assert.equal(lida, "Carga Inicial das Funções");
+    assert.deepEqual(
+      itens.map((i) => [i.linha, i.valores.funcao, i.valores.senioridade]),
+      [
+        [2, "Conferente", "Júnior"],
+        [3, "Conferente", "Pleno"],
+      ],
+    );
+  });
+
+  it("a função serve na senioridade dela; a sem senioridade, em todas", () => {
+    assert.equal(funcaoServeNaSenioridade({ senioridadeId: "pleno" }, "pleno"), true);
+    assert.equal(funcaoServeNaSenioridade({ senioridadeId: "pleno" }, "junior"), false);
+    assert.equal(funcaoServeNaSenioridade({ senioridadeId: null }, "junior"), true);
+    assert.equal(rotuloDaFuncao({ nome: "Conferente", senioridade: { nome: "Pleno" } }), "Conferente · Pleno");
+    assert.equal(recusaDaFuncao({ nome: "Conferente", senioridadeId: "pleno", senioridade: { nome: "Pleno" } }, "pleno"), null);
+    assert.match(recusaDaFuncao({ nome: "Conferente", senioridadeId: "pleno", senioridade: { nome: "Pleno" } }, "junior") ?? "", /Conferente · Pleno é de outra senioridade/);
   });
 });

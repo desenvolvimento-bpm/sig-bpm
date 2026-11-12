@@ -80,7 +80,9 @@ export function TabelaPremissas({ id, dados, tabela, editavel }: { id: string; d
  * A tabela editável mês a mês (13/10/2026): as premissas de uma unidade e venda e as contas de um centro de custo. As
  * linhas vêm em seções, com subtítulos; depois da descrição, a unidade, a Média de Referência (`comReferencia`) e os
  * meses (em branco, os meses sem valor gravado, 15/10/2026). Clicar num valor edita aquele mês (com a chave de replicar aos meses seguintes); as caixas das linhas e dos
- * meses marcam valores, e "Reajustar Marcados" aplica um reajuste a todos. As linhas de cálculo não se editam.
+ * meses marcam valores, e "Reajustar Marcados" aplica um reajuste a todos. As linhas de cálculo não se editam. Com
+ * `tituloNoDestaque` (11/11/2026: a aba Centros de Custo), o título e o subtítulo ficam dentro do card de destaque, à
+ * esquerda, e a marcação à direita, antes de "Reajustar Marcados"; com `semTitulo` (a aba Rateios), sem o título.
  */
 export function TabelaEditavel({
   titulo,
@@ -94,6 +96,8 @@ export function TabelaEditavel({
   item = ["premissa", "premissas"],
   // 19/10/2026: "PREMISSAS" (antes, "PREMISSA"), nas unidades e nos centros de custo.
   cabecalho = "PREMISSAS",
+  tituloNoDestaque = false,
+  semTitulo = false,
 }: {
   titulo: string;
   subtitulo?: React.ReactNode;
@@ -107,6 +111,10 @@ export function TabelaEditavel({
   item?: [string, string];
   /** O rótulo da primeira coluna. */
   cabecalho?: string;
+  /** O título e o subtítulo dentro do card de destaque (11/11/2026: a aba Centros de Custo); o card aparece também sem edição. */
+  tituloNoDestaque?: boolean;
+  /** Sem o título nem o subtítulo acima da tabela (11/11/2026: a aba Rateios); o título continua no modal do reajuste. */
+  semTitulo?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [linhas, setLinhas] = useState<Set<string>>(new Set());
@@ -227,37 +235,64 @@ export function TabelaEditavel({
     );
   }
 
+  const cabecalhoDaTabela = (
+    <div className="min-w-0">
+      <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">{titulo}</h2>
+      {subtitulo ? <p className="text-xs text-gray-600">{subtitulo}</p> : null}
+    </div>
+  );
+  // A marcação: os valores marcados, Marcar Todos os Meses, Limpar Seleção e Reajustar Marcados.
+  const marcacao = (
+    <>
+      <span className="text-gray-700">
+        <span className="font-bold text-gray-900">{marcados.length}</span> {plural(marcados.length, "valor marcado", "valores marcados")} · {linhas.size} {plural(linhas.size, ...item)} × {meses.size} {plural(meses.size, "mês", "meses")}
+      </span>
+      <button type="button" className={botaoCinza} onClick={() => setMeses(todosOsMeses ? new Set() : new Set(mesesDaTabela.map((_, i) => i)))}>
+        {todosOsMeses ? "Desmarcar os Meses" : "Marcar Todos os Meses"}
+      </button>
+      {linhas.size || meses.size ? (
+        <button
+          type="button"
+          className={botaoCinza}
+          onClick={() => {
+            setLinhas(new Set());
+            setMeses(new Set());
+          }}
+        >
+          Limpar Seleção
+        </button>
+      ) : null}
+    </>
+  );
+  const reajustar = (
+    <Button type="button" className={`${botaoPrimario} ${tituloNoDestaque ? "" : "ml-auto"}`} disabled={marcados.length === 0} onClick={() => setReajuste(true)}>
+      Reajustar Marcados
+    </Button>
+  );
   return (
     <section className="space-y-2">
-      <div>
-        <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">{titulo}</h2>
-        {subtitulo ? <p className="text-xs text-gray-600">{subtitulo}</p> : null}
-      </div>
-      {editavel ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
-          <span className="text-gray-700">
-            <span className="font-bold text-gray-900">{marcados.length}</span> {plural(marcados.length, "valor marcado", "valores marcados")} · {linhas.size} {plural(linhas.size, ...item)} × {meses.size} {plural(meses.size, "mês", "meses")}
-          </span>
-          <button type="button" className={botaoCinza} onClick={() => setMeses(todosOsMeses ? new Set() : new Set(mesesDaTabela.map((_, i) => i)))}>
-            {todosOsMeses ? "Desmarcar os Meses" : "Marcar Todos os Meses"}
-          </button>
-          {linhas.size || meses.size ? (
-            <button
-              type="button"
-              className={botaoCinza}
-              onClick={() => {
-                setLinhas(new Set());
-                setMeses(new Set());
-              }}
-            >
-              Limpar Seleção
-            </button>
+      {tituloNoDestaque ? (
+        // O título dentro do card de destaque, à esquerda, e a marcação à direita, antes de Reajustar Marcados (11/11/2026).
+        <div className="flex items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+          <div className="min-w-0 flex-1">{cabecalhoDaTabela}</div>
+          {editavel ? (
+            <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+              {marcacao}
+              {reajustar}
+            </div>
           ) : null}
-          <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={marcados.length === 0} onClick={() => setReajuste(true)}>
-            Reajustar Marcados
-          </Button>
         </div>
-      ) : null}
+      ) : (
+        <>
+          {semTitulo ? null : cabecalhoDaTabela}
+          {editavel ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+              {marcacao}
+              {reajustar}
+            </div>
+          ) : null}
+        </>
+      )}
       <div className="rounded-sm border border-gray-200 bg-white">
         <div ref={topo} className="sticky top-[var(--topo-tabela,0px)] z-30 overflow-hidden">
         <table className="tabela-sig table-fixed border-collapse [--topo-tabela:0px]" style={{ width: total, minWidth: "100%" }}>

@@ -22,6 +22,8 @@ export function textoDoCampo(c: Campo, v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   if (c.tipo === "booleano") return v ? "Sim" : "Não";
   if (c.tipo === "opcao") return c.opcoes?.find((o) => o.valor === String(v))?.rotulo ?? String(v);
+  // A múltipla escolha (12/11/2026): os valores com vírgula e espaço (as siglas dos Departamentos da DRE, os códigos das unidades).
+  if (c.tipo === "multipla" && Array.isArray(v)) return v.length ? v.map(String).join(", ") : null;
   // Os valores em reais com "R$" e duas casas (os preços da Tabela de Estacas, 12/10/2026).
   if (c.tipo === "decimal" && c.moeda) return `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (c.tipo === "decimal") return Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -91,7 +93,8 @@ export function ListaCadastroContent({ entidade, rota, titulo, descricao, comoUs
   const edicao = useEdicaoCadastro(entidade, { criar: def.data?.criar ?? false });
 
   // Na tabela, só os campos de mostrar (sem as listas múltiplas, as fórmulas em texto bruto e os só do formulário).
-  const campos = useMemo(() => (def.data?.campos ?? []).filter((c) => c.tipo !== "multipla" && c.tipo !== "formula" && c.naTabela !== false), [def.data]);
+  // A múltipla escolha só com naTabela marcado (12/11/2026: os Departamentos da DRE, pelas siglas).
+  const campos = useMemo(() => (def.data?.campos ?? []).filter((c) => (c.tipo !== "multipla" || c.naTabela === true) && c.tipo !== "formula" && c.naTabela !== false), [def.data]);
   const colunas = useMemo(() => {
     const doCadastro = campos.map(colunaDoCampo);
     return edicao.pode ? [...doCadastro, EDITAR] : doCadastro;

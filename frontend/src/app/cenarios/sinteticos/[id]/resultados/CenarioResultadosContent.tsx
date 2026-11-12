@@ -136,6 +136,12 @@ export function CenarioResultadosContent() {
                 abre nem se fecha (Congelar e Reabrir Versão, Criar Revisão).
               </li>
             ) : null}
+            {analitico ? (
+              <li>
+                “Recalcular” só refaz a DRE (as premissas e as regras de rateio de hoje), com os Reajustes das Premissas como estão: aplicados ou
+                removidos antes, na tela Premissas, aba Reajustes (com eles aplicados, a etiqueta Reajustes Aplicados aparece na barra do cenário).
+              </li>
+            ) : null}
             <li>
               Use “Exportar” para baixar em Excel ou PDF, como em Resultados Empresariais: a visão atual ou todas as unidades (uma por aba ou por
               página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel: todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
@@ -196,14 +202,17 @@ export function CenarioResultadosContent() {
   );
 }
 
-/** O botão Recalcular (14/10/2026): refaz a DRE do analítico em aberto com as regras de rateio de hoje. */
+/**
+ * O botão Recalcular (14/10/2026): refaz a DRE do analítico em aberto com as regras de rateio de hoje, com os Reajustes das
+ * Premissas como estão (11/11/2026: aplicados ou removidos na aba Reajustes das Premissas).
+ */
 function BotaoRecalcular({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const recalcular = useMutation({
     mutationFn: () => cenariosService.recalcular(id),
-    onSuccess: () => {
+    onSuccess: (c) => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
-      toast.success("Cenário recalculado com as regras de rateio de hoje.");
+      toast.success(c.reajustesAplicados ? "Cenário recalculado com as regras de rateio de hoje e os reajustes aplicados." : "Cenário recalculado com as regras de rateio de hoje.");
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível recalcular o cenário.")),
   });

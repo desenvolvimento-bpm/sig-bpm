@@ -6,6 +6,7 @@ import { exportacaoRelatoriosService, type EscopoResultados } from "../../servic
 import { indicadoresService } from "../../services/relatorios/indicadoresService.js";
 import { orcamentosDoProva } from "../../services/relatorios/orcamento.js";
 import { painelService } from "../../services/relatorios/painelService.js";
+import { pesquisaDosResultados } from "../../services/relatorios/pesquisaDosResultados.js";
 import { RelatorioError, resultadosService } from "../../services/relatorios/resultadosService.js";
 import { creditosImpostosService } from "../../services/impostos/creditosImpostosService.js";
 import { veObras } from "../../services/acesso/recorteDepartamento.js";
@@ -100,6 +101,24 @@ export const relatoriosController = {
   /** Os cenários marcados (21/10/2026; desde 22/10/2026, de qualquer exercício): as opções do Compara Com. */
   async comparaveis(_request: Request, response: Response) {
     return responder(response, () => cenariosMarcados());
+  },
+
+  /**
+   * O Pesquisar (11/11/2026): ?tipo=fornecedor|conta&termo=, nos meses fechados do exercício até ?ate=, no recorte do
+   * usuário. O fornecedor pede ao menos três letras.
+   */
+  async pesquisar(request: Request, response: Response) {
+    const p = periodo(request, response);
+    if (!p) return;
+    const tipo = z.enum(["fornecedor", "conta"]).safeParse(request.query.tipo);
+    const termo = z.string().trim().min(1).max(120).safeParse(request.query.termo);
+    if (!tipo.success || !termo.success) return response.status(400).json({ error: "Pesquisa inválida" });
+    if (tipo.data === "fornecedor" && termo.data.length < 3) return response.status(400).json({ error: "Digite ao menos três letras do fornecedor ou cliente." });
+    return responder(response, () => pesquisaDosResultados.pesquisar(p.ano, p.ate, tipo.data, termo.data, request.user!.acesso));
+  },
+  /** As contas de resultado da lista do Pesquisar (o plano de contas). */
+  async contasDaPesquisa(_request: Request, response: Response) {
+    return responder(response, () => pesquisaDosResultados.contas());
   },
 
   /** A aba Impostos (Créditos de Impostos, 03/11/2026): os créditos de impostos de cada mês fechado do exercício, até ?ate=. */

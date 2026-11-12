@@ -133,14 +133,14 @@ export function ConfiguracoesDoRelatorio({ relatorioId, destaque = false }: { re
         <div>
           <h2 className="text-base font-bold text-gray-900">Comparação PROVA</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Os cenários dos Cards PROVA e das Tabelas PROVA, lado a lado, cada um com a cor dele: dois ou mais dos cenários marcados (Previsão, Orçado,
+            Os cenários dos Cards PROVA e das Tabelas PROVA, lado a lado, cada um com a cor dele: dois ou mais dos cenários marcados (Forecast, Orçado,
             Vendido e Anterior). De início, todos. A comparação acompanha as marcações: se uma marcação passar para outro cenário, os objetos PROVA
             comparam com ele.
           </p>
           {daProva.length < 2 ? (
             <p className="mt-1 text-sm text-gray-600">
               {daProva.length ? "Só um cenário está marcado: os objetos PROVA comparam com ele." : "Nenhum cenário está marcado: os objetos PROVA ficam sem comparação."} Marque os
-              cenários em Criação de Cenários / Cenários Sintéticos.
+              cenários em Análises Gerenciais / Cenários Sintéticos.
             </p>
           ) : null}
         </div>

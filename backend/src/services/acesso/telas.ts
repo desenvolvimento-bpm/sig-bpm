@@ -40,8 +40,9 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
       abas: [
         { codigo: "cenario", nome: "Cenário" },
         { codigo: "referencia", nome: "Referência" },
-        // Os Índices de Reajuste dos analíticos (19/10/2026), que o Comparativo deles usa no lugar da variação digitada.
-        ...(analitico ? [{ codigo: "indices", nome: "Índices" }] : []),
+        // Os Índices de Referência dos analíticos (19/10/2026, a aba Índices; desde 11/11/2026, o quadro do meio da aba
+        // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
+        ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),
         { codigo: "comparativo", nome: "Comparativo" },
         // Os Indicadores Manuais dos sintéticos (19/10/2026; antes, no Painel de Bordo); nos analíticos, nas Premissas.
         ...(analitico ? [] : [{ codigo: "manuais", nome: "Indicadores Manuais" }]),
@@ -63,6 +64,9 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "investimentos", nome: "Investimentos" },
               { codigo: "extra", nome: "Extra-Operacional" },
               { codigo: "manuais", nome: "Indicadores Manuais" },
+              // A aba Reajustes (11/11/2026, pedido do Adão): os Índices de Reajuste e a Aplicação dos Reajustes; os perfis com
+              // a aba Indicadores Manuais a herdaram.
+              { codigo: "reajustes", nome: "Reajustes" },
             ],
           },
         ]
@@ -275,6 +279,8 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "regras_rateio", nome: "Regras de Rateio" },
           // A Alocação nas Linhas (26/10/2026): os custos sem tarefa nas linhas, para a etapa Linhas da apuração.
           { codigo: "alocacao_linhas", nome: "Alocação nas Linhas" },
+          // Os Departamentos (11/11/2026, pedido do Adão): a ordem, a unidade e o departamento.
+          { codigo: "departamentos", nome: "Departamentos" },
         ],
       },
       {

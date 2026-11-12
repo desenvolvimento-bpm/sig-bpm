@@ -57,9 +57,13 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
     !pode(a, "editar") ? `Seu perfil só lê ${oQue}.` : `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}: só quem o criou (ou o Administrador) altera ${oQue}.`;
   const analitico = t.tipo === "ANALITICO";
   // Os Indicadores Manuais, só nos sintéticos (19/10/2026; antes, no Painel de Bordo; nos analíticos, ficam nas Premissas).
-  // Os Índices de Reajuste, só nos analíticos (19/10/2026), antes do Comparativo, que os usa.
-  const abas = (["cenario", "referencia", ...(analitico ? ["indices"] : []), "comparativo", ...(analitico ? [] : ["manuais"])] as AbaDasConfiguracoes[]).filter((a) => pode(a));
-  const aba: AbaDasConfiguracoes | null = abas.includes(escolhida) ? escolhida : (abas[0] ?? null);
+  // Os Índices de Referência dos analíticos (11/11/2026, pedido do Adão; antes, a aba Índices) são o quadro do meio da aba
+  // Comparativo, com a permissão deles: a aba aparece com uma das duas.
+  const lerIndices = analitico && pode("indices");
+  const abas = (["cenario", "referencia", "comparativo", ...(analitico ? [] : ["manuais"])] as AbaDasConfiguracoes[]).filter((a) => pode(a) || (a === "comparativo" && lerIndices));
+  // A aba Índices lembrada (ou num endereço) abre o Comparativo.
+  const pedida = escolhida === "indices" ? "comparativo" : escolhida;
+  const aba: AbaDasConfiguracoes | null = abas.includes(pedida) ? pedida : (abas[0] ?? null);
   // O Tipo e os Rótulos do gráfico do indicador, os do Painel de Bordo.
   const [tipoGrafico] = useTipoGrafico();
   const [comRotulos] = useRotulosDosValores();
@@ -90,7 +94,6 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
         abas={[
           { chave: "cenario", rotulo: "Cenário" },
           { chave: "referencia", rotulo: "Referência" },
-          { chave: "indices", rotulo: "Índices" },
           // O comparativo com outro cenário (13/10/2026; antes, a aba Referência da tela Comparativo).
           { chave: "comparativo", rotulo: "Comparativo" },
           { chave: "manuais", rotulo: "Indicadores Manuais" },
@@ -168,21 +171,24 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
         </section>
       ) : aba === "comparativo" ? (
         <div className="space-y-4">
-          {!edita("comparativo") ? (
+          {/* Os avisos de quem só lê: o comparativo e, nos analíticos, os Índices de Referência (cada um com a sua permissão). */}
+          {pode("comparativo") && !edita("comparativo") ? (
             <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("comparativo", "o comparativo")}</p>
-          ) : travado ? (
-            <AvisoMarcado cenario={cenario} oQue="o comparativo" />
           ) : null}
-          <ComparativoCenario id={cenario.id} podeEditar={edita("comparativo") && !travado} />
-        </div>
-      ) : aba === "indices" ? (
-        <div className="space-y-4">
-          {!edita("indices") ? (
-            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("indices", "os índices")}</p>
-          ) : travado ? (
-            <AvisoMarcado cenario={cenario} oQue="os índices" />
+          {lerIndices && !edita("indices") ? (
+            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("indices", "os Índices de Referência")}</p>
           ) : null}
-          <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
+          {travado && (edita("comparativo") || (lerIndices && edita("indices"))) ? <AvisoMarcado cenario={cenario} oQue={analitico ? "o comparativo e os índices" : "o comparativo"} varios={analitico} /> : null}
+          {pode("comparativo") ? (
+            <ComparativoCenario
+              id={cenario.id}
+              podeEditar={edita("comparativo") && !travado}
+              // Nos analíticos (11/11/2026), os Índices de Referência entre o Cenário Comparado e as Variações Máximas.
+              indices={lerIndices ? <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} /> : null}
+            />
+          ) : (
+            <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
+          )}
         </div>
       ) : aba === "manuais" ? (
         <IndicadoresDoCenario id={cenario.id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />

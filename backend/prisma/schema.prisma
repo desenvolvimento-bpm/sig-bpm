@@ -434,8 +434,31 @@ model UnidadeNegocio {
   lancamentosReceita  LancamentoReceita[]
   volumesOperacionais VolumeOperacional[]
   resultadosApurados  ResultadoApurado[]
+  /// LISTA: os departamentos da unidade (cadastro Departamentos, 11/11/2026).
+  departamentos       Departamento[]
 
   @@map("unidades_negocio")
+}
+
+/// Os Departamentos (11/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria / Departamentos): a ordem, a
+/// unidade de negócio, o nome do departamento e, desde 12/11/2026, os Departamentos da DRE (os grupos, pela sigla). Carga
+/// inicial nas migrações: Produção (Matriz e Filial, CPP), Montagem (CSM) e Complementares (CSC) em Serviços, e Logística
+/// (DL), Técnico (DT), Comercial (DC), Administrativo (DA) e Extra-Operacional (DML, RFC, RFNC, DFC e DFNC) em Despesas e Extra.
+model Departamento {
+  id               String         @id @default(uuid())
+  /// ORDEM: posição na tela.
+  ordem            Int            @default(0)
+  unidadeNegocioId String         @map("unidade_negocio_id")
+  unidadeNegocio   UnidadeNegocio @relation(fields: [unidadeNegocioId], references: [id])
+  nome             String
+  /// LISTA: as siglas dos grupos da DRE do departamento (os Departamentos da DRE: CPP, CSM, DL…), na unidade dele.
+  gruposDRE        String[]       @default([]) @map("grupos_dre")
+  ativo            Boolean        @default(true)
+  criadoEm         DateTime       @default(now()) @map("criado_em")
+  atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
+
+  @@unique([unidadeNegocioId, nome])
+  @@map("departamentos")
 }
 
 model CentroCusto {
@@ -2151,10 +2174,22 @@ model Cenario {
   indicesReajuste  Json? @db.Json @map("indices_reajuste")
   /// O índice de cada conta no Comparativo dos analíticos: { código da linha da DRE: chave do índice }.
   indicesDoComparativo Json? @db.Json @map("indices_do_comparativo")
+  /// Os Índices de Reajuste das Premissas do cenário analítico (11/11/2026; Premissas / Reajustes): [{ chave, descricao,
+  /// observacao, reajustes: [{ valor (%), mes (1 a 12, o Inicia Em) }] }], até 4 reajustes por índice, cada um sobre os anteriores.
+  indicesDosReajustes Json? @db.Json @map("indices_dos_reajustes")
+  /// A Aplicação dos Reajustes: o índice de cada conta da DRE { código da linha: chave do índice }.
+  aplicacaoDosReajustes Json? @db.Json @map("aplicacao_dos_reajustes")
+  /// Os reajustes aplicados na DRE (o Recalcular dos Resultados: Aplicar ou Remover Reajustes). Ligado, todo cálculo da DRE
+  /// multiplica as contas com índice pelos fatores de cada mês (calcularAnalitico).
+  reajustesAplicados Boolean @default(false) @map("reajustes_aplicados")
   /// As movimentações do realizado fora dos padrões das premissas (cenário analítico, 14/10/2026): as da última carga
   /// do resultado realizado, as decisões de realocação (o grupo de centros de custo de cada conta; mantidas entre as
   /// cargas) e o que está somado nos centros por elas. Ver services/cenarios/realocacoesCenario.ts.
   realocacoes      Json? @db.Json @map("realocacoes")
+  /// A referência carregada no cenário analítico (11/11/2026: os meses dela no Exportar Premissas): { tipo: "REALIZADO", ano,
+  /// meses } (as competências do período) ou { tipo: "CENARIO", cenarioId } (o cenário de origem). Nula sem referência (ou
+  /// carregada antes: o Exportar Premissas lê o nomeArquivo).
+  referenciaDetalhe Json? @db.Json @map("referencia_detalhe")
   /// As regras de rateio do último cálculo do cenário analítico (14/10/2026): o id e a data de alteração de cada uma. Se
   /// as regras de hoje são outras (editadas, criadas ou excluídas), a tela Resultados pede o Recalcular.
   rateiosAssinatura String? @map("rateios_assinatura")
@@ -2925,6 +2960,10 @@ model ArquivoGeral {
   enviadoPor     String?               @map("enviado_por")
   enviadoPorNome String?               @map("enviado_por_nome")
   enviadoEm      DateTime              @default(now()) @map("enviado_em")
+  /// O processo do arquivo (11/11/2026, pedido do Adão): o código (um recurso do catálogo das telas, ou a tela das Análises
+  /// Gerenciais que é um processo do menu); nulo, Geral. A lista mostra a cada usuário os Gerais e os dos processos em
+  /// que ele lê ou edita alguma tela.
+  processo       String?
 
   @@index([categoria, enviadoEm])
   @@map("arquivos_gerais")
@@ -2951,10 +2990,12 @@ model ColaboradorSenioridade {
   @@map("colaboradores_senioridades")
 }
 
-/// As funções dos colaboradores permitidas no Quadro de Lotação, com o nível (a senioridade), as competências e as atividades.
+/// As funções dos colaboradores permitidas no Quadro de Lotação, com a senioridade, as competências e as atividades. Desde
+/// 11/11/2026 (pedido do Adão), a função é cadastrada por senioridade: a mesma função (o nome) pode ter várias, cada uma com a
+/// sua descrição, competências e atividades; o par nome + senioridade não se repete (sem senioridade, a função vale para todas).
 model ColaboradorFuncao {
   id            String   @id @default(uuid())
-  nome          String   @unique
+  nome          String
   descricao     String?
   senioridadeId String?  @map("senioridade_id")
   competencias  String?
@@ -2968,6 +3009,7 @@ model ColaboradorFuncao {
   movimentacoes ColaboradorMovimentacao[]
   cenarios      CenarioLotacao[]
 
+  @@unique([nome, senioridadeId])
   @@map("colaboradores_funcoes")
 }
 

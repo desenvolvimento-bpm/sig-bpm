@@ -8,6 +8,7 @@ import { pipeline } from "node:stream/promises";
 import { env } from "../../config/env.js";
 import { getPrismaClient } from "../../config/prisma.js";
 import type { CategoriaArquivoGeral } from "../../generated/prisma/enums.js";
+import { CATALOGO_DE_TELAS } from "../acesso/telas.js";
 import { auditar } from "../auditoriaService.js";
 
 /**
@@ -93,18 +94,60 @@ export function tipoDoArquivo(tipo: string, nome: string) {
   return TIPO_DA_EXTENSAO[extensaoDoArquivo(nome)] ?? "application/octet-stream";
 }
 
+/**
+ * Os processos dos arquivos (11/11/2026, pedido do Adão): os vigentes, os do catálogo das telas dos perfis (os em
+ * desenvolvimento não estão nele), na ordem do menu — as Análises Gerenciais com um processo por tela (Relatórios
+ * Executivos e Painéis e Apresentações) e os Cenários Analíticos antes dos Sintéticos. Cada um com as áreas das telas
+ * dele: o usuário vê o processo quando lê ou edita alguma tela (ou aba) dele.
+ */
+export function processosDosArquivos(): Array<{ codigo: string; nome: string; areas: string[] }> {
+  const r: Array<{ codigo: string; nome: string; areas: string[] }> = [];
+  for (const g of CATALOGO_DE_TELAS) {
+    if (g.recurso === "ANALISES_GERENCIAIS") {
+      for (const t of g.telas) r.push({ codigo: t.codigo.toUpperCase(), nome: t.nome, areas: [t.codigo] });
+      continue;
+    }
+    r.push({ codigo: g.recurso, nome: g.nome, areas: g.telas.map((t) => t.codigo) });
+  }
+  const i = r.findIndex((p) => p.codigo === "CENARIOS_SINTETICOS");
+  const j = r.findIndex((p) => p.codigo === "CENARIOS_ANALITICOS");
+  if (i >= 0 && j > i) [r[i], r[j]] = [r[j], r[i]];
+  return r;
+}
+/** Os códigos dos processos que o usuário vê: alguma permissão (ler ou editar) numa tela ou numa aba deles. */
+export function processosVisiveis(permissoes: string[]) {
+  const areas = new Set(permissoes.map((p) => p.split(":")[0]));
+  const daArea = (a: string) => [...areas].some((x) => x === a || x.startsWith(`${a}.`));
+  return new Set(processosDosArquivos().filter((p) => p.areas.some(daArea)).map((p) => p.codigo));
+}
+/** O processo escolhido: nulo (Geral) ou um código vigente. */
+function processoValido(processo: string | null | undefined) {
+  const p = (processo ?? "").trim();
+  if (!p) return null;
+  if (!processosDosArquivos().some((x) => x.codigo === p)) throw new RegraArquivosError(400, "Escolha o processo do arquivo na lista (ou Geral).");
+  return p;
+}
+const nomeDoProcesso = (codigo: string | null) => (codigo ? (processosDosArquivos().find((p) => p.codigo === codigo)?.nome ?? codigo) : "Geral");
+
 const pasta = () => join(resolve(env.UPLOAD_DIR), "arquivos-gerais");
 const NOME_NO_DISCO = /^[0-9a-f-]{36}\.[a-z0-9]{1,10}$/;
 
 export const arquivosGeraisService = {
-  /** Os arquivos da tela, do mais recente ao mais antigo, com o Visualizar de cada um. */
-  async listar(tela: TelaDosArquivos) {
+  /**
+   * Os arquivos da tela, do mais recente ao mais antigo, com o Visualizar de cada um: os Gerais e os dos processos que o
+   * usuário vê (11/11/2026). Com eles, os processos vigentes, para o Adicionar e o Editar.
+   */
+  async listar(tela: TelaDosArquivos, permissoes: string[]) {
+    const visiveis = processosVisiveis(permissoes);
     const rs = await getPrismaClient().arquivoGeral.findMany({
-      where: { categoria: TELAS_DOS_ARQUIVOS[tela].categoria },
+      where: { categoria: TELAS_DOS_ARQUIVOS[tela].categoria, OR: [{ processo: null }, { processo: { in: [...visiveis] } }] },
       orderBy: { enviadoEm: "desc" },
-      select: { id: true, descricao: true, nomeOriginal: true, tipo: true, tamanho: true, enviadoPorNome: true, enviadoEm: true },
+      select: { id: true, descricao: true, nomeOriginal: true, tipo: true, tamanho: true, enviadoPorNome: true, enviadoEm: true, processo: true },
     });
-    return rs.map((r) => ({ ...r, visualizavel: podeVisualizar(r.tipo) }));
+    return {
+      arquivos: rs.map((r) => ({ ...r, processoNome: nomeDoProcesso(r.processo), visualizavel: podeVisualizar(r.tipo) })),
+      processos: processosDosArquivos().map(({ codigo, nome }) => ({ codigo, nome })),
+    };
   },
 
   /**
@@ -114,10 +157,11 @@ export const arquivosGeraisService = {
   async adicionar(
     tela: TelaDosArquivos,
     corpo: Readable,
-    d: { nome: string; descricao: string; tipo: string; tamanho: number | null },
+    d: { nome: string; descricao: string; tipo: string; tamanho: number | null; processo?: string | null },
     usuario: { id: string; nome: string },
   ) {
     const nome = nomeDoArquivo(d.nome);
+    const processo = processoValido(d.processo);
     const descricao = d.descricao.trim();
     if (!nome) throw new RegraArquivosError(400, "Falta o nome do arquivo.");
     if (!descricao) throw new RegraArquivosError(400, "Escreva a descrição do arquivo.");
@@ -147,8 +191,8 @@ export const arquivosGeraisService = {
     }
     const tipo = tipoDoArquivo(d.tipo, nome);
     const r = await getPrismaClient().arquivoGeral.create({
-      data: { categoria: TELAS_DOS_ARQUIVOS[tela].categoria, descricao, nomeOriginal: nome, tipo, tamanho: recebido, arquivo, enviadoPor: usuario.id, enviadoPorNome: usuario.nome },
-      select: { id: true, descricao: true, nomeOriginal: true, tipo: true, tamanho: true, enviadoPorNome: true, enviadoEm: true },
+      data: { categoria: TELAS_DOS_ARQUIVOS[tela].categoria, descricao, nomeOriginal: nome, tipo, tamanho: recebido, arquivo, enviadoPor: usuario.id, enviadoPorNome: usuario.nome, processo },
+      select: { id: true, descricao: true, nomeOriginal: true, tipo: true, tamanho: true, enviadoPorNome: true, enviadoEm: true, processo: true },
     });
     await auditar({
       usuarioId: usuario.id,
@@ -156,15 +200,42 @@ export const arquivosGeraisService = {
       acao: "CRIACAO",
       entidade: "arquivo_geral",
       entidadeId: r.id,
-      depois: { tela: TELAS_DOS_ARQUIVOS[tela].nome, descricao, nome, tipo, tamanho: recebido },
+      depois: { tela: TELAS_DOS_ARQUIVOS[tela].nome, descricao, nome, tipo, tamanho: recebido, processo: nomeDoProcesso(processo) },
     });
-    return { ...r, visualizavel: podeVisualizar(tipo) };
+    return { ...r, processoNome: nomeDoProcesso(processo), visualizavel: podeVisualizar(tipo) };
+  },
+
+  /** Edita a descrição e o processo de um arquivo (11/11/2026, pedido do Adão), com o registro na Auditoria. */
+  async editar(tela: TelaDosArquivos, id: string, d: { descricao: string; processo: string | null }, usuario: { id: string; nome: string; permissoes: string[] }) {
+    const prisma = getPrismaClient();
+    const r = await prisma.arquivoGeral.findFirst({ where: { id, categoria: TELAS_DOS_ARQUIVOS[tela].categoria } });
+    if (!r || (r.processo && !processosVisiveis(usuario.permissoes).has(r.processo))) throw new RegraArquivosError(404, "Arquivo não encontrado.");
+    const descricao = d.descricao.trim();
+    if (!descricao) throw new RegraArquivosError(400, "Escreva a descrição do arquivo.");
+    if (descricao.length > MAXIMO_DA_DESCRICAO) throw new RegraArquivosError(400, `A descrição passa de ${MAXIMO_DA_DESCRICAO} caracteres.`);
+    const processo = processoValido(d.processo);
+    const novo = await prisma.arquivoGeral.update({
+      where: { id },
+      data: { descricao, processo },
+      select: { id: true, descricao: true, nomeOriginal: true, tipo: true, tamanho: true, enviadoPorNome: true, enviadoEm: true, processo: true },
+    });
+    await auditar({
+      usuarioId: usuario.id,
+      usuarioNome: usuario.nome,
+      acao: "ALTERACAO",
+      entidade: "arquivo_geral",
+      entidadeId: id,
+      antes: { tela: TELAS_DOS_ARQUIVOS[tela].nome, descricao: r.descricao, processo: nomeDoProcesso(r.processo) },
+      depois: { tela: TELAS_DOS_ARQUIVOS[tela].nome, descricao, processo: nomeDoProcesso(processo) },
+    });
+    return { ...novo, processoNome: nomeDoProcesso(processo), visualizavel: podeVisualizar(novo.tipo) };
   },
 
   /** O arquivo para o Visualizar e o Baixar: o caminho no disco, o tamanho, o tipo e o nome. */
-  async ler(tela: TelaDosArquivos, id: string) {
-    const r = await getPrismaClient().arquivoGeral.findFirst({ where: { id, categoria: TELAS_DOS_ARQUIVOS[tela].categoria }, select: { nomeOriginal: true, tipo: true, arquivo: true } });
-    if (!r || !NOME_NO_DISCO.test(r.arquivo)) throw new RegraArquivosError(404, "Arquivo não encontrado.");
+  async ler(tela: TelaDosArquivos, id: string, permissoes: string[]) {
+    const r = await getPrismaClient().arquivoGeral.findFirst({ where: { id, categoria: TELAS_DOS_ARQUIVOS[tela].categoria }, select: { nomeOriginal: true, tipo: true, arquivo: true, processo: true } });
+    // O arquivo de um processo que o usuário não vê (11/11/2026) não abre, como se não existisse.
+    if (!r || !NOME_NO_DISCO.test(r.arquivo) || (r.processo && !processosVisiveis(permissoes).has(r.processo))) throw new RegraArquivosError(404, "Arquivo não encontrado.");
     const caminho = join(pasta(), r.arquivo);
     const info = await stat(caminho).catch(() => null);
     if (!info) throw new RegraArquivosError(404, "O arquivo não está mais no servidor.");
@@ -172,10 +243,10 @@ export const arquivosGeraisService = {
   },
 
   /** Exclui o arquivo: o registro e o conteúdo no disco, com o registro na Auditoria. */
-  async excluir(tela: TelaDosArquivos, id: string, usuario: { id: string; nome: string }) {
+  async excluir(tela: TelaDosArquivos, id: string, usuario: { id: string; nome: string; permissoes?: string[] }) {
     const prisma = getPrismaClient();
     const r = await prisma.arquivoGeral.findFirst({ where: { id, categoria: TELAS_DOS_ARQUIVOS[tela].categoria } });
-    if (!r) throw new RegraArquivosError(404, "Arquivo não encontrado.");
+    if (!r || (r.processo && usuario.permissoes && !processosVisiveis(usuario.permissoes).has(r.processo))) throw new RegraArquivosError(404, "Arquivo não encontrado.");
     await prisma.arquivoGeral.delete({ where: { id } });
     if (NOME_NO_DISCO.test(r.arquivo)) await rm(join(pasta(), r.arquivo), { force: true });
     await auditar({

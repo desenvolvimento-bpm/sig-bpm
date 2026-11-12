@@ -121,7 +121,7 @@ export function RealizadoContent() {
             <li>Use os filtros nos rótulos das colunas; a linha Total soma as linhas filtradas.</li>
             <li>Turnover = (Entradas + Saídas) ÷ 2 ÷ Quadro de Lotação do fim do mês; Contratações = as entradas aprovadas.</li>
             <li>
-              “Comparação”, ao lado do título, escolhe o cenário marcado (Previsão, Orçamento, Anterior ou Vendido, em Criação de Cenários) ou Sem Comparação;
+              “Comparação”, ao lado do título, escolhe o cenário marcado (Forecast, Orçamento, Anterior ou Vendido, nos Cenários Sintéticos e Analíticos) ou Sem Comparação;
               a escolha fica guardada neste navegador e vale também no Painel de Bordo. Nos cards, o realizado, o cenário e a diferença do mês e do acumulado no
               ano (os meses do ano com competência até este: o Quadro de Lotação do último; o Turnover e as Contratações somados, nos dois). Na tabela, as
               colunas Cenário (os colaboradores do centro no mês, na aba Quadro de Lotação do cenário) e Diferença (Fim do Mês − Cenário) aparecem quando o

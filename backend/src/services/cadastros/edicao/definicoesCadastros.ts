@@ -1530,6 +1530,103 @@ const tipos: DefinicaoCadastro = {
   remover: async (db, id) => void (await db.tipoMovimento.delete({ where: { id } })),
 };
 
+// ---------------------------------------------------------------- departamentos
+/**
+ * Os grupos da DRE que um departamento pode ter (os Departamentos da DRE, 12/11/2026): os grupos com sigla e linhas de
+ * item ativas (os do Departamento das Contas de Resultado, sem os volumes de Produção e Serviços, P e S), com as unidades em
+ * que as linhas aparecem.
+ */
+const GRUPOS_DE_VOLUME = new Set(["P", "S"]);
+async function gruposDaDRE(db: Db) {
+  const ls = await db.linhaDRE.findMany({
+    where: { tipo: "ITEM", ativo: true },
+    orderBy: { ordem: "asc" },
+    select: { grupo: true, grupoSigla: true, unidades: { select: { unidadeNegocio: { select: { id: true } } } } },
+  });
+  const grupos = new Map<string, { sigla: string; nome: string; unidades: Set<string> }>();
+  for (const l of ls) {
+    if (!l.grupoSigla || !/\(/.test(l.grupo) || GRUPOS_DE_VOLUME.has(l.grupoSigla)) continue;
+    const g = grupos.get(l.grupoSigla) ?? { sigla: l.grupoSigla, nome: l.grupo, unidades: new Set<string>() };
+    for (const u of l.unidades) g.unidades.add(u.unidadeNegocio.id);
+    grupos.set(l.grupoSigla, g);
+  }
+  return grupos;
+}
+
+/**
+ * Os Departamentos (11/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria): a ordem, a unidade de negócio
+ * (a lista do cadastro Unidades), o nome do departamento, único na unidade, e os Departamentos da DRE (12/11/2026: os grupos
+ * da DRE do departamento, pela sigla; só os que têm linhas na unidade, e cada grupo num departamento só da unidade). Inativo,
+ * o departamento sai das listas.
+ */
+const departamentosDoCadastro: DefinicaoCadastro = {
+  entidade: "departamentos",
+  titulo: "Departamento",
+  auditoria: "departamento",
+  criar: true,
+  excluir: true,
+  campos: [
+    { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
+    {
+      nome: "unidadeNegocioId",
+      rotulo: "Unidade",
+      tipo: "opcao",
+      obrigatorio: true,
+      opcoes: async (db) => (await db.unidadeNegocio.findMany({ orderBy: { codigo: "asc" } })).map((u) => ({ valor: u.id, rotulo: u.nome })),
+      ajuda: "A unidade de negócio (cadastro Unidades).",
+    },
+    { nome: "nome", rotulo: "Departamento", tipo: "texto", obrigatorio: true },
+    {
+      nome: "gruposDRE",
+      rotulo: "Departamentos da DRE",
+      tipo: "multipla",
+      naTabela: true,
+      opcoes: async (db) => [...(await gruposDaDRE(db)).values()].map((g) => ({ valor: g.sigla, rotulo: g.nome })),
+      ajuda: "Os grupos da DRE do departamento, entre os que têm linhas na unidade dele; cada grupo fica num departamento só da unidade.",
+    },
+    { nome: "ativo", rotulo: "Ativo", tipo: "booleano" },
+  ],
+  async listar(db, busca) {
+    const ds = await db.departamento.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }], include: { unidadeNegocio: { select: { nome: true } } } });
+    return ds.filter((d) => contem(busca, d.nome, d.unidadeNegocio.nome, ...d.gruposDRE)).map(({ unidadeNegocio: _u, ...d }) => d);
+  },
+  ler: (db, id) => db.departamento.findUnique({ where: { id } }),
+  async preparar(db, v, id) {
+    const nome = exigir(v.nome, "O departamento");
+    const unidadeNegocioId = exigir(v.unidadeNegocioId, "A unidade");
+    const unidade = await db.unidadeNegocio.findUnique({ where: { id: unidadeNegocioId }, select: { nome: true } });
+    if (!unidade) throw new RegraCadastroError(400, "Unidade inválida.");
+    const outro = await db.departamento.findUnique({ where: { unidadeNegocioId_nome: { unidadeNegocioId, nome } }, select: { id: true } });
+    if (outro && outro.id !== id) throw new RegraCadastroError(409, `Já existe o departamento ${nome} na unidade ${unidade.nome}.`);
+    // Os Departamentos da DRE (12/11/2026): grupos que existem, com linhas na unidade, e fora dos outros departamentos ativos dela.
+    const gruposDRE = [...new Set(Array.isArray(v.gruposDRE) ? v.gruposDRE.map(String) : [])];
+    const grupos = await gruposDaDRE(db);
+    for (const s of gruposDRE) {
+      const g = grupos.get(s);
+      if (!g) throw new RegraCadastroError(400, `O grupo ${s} não está na Estrutura da DRE.`);
+      if (!g.unidades.has(unidadeNegocioId)) throw new RegraCadastroError(400, `O grupo ${g.nome} não tem linhas na unidade ${unidade.nome}.`);
+    }
+    const ativo = v.ativo === undefined ? true : booleano(v.ativo);
+    if (ativo && gruposDRE.length) {
+      const outros = await db.departamento.findMany({ where: { unidadeNegocioId, ativo: true, ...(id ? { id: { not: id } } : {}) }, select: { nome: true, gruposDRE: true } });
+      for (const o of outros) {
+        const repetido = gruposDRE.find((s) => o.gruposDRE.includes(s));
+        if (repetido) throw new RegraCadastroError(409, `O grupo ${grupos.get(repetido)!.nome} já é do departamento ${o.nome} da unidade ${unidade.nome}.`);
+      }
+    }
+    // Na ordem da DRE.
+    const ordemDaDRE = [...grupos.keys()];
+    gruposDRE.sort((a, b) => ordemDaDRE.indexOf(a) - ordemDaDRE.indexOf(b));
+    return { ordem: inteiro(v.ordem, "A ordem") ?? undefined, unidadeNegocioId, nome, gruposDRE, ativo };
+  },
+  async gravar(db, d, id) {
+    const dados = d as Prisma.DepartamentoUncheckedCreateInput;
+    if (id) return (await db.departamento.update({ where: { id }, data: dados })).id;
+    return (await db.departamento.create({ data: { ...dados, ordem: dados.ordem ?? (await db.departamento.count()) + 1 } })).id;
+  },
+  remover: async (db, id) => void (await db.departamento.delete({ where: { id } })),
+};
+
 // ---------------------------------------------------------- tabela de estacas
 const estacas: DefinicaoCadastro = {
   entidade: "tabela-estacas",
@@ -1568,7 +1665,7 @@ const estacas: DefinicaoCadastro = {
 
 export const DEFINICOES: Record<string, DefinicaoCadastro> = Object.fromEntries(
   // Os cadastros da Gestão de Colaboradores (06/11/2026), no arquivo deles.
-  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
+  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, departamentosDoCadastro, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
     d.entidade,
     d,
   ]),

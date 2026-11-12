@@ -43,6 +43,7 @@ export function TransicoesDoSlide({
   onMudar,
   className,
   disabled,
+  recomecar,
 }: {
   ajuste: AjusteDoSlide;
   nomeDoSlide: string;
@@ -52,6 +53,11 @@ export function TransicoesDoSlide({
   /** A classe do ícone (a dos botões ao lado das páginas). */
   className: string;
   disabled?: boolean;
+  /**
+   * "Recomeçar ao Terminar" (11/11/2026, pedido do Adão; só nos painéis): a apresentação volta ao primeiro slide depois do
+   * Avançar Após do último. Vale para o painel inteiro.
+   */
+  recomecar?: { marcado: boolean; onMudar: (marcado: boolean) => void };
 }) {
   const { grupo } = useProcesso();
   const [aberto, setAberto] = useState(false);
@@ -154,6 +160,12 @@ export function TransicoesDoSlide({
               <span className="text-gray-500">segundos</span>
             </label>
             {grupoDe(avancoAoGrupo, () => onMudar({ campo: "avancarApos", valor: ajuste.avancarApos }, true), setAvancoAoGrupo)}
+            {recomecar ? (
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-gray-800" title="Depois do Avançar Após da última página, a apresentação volta à primeira">
+                <input type="checkbox" checked={recomecar.marcado} onChange={(e) => recomecar.onMudar(e.target.checked)} className="size-4 accent-black" />
+                Recomeçar ao Terminar
+              </label>
+            ) : null}
           </section>
         </DialogContent>
       </Dialog>

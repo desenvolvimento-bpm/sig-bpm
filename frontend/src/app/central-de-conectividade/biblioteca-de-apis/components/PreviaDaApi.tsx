@@ -18,7 +18,7 @@ import { conectividadeService, copiarTexto, enderecoDaApi, type ApiDoCatalogo, t
 const OPCOES: Record<string, Array<[string, string]>> = {
   visao: [["0", "Consolidado"], ["1", "Matriz"], ["2", "Filial"], ["3", "Serviços"], ["4", "Despesas e Extra"], ["5", "RN"]],
   nivel: [["1", "Totais"], ["2", "Atribuições"], ["3", "Contas"]],
-  comparacao: [["", "Orçamento (o padrão)"], ["RESULTADOS_ANTERIORES", "Anterior"], ["RESULTADOS_VENDIDOS", "Vendido"], ["PREVISAO", "Previsão"]],
+  comparacao: [["", "Orçamento (o padrão)"], ["RESULTADOS_ANTERIORES", "Anterior"], ["RESULTADOS_VENDIDOS", "Vendido"], ["PREVISAO", "Forecast"]],
   aba: [["", "As que o perfil lê"], ["resultados", "Resultados"], ["performance", "Performance"]],
   grafico: [["sim", "Com o gráfico"], ["nao", "Sem o gráfico"]],
 };
@@ -46,7 +46,7 @@ export function PreviaDaApi({ api: a, onFechar }: { api: ApiDoCatalogo; onFechar
     enabled: precisaCenario,
   });
   const listaDeCenarios = cenarios.data?.data.formato === "dados" ? cenarios.data.data.linhas : [];
-  // Sem o cenário escolhido, o marcado (o Orçamento, a Previsão…) ou o primeiro da lista: a prévia já abre pronta para Ver.
+  // Sem o cenário escolhido, o marcado (o Orçamento, o Forecast…) ou o primeiro da lista: a prévia já abre pronta para Ver.
   const sugerido = listaDeCenarios.find((c) => c.marcacao) ?? listaDeCenarios[0];
   const efetivos = precisaCenario && !valores.cenario && sugerido ? { ...valores, cenario: String(sugerido.id) } : valores;
   const faltando = a.parametros.filter((p) => p.obrigatorio && p.nome !== "formato" && !(efetivos[p.nome] ?? "").trim()).map((p) => p.nome);

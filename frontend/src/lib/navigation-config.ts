@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   BadgeDollarSign,
+  Boxes,
   Building2,
   Cable,
   Calculator,
@@ -108,25 +109,15 @@ export const navGrupos: NavGrupo[] = [
       },
       // Demonstrativos Financeiros (27/10/2026), em desenvolvimento.
       { title: "Demonstrativos Financeiros", href: "/analises-gerenciais/demonstrativos-financeiros", icon: FileSpreadsheet, emDesenvolvimento: true },
-    ],
-  },
-  {
-    titulo: "Gestão do Patrimônio",
-    itens: [
-      { title: "Auditoria de Investimentos", href: "/gestao-do-patrimonio/auditoria-de-investimentos", icon: ShieldCheck, emDesenvolvimento: true },
-      // Inventários e Cíclicas (15/10/2026; antes, Inventário de Prod. Acabados).
-      { title: "Inventários e Cíclicas", href: "/gestao-do-patrimonio/inventarios-e-ciclicas", icon: PackageCheck, emDesenvolvimento: true },
-      { title: "Ociosidade do Maquinário", href: "/gestao-do-patrimonio/ociosidade-do-maquinario", icon: Factory, emDesenvolvimento: true },
-    ],
-  },
-  {
-    // Criação de Cenários (11/10/2026); os Resultados Vendidos no alto e os analíticos acima dos sintéticos (14/10/2026).
-    titulo: "Criação de Cenários",
-    itens: [
-      { title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true },
+      // Os Cenários Analíticos e Sintéticos (11/11/2026, pedido do Adão; antes, na Criação de Cenários), os analíticos acima.
       { title: "Cenários Analíticos", href: "/cenarios/analiticos", icon: Workflow, permission: "cenarios_analiticos_lista:ler", recurso: "CENARIOS_ANALITICOS" },
       { title: "Cenários Sintéticos", href: "/cenarios/sinteticos", icon: Layers, permission: "cenarios_lista:ler", recurso: "CENARIOS_SINTETICOS" },
     ],
+  },
+  {
+    // Criação de Cenários (11/10/2026): desde 11/11/2026, só os Resultados Vendidos (os Cenários foram para as Análises Gerenciais).
+    titulo: "Criação de Cenários",
+    itens: [{ title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true }],
   },
   {
     titulo: "Apuração dos Resultados",
@@ -197,10 +188,11 @@ export const navGrupos: NavGrupo[] = [
     ],
   },
   {
-    // Os Processos Administrativos (06/11/2026, pedido do Adão), entre a Apuração e a Controladoria: a Gestão de
-    // Colaboradores (a tela Cadastros, com uma aba por cadastro) e, em desenvolvimento, o Fluxo de Caixa, a Gestão de
-    // Credores e a Gestão da Segurança.
-    titulo: "Processos Administrativos",
+    // Os Processos Auxiliares (11/11/2026, pedido do Adão; antes, Processos Administrativos, de 06/11/2026), entre a Apuração e
+    // a Controladoria: a Gestão de Colaboradores (a tela Cadastros, com uma aba por cadastro) e, em desenvolvimento, o Fluxo de
+    // Caixa, a Gestão de Credores, a Gestão da Segurança e os três da Gestão do Patrimônio (o grupo saiu em 11/11/2026):
+    // Auditoria de Investimentos, Inventários e Cíclicas e Ociosidade do Maquinário.
+    titulo: "Processos Auxiliares",
     itens: [
       { title: "Fluxo de Caixa", href: "/processos-administrativos/fluxo-de-caixa", icon: Wallet, emDesenvolvimento: true },
       { title: "Gestão de Credores", href: "/processos-administrativos/gestao-de-credores", icon: ReceiptText, emDesenvolvimento: true },
@@ -244,6 +236,11 @@ export const navGrupos: NavGrupo[] = [
         ],
       },
       { title: "Gestão da Segurança", href: "/processos-administrativos/gestao-da-seguranca", icon: ShieldPlus, emDesenvolvimento: true },
+      // Os três da Gestão do Patrimônio (11/11/2026, pedido do Adão; o grupo saiu do menu).
+      { title: "Auditoria de Investimentos", href: "/gestao-do-patrimonio/auditoria-de-investimentos", icon: ShieldCheck, emDesenvolvimento: true },
+      // Inventários e Cíclicas (15/10/2026; antes, Inventário de Prod. Acabados).
+      { title: "Inventários e Cíclicas", href: "/gestao-do-patrimonio/inventarios-e-ciclicas", icon: PackageCheck, emDesenvolvimento: true },
+      { title: "Ociosidade do Maquinário", href: "/gestao-do-patrimonio/ociosidade-do-maquinario", icon: Factory, emDesenvolvimento: true },
     ],
   },
   {
@@ -287,6 +284,8 @@ export const navGrupos: NavGrupo[] = [
               { title: "Regras de Rateio", href: "/cadastros/regras-rateio", icon: Percent, permission: "cadastro_controladoria.regras_rateio:ler" },
               // Os custos sem tarefa nas linhas, para a etapa Linhas da apuração (26/10/2026).
               { title: "Alocação nas Linhas", href: "/cadastros/alocacao-linhas", icon: Split, permission: "cadastro_controladoria.alocacao_linhas:ler" },
+              // Os Departamentos (11/11/2026, pedido do Adão).
+              { title: "Departamentos", href: "/cadastros/departamentos", icon: Boxes, permission: "cadastro_controladoria.departamentos:ler" },
             ],
           },
           {
@@ -394,6 +393,7 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/cadastros\/painel-bordo(\/|$)/, "cadastro_analitico.painel_bordo:ler"],
   [/^\/cadastros\/regras-rateio(\/|$)/, "cadastro_controladoria.regras_rateio:ler"],
   [/^\/cadastros\/alocacao-linhas(\/|$)/, "cadastro_controladoria.alocacao_linhas:ler"],
+  [/^\/cadastros\/departamentos(\/|$)/, "cadastro_controladoria.departamentos:ler"],
   [/^\/cadastros\/estrutura-dre(\/|$)/, "cadastro_controladoria.estrutura_dre:ler"],
   [/^\/cadastros(\/|$)/, "cadastros_controladoria:ler"],
   [/^\/usuarios(\/|$)/, "usuarios:ler"],
@@ -497,6 +497,7 @@ export const pageTitles: Record<string, string> = {
   "/cadastros/estrutura-indicadores": "Indicadores",
   "/cadastros/regras-rateio": "Regras de Rateio",
   "/cadastros/alocacao-linhas": "Alocação nas Linhas",
+  "/cadastros/departamentos": "Departamentos",
   "/cadastros/tipos-movimento": "Tipos de Movimento",
   "/cadastros/tabela-estacas": "Tabela de Estacas",
   "/usuarios": "Usuários",

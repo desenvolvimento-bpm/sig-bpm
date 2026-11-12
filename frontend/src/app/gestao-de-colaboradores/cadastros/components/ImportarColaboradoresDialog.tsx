@@ -29,12 +29,12 @@ const TEXTOS: Record<TipoImportacaoColaboradores, { titulo: string; descricao: s
   funcoes: {
     titulo: "Importar Funções",
     descricao:
-      "Escolha a planilha (.xlsx) com as colunas Função, Descrição, Nível, Competências e Atividades. A função já cadastrada (o mesmo nome) é atualizada; as que não estão na planilha ficam como estão. O Nível precisa estar cadastrado na aba Senioridades. Nada é importado antes de você confirmar, e uma linha inválida cancela a importação.",
+      "Escolha a planilha (.xlsx) com as colunas Função, Descrição, Senioridade, Competências e Atividades. Cada linha é uma função numa senioridade (a mesma função pode vir em várias linhas, uma por senioridade). A importação substitui o cadastro inteiro: as funções que não estão na planilha são excluídas, e as da planilha são cadastradas de novo (a já cadastrada com o mesmo nome e a mesma senioridade fica com os dados da planilha e com os vínculos dela). A Senioridade precisa estar cadastrada na aba Senioridades. Na planilha com várias abas, vale a que tem mais dessas colunas. Nada é importado antes de você confirmar, e uma linha inválida cancela a importação.",
   },
   "lancamento-inicial": {
     titulo: "Importar Lançamento Inicial",
     descricao:
-      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT ou PJ), Senioridade, Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. A importação substitui o Lançamento Inicial inteiro. Nada é importado antes de você confirmar, e uma linha inválida (uma senioridade, uma função ou um centro de custo não cadastrado) cancela a importação.",
+      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT ou PJ), Senioridade, Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. Nada é importado antes de você confirmar, e uma linha inválida (uma senioridade, uma função ou um centro de custo não cadastrado) cancela a importação.",
   },
 };
 
@@ -57,9 +57,10 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
   const importar = useMutation({
     mutationFn: () => colaboradoresService.importar(tipo, arquivo!, { competencia, gravar: true }),
     onSuccess: (r) => {
+      const excluidas = r.excluidas?.total ?? 0;
       toast.success(
         tipo === "funcoes"
-          ? `Funções importadas: ${r.resumo.NOVA} ${plural(r.resumo.NOVA, "nova", "novas")} e ${r.resumo.ALTERADA} ${plural(r.resumo.ALTERADA, "alterada", "alteradas")}.`
+          ? `Funções importadas: ${r.resumo.NOVA} ${plural(r.resumo.NOVA, "nova", "novas")}, ${r.resumo.ALTERADA} ${plural(r.resumo.ALTERADA, "alterada", "alteradas")} e ${excluidas} ${plural(excluidas, "excluída", "excluídas")}.${r.apagaLancamentoInicial ? " O Lançamento Inicial foi apagado: importe-o de novo." : ""}`
           : `Lançamento Inicial de ${r.competencia} importado: ${r.resumo.NOVA} ${plural(r.resumo.NOVA, "colaborador", "colaboradores")}.`,
       );
       void queryClient.invalidateQueries({ queryKey: ["edicao"] });
@@ -81,7 +82,9 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
   };
 
   const r = previa?.resumo;
-  const aGravar = r ? r.NOVA + r.ALTERADA : 0;
+  // Nas funções, também as que saem do cadastro (11/11/2026: a importação substitui o cadastro inteiro).
+  const excluidas = previa?.excluidas?.total ?? 0;
+  const aGravar = r ? r.NOVA + r.ALTERADA + excluidas : 0;
   const anos = [hoje.getFullYear() - 2, hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1];
 
   return (
@@ -141,8 +144,23 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
               {tipo === "funcoes"
                 ? `${previa.linhas.length} ${plural(previa.linhas.length, "linha", "linhas")}: ${r.NOVA} ${plural(r.NOVA, "nova", "novas")}, ${r.ALTERADA} ${plural(r.ALTERADA, "alterada", "alteradas")}, ${r.IGUAL} ${plural(r.IGUAL, "igual", "iguais")} e ${r.INVALIDA} ${plural(r.INVALIDA, "inválida", "inválidas")}.`
                 : `${previa.linhas.length} ${plural(previa.linhas.length, "colaborador", "colaboradores")} no quadro do início de ${previa.competencia}${r.INVALIDA ? `, ${r.INVALIDA} ${plural(r.INVALIDA, "linha inválida", "linhas inválidas")}` : ""}.`}
-              {previa.substitui ? ` A importação substitui os ${previa.substitui.colaboradores} do Lançamento Inicial de ${previa.substitui.competencia}.` : ""}
+              {previa.substitui ? ` A importação apaga os ${previa.substitui.colaboradores} do Lançamento Inicial de ${previa.substitui.competencia}.` : ""}
+              {tipo === "funcoes" ? (excluidas ? ` ${excluidas} ${plural(excluidas, "função que não está", "funções que não estão")} na planilha ${excluidas === 1 ? "será excluída" : "serão excluídas"}.` : " Nenhuma função sai do cadastro.") : ""}
             </p>
+            {excluidas ? (
+              <p className="max-h-20 overflow-y-auto text-xs text-gray-600">
+                <span className="font-medium text-gray-900">Saem do cadastro:</span> {previa.excluidas!.nomes.join("; ")}
+                {excluidas > previa.excluidas!.nomes.length ? ` e mais ${excluidas - previa.excluidas!.nomes.length}` : ""}.
+              </p>
+            ) : null}
+            {previa.apagaLancamentoInicial && !previa.bloqueio ? (
+              <p className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                O Lançamento Inicial de {previa.apagaLancamentoInicial.competencia} ({previa.apagaLancamentoInicial.colaboradores}{" "}
+                {plural(previa.apagaLancamentoInicial.colaboradores, "colaborador", "colaboradores")}) usa {previa.apagaLancamentoInicial.funcoes} das funções excluídas e também será apagado: importe-o de novo em seguida
+                (aba Lançamento Inicial), com as funções da planilha.
+              </p>
+            ) : null}
+            {previa.bloqueio ? <p className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">A importação será cancelada: {previa.bloqueio}</p> : null}
             {r.INVALIDA ? (
               <p className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 A importação será cancelada: corrija {r.INVALIDA === 1 ? "a linha inválida" : `as ${r.INVALIDA} linhas inválidas`} na planilha (ou cadastre o que falta) e escolha o
@@ -185,7 +203,7 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
               <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar} disabled={importar.isPending}>
                 Cancelar
               </Button>
-              <Button type="button" className={botaoPrimario} disabled={!!r.INVALIDA || aGravar === 0 || importar.isPending} onClick={() => importar.mutate()}>
+              <Button type="button" className={botaoPrimario} disabled={!!r.INVALIDA || !!previa.bloqueio || aGravar === 0 || importar.isPending} onClick={() => importar.mutate()}>
                 {importar.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
                 {importar.isPending ? "Importando…" : `Importar${aGravar ? ` (${aGravar})` : ""}`}
               </Button>

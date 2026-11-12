@@ -418,8 +418,11 @@ function Editor({
   };
   const mudarAjuste = (m: MudancaDoSlide, aoGrupo: boolean) =>
     mudarPaginas(daAba.map((p) => (aoGrupo || p.id === pagina?.id ? { ...p, [m.campo]: m.valor } : p)));
+  // Recomeçar ao Terminar (11/11/2026, só nos painéis): o painel inteiro (marcado em todas as páginas).
+  const recomecarAoTerminar = daAba.length > 0 && daAba.every((p) => p.recomecarAoTerminar);
+  const mudarRecomecar = (marcado: boolean) => mudarPaginas(daAba.map((p) => ({ ...p, recomecarAoTerminar: marcado || undefined })));
   const novaPagina = () => {
-    const nova: Pagina = { id: novoId(), blocos: [], ...ajusteDaPagina };
+    const nova: Pagina = { id: novoId(), blocos: [], ...ajusteDaPagina, ...(recomecarAoTerminar ? { recomecarAoTerminar: true } : {}) };
     mudarPaginas([...daAba.slice(0, nPagina + 1), nova, ...daAba.slice(nPagina + 1)]);
     setAberta({ chave, pagina: nova.id });
   };
@@ -441,7 +444,7 @@ function Editor({
   // Introdução: os slides da Capa e do Encerramento (20/10/2026) não contam.
   const comConteudo = relatorio.abas.flatMap((a) => {
     const ps = a.visivel ? (paginas[a.chave] ?? []) : [];
-    return ps.flatMap((p, k) => (p.blocos.length || p.fundo ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos }] : []));
+    return ps.flatMap((p, k) => (p.blocos.length || p.fundo ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos, recomecarAoTerminar: p.recomecarAoTerminar }] : []));
   });
   const contados = comConteudo.filter((x) => !ABAS_SEM_NUMERO.has(x.aba)).length;
   let contagem = 0;
@@ -952,6 +955,7 @@ function Editor({
                     nomeDoSlide={nomeDaPagina(pagina, nPagina)}
                     uniformes={uniformes}
                     onMudar={mudarAjuste}
+                    recomecar={processo.rota === "paineis-de-bordo" ? { marcado: recomecarAoTerminar, onMudar: mudarRecomecar } : undefined}
                   />
                 ) : null}
                 <span className="mx-1 h-5 w-px bg-gray-200" />
@@ -1213,7 +1217,7 @@ function ComoUsarDoRelatorio() {
         cenários com marcação, de qualquer exercício, com o ano, o tipo (Sintético ou Analítico) e a marcação em etiquetas — para o relatório ficar com
         ele enquanto ele tiver a marcação (se a marcação passar para outro cenário, o relatório volta ao marcado como Orçamento; num cenário de outro
         exercício, valem os mesmos meses dele). A Comparação PROVA são os cenários dos
-        Cards PROVA e das Tabelas PROVA: marque dois ou mais dos cenários marcados (Previsão, Orçado, Vendido e Anterior, cada um com o quadradinho da cor
+        Cards PROVA e das Tabelas PROVA: marque dois ou mais dos cenários marcados (Forecast, Orçado, Vendido e Anterior, cada um com o quadradinho da cor
         dele; de início, todos); com dois marcados, eles não se desmarcam antes de se marcar outro. Ela acompanha as marcações: se uma marcação passar para
         outro cenário, os objetos PROVA comparam com ele. Quem edita a tela escolhe, e as escolhas se salvam na hora (“Salvo às…”, embaixo das listas); os
         demais só veem. Embaixo, “Excluir Relatório” (de quem o criou ou do Administrador, enquanto nenhum grupo está finalizado) exclui o relatório, com
@@ -1270,9 +1274,9 @@ export function ItensDoComoUsar() {
         lista; ela vale para todos os objetos PROVA do {d}. No
         card PROVA, embaixo do valor do mês e do acumulado, cada cenário vem numa linha: “vs.” e o cenário, com o quadradinho da cor dele, o orçado, a
         variação e a faixa de melhor ou pior à direita (a dica traz o nome do cenário). O gráfico traz uma série por cenário: nas barras, uma coluna para
-        cada um; na área, o realizado em área e os cenários em linhas. As cores: a Previsão em cinza forte (cinza fraco no tema Escuro), o Orçado em
+        cada um; na área, o realizado em área e os cenários em linhas. As cores: o Forecast em cinza forte (cinza fraco no tema Escuro), o Orçado em
         preto (claro no Escuro), o Vendido em ouro forte e o Anterior em ouro fraco; o realizado continua no amarelo-ouro. Num slide com cards ou
-        tabelas PROVA, os cards e as tabelas padrão ficam na cor do cenário de comparação do {d} (comparado com a Previsão, em cinza forte, como
+        tabelas PROVA, os cards e as tabelas padrão ficam na cor do cenário de comparação do {d} (comparado com o Forecast, em cinza forte, como
         no PROVA).
       </li>
       <li>
@@ -1365,6 +1369,9 @@ export function ItensDoComoUsar() {
         sozinho ao próximo depois desse tempo (em branco ou zero, só pelas setas). A Animação e o Cronômetro têm cada um o seu “Aplicar ao {p.grupo}”:
         marcado, a mudança vale para todos os slides do {p.grupo.toLowerCase()} (marcar a caixa já leva a transição, ou o avanço, do slide aberto a todos; ela abre
         marcada quando todos já são iguais); desmarcado, só para o slide aberto. A página nova entra com a transição e o avanço da aberta.
+        {p.rota === "paineis-de-bordo"
+          ? " No Cronômetro do painel, “Recomeçar ao Terminar” (vale para o painel inteiro) faz a apresentação voltar à primeira página depois do Avançar Após da última: o painel fica passando em ciclo."
+          : ""}
       </li>
       <li>
         Como no Canva: clique num bloco para escolhê-lo (o contorno tracejado, com o mouse sobre um bloco, mostra qual o clique escolhe). O escolhido fica destacado
@@ -1389,7 +1396,9 @@ export function ItensDoComoUsar() {
         nos mesmos lugares; as que não valem para o bloco escolhido ficam quase apagadas (o nome do bloco aparece na dica da borda dele). Da esquerda para a
         direita: Desfazer e Refazer (Ctrl+Z e Ctrl+Y, ou Ctrl+Shift+Z: as alterações desta sessão, {g ? "em todas as abas" : "em todas as páginas"}, até 100 passos; a digitação seguida
         conta como um passo, e o Desfazer abre {g ? "a aba e a página" : "a página"} da alteração; dentro de um texto em edição, o Ctrl+Z desfaz a digitação, como no
-        navegador), Copiar e Colar (o bloco; veja acima), o gráfico dos cards do Painel e dos Indicadores (em
+        navegador), Copiar e Colar (o bloco; veja acima), os dados dos cards do Painel e dos Indicadores, padrão e PROVA (em ciclo: o Atual e o
+        Acumulado → apenas o Atual, com o calendário no ícone → apenas o Acumulado, com o Σ; com um só, ele fica antes do gráfico, o nome em cima da
+        Metodologia, e o card muda de largura na proporção), o gráfico dos cards do Painel e dos Indicadores (em
         ciclo: os meses e o acumulado → só o acumulado, com o “A” no ícone → sem gráfico; o card muda de largura na proporção), o Zoom do card (100%,
         125%, 150%, 200%, 250% ou 300%: o conteúdo inteiro — os textos, os valores e o gráfico — maior, no mesmo bloco; o que não couber, aumente o
         bloco), Configurar (as opções do

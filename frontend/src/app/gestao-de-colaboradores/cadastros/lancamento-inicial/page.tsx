@@ -27,11 +27,11 @@ export default function LancamentoInicialPage() {
               </li>
               <li>
                 A prévia confere cada linha com os cadastros: uma unidade, senioridade, função ou centro de custo não cadastrado (ou inativo) torna a linha
-                inválida e cancela a importação. A importação substitui o Lançamento Inicial inteiro.
+                inválida e cancela a importação. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. A importação das Funções que exclui uma função usada aqui também apaga o Lançamento Inicial: importe-o de novo em seguida.
               </li>
               <li>Use Novo para incluir um colaborador no Lançamento Inicial já importado (na mesma competência).</li>
               <li>No menu Ações de cada linha, Editar muda o colaborador e Excluir o tira do Lançamento Inicial, depois da confirmação.</li>
-              <li>Acima da tabela ficam a competência do quadro e o total de colaboradores, CLT e PJ. Use os filtros nos rótulos das colunas.</li>
+              <li>No destaque acima da tabela ficam a competência do quadro e o total de colaboradores, CLT e PJ. Use os filtros nos rótulos das colunas.</li>
             </ul>
           }
         />

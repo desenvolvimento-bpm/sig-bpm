@@ -12,19 +12,20 @@ import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
+import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "../../../components/AvisoMarcado";
 import { AvisoRateiosSemBase, CentrosDoCenario, RateiosDoCenario } from "../../../components/CentrosDoCenario";
 import { Erro } from "../../../components/CenarioDialog";
 import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/InvestimentosDoCenario";
 import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
 import { BotaoApagarValores, BotaoImportarValores, BotaoReplicarMedias, ExportarPremissas } from "../../../components/PlanilhaPremissas";
 import { QuadroDoCenario } from "../../../components/QuadroDoCenario";
+import { ReajustesDoCenario } from "../../../components/ReajustesDoCenario";
 import { TabelaPremissas } from "../../../components/TabelaPremissas";
 import { cenariosService } from "../../../services/cenariosService";
 
 /**
  * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os rateios, os investimentos,
- * o extra-operacional e os indicadores manuais.
+ * o extra-operacional, os indicadores manuais e os Reajustes (11/11/2026: os Índices de Reajuste e a Aplicação dos Reajustes).
  */
 const ABAS = [
   { chave: "1", rotulo: "Matriz" },
@@ -36,7 +37,10 @@ const ABAS = [
   { chave: "investimentos", rotulo: "Investimentos" },
   { chave: "extra", rotulo: "Extra-Operacional" },
   { chave: "manuais", rotulo: "Indicadores Manuais" },
+  { chave: "reajustes", rotulo: "Reajustes" },
 ];
+/** As abas da planilha (Replicar Médias, Apagar Valores e Importar Valores): todas menos os Reajustes, que não têm meses digitados. */
+const ABAS_DA_PLANILHA = ABAS.filter((a) => a.chave !== "reajustes");
 
 /**
  * A tela Premissas de um cenário analítico (13/10/2026): as tabelas de cada unidade (Matriz e Filial, Global e
@@ -59,14 +63,19 @@ export function PremissasContent() {
   const investimentos = aba === "investimentos";
   const extra = aba === "extra";
   const manuais = aba === "manuais";
+  const reajustes = aba === "reajustes";
   const deUnidade = ["1", "2", "3"].includes(aba);
   const consulta = useQuery({ queryKey: ["cenarios", id, "premissas", aba], queryFn: () => cenariosService.premissas(id, Number(aba) as 1 | 2 | 3), enabled: deUnidade });
   const travado = !!cenario.data && estaTravado(cenario.data);
-  const podeEditar = editaAba && !travado && (!deUnidade || !!consulta.data?.editavel);
+  // Com os reajustes aplicados na DRE (11/11/2026, pedido do Adão), só os Indicadores Manuais e a aba Reajustes se editam.
+  const comReajustes = !!cenario.data?.reajustesAplicados;
+  const bloqueadaPelosReajustes = comReajustes && !manuais && !reajustes;
+  const podeEditar = editaAba && !travado && !bloqueadaPelosReajustes && (!deUnidade || !!consulta.data?.editavel);
   // Os botões da planilha (15/10/2026), na altura do título: Replicar Médias e Apagar Valores (todas as abas editáveis),
-  // Importar Valores (alguma aba editável) e Exportar Premissas.
-  const editaTodas = ABAS.every((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
-  const editaAlguma = ABAS.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
+  // Importar Valores (alguma aba editável) e Exportar Premissas; os três primeiros saem com os reajustes aplicados.
+  const editaTodas = ABAS_DA_PLANILHA.every((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
+  const editaAlguma = ABAS_DA_PLANILHA.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
+  const editaPlanilha = !!cenario.data && !travado && !comReajustes;
   return (
     <div className="space-y-6">
       <CabecalhoDaTela
@@ -74,9 +83,9 @@ export function PremissasContent() {
         acoes={
           abas.length ? (
             <div className="flex flex-wrap items-center gap-2">
-              {cenario.data && !travado && editaTodas ? <BotaoReplicarMedias id={id} /> : null}
-              {cenario.data && !travado && editaTodas ? <BotaoApagarValores id={id} /> : null}
-              {cenario.data && !travado && editaAlguma ? <BotaoImportarValores id={id} /> : null}
+              {editaPlanilha && editaTodas ? <BotaoReplicarMedias id={id} /> : null}
+              {editaPlanilha && editaTodas ? <BotaoApagarValores id={id} /> : null}
+              {editaPlanilha && editaAlguma ? <BotaoImportarValores id={id} /> : null}
               <ExportarPremissas id={id} />
             </div>
           ) : null
@@ -88,27 +97,33 @@ export function PremissasContent() {
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
               (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
-              (colaboradores × Salário Total nos doze meses) e, no rodapé, os colaboradores e a folha de cada mês. Busque as linhas pela função, pelo
-              centro, pela unidade ou pela senioridade, e mostre todos os meses ou um só.
+              (colaboradores × Salário Total nos doze meses) e, no rodapé, os colaboradores e a folha de cada mês. No destaque acima da tabela, busque as linhas pela
+              função, pelo centro, pela unidade ou pela senioridade, e mostre todos os meses ou um só.
               {podeEditar
-                ? " “Nova Linha” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, digite os valores de cada mês e clique em “Gravar” (ou “Descartar”). O menu Ações de cada linha edita os cadastros ou a exclui; para excluir várias, marque as caixas e clique em “Excluir Selecionadas”."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, digite os valores de cada mês e clique em “Gravar” (ou “Descartar”). O menu Ações de cada linha edita os cadastros ou a exclui; para excluir várias, marque as caixas e clique em “Excluir Selecionadas”."
                 : null}{" "}
-              O grupo de centros com linhas conta por elas, na aba Centros de Custo, os Colaboradores CLT e PJ e as Remunerações CLT e PJ (colaboradores ×
-              Salário Total; na mão de obra da atribuição do centro da linha — Direta, a MOD; Indireta, a MOI; sem ela, a do grupo), que deixam de se
-              digitar ali; a senioridade Aprendiz tem o Fundo de Garantia: Aprendiz. O grupo sem linhas continua com os valores digitados.
+              O grupo de centros com linhas conta por elas, na aba Centros de Custo, os Colaboradores Aprendizes (a senioridade Aprendiz: o Jovem
+              Aprendiz), os Colaboradores Estagiários (a senioridade Estagiário: os estagiários e os bolsistas), os Colaboradores CLT e os PJ (as demais
+              senioridades, pelo Tipo) e as Remunerações CLT e PJ (colaboradores × Salário Total, pelo Tipo da linha; na mão de obra da atribuição do
+              centro da linha — Direta, a MOD; Indireta, a MOI; sem ela, a do grupo), que deixam de se digitar ali. Nos encargos, o Aprendiz tem o
+              Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). As Remunerações CLT e PJ vêm sempre
+              daqui, em todos os grupos (o grupo sem linhas fica com elas zeradas); os colaboradores do grupo sem linhas continuam digitados.
             </li>
             <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
               estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo: o Quadro de Lotação (os Colaboradores CLT e PJ
-              de cada mês; o Total de Colaboradores é a soma; nos grupos com linhas na aba Quadro de Lotação, eles, as Remunerações CLT e PJ e os
-              Salários dos Aprendizes vêm de lá e não se digitam); os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
+              de cada mês; o Total de Colaboradores é a soma; nos grupos com linhas na aba Quadro de Lotação, os Colaboradores Aprendizes e
+              Estagiários vêm antes dos CLT, o Total soma os quatro, e eles e os Salários dos Aprendizes e dos Estagiários vêm de lá e não se
+              digitam); os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
-              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas: mão de obra direta e indireta e gastos
+              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
+              sempre da aba Quadro de Lotação, em todos os grupos, e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
               tabelas das unidades, em R$ por unidade; a depreciação, nos investimentos). A conta Encargos e Benefícios não se digita: é a base
-              (Remunerações CLT + Horas Extras) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo Terceiro)] + (FGTS
-              Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais (estes, na mão de obra da
-              atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ não têm encargos. Embaixo do título, os centros do grupo, o balde e para onde vai o valor; o grupo com centros de
+              (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
+              Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais
+              (estes, na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ e os estagiários não têm
+              encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses” e “Reajustar Marcados”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
               Cadastros da Controladoria). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
@@ -138,6 +153,25 @@ export function PremissasContent() {
               se digitam: saem do Total de Colaboradores dos grupos de centros de custo.
             </li>
             <li>
+              Na aba Reajustes, dois quadros. Em Índices de Reajuste, cada índice tem a Descrição, a Observação e até quatro reajustes, cada um com o
+              Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro
+              e 2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante).
+              {podeEditar ? " Use “Incluir Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista." : ""}{" "}
+              Em Aplicação dos Reajustes, cada conta da DRE (sem Produção e Serviços) escolhe um índice; o de um total ou de uma atribuição vale
+              para as contas abaixo dele{podeEditar ? ", e “Preencher Selecionados” aplica um índice às contas marcadas; “Gravar Aplicação” grava os índices das contas" : ""}.
+              Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada
+              conta com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; com eles aplicados, o botão vira “Remover Reajustes”,
+              que faz o inverso e volta aos valores das premissas — nunca duas vezes seguidas (grave a aplicação antes, se mudou). O aviso no
+              topo da aba diz se os reajustes estão aplicados. Com eles aplicados, a barra do cenário mostra a etiqueta Reajustes Aplicados, gravar
+              um quadro recalcula a DRE e o “Recalcular” da tela Resultados os mantém; o histórico registra cada aplicação e remoção (tela
+              Histórico). As premissas das outras abas não mudam: o reajuste fica só na DRE.
+            </li>
+            <li>
+              Com os reajustes aplicados, as demais abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição, com o aviso em
+              cada uma; “Replicar Médias”, “Apagar Valores” e “Importar Valores” saem da altura do título, e a referência (Configurações /
+              Referência) não se carrega. “Remover Reajustes” as deixa editáveis de novo.
+            </li>
+            <li>
               A base das premissas pode vir da referência (Configurações / Referência): o resultado realizado (as Médias de Referência, os centros de
               custo, a depreciação, o extra-operacional e os indicadores) ou outro cenário analítico.
             </li>
@@ -157,28 +191,34 @@ export function PremissasContent() {
               departamentos: Produção, a Matriz, a Filial, os centros de produção e a depreciação e os investimentos delas; Serviços, a aba Serviços, os
               centros de serviços e a depreciação e os investimentos de Serviços; Logística, Técnico, Comercial e Administrativo, os centros do
               departamento; Extra-Operacional, a aba Extra-Operacional — esses cinco com a depreciação e os investimentos de Despesas e Extra. Os
-              indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz o Código, a descrição, a unidade, a Média de
-              Referência, o Total da Referência (a média × 12), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
+              indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz a descrição (as colunas antes da Und., que a identificam na importação: não as altere, nem o nome das abas; elas, a Und. e os rótulos ficam presos ao rolar a planilha — no Quadro de Lotação, os cadastros; nos Investimentos, até a Descrição), a unidade, os doze meses da
+              referência do cenário (com ela: Realizado, o resultado realizado de cada mês do período; Referência, os meses do outro cenário — não se
+              importam), a Média de Referência, o Total da Referência (a média × 12), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
               (uma fórmula: Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência) e a Justificativa, em texto
-              livre. Nos centros de custo, o Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores em fórmula; os Salários dos
-              Aprendizes nos grupos com linhas na aba Quadro de Lotação), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
+              livre. Nos centros de custo, o Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores em fórmula; nos grupos com linhas
+              na aba Quadro de Lotação, também os Colaboradores Aprendizes e Estagiários, antes dos CLT, e os Salários dos Aprendizes e dos
+              Estagiários; as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas, os colaboradores e os Salários dos Aprendizes e dos
+              Estagiários são fórmulas sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e incluir ou
+              mudar as linhas ou os salários dela muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
               Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula (as linhas calculadas não se importam nem se replicam). A aba
-              Quadro de Lotação traz as linhas, com o Código da Linha (que a identifica na importação), os cadastros (o Centro de Custo pelo código) e,
+              Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
               em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), o Custo no Ano em fórmula
-              e linhas em branco para as novas; ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
+              e linhas em branco para as novas; com a referência, depois do Centro de Custo, os colaboradores da linha no QL Realizado da competência
+              mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
               linhas em branco para os novos. No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
-              conta somada em todas as abas dos centros (em fórmulas, que acompanham os valores das abas), para conferir com a DRE do cenário; o
+              conta somada em todas as abas dos centros (em fórmulas, que acompanham os valores das abas; também os meses da referência), para conferir com a DRE do cenário; o
               total bate, e a parte dos rateios que vai para Serviços está, na DRE, nas contas da CSM ou da CSC.
             </li>
             <li>
               “Importar Valores” abre a lista dos arquivos: escolha planilhas do Exportar Premissas (ou o ZIP) ou uma pasta com elas. Cada arquivo é
-              conferido no padrão (a coluna Código, a Média de Referência, os doze meses e a Justificativa) e mostra quantos valores, justificativas e
+              conferido no padrão (as descrições, a Média de Referência, os doze meses e a Justificativa; cada linha se acha pelas descrições) e mostra quantos valores, justificativas e
               investimentos mudam. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade…) aparece em mais de um arquivo, o
               quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último). Na aba Investimentos, os com o
               Nome de Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro
-              de Lotação, as linhas com o Código da Linha são atualizadas e as sem código entram como novas (os cadastros conferidos como no
-              Lançamento Inicial: uma unidade, senioridade, função ou centro de custo que não existe recusa o arquivo); para tirar uma linha, use a
-              tela. “Importar” grava os meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, recalcula a DRE
+              de Lotação, as linhas da planilha substituem as do cenário nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com
+              outros valores são alteradas, as novas entram e as que não estão na planilha saem (a prévia mostra quantas; os cadastros conferidos
+              como no Lançamento Inicial: uma unidade, senioridade, função ou centro de custo que não existe recusa o arquivo). “Importar” grava os
+              meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, recalcula a DRE
               e registra no histórico (tela Histórico, aba Alterações).
             </li>
             <li>
@@ -244,7 +284,7 @@ export function PremissasContent() {
               em % da receita bruta, por venda (as da unidade divididas entre a Global e a Mercantil pela receita bruta de cada uma).
             </p>
             <p>
-              Os quadros de lotação dos indicadores saem do Total de Colaboradores (CLT + PJ) dos grupos de centros de custo, pela classificação de cada grupo: Direta
+              Os quadros de lotação dos indicadores saem do Total de Colaboradores (Aprendizes + Estagiários + CLT + PJ) dos grupos de centros de custo, pela classificação de cada grupo: Direta
               ou Indireta pela atribuição mais comum dos centros dele; Matriz ou Filial pelo balde (o Unidade e os de rateio, pela filial em que os
               centros mais lançaram); Montagem nos grupos dos custos de montagem; as despesas e os grupos sem atribuição entram só no Quadro de Lotação
               Total. MO Direta Total e MO Indireta Total são Matriz + Filial, e MO Geral, Direta + Indireta; com eles se calculam as eficiências. Na
@@ -256,8 +296,10 @@ export function PremissasContent() {
               A conta Encargos e Benefícios da mão de obra (direta e indireta) de cada grupo é calculada mês a mês, com o INSS e o FGTS também sobre
               as férias e o décimo terceiro: base × [INSS + FGTS CLT + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo
               Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + Benefícios Adicionais, com a base =
-              Remunerações CLT + Horas Extras (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador sobre os seus salários, os
-              aprendizes (a senioridade Aprendiz, nas linhas CLT da aba Quadro de Lotação) a 2% e os demais a 8%. Os percentuais têm o mesmo padrão
+              Remunerações CLT + Horas Extras − Salários dos Estagiários (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador
+              sobre os seus salários, os aprendizes (a senioridade Aprendiz, nas linhas CLT da aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as
+              Férias e o Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (a senioridade Estagiário; Lei 11.788/2008) não
+              têm INSS, FGTS, férias com o terço nem décimo terceiro: os salários deles nas Remunerações CLT saem da base. Os percentuais têm o mesmo padrão
               em todos os cenários (29% — a confirmar com a contabilidade —, 2%, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
               Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo.
               Na referência realizada, os Benefícios Adicionais de cada mês fechado e a Média de Referência deles são a diferença entre os encargos
@@ -273,7 +315,11 @@ export function PremissasContent() {
       />
       <Abas rotulo="Unidade das premissas" ativa={aba} onMudar={setAba} abas={abas} />
       {abas.length ? <AvisoRateiosSemBase id={id} /> : null}
-      {cenario.data && travado && editaAba ? <AvisoMarcado cenario={cenario.data} oQue="as premissas" /> : null}
+      {cenario.data && travado && editaAba ? (
+        <AvisoMarcado cenario={cenario.data} oQue="as premissas" />
+      ) : bloqueadaPelosReajustes && editaAba && !rateios ? (
+        <AvisoReajustesAplicados oQue="as premissas desta aba" varios />
+      ) : null}
       {!abas.length ? (
         <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Seu perfil não tem acesso a nenhuma aba desta tela.</p>
       ) : quadro ? (
@@ -288,6 +334,8 @@ export function PremissasContent() {
         <ExtraDoCenario id={id} editavel={podeEditar} />
       ) : manuais ? (
         <IndicadoresManuais id={id} podeEditar={podeEditar} comReferencia />
+      ) : reajustes ? (
+        <ReajustesDoCenario id={id} podeEditar={podeEditar} />
       ) : consulta.isError ? (
         <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar as premissas.")} />
       ) : consulta.isPending ? (

@@ -33,18 +33,20 @@ const TITULO = "text-sm font-bold text-gray-900";
  * aba Comparar dos Resultados): o cenário com que este se compara e a variação máxima (em %) de cada conta, na
  * estrutura da DRE vigente (14/10/2026; antes, só os totais). Com um cenário comparado, a aba Justificativas da tela
  * Reajustes lista as contas que passam da variação. Nos analíticos (19/10/2026), cada conta escolhe um Índice de
- * Reajuste (Configurações / Índices) no lugar da variação digitada; a tela Reajustes deles se chama Histórico.
+ * Referência no lugar da variação digitada; a tela Reajustes deles se chama Histórico. Desde 11/11/2026 (pedido do Adão), nos
+ * analíticos, três quadros: Cenário Comparado, Índices de Referência (`indices`; antes, a aba Índices) e Variações Máximas
+ * (o índice de cada conta; antes, Índices de Reajuste).
  */
-export function ComparativoCenario({ id, podeEditar }: { id: string; podeEditar: boolean }) {
+export function ComparativoCenario({ id, podeEditar, indices = null }: { id: string; podeEditar: boolean; indices?: React.ReactNode }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "comparativo"], queryFn: () => cenariosService.comparativo(id) });
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar o comparativo.")} />;
   if (consulta.isPending) return <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
-  return <Formulario key={JSON.stringify(consulta.data)} id={id} dados={consulta.data} podeEditar={podeEditar} />;
+  return <Formulario key={JSON.stringify(consulta.data)} id={id} dados={consulta.data} podeEditar={podeEditar} quadroDosIndices={indices} />;
 }
 
 type LinhaDaVariacao = Comparativo["linhas"][number];
 
-function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo; podeEditar: boolean }) {
+function Formulario({ id, dados, podeEditar, quadroDosIndices }: { id: string; dados: Comparativo; podeEditar: boolean; quadroDosIndices: React.ReactNode }) {
   const queryClient = useQueryClient();
   const [comparado, setComparado] = useState(dados.comparadoCom?.id ?? "");
   // As linhas verificadas (as contas, e os totais e atribuições sem contas) guardam a variação; as demais a repassam.
@@ -61,7 +63,7 @@ function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo;
     analitico
       ? {
           chave: "indice",
-          rotulo: "Índice de Reajuste",
+          rotulo: "Índice de Referência",
           valor: (l) => {
             const i = l.verificada && l.indice ? indices.find((x) => x.chave === l.indice) : undefined;
             return i ? rotuloDoIndice(i) : "";
@@ -160,18 +162,21 @@ function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo;
         </div>
       </section>
 
+      {/* Os Índices de Referência (11/11/2026: o quadro do meio, nos analíticos). */}
+      {quadroDosIndices}
+
       <section className={QUADRO}>
         {/* O "Preencher Selecionados" à direita, ao lado do texto (13/10/2026; até 15/10/2026, "Preencher Todos Com"). */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <h2 className={TITULO}>{analitico ? "Índices de Reajuste" : "Variação Máxima"}</h2>
+            <h2 className={TITULO}>{analitico ? "Variações Máximas" : "Variação Máxima"}</h2>
             <p className="mt-1 text-xs text-gray-600">
               {analitico
-                ? "O índice de reajuste de cada conta, na estrutura da DRE vigente. Contas sem índice não serão verificadas."
+                ? "O índice de referência de cada conta (a variação máxima dela), na estrutura da DRE vigente. Contas sem índice não serão verificadas."
                 : "A variação aceita (em %, para mais ou para menos) em cada conta, na estrutura da DRE vigente. Variações em branco não serão verificadas."}
             </p>
             {analitico && indices.length === 0 ? (
-              <p className="mt-1 text-xs font-medium text-red-700">Nenhum índice cadastrado: inclua os índices na aba Índices.</p>
+              <p className="mt-1 text-xs font-medium text-red-700">Nenhum índice cadastrado: inclua os índices no quadro Índices de Referência, acima.</p>
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -213,7 +218,7 @@ function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo;
               </>
             ) : null}
             {/* O Exportar (30/10/2026): o que está gravado em cada linha da DRE; por último, depois do Limpar (03/11/2026, pedido do Adão). */}
-            <ExportarTabela titulo={`Cenário · Comparativo · ${analitico ? "Índices de Reajuste" : "Variação Máxima"}`} colunas={colunasExportadas} linhas={dados.linhas} />
+            <ExportarTabela titulo={`Cenário · Comparativo · ${analitico ? "Variações Máximas" : "Variação Máxima"}`} colunas={colunasExportadas} linhas={dados.linhas} />
           </div>
         </div>
         <div className="rounded-sm border border-gray-200">
@@ -233,7 +238,7 @@ function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo;
                     Linha da DRE
                   </span>
                 </th>
-                <th className={`${analitico ? "w-80" : "w-48"} px-4 py-2.5 text-right text-xs font-bold text-gray-600`}>{analitico ? "Índice de Reajuste" : "Variação Máxima (%)"}</th>
+                <th className={`${analitico ? "w-80" : "w-48"} px-4 py-2.5 text-right text-xs font-bold text-gray-600`}>{analitico ? "Índice de Referência" : "Variação Máxima (%)"}</th>
               </tr>
             </thead>
             <tbody>
@@ -327,8 +332,8 @@ function Formulario({ id, dados, podeEditar }: { id: string; dados: Comparativo;
   );
 }
 
-/** A caixa de marcar uma linha (ou todas): parcial quando só parte das contas dela está marcada. */
-function Caixa({ rotulo, estado, onMudar }: { rotulo: string; estado: "nenhuma" | "parte" | "todas"; onMudar: (marcar: boolean) => void }) {
+/** A caixa de marcar uma linha (ou todas): parcial quando só parte das contas dela está marcada (também nos Reajustes das Premissas). */
+export function Caixa({ rotulo, estado, onMudar }: { rotulo: string; estado: "nenhuma" | "parte" | "todas"; onMudar: (marcar: boolean) => void }) {
   return (
     <input
       type="checkbox"

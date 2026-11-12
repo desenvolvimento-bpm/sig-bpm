@@ -336,8 +336,9 @@ function ExcluirCompetencia({ anoMes, ano, mes, paraExcluir, onFechar }: { anoMe
             </ul>
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-1.5">
-          <label htmlFor="confirmar-exclusao" className="text-sm font-medium text-gray-900">
+        {/* O campo à direita, alinhado ao botão Excluir, 25% mais estreito e com o texto à direita (11/11/2026, pedido do Adão). */}
+        <div className="flex items-center justify-end gap-3">
+          <label htmlFor="confirmar-exclusao" className="text-right text-sm font-medium text-gray-900">
             Para confirmar, digite a competência ({rotulo})
           </label>
           <input
@@ -345,7 +346,7 @@ function ExcluirCompetencia({ anoMes, ano, mes, paraExcluir, onFechar }: { anoMe
             value={digitado}
             onChange={(e) => setDigitado(e.target.value)}
             autoComplete="off"
-            className="h-9 w-40 rounded-sm border border-gray-300 bg-white px-3 text-sm"
+            className="h-9 w-30 shrink-0 rounded-sm border border-gray-300 bg-white px-3 text-right text-sm"
             placeholder="MM/AAAA"
           />
         </div>

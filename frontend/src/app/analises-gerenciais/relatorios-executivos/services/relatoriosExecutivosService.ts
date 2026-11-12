@@ -32,6 +32,8 @@ export type ListaDeRelatorios = {
   meusDepartamentos: Array<{ chave: string; nome: string }>;
 };
 
+/** Os dados dos cards antes do gráfico (12/11/2026): só o Atual ou só o Acumulado (sem o campo, os dois). */
+export type PeriodosDoCard = "ATUAL" | "ACUMULADO";
 /** Um bloco da grade: a posição e o tamanho (colunas e linhas) e o conteúdo. */
 export type Posicao = { id: string; x: number; y: number; w: number; h: number };
 export type Nota = "POSITIVO" | "NEGATIVO" | "ATENCAO";
@@ -46,6 +48,8 @@ export type Bloco = Posicao &
         comGrafico: boolean;
         /** Com o gráfico, só o do acumulado (22/10/2026); sem isso, os meses e o acumulado. */
         soAcumulado?: boolean;
+        /** Os dados antes do gráfico (12/11/2026): só o Atual ou só o Acumulado; sem ele, os dois. */
+        periodos?: PeriodosDoCard;
         /** As opções do gráfico do card (16/10/2026), como no Configurar Gráficos do Painel; sem elas, as do navegador. */
         tipoGrafico?: "barras" | "area";
         comRotulos?: boolean;
@@ -59,7 +63,7 @@ export type Bloco = Posicao &
      * O gráfico do card do indicador (22/10/2026): os meses e o acumulado ou só o acumulado; sem ele, só os valores. As
      * opções do gráfico, como as dos cards do Painel.
      */
-    | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
+    | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; /** Os dados antes do gráfico (12/11/2026). */ periodos?: PeriodosDoCard; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
     /** O título da anotação (16/10/2026); sem ele, o nome da nota. */
     | {
         tipo: "ANOTACAO";
@@ -159,7 +163,7 @@ export type RecorteDaImagem = { zoom: number; x: number; y: number };
 /** A transição dos slides de um grupo (27/10/2026), guardada em cada página dele. */
 export type Transicao = "ESMAECER" | "ROLAR_VERTICAL" | "ROLAR_HORIZONTAL";
 /** Uma página da aba (16/10/2026): cada departamento tem uma ou mais, cada uma com a sua grade. */
-export type Pagina = { id: string; /** O nome (16/10/2026), o do slide; sem ele, "Página N". */ nome?: string; blocos: Bloco[]; fundo?: Fundo; /** A transição do slide (27/10/2026; até 30/10/2026, a mesma em todas as páginas do grupo). */ transicao?: Transicao; /** Avançar Após (30/10/2026): na apresentação, o slide passa sozinho ao próximo depois desses segundos. */ avancarApos?: number };
+export type Pagina = { id: string; /** O nome (16/10/2026), o do slide; sem ele, "Página N". */ nome?: string; blocos: Bloco[]; fundo?: Fundo; /** A transição do slide (27/10/2026; até 30/10/2026, a mesma em todas as páginas do grupo). */ transicao?: Transicao; /** Avançar Após (30/10/2026): na apresentação, o slide passa sozinho ao próximo depois desses segundos. */ avancarApos?: number; /** Recomeçar ao Terminar (11/11/2026, os painéis): depois do Avançar Após do último slide, a apresentação volta ao primeiro; marcado em todas as páginas do painel. */ recomecarAoTerminar?: boolean };
 /** A Capa (20/10/2026): a primeira aba; os slides dela não entram na contagem. */
 export const CHAVE_DA_CAPA = "CAPA";
 /**
@@ -207,7 +211,7 @@ export type Relatorio = {
   automatica?: boolean;
 };
 /**
- * Os cenários dos cards PROVA (31/10/2026): os marcados que existem, na ordem do PROVA (Previsão, Orçado, Vendido e
+ * Os cenários dos cards PROVA (31/10/2026): os marcados que existem, na ordem do PROVA (Forecast, Orçado, Vendido e
  * Anterior), com o nome do cenário; e a marcação do cenário de comparação (a cor dos cards padrão nos slides com cards
  * PROVA; nula: um cenário sem marcação).
  */

@@ -37,6 +37,11 @@ export default function EstruturaIndicadoresPage() {
                 receitas acumuladas de cada uma). O Cálculo do Sistema (a conta no código) serve só para voltar atrás: todos os indicadores têm
                 Metodologia.
               </li>
+              <li>
+                Na lista de itens da Metodologia, ao lado de cada um, o valor acumulado de janeiro até a competência fechada mais recente em Resultados
+                Empresariais (#.##0,00, ou 0,00% nos indicadores e metas em %; no Quadro de Lotação, a posição do mês). “Testar”, antes de “Gravar”,
+                mostra o Realizado (Atual) do indicador nessa competência e o Acumulado, com a fórmula do formulário, sem gravar.
+              </li>
               <li>A Descrição é o texto que a aba Indicadores do Painel de Bordo de Resultados Empresariais mostra sob o nome.</li>
               <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os indicadores inativos (que saem do Painel de Bordo de Resultados Empresariais, também da aba Indicadores).</li>
               <li>

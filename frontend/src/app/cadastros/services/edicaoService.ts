@@ -45,6 +45,23 @@ export type DefinicaoCadastro = { entidade: string; titulo: string; criar: boole
 /** As travas do registro: com movimentos, os campos-chave não mudam e a exclusão é recusada (11/10/2026). */
 export type Travas = { movimentos: string | null; campos: string[]; exclusao: string | null };
 export type Registro = Record<string, unknown> & { id: string; __travas?: Travas };
+/**
+ * Os valores acumulados dos itens da Metodologia (11/11/2026: os cards do Painel de Bordo e os indicadores), de janeiro
+ * até a competência fechada mais recente, pela chave do item (DRE|unidade|linha, INDICADOR|nome…); `percentuais`: as
+ * chaves em %. Sem competência fechada, `competencia` vem nula.
+ */
+export type ValoresDaMetodologia = { competencia: string | null; valores: Record<string, number | null>; percentuais: string[] };
+/** O Testar (11/11/2026): o Realizado (Atual) na competência fechada mais recente, com o formulário ainda não gravado. */
+export type TesteDaFormula = {
+  competencia: string;
+  realizado: number | null;
+  /** No card: o Percentual sob o Valor e o Formato. */
+  percentual?: number | null;
+  formato?: string | null;
+  /** No indicador: o Acumulado (pelo modo escolhido) e a unidade. */
+  acumulado?: number | null;
+  unidade?: string;
+};
 /** O efeito de uma alteração que classifica: o que foi reclassificado e o que precisa ser reapurado. */
 export type Efeito = { reclassificadas: string[]; apuradasPorReapurar: string[] };
 
@@ -58,6 +75,10 @@ export const edicaoService = {
   atualizar: async (entidade: string, id: string, valores: Record<string, unknown>) =>
     (await api.put<{ data: { registro: Registro } & Efeito }>(`${base(entidade)}/${id}`, valores)).data.data,
   excluir: async (entidade: string, id: string) => (await api.delete<{ data: Efeito }>(`${base(entidade)}/${id}`)).data.data,
+  valoresDaMetodologia: async (entidade: string): Promise<ValoresDaMetodologia> =>
+    (await api.get<{ data: ValoresDaMetodologia }>(`${base(entidade)}/valores-da-metodologia`)).data.data,
+  testar: async (entidade: string, valores: Record<string, unknown>, id: string | null): Promise<TesteDaFormula> =>
+    (await api.post<{ data: TesteDaFormula }>(`${base(entidade)}/testar`, valores, { params: id ? { id } : {} })).data.data,
 };
 
 export function mensagemDeErro(error: unknown, padrao: string) {

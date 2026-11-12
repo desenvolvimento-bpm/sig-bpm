@@ -1,5 +1,6 @@
 import type { Prisma } from "../../../generated/prisma/client.js";
 import { plural } from "../../../utils/plural.js";
+import { recusaDaFuncao, rotuloDaFuncao } from "../../colaboradores/funcaoPorSenioridade.js";
 import type { DefinicaoCadastro, Opcao, Valores } from "./definicoesCadastros.js";
 import { RegraCadastroError } from "./erroCadastro.js";
 
@@ -51,7 +52,12 @@ const opcoesDe = (rotulos: Record<string, string>): Opcao[] => Object.entries(ro
 
 const opcoesSenioridades = async (db: Db) =>
   (await db.colaboradorSenioridade.findMany({ orderBy: { nome: "asc" } })).map((s) => ({ valor: s.id, rotulo: `${s.nome}${inativo(s.ativo)}` }));
-const opcoesFuncoes = async (db: Db) => (await db.colaboradorFuncao.findMany({ orderBy: { nome: "asc" } })).map((f) => ({ valor: f.id, rotulo: `${f.nome}${inativo(f.ativo)}` }));
+// A função com a senioridade (11/11/2026: a mesma função tem uma por senioridade).
+const opcoesFuncoes = async (db: Db) =>
+  (await db.colaboradorFuncao.findMany({ orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], include: { senioridade: { select: { nome: true } } } })).map((f) => ({
+    valor: f.id,
+    rotulo: `${rotuloDaFuncao(f)}${inativo(f.ativo)}`,
+  }));
 const opcoesTipos = async (db: Db) =>
   (await db.colaboradorTipoMovimentacao.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }] })).map((t) => ({ valor: t.id, rotulo: `${t.nome}${inativo(t.ativo)}` }));
 const opcoesUnidades = async (db: Db) => (await db.unidadeNegocio.findMany({ orderBy: { codigo: "asc" } })).map((u) => ({ valor: u.id, rotulo: u.nome }));
@@ -110,7 +116,7 @@ const funcoes: DefinicaoCadastro = {
   excluir: true,
   campos: [
     { nome: "nome", rotulo: "Função", tipo: "texto", obrigatorio: true },
-    { nome: "senioridadeId", rotulo: "Nível", tipo: "opcao", opcoes: opcoesSenioridades, ajuda: "A senioridade da função (aba Senioridades)." },
+    { nome: "senioridadeId", rotulo: "Senioridade", tipo: "opcao", opcoes: opcoesSenioridades, ajuda: "A senioridade da função (aba Senioridades)." },
     { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true },
     { nome: "competencias", rotulo: "Competências", tipo: "texto", multilinha: true, larguraInteira: true, naTabela: false },
     { nome: "atividades", rotulo: "Atividades", tipo: "texto", multilinha: true, larguraInteira: true, naTabela: false },
@@ -118,15 +124,23 @@ const funcoes: DefinicaoCadastro = {
   ],
   listar: async (db, busca) =>
     comUso(
-      (await db.colaboradorFuncao.findMany({ orderBy: { nome: "asc" } })).filter((f) => contem(busca, f.nome, f.descricao)),
+      (await db.colaboradorFuncao.findMany({ orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], include: { senioridade: { select: { nome: true } } } }))
+        .filter((f) => contem(busca, f.nome, f.descricao, f.senioridade?.nome))
+        .map(({ senioridade: _s, ...f }) => f),
       (id) => funcoes.impedimentoExclusao!(db, id),
     ),
   ler: (db, id) => db.colaboradorFuncao.findUnique({ where: { id } }),
   async preparar(db, v, id) {
     const nome = exigir(v.nome, "A função");
-    await nomeLivre(() => db.colaboradorFuncao.findFirst({ where: { nome: { equals: nome, mode: "insensitive" } }, select: { id: true, nome: true } }), id, (n) => `Já existe a função ${n}.`);
     const senioridadeId = texto(v.senioridadeId);
-    if (senioridadeId && !(await db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { id: true } }))) throw new RegraCadastroError(400, "Nível inexistente.");
+    const senioridade = senioridadeId ? await db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { nome: true } }) : null;
+    if (senioridadeId && !senioridade) throw new RegraCadastroError(400, "Senioridade inexistente.");
+    // A função por senioridade (11/11/2026): o par nome + senioridade não se repete.
+    await nomeLivre(
+      () => db.colaboradorFuncao.findFirst({ where: { nome: { equals: nome, mode: "insensitive" }, senioridadeId }, select: { id: true, nome: true } }),
+      id,
+      (n) => (senioridade ? `Já existe a função ${n} com a senioridade ${senioridade.nome}.` : `Já existe a função ${n} sem senioridade.`),
+    );
     return { nome, descricao: texto(v.descricao), senioridadeId, competencias: texto(v.competencias), atividades: texto(v.atividades), ativo: ativoDe(v) };
   },
   async gravar(db, d, id) {
@@ -285,10 +299,12 @@ const lancamentoInicial: DefinicaoCadastro = {
     const [u, s, f, c] = await Promise.all([
       db.unidadeNegocio.findUnique({ where: { id: unidadeNegocioId }, select: { id: true } }),
       db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { id: true } }),
-      db.colaboradorFuncao.findUnique({ where: { id: funcaoId }, select: { id: true } }),
+      db.colaboradorFuncao.findUnique({ where: { id: funcaoId }, select: { id: true, nome: true, senioridadeId: true, senioridade: { select: { nome: true } } } }),
       db.centroCusto.findUnique({ where: { id: centroCustoId }, select: { id: true } }),
     ]);
     if (!u || !s || !f || !c) throw new RegraCadastroError(400, "Unidade, senioridade, função ou centro de custo inexistente.");
+    const recusa = recusaDaFuncao(f, senioridadeId);
+    if (recusa) throw new RegraCadastroError(400, recusa);
     return { ano: atual.ano, mes: atual.mes, unidadeNegocioId, vinculo, senioridadeId, funcaoId, centroCustoId };
   },
   async gravar(db, d, id) {

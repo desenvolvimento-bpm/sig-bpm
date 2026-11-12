@@ -26,6 +26,9 @@ relatoriosRoutes.get("/resultados/exportar", autenticacao, verificarAba("relator
   const a = abaDaVisao(r.query.visao ?? 0);
   return a ? [a] : null;
 }), asyncHandler(c.exportarResultados));
+// O Pesquisar (11/11/2026, pedido do Adão): os movimentos de um fornecedor ou de uma conta, no recorte do usuário.
+relatoriosRoutes.get("/resultados/pesquisa", autenticacao, verificarPermissao("relatorio_resultados:ler"), asyncHandler(c.pesquisar));
+relatoriosRoutes.get("/resultados/pesquisa/contas", autenticacao, verificarPermissao("relatorio_resultados:ler"), asyncHandler(c.contasDaPesquisa));
 // A aba Impostos (Créditos de Impostos, 03/11/2026, pedido do Adão; de início, Almoxarifado): os créditos de impostos de cada mês.
 relatoriosRoutes.get("/resultados/impostos", autenticacao, verificarPermissao("relatorio_resultados.impostos:ler"), asyncHandler(c.impostos));
 // Os indicadores: a tela Indicadores dos Resultados Empresariais ou, na etapa do Fechamento Mensal (?etapa=1), a dela.

@@ -38,3 +38,19 @@ export function AvisoMarcado({ cenario: c, oQue, varios = false }: { cenario: Tr
     </p>
   );
 }
+
+/**
+ * O aviso dos reajustes aplicados na DRE do cenário analítico (11/11/2026, pedido do Adão): as abas das Premissas (menos os
+ * Indicadores Manuais e a própria aba Reajustes) e a referência não se editam até “Remover Reajustes”.
+ */
+export function AvisoReajustesAplicados({ oQue, varios = false }: { oQue: string; varios?: boolean }) {
+  return (
+    <p className="flex items-start gap-2 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
+      <Lock className="mt-0.5 size-4 shrink-0 text-gray-500" />
+      <span>
+        Os reajustes estão aplicados na DRE: {oQue} {varios ? "não se editam" : "não se edita"}. Para editar, remova os reajustes na aba Reajustes
+        das Premissas (“Remover Reajustes”, no quadro Aplicação dos Reajustes).
+      </span>
+    </p>
+  );
+}
