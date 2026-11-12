@@ -233,6 +233,12 @@ export type Cenario = {
   nomeTravado: boolean;
   /** Quem criou o cenário e os Administradores mudam a visualização. */
   podeMudarVisualizacao: boolean;
+  /**
+   * A Edição das Configurações (12/11/2026): Particular, só quem criou e o Administrador alteram a tela Configurações; Pública,
+   * todos com a permissão do perfil. `podeEditarConfiguracoes`: se o usuário as altera por ela.
+   */
+  edicaoConfiguracoes: Visualizacao;
+  podeEditarConfiguracoes: boolean;
   /** As movimentações fora dos padrões da última carga do realizado e as realocações delas (analíticos, 14/10/2026). */
   realocacoes: Realocacoes | null;
   /** Nos analíticos (14/10/2026): os avisos dos rateios no exercício e se as regras mudaram depois do último cálculo. */
@@ -436,7 +442,7 @@ export const cenariosService = {
   listar: async (tipo: TipoCenario = "SINTETICO") => (await api.get<{ data: Cenario[] }>("/proxy/cenarios", { params: { tipo } })).data.data,
   obter: async (id: string) => (await api.get<{ data: Cenario }>(`/proxy/cenarios/${id}`)).data.data,
   criar: async (dados: { nome: string; ano: number; descricao: string | null; copiarDe: string | null; visualizacao: Visualizacao; tipo: TipoCenario }) => (await api.post<{ data: Cenario }>("/proxy/cenarios", dados)).data.data,
-  atualizar: async (id: string, dados: { nome: string; descricao: string | null; visualizacao: Visualizacao }) => (await api.patch<{ data: Cenario }>(`/proxy/cenarios/${id}`, dados)).data.data,
+  atualizar: async (id: string, dados: { nome: string; descricao: string | null; visualizacao: Visualizacao; edicaoConfiguracoes?: Visualizacao }) => (await api.patch<{ data: Cenario }>(`/proxy/cenarios/${id}`, dados)).data.data,
   excluir: async (id: string) => {
     await api.delete(`/proxy/cenarios/${id}`);
   },

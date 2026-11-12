@@ -2164,6 +2164,9 @@ model Cenario {
   criadoPorId  String?          @map("criado_por_id")
   /// Particular ou pública; um cenário marcado é sempre público (o Orçamento Empresarial dá o orçado a todos).
   visualizacao VisualizacaoCenario @default(PUBLICA)
+  /// A Edição das Configurações (12/11/2026, pedido do Adão): Particular (o padrão, a regra de antes), só quem criou o cenário
+  /// e o Administrador alteram a tela Configurações (todas as abas e ações); Pública, todos com a permissão do perfil.
+  edicaoConfiguracoes VisualizacaoCenario @default(PARTICULAR) @map("edicao_configuracoes")
   /// O comparativo (12/10/2026): o cenário com que este se compara; com ele, as contas que variam acima da variação
   /// máxima do total delas pedem justificativa (tela Justificativas).
   comparadoComId   String?  @map("comparado_com_id")

@@ -323,7 +323,7 @@ export const cenariosController = {
   atualizar(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const corpo = z.object({ nome: nomeSchema, descricao: descricaoSchema, visualizacao: visualizacaoSchema }).safeParse(request.body);
+    const corpo = z.object({ nome: nomeSchema, descricao: descricaoSchema, visualizacao: visualizacaoSchema, edicaoConfiguracoes: z.enum(["PARTICULAR", "PUBLICA"]).optional() }).safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Dados inválidos." });
     return responder(response, () => cenariosService.atualizar(c, corpo.data, usuario(request)));
   },
@@ -490,18 +490,18 @@ export const cenariosController = {
 
   /**
    * Os indicadores do cenário, só os das abas permitidas (14/10/2026): a aba Indicadores do Painel de Bordo traz todos; a
-   * dos Indicadores Manuais (Configurações, nos sintéticos; Premissas, nos analíticos), os manuais.
+   * dos Indicadores Manuais (Resultados, nos sintéticos; Premissas, nos analíticos), os manuais.
    */
   indicadores(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const base = String(response.locals.areaDoCenario ?? "cenarios");
     const tem = (p: string) => request.user!.permissions.includes(`${p}:ler`);
-    // A aba Indicadores do Painel de Bordo traz todos; os Indicadores Manuais, a aba deles (19/10/2026: nos sintéticos, na
-    // tela Configurações; nos analíticos, nas Premissas).
+    // A aba Indicadores do Painel de Bordo traz todos; os Indicadores Manuais, a aba deles (nos sintéticos, na tela Resultados;
+    // nos analíticos, nas Premissas).
     const todas = tem(`${base}_painel.metas`);
     const resultados = todas;
-    const manuais = todas || tem(`${base}_${base === "cenarios_analiticos" ? "premissas" : "configuracoes"}.manuais`);
+    const manuais = todas || tem(`${base}_${base === "cenarios_analiticos" ? "premissas" : "resultados"}.manuais`);
     return responder(response, async () => {
       const r = await cenariosService.indicadores(c, usuario(request));
       return { ...r, indicadores: todas ? r.indicadores : r.indicadores.filter((i) => (i.classe === "MANUAL" ? manuais : i.classe === "RESULTADO" ? resultados : false)) };

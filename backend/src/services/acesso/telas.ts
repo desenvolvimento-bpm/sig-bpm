@@ -53,8 +53,6 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
         // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
         ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),
         { codigo: "comparativo", nome: "Comparativo" },
-        // Os Indicadores Manuais dos sintéticos (19/10/2026; antes, no Painel de Bordo); nos analíticos, nas Premissas.
-        ...(analitico ? [] : [{ codigo: "manuais", nome: "Indicadores Manuais" }]),
       ],
     },
     ...(analitico
@@ -80,7 +78,9 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
           },
         ]
       : []),
-    { codigo: `${base}_resultados`, nome: "Resultados", abas: UNIDADES },
+    // Os Indicadores Manuais dos sintéticos (12/11/2026, pedido do Adão: uma aba da tela Resultados, depois das visões; os
+    // perfis com a aba nas Configurações a herdaram); nos analíticos, nas Premissas.
+    { codigo: `${base}_resultados`, nome: "Resultados", abas: analitico ? UNIDADES : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }] },
     // A aba Indicadores no Painel de Bordo, depois de Performance (19/10/2026; antes, a tela Indicadores e, por um dia, a
     // aba Metas; a chave continua `metas`): todos os indicadores do cenário.
     { codigo: `${base}_painel`, nome: "Painel de Bordo", abas: [...PAINEL, { codigo: "metas", nome: "Indicadores" }] },

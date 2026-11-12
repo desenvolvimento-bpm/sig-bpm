@@ -34,8 +34,8 @@ cenariosRoutes.put("/:id/marcacao", autenticacao, tela("configuracoes", "editar"
 cenariosRoutes.get("/:id/exportar", autenticacao, tela("resultados", "ler"), asyncHandler(c.exportar));
 cenariosRoutes.get("/:id/centros/exportar", autenticacao, tela("premissas", "ler", "centros"), asyncHandler(c.exportarCentros));
 cenariosRoutes.get("/:id/resultados", autenticacao, tela("resultados", "ler", (r: Request) => abaDaVisao(r.query.visao ?? 0)), asyncHandler(c.resultados));
-// Os indicadores: a tela Indicadores (o controlador deixa só as abas permitidas) ou, no analítico, a aba Indicadores
-// Manuais das Premissas.
+// Os indicadores: a aba Indicadores do Painel de Bordo (o controlador deixa só as abas permitidas) ou a aba Indicadores
+// Manuais (a da tela Resultados, nos sintéticos; a das Premissas, nos analíticos).
 cenariosRoutes.get("/:id/indicadores", autenticacao, verificarIndicadoresDoCenario, asyncHandler(c.indicadores));
 cenariosRoutes.get("/:id/painel", autenticacao, tela("painel"), asyncHandler(c.painel));
 // A edição da DRE do cenário pela ferramenta (12/10/2026).

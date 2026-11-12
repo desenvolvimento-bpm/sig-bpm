@@ -21,7 +21,7 @@ export function ConfiguracoesContent() {
   const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
   // ?aba=comparativo (ou referencia) abre direto na aba: os avisos do comparativo levam para cá.
   const pedida = useSearchParams().get("aba");
-  const abaInicial: AbaDasConfiguracoes = pedida === "comparativo" || pedida === "referencia" || pedida === "manuais" || pedida === "indices" ? pedida : "cenario";
+  const abaInicial: AbaDasConfiguracoes = pedida === "comparativo" || pedida === "referencia" || pedida === "indices" ? pedida : "cenario";
   const analitico = t.tipo === "ANALITICO";
   return (
     <div className="space-y-6">
@@ -29,7 +29,7 @@ export function ConfiguracoesContent() {
         titulo="Configurações"
         comoUsar={
           <ul>
-            <li>Na aba Cenário, mude o nome, a descrição e a visualização (Particular ou Pública) e clique em “Gravar Configurações”. Depois da primeira revisão, o nome fica travado: é o mesmo em todas as versões do cenário. Com o cenário marcado ou com a versão congelada, o nome e a descrição não mudam (a visualização, sim).</li>
+            <li>Na aba Cenário, mude o nome, a descrição, a visualização (Particular ou Pública) e a Edição das Configurações (Particular: só quem criou o cenário e os Administradores alteram esta tela; Pública: todos com permissão de editar as Configurações) e clique em “Gravar Configurações”; a visualização e a Edição das Configurações só mudam por quem criou o cenário ou pelo Administrador. Depois da primeira revisão, o nome fica travado: é o mesmo em todas as versões do cenário. Com o cenário marcado ou com a versão congelada, o nome e a descrição não mudam (a visualização, sim).</li>
             <li>
               Também na aba Cenário: “Marcar Cenário” marca o cenário como Orçamento, Anterior, Vendido ou Forecast (cada
               marcação fica ativa em um cenário só: marcar este tira a do anterior), e “Excluir Cenário” o exclui (um cenário marcado não se exclui).
@@ -40,8 +40,9 @@ export function ConfiguracoesContent() {
                   Na aba Referência (opcional): carregue o resultado realizado das competências fechadas de um exercício (Média do Período ou Mês a
                   Mês) ou outro cenário analítico. O realizado traz só as Médias de Referência — das premissas, dos centros de custo, da depreciação base, do
                   extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
-                  cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, na tela Premissas, para levar as médias aos
-                  meses. Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. A média de cada conta dos centros de
+                  cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, aqui na Referência, depois do “Realocar”, para levar as médias aos
+                  meses (“Apagar Valores”, ao lado, deixa os doze meses de todas as abas das premissas em branco; os dois pedem editar todas as
+                  abas das premissas e confirmam antes de gravar). Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. A média de cada conta dos centros de
                   custo divide a soma do período só pelos meses em que a conta teve movimentação. Os avisos do que não coube aparecem embaixo. Marque
                   “Manter os Valores dos Meses” para trocar só as Médias de Referência: os doze meses do cenário (digitados ou importados), os
                   investimentos e as linhas do Quadro de Lotação ficam, e o Justificar? do Exportar Premissas passa a comparar os meses com as médias
@@ -83,17 +84,14 @@ export function ConfiguracoesContent() {
                 </li>
               </>
             )}
-            {analitico ? null : (
-              <li>
-                Na aba Indicadores Manuais, os quadros de lotação e os indicadores do Comercial e do Administrativo, que
-                não saem da DRE: vêm da aba das metas do arquivo importado; clique numa linha para digitar os meses (as células digitadas ficam em
-                amarelo) ou no indicador, sem a permissão de editar, para ver o gráfico. O Painel de Bordo, aba Indicadores, mostra todos os
-                indicadores do cenário.
-              </li>
-            )}
             <li>Troque de cenário no nome dele, na barra do topo; ao lado, as telas {analitico ? "Premissas, Resultados, Painel de Bordo e Histórico" : "Resultados, Painel de Bordo e Reajustes"}.</li>
             <li>Aparecem só as abas que o seu perfil lê, e os botões de cada aba só com a permissão de editar nela (Controle de Usuários / Perfis); sem ela, a aba se lê, com um aviso.</li>
-            <li>Só quem criou o cenário (ou o Administrador) altera as Configurações: num cenário público de outro usuário, as abas se leem, com um aviso que diz de quem é o cenário.</li>
+            <li>
+              A Edição das Configurações vale para toda esta tela (todas as abas e ações: o cenário, Marcar e Excluir, a referência, as realocações,
+              o Replicar Médias e o Apagar Valores, o comparativo e os índices). Particular (o padrão): só quem criou o cenário
+              (ou o Administrador) altera as Configurações; num cenário público de outro usuário, as abas se leem, com um aviso que diz de quem é o
+              cenário. Pública: todos os usuários com permissão de editar as Configurações as alteram.
+            </li>
             <li>Na Referência, os meses fechados do exercício aparecem resumidos (por exemplo, “Fechada: de Janeiro a Agosto.”).</li>
             {analitico ? (
               <li>

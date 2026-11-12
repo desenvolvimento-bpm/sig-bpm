@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { plural } from "@/lib/texto";
+import { usePermissions } from "@/context/PermissionContext";
 
 import { mensagemDoErro, nomeDoArquivo } from "@/app/competencias/[anoMes]/dre/components/ExportarDRE";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -24,10 +25,19 @@ const invalidar = (queryClient: ReturnType<typeof useQueryClient>) => {
 const ABAS_DA_PLANILHA =
   "Matriz, Filial, Serviços, Quadro de Lotação, Centros de Custo (com o Quadro de Lotação e os Encargos e Benefícios), Investimentos (a Depreciação Base), Extra-Operacional e Indicadores Manuais";
 
+/** As abas da planilha das premissas (todas menos os Reajustes, que não têm meses digitados), pela chave da permissão. */
+const ABAS_DA_PERMISSAO = ["matriz", "filial", "servicos", "quadro", "centros", "rateios", "investimentos", "extra", "manuais"];
+/** O perfil edita todas as abas das premissas: o que Replicar Médias e Apagar Valores pedem (o servidor confere também). */
+export function useEditaTodasAsAbas() {
+  const { hasPermission } = usePermissions();
+  return ABAS_DA_PERMISSAO.every((a) => hasPermission(`cenarios_analiticos_premissas.${a}:editar`));
+}
+
 /**
  * Os botões Replicar Médias e Apagar Valores (15/10/2026; antes, um botão só, Replicar Médias / Apagar Valores, com a
- * escolha no modal), na altura do título das Premissas: em todas as abas, replica a Média de Referência de cada linha
- * nos doze meses, ou deixa os meses em branco. Cada um abre o modal dele, que confirma antes de gravar.
+ * escolha no modal; desde 12/11/2026, pedido do Adão, em Configurações / Referência, logo depois do Realocar — antes, na
+ * altura do título das Premissas): em todas as abas, replica a Média de Referência de cada linha nos doze meses, ou deixa
+ * os meses em branco. Cada um abre o modal dele, que confirma antes de gravar.
  */
 export function BotaoReplicarMedias({ id }: { id: string }) {
   const [aberto, setAberto] = useState(false);

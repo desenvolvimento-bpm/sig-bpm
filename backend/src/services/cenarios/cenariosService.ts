@@ -140,14 +140,19 @@ export const VISUALIZACOES: Record<VisualizacaoCenario, string> = { PARTICULAR: 
 /** O usuário alcança o cenário? */
 const alcanca = (c: { visualizacao: VisualizacaoCenario; criadoPorId: string | null }, u: Usuario) =>
   c.visualizacao === "PUBLICA" || !!u.admin || (!!c.criadoPorId && c.criadoPorId === u.id);
-/** Quem muda a visualização de um cenário: quem o criou e o Administrador. */
+/** Quem muda a visualização e a Edição das Configurações de um cenário: quem o criou e o Administrador. */
 const mudaVisualizacao = (c: { criadoPorId: string | null }, u: Usuario) => !!u.admin || (!!c.criadoPorId && c.criadoPorId === u.id);
 /**
- * As Configurações (o cenário, a referência e o comparativo) só se alteram por quem criou o cenário ou pelo
- * Administrador (14/10/2026): num cenário público, os demais as leem. É a mesma regra da visualização.
+ * Quem altera a tela Configurações (todas as abas e ações: o cenário, marcar e excluir, a referência, as realocações, o
+ * Replicar Médias e o Apagar Valores, o comparativo e os índices): com a Edição das Configurações Particular (o padrão; a
+ * regra de 14/10/2026), só quem criou o cenário e o Administrador; Pública (12/11/2026, pedido do Adão), todos com a
+ * permissão do perfil (as rotas conferem a dela).
  */
-function exigirQuemCriou(c: { nome: string; criadoPorId: string | null }, u: Usuario) {
-  if (!mudaVisualizacao(c, u)) throw new CenarioError(403, `O cenário ${c.nome} é de outro usuário: só quem o criou (ou o Administrador) altera as Configurações dele.`);
+const editaConfiguracoes = (c: { criadoPorId: string | null; edicaoConfiguracoes: VisualizacaoCenario }, u: Usuario) =>
+  c.edicaoConfiguracoes === "PUBLICA" || mudaVisualizacao(c, u);
+function exigirQuemCriou(c: { nome: string; criadoPorId: string | null; edicaoConfiguracoes: VisualizacaoCenario }, u: Usuario) {
+  if (!editaConfiguracoes(c, u))
+    throw new CenarioError(403, `O cenário ${c.nome} é de outro usuário, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) altera as Configurações dele.`);
 }
 const LOTE = 500;
 const MANUAIS = new Set(INDICADORES_DAS_LISTAS);
@@ -1114,7 +1119,7 @@ export const cenariosService = {
     const cenarios = (await getPrismaClient().cenario.findMany({ where: { tipo }, orderBy: [{ ano: "desc" }, { criadoEm: "desc" }] })).filter((c) => alcanca(c, usuario));
     const [doCenario, linhas, daFamilia] = await Promise.all([conteudo(cenarios.map((c) => c.id)), estrutura(), familias()]);
     const resumos = await Promise.all(cenarios.map((c) => resumoDoCenario(c.id, linhas)));
-    return cenarios.map((c, k) => ({ ...c, ...doCenario(c.id), ...daFamilia(c), resultados: resumos[k], podeMudarVisualizacao: mudaVisualizacao(c, usuario) }));
+    return cenarios.map((c, k) => ({ ...c, ...doCenario(c.id), ...daFamilia(c), resultados: resumos[k], podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario) }));
   },
 
   async obter(id: string, usuario: Usuario = SISTEMA) {
@@ -1122,7 +1127,7 @@ export const cenariosService = {
     // Nos analíticos (14/10/2026): os rateios sem regra no exercício e se as regras mudaram depois do último cálculo.
     const regras = c.tipo === "ANALITICO" ? await regrasDeRateio() : null;
     const rateios = regras ? { avisos: avisosDosRateios(regras, mesesDoAno(c.ano)), desatualizados: c.rateiosAssinatura !== assinaturaDasRegras(regras) } : null;
-    return { ...c, ...(await conteudo([id]))(id), ...(await familias())(c), podeMudarVisualizacao: mudaVisualizacao(c, usuario), rateios };
+    return { ...c, ...(await conteudo([id]))(id), ...(await familias())(c), podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), rateios };
   },
 
   /**
@@ -1187,11 +1192,11 @@ export const cenariosService = {
   },
 
   /**
-   * O nome, a descrição e a visualização. A visualização só muda por quem criou o cenário ou pelo Administrador, e um
-   * cenário marcado não fica particular (a marcação vale para todos: o Orçamento Empresarial dá o orçado de Resultados
-   * Realizados).
+   * O nome, a descrição, a visualização e a Edição das Configurações (12/11/2026). Os dois últimos só mudam por quem criou o
+   * cenário ou pelo Administrador, e um cenário marcado não fica particular (a marcação vale para todos: o Orçamento
+   * Empresarial dá o orçado de Resultados Realizados).
    */
-  async atualizar(id: string, dados: { nome: string; descricao: string | null; visualizacao?: VisualizacaoCenario }, usuario: Usuario) {
+  async atualizar(id: string, dados: { nome: string; descricao: string | null; visualizacao?: VisualizacaoCenario; edicaoConfiguracoes?: VisualizacaoCenario }, usuario: Usuario) {
     const antes = await obterOuFalhar(id, usuario);
     exigirQuemCriou(antes, usuario);
     // Com revisões criadas, o nome é o mesmo em todas as versões e não muda (13/10/2026).
@@ -1207,7 +1212,10 @@ export const cenariosService = {
         throw new CenarioError(409, `O cenário está marcado como ${MARCACOES[antes.marcacao]}: um cenário marcado fica público. Tire a marcação antes de torná-lo particular.`);
       }
     }
-    const depois = await getPrismaClient().cenario.update({ where: { id }, data: { nome: dados.nome, descricao: dados.descricao, visualizacao } });
+    const edicaoConfiguracoes = dados.edicaoConfiguracoes ?? antes.edicaoConfiguracoes;
+    if (edicaoConfiguracoes !== antes.edicaoConfiguracoes && !mudaVisualizacao(antes, usuario))
+      throw new CenarioError(409, "Só quem criou o cenário ou o Administrador muda a Edição das Configurações dele.");
+    const depois = await getPrismaClient().cenario.update({ where: { id }, data: { nome: dados.nome, descricao: dados.descricao, visualizacao, edicaoConfiguracoes } });
     await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, antes, depois });
     return this.obter(id, usuario);
   },
@@ -2073,6 +2081,8 @@ export const cenariosService = {
             tipo: origem.tipo,
             descricao: origem.descricao,
             visualizacao: origem.visualizacao,
+            // A Edição das Configurações da versão de origem (12/11/2026).
+            edicaoConfiguracoes: origem.edicaoConfiguracoes,
             criadoPor: usuario.nome,
             criadoPorId: usuario.id || null,
             nomeArquivo: origem.nomeArquivo,
@@ -2914,6 +2924,8 @@ export const cenariosService = {
    */
   async replicarMedias(id: string, acao: "replicar" | "apagar", usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
+    // Em Configurações / Referência (12/11/2026): a Edição das Configurações vale para eles.
+    exigirQuemCriou(c, usuario);
     exigirAnalitico(c);
     exigirEditavel(c);
     exigirSemReajustes(c);
@@ -3827,6 +3839,8 @@ export const cenariosService = {
   /** Grava os lançamentos manuais de um indicador (os 12 meses; vazio apaga o mês). */
   async salvarManual(id: string, nome: string, valores: Array<number | null>, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
+    // Nos sintéticos, os Indicadores Manuais são uma aba da tela Resultados (12/11/2026), como a DRE: valem a permissão da aba
+    // (a rota confere), sem a Edição das Configurações; nos analíticos, ficam nas Premissas.
     exigirEditavel(c);
     if (!MANUAIS.has(nome)) throw new CenarioError(400, `${nome} não é um lançamento manual: sai da DRE do cenário.`);
     if (c.tipo === "ANALITICO" && QUADROS_DE_LOTACAO.has(nome))

@@ -17,7 +17,7 @@ import { AvisoRateiosSemBase, CentrosDoCenario, RateiosDoCenario } from "../../.
 import { Erro } from "../../../components/CenarioDialog";
 import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/InvestimentosDoCenario";
 import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
-import { BotaoApagarValores, BotaoImportarValores, BotaoReplicarMedias, ExportarPremissas } from "../../../components/PlanilhaPremissas";
+import { BotaoImportarValores, ExportarPremissas } from "../../../components/PlanilhaPremissas";
 import { QuadroDoCenario } from "../../../components/QuadroDoCenario";
 import { ReajustesDoCenario } from "../../../components/ReajustesDoCenario";
 import { TabelaPremissas } from "../../../components/TabelaPremissas";
@@ -71,9 +71,8 @@ export function PremissasContent() {
   const comReajustes = !!cenario.data?.reajustesAplicados;
   const bloqueadaPelosReajustes = comReajustes && !manuais && !reajustes;
   const podeEditar = editaAba && !travado && !bloqueadaPelosReajustes && (!deUnidade || !!consulta.data?.editavel);
-  // Os botões da planilha (15/10/2026), na altura do título: Replicar Médias e Apagar Valores (todas as abas editáveis),
-  // Importar Valores (alguma aba editável) e Exportar Premissas; os três primeiros saem com os reajustes aplicados.
-  const editaTodas = ABAS_DA_PLANILHA.every((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
+  // Os botões da planilha (15/10/2026), na altura do título: Importar Valores (alguma aba editável; sai com os reajustes
+  // aplicados) e Exportar Premissas. O Replicar Médias e o Apagar Valores ficam em Configurações / Referência (12/11/2026).
   const editaAlguma = ABAS_DA_PLANILHA.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
   const editaPlanilha = !!cenario.data && !travado && !comReajustes;
   return (
@@ -83,8 +82,6 @@ export function PremissasContent() {
         acoes={
           abas.length ? (
             <div className="flex flex-wrap items-center gap-2">
-              {editaPlanilha && editaTodas ? <BotaoReplicarMedias id={id} /> : null}
-              {editaPlanilha && editaTodas ? <BotaoApagarValores id={id} /> : null}
               {editaPlanilha && editaAlguma ? <BotaoImportarValores id={id} /> : null}
               <ExportarPremissas id={id} />
             </div>
@@ -172,7 +169,7 @@ export function PremissasContent() {
             </li>
             <li>
               Com os reajustes aplicados, as demais abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição, com o aviso em
-              cada uma; “Replicar Médias”, “Apagar Valores” e “Importar Valores” saem da altura do título, e a referência (Configurações /
+              cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações /
               Referência) não se carrega. “Remover Reajustes” as deixa editáveis de novo.
             </li>
             <li>
@@ -185,9 +182,10 @@ export function PremissasContent() {
               Úteis, os do calendário, em cinza).
             </li>
             <li>
-              “Replicar Médias”, na altura do título: em todas as abas, leva a Média de Referência de cada linha aos doze meses (as linhas sem
-              média ficam como estão). “Apagar Valores”, ao lado: deixa os doze meses de todas as abas em branco (as Médias de Referência ficam).
-              Cada um abre o seu modal, que confirma antes de gravar; os dois pedem editar todas as abas.
+              “Replicar Médias” e “Apagar Valores” ficam em Configurações / Referência, depois do “Realocar”: o primeiro leva a Média de
+              Referência de cada linha aos doze meses, em todas as abas (as linhas sem média ficam como estão); o segundo deixa os doze meses de
+              todas as abas em branco (as Médias de Referência ficam). Cada um abre o seu modal, que confirma antes de gravar; os dois pedem
+              editar todas as abas.
             </li>
             <li>
               “Exportar Premissas” abre o modal: marque os departamentos e escolha o tipo (Todas as Abas, com os centros de custo numa aba; Um Centro

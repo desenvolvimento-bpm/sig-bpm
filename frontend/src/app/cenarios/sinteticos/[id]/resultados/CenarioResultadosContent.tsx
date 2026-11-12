@@ -16,6 +16,7 @@ import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 
 import { TabelaResultados } from "@/app/relatorios/resultados/ResultadosContent";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
+import { useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
 
 import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
 import { EdicaoDRE } from "../../../components/EdicaoDRE";
@@ -24,6 +25,7 @@ import { BotoesDeVersao } from "../../../components/VersaoCenario";
 import { cenariosService, type Cenario } from "../../../services/cenariosService";
 import { botaoPrimario } from "../../../components/CenarioDialog";
 import { useTipoDoCenario } from "../../../components/tipoDoCenario";
+import { IndicadoresDoCenario } from "../indicadores/CenarioIndicadoresContent";
 
 /** As visões da DRE do cenário: as de Resultados Empresariais, sem os centros de custo. */
 const VISOES = [
@@ -71,8 +73,9 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
 
 /**
  * A tela Resultados de um cenário: as visões da DRE mês a mês no exercício, como em Resultados Empresariais. No sintético,
- * quem edita os cenários edita a DRE aqui; no analítico (13/10/2026), a DRE é calculada a partir das premissas e fica
- * só para leitura.
+ * quem edita os cenários edita a DRE aqui, e a aba Indicadores Manuais (12/11/2026, pedido do Adão), depois das visões,
+ * digita os indicadores que não saem da DRE; no analítico (13/10/2026), a DRE é calculada a partir das premissas e fica
+ * só para leitura (os Indicadores Manuais ficam nas Premissas).
  */
 export function CenarioResultadosContent() {
   const { id } = useParams<{ id: string }>();
@@ -87,10 +90,17 @@ export function CenarioResultadosContent() {
   const analitico = t.tipo === "ANALITICO";
   // As visões (abas) que o perfil lê, e a edição de cada uma (14/10/2026).
   const visoes = VISOES.filter((v) => hasPermission(t.perm("resultados", "ler", v.aba)));
-  const visao = visoes.some((v) => v.chave === escolhida) ? escolhida : (visoes[0]?.chave ?? "");
+  // A aba Indicadores Manuais dos sintéticos (12/11/2026), depois das visões, com a permissão dela.
+  const leManuais = !analitico && hasPermission(t.perm("resultados", "ler", "manuais"));
+  const abas = [...visoes.map((v) => ({ chave: v.chave, rotulo: v.nome })), ...(leManuais ? [{ chave: "manuais", rotulo: "Indicadores Manuais" }] : [])];
+  const visao = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
+  const naManuais = visao === "manuais";
   const daVisao = VISOES.find((v) => v.chave === visao);
   const podeEditar = !analitico && !!daVisao && hasPermission(t.perm("resultados", "editar", daVisao.aba)) && !!cenario.data && !travado;
   const nome = daVisao?.nome ?? "";
+  // O Tipo e os Rótulos do gráfico de cada indicador manual, os do Configurar Gráficos do Painel de Bordo.
+  const [tipoGrafico] = useTipoGrafico();
+  const [comRotulos] = useRotulosDosValores();
   // O Exportar (14/10/2026), como o de Resultados Empresariais: a visão na tela, as seis unidades e, nos analíticos, os
   // centros de custo (em Excel).
   const leTodas = VISOES.every((v) => hasPermission(t.perm("resultados", "ler", v.aba)));
@@ -119,7 +129,7 @@ export function CenarioResultadosContent() {
                 endereco={`/proxy/cenarios/${id}/exportar`}
                 opcoes={opcoesExportar}
                 padrao={`${cenario.data?.nome ?? "Cenário"} - Resultados`}
-                imagem={{ nome: `${cenario.data?.nome ?? "Cenário"} - Resultados - ${nome}` }}
+                imagem={daVisao ? { nome: `${cenario.data?.nome ?? "Cenário"} - Resultados - ${nome}` } : undefined}
               /> : null}
           </div>
         }
@@ -127,7 +137,16 @@ export function CenarioResultadosContent() {
           <ul>
             <li>Troque de cenário no nome dele, na barra do topo; ao lado, o Painel de Bordo, com a aba Indicadores.</li>
             {analitico ? <li>No cenário analítico, a DRE é calculada a partir das premissas e não se edita aqui: os valores mudam com as premissas.</li> : null}
-            <li>Escolha a visão nas abas: Consolidado ou cada unidade (as que o seu perfil lê).</li>
+            <li>Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? "" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).</li>
+            {analitico ? null : (
+              <li>
+                Na aba Indicadores Manuais, os quadros de lotação e os indicadores do Comercial e do Administrativo, que não saem da DRE: vêm da aba
+                das metas do arquivo importado. Com a permissão de editar a aba, clique numa linha para digitar os meses (as células digitadas ficam
+                em amarelo); sem ela, clique no indicador para ver o gráfico (no Tipo e com os Rótulos do Configurar Gráficos do Painel de Bordo).
+                Com o cenário marcado ou com a versão congelada, os Indicadores Manuais não se editam. O Painel de Bordo, aba Indicadores, mostra
+                todos os indicadores do cenário.
+              </li>
+            )}
             {analitico ? (
               <li>
                 Nos analíticos, os rateios dos centros de custo seguem as regras de rateio de cada mês (o percentual fixo, ou as bases das premissas
@@ -183,15 +202,23 @@ export function CenarioResultadosContent() {
               Pré-Fabricado nos custos de produção; a de Montagem e a Complementar nos custos de serviços; a de Frete no Frete e Descarga; a ROL no
               resto. Em Despesas e Extra e no RN, as bases são as do Consolidado.
             </p>
+            {analitico ? null : (
+              <p>
+                A aba Indicadores Manuais traz os indicadores do cenário que não saem da DRE (os quadros de lotação e os do Comercial e do
+                Administrativo), mês a mês e acumulados, com o comparado; com as eficiências e a DRE, eles formam os indicadores do Painel de Bordo.
+              </p>
+            )}
           </>
         }
       />
-      <Abas rotulo="Visão dos resultados do cenário" ativa={visao} onMudar={setVisao} abas={visoes.map((v) => ({ chave: v.chave, rotulo: v.nome }))} />
-      {cenario.data && travado && hasPermission(t.perm("resultados", "editar")) && !analitico ? <AvisoMarcado cenario={cenario.data} oQue="a DRE" /> : null}
+      <Abas rotulo="Visão dos resultados do cenário" ativa={visao} onMudar={setVisao} abas={abas} />
+      {cenario.data && travado && hasPermission(t.perm("resultados", "editar")) && !analitico && !naManuais ? <AvisoMarcado cenario={cenario.data} oQue="a DRE" /> : null}
       {analitico && cenario.data ? <AvisosDosRateios cenario={cenario.data} podeRecalcular={podeRecalcular} /> : null}
       {/* No analítico, o aviso dos rateios sem base nas premissas (13/10/2026): esse valor não entra na DRE. */}
       {analitico ? <AvisoRateiosSemBase id={id} /> : null}
-      {!daVisao ? (
+      {naManuais ? (
+        <IndicadoresDoCenario id={id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />
+      ) : !daVisao ? (
         <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Seu perfil não tem acesso a nenhuma aba desta tela.</p>
       ) : podeEditar ? (
         <EdicaoDRE key={visao} id={id} visao={Number(visao)} nome={nome} />

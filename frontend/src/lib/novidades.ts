@@ -28,6 +28,42 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 16:47
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Referência, os botões Replicar Médias e Apagar Valores ficam logo depois de Realocar (na referência de outro cenário, depois de Carregar Cenário). Valem para todas as abas das Premissas.",
+      "Na aba Cenário, a opção Edição das Configurações: Particular (só quem criou o cenário e os Administradores alteram as Configurações) ou Pública (todos com permissão de editar as Configurações). Vale para toda a tela: todas as abas e ações. Só quem criou o cenário ou um Administrador muda a opção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Replicar Médias e Apagar Valores ficam em Configurações / Referência, logo depois de Realocar."],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Sintéticos",
+    tela: "Configurações",
+    rota: "/cenarios/sinteticos/0/configuracoes",
+    itens: [
+      "Na aba Cenário, a opção Edição das Configurações: Particular (só quem criou o cenário e os Administradores alteram as Configurações) ou Pública (todos com permissão de editar as Configurações). Vale para toda a tela: todas as abas e ações. Só quem criou o cenário ou um Administrador muda a opção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: [
+      "A aba Indicadores Manuais fica na tela Resultados, depois de RN: com a permissão de editar a aba, clique numa linha para digitar os meses; sem ela, clique no indicador para ver o gráfico. As permissões dos perfis passaram para a aba nova.",
+    ],
+  },
   // 12/11/2026, 15:24
   {
     publicada: "2026-11-12T15:24",

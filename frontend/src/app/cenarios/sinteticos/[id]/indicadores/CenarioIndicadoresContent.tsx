@@ -19,7 +19,7 @@ import { useTipoDoCenario } from "../../../components/tipoDoCenario";
 /**
  * A aba dos indicadores no Painel de Bordo do cenário, depois de Performance (19/10/2026): Indicadores (antes, Metas; a
  * chave da aba no perfil continua `metas`), o compilado de todos os indicadores. Os Indicadores Manuais ficam na tela
- * Configurações (sintéticos) ou nas Premissas (analíticos).
+ * Resultados (sintéticos) ou nas Premissas (analíticos).
  */
 const ABAS = [{ chave: "metas", rotulo: "Indicadores" }];
 const DA_ABA: Record<string, (i: IndicadorDoCenario) => boolean> = {
@@ -36,7 +36,7 @@ export function useAbasDosIndicadoresDoCenario() {
 
 /**
  * Os indicadores de um cenário (19/10/2026; antes, a tela Indicadores): a aba Indicadores do Painel de Bordo (`metas`,
- * todos) ou a aba Indicadores Manuais da tela Configurações dos sintéticos (`manuais`, onde se digitam) — a tabela e o
+ * todos) ou a aba Indicadores Manuais da tela Resultados dos sintéticos (`manuais`, onde se digitam) — a tabela e o
  * gráfico de cada indicador, com o Tipo e os Rótulos do Configurar Gráficos do Painel de Bordo.
  */
 export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string; aba: string; tipo: TipoGrafico; comRotulos: boolean }) {
@@ -48,7 +48,9 @@ export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string
   const travado = !!cenario.data && estaTravado(cenario.data);
   // No analítico (14/10/2026), os Indicadores Manuais se editam na tela Premissas; aqui ficam só para leitura.
   const analitico = t.tipo === "ANALITICO";
-  const podeEditar = hasPermission(t.perm("configuracoes", "editar", "manuais")) && !!cenario.data && !travado && !analitico;
+  // Os Indicadores Manuais são uma aba da tela Resultados (12/11/2026): vale a permissão de editar a aba, como na DRE.
+  const editaAba = hasPermission(t.perm("resultados", "editar", "manuais"));
+  const podeEditar = editaAba && !!cenario.data && !travado && !analitico;
   const [editando, setEditando] = useState<IndicadorDoCenario | null>(null);
   // O gráfico do indicador (16/10/2026), como em Resultados Empresariais: o cenário × o comparado.
   const [comGrafico, setComGrafico] = useState<IndicadorDoCenario | null>(null);
@@ -64,11 +66,11 @@ export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string
       {aba === "metas" ? (
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
           Os indicadores do cenário: os que saem da DRE (na tela Resultados) e os Indicadores Manuais (
-          {analitico ? "nas Premissas, aba Indicadores Manuais" : "na tela Configurações, aba Indicadores Manuais"}), com as eficiências calculadas e os
+          {analitico ? "nas Premissas, aba Indicadores Manuais" : "na tela Resultados, aba Indicadores Manuais"}), com as eficiências calculadas e os
           importados (liberação de projetos, GME). Não se editam aqui.
         </p>
       ) : null}
-      {manuais && cenario.data && travado && hasPermission(t.perm("configuracoes", "editar", "manuais")) ? <AvisoMarcado cenario={cenario.data} oQue="os Indicadores Manuais" /> : null}
+      {manuais && cenario.data && travado && editaAba ? <AvisoMarcado cenario={cenario.data} oQue="os Indicadores Manuais" varios /> : null}
       {manuais && analitico ? (
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
           No cenário analítico, os Indicadores Manuais se digitam na tela Premissas, aba Indicadores Manuais.

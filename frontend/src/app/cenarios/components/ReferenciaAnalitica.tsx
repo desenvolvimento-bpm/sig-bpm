@@ -17,6 +17,7 @@ import { cenariosService, rotuloVersao, type Cenario } from "../services/cenario
 import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "./AvisoMarcado";
 import { descreverFechadas } from "./descreverFechadas";
 import { BotaoRealocar, QuadroDeRealocacoes } from "./RealocacoesDialog";
+import { BotaoApagarValores, BotaoReplicarMedias, useEditaTodasAsAbas } from "./PlanilhaPremissas";
 import { botaoPrimario, classeSelect, Erro, OpcaoEmLinha } from "./CenarioDialog";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -88,7 +89,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
           : tipo === "cenario"
             ? `${origem!.nome} carregado no cenário; a DRE foi recalculada.`
             : modo === "MEDIA"
-              ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, nas Premissas).`
+              ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, aqui na Referência).`
               : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`) + vigente,
         lista,
       ),
@@ -99,6 +100,16 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
   // As ações do realizado (03/11/2026, pedido do Adão): o Carregar Realizado e, depois dele, o Realocar, na altura do De e do
   // Até (na Média do Período) ou sozinhos à direita (no Mês a Mês).
   const comCarregarRealizado = podeEditar && !bloqueada && tipo === "realizado" && anos.length > 0;
+  // O Replicar Médias e o Apagar Valores (12/11/2026, pedido do Adão; antes, na tela Premissas), logo depois do Realocar (ou do
+  // Carregar Cenário): mexem nos meses de todas as abas das premissas, que o perfil precisa editar.
+  const editaTodasAsAbas = useEditaTodasAsAbas();
+  const replicarOuApagar =
+    podeEditar && !bloqueada && editaTodasAsAbas ? (
+      <>
+        <BotaoReplicarMedias id={cenario.id} />
+        <BotaoApagarValores id={cenario.id} />
+      </>
+    ) : null;
   const acoes = (
     <>
       <Button type="button" className={botaoPrimario} disabled={periodoInvalido} onClick={() => setConfirmar(true)}>
@@ -106,6 +117,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
         Carregar Realizado
       </Button>
       <BotaoRealocar cenario={cenario} podeEditar />
+      {replicarOuApagar}
     </>
   );
 
@@ -184,6 +196,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
               <Copy className="size-4" />
               Carregar Cenário
             </Button>
+            {replicarOuApagar}
           </div>
         )
       ) : anos.length === 0 ? (
@@ -212,7 +225,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                 [
                   "MEDIA",
                   "Média do Período",
-                  `As Médias de Referência de um período (os centros de custo, cada conta só nos meses com movimentação)${manterMeses ? "; os meses do cenário ficam como estão." : ": os meses do cenário ficam em branco, para replicar as médias (Premissas / Replicar Médias) ou digitar."}`,
+                  `As Médias de Referência de um período (os centros de custo, cada conta só nos meses com movimentação)${manterMeses ? "; os meses do cenário ficam como estão." : ": os meses do cenário ficam em branco, para replicar as médias (Replicar Médias, abaixo) ou digitar."}`,
                 ],
                 [
                   "MES_A_MES",
