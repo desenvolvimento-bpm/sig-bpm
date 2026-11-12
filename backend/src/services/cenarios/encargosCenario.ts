@@ -32,6 +32,10 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  * férias com o terço nem 13º: os salários deles nas Remunerações CLT saem da base,
  *
  *   base = Remunerações CLT + Horas Extras − Salários dos Estagiários.
+ *
+ * Os Salários dos Aprendizes e dos Estagiários (12/11/2026, pedido do Adão: um por grupo, como os Salários CLT e PJ; antes,
+ * um de cada por mão de obra) entram só na mão de obra da atribuição do grupo, a que recebe as remunerações do Quadro de
+ * Lotação (quadroDoCenario.ts); na outra, a base é Remunerações CLT + Horas Extras.
  */
 
 export type ItemDosEncargos = "INSS" | "FGTS_APRENDIZ" | "FGTS" | "FERIAS" | "DECIMO_TERCEIRO" | "BENEFICIOS";
@@ -78,8 +82,9 @@ export const ehContaDeEncargos = (codigo: string) => codigo.endsWith(`.${ENCARGO
 
 /**
  * As contas de encargos de um grupo: para cada mão de obra (o prefixo "CPP.MOD"…) que o grupo tem, a conta de encargos,
- * as de base, a das Remunerações PJ (09/11/2026: o Quadro de Lotação do cenário) e se é a dos Benefícios Adicionais (a
- * principal: a da atribuição do grupo).
+ * as de base, a das Remunerações PJ (09/11/2026: o Quadro de Lotação do cenário) e se é a principal, a da atribuição do grupo
+ * (Direta: a MOD; Indireta ou sem atribuição: a MOI; a outra, quando o grupo da DRE só tem uma): a dos Benefícios Adicionais
+ * e, desde 12/11/2026, a que recebe as remunerações e os salários do Quadro de Lotação.
  */
 export function maosDeObraDoGrupo(codigos: string[], atribuicao: GrupoDoCenario["atribuicao"]) {
   const prefixos = [...new Set(codigos.filter(ehContaDeEncargos).map((c) => c.slice(0, -ENCARGOS.length - 1)))];
@@ -94,6 +99,7 @@ export function maosDeObraDoGrupo(codigos: string[], atribuicao: GrupoDoCenario[
     remuneracoesPJ: `${p}.${REMUNERACOES_PJ}`,
     horasExtras: `${p}.${HORAS_EXTRAS}`,
     beneficios: p === principal,
+    principal: p === principal,
   }));
 }
 
@@ -107,16 +113,17 @@ export function valorDoItem(item: (typeof ITENS_DOS_ENCARGOS)[number], gravado: 
 
 /**
  * Os Encargos e Benefícios de um grupo nos doze meses (conta → os doze meses): `conta(codigo, mes)` lê o valor das contas
- * do grupo; `gravado(venda, mes)`, as premissas dos encargos; `aprendizes(prefixo, mes)`, os salários dos aprendizes da mão
- * de obra (09/11/2026; sem eles, zero); `estagiarios(prefixo, mes)`, os dos estagiários, que saem da base (11/11/2026).
+ * do grupo; `gravado(venda, mes)`, as premissas dos encargos; `aprendizes(mes)`, os Salários dos Aprendizes do grupo
+ * (09/11/2026; sem eles, zero); `estagiarios(mes)`, os dos Estagiários, que saem da base (11/11/2026). Os dois, só na mão
+ * de obra principal (12/11/2026).
  */
 export function encargosDoGrupo(
   codigos: string[],
   atribuicao: GrupoDoCenario["atribuicao"],
   conta: (codigo: string, mes: number) => number,
   gravado: (venda: string, mes: number) => number | undefined,
-  aprendizes: (prefixo: string, mes: number) => number = () => 0,
-  estagiarios: (prefixo: string, mes: number) => number = () => 0,
+  aprendizes: (mes: number) => number = () => 0,
+  estagiarios: (mes: number) => number = () => 0,
 ) {
   const r = new Map<string, number[]>();
   const beneficios = ITENS_DOS_ENCARGOS.find((i) => i.item === "BENEFICIOS")!;
@@ -125,9 +132,9 @@ export function encargosDoGrupo(
       mo.encargos,
       Array.from({ length: 12 }, (_, k) => {
         const mes = k + 1;
-        const base = conta(mo.remuneracoes, mes) + conta(mo.horasExtras, mes) - estagiarios(mo.prefixo, mes);
+        const base = conta(mo.remuneracoes, mes) + conta(mo.horasExtras, mes) - (mo.principal ? estagiarios(mes) : 0);
         const valor = (item: ItemDosEncargos) => valorDoItem(itemDosEncargos(item)!, gravado, mes);
-        return encargosDaBase(base, aprendizes(mo.prefixo, mes), valor) + (mo.beneficios ? valorDoItem(beneficios, gravado, mes) : 0);
+        return encargosDaBase(base, mo.principal ? aprendizes(mes) : 0, valor) + (mo.beneficios ? valorDoItem(beneficios, gravado, mes) : 0);
       }),
     );
   }

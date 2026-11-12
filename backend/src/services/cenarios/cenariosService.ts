@@ -75,7 +75,7 @@ import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realo
 import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosReajustes, type IndiceDosReajustes, type ReajusteDoIndice } from "./reajustesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
-import { copiarQuadro, ehAprendiz, ehEstagiario, linhasDoQuadro, maoDeObraDaLinha, mesesDaLinha, quadroDosGrupos, type LinhaDoQuadro, type MesDaLinha } from "./quadroDoCenario.js";
+import { copiarQuadro, ehAprendiz, ehEstagiario, linhasDoQuadro, mesesDaLinha, quadroDosGrupos, type LinhaDoQuadro, type MesDaLinha, type TipoDeColaborador } from "./quadroDoCenario.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
 import { recusaDaFuncao } from "../colaboradores/funcaoPorSenioridade.js";
@@ -508,12 +508,19 @@ export const ABA_DA_PERMISSAO: Record<AbaDasPremissas, string> = { "1": "matriz"
 const iguais = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a)));
 const MESES_1_A_12 = Array.from({ length: 12 }, (_, k) => k + 1);
 
-/** O rótulo da linha dos Salários dos Aprendizes de uma mão de obra (com o nome dela, quando o grupo tem mais de uma). */
-function rotuloDosAprendizes(prefixo: string, maos: number, totais: Array<{ codigo: string; descricao: string }>, quem = "Aprendizes") {
-  return `Salários dos ${quem}${maos > 1 ? ` (${totais.find((t) => t.codigo === prefixo)?.descricao ?? prefixo})` : ""}`;
-}
-/** O rótulo da linha dos Salários dos Estagiários (11/11/2026), como o dos aprendizes. */
-const rotuloDosEstagiarios = (prefixo: string, maos: number, totais: Array<{ codigo: string; descricao: string }>) => rotuloDosAprendizes(prefixo, maos, totais, "Estagiários");
+/**
+ * As linhas dos Salários de um grupo (12/11/2026, pedido do Adão; antes, os Salários dos Aprendizes e dos Estagiários de cada
+ * mão de obra): uma por tipo de colaborador, como os Colaboradores — o tipo, o sufixo da chave da planilha (L|grupo|…), o
+ * rótulo e as linhas da aba Quadro de Lotação que ela soma no Excel (a senioridade e, nos CLT e nos PJ, o Tipo).
+ */
+const SALARIOS_DO_QUADRO: Array<{ tipo: TipoDeColaborador; sufixo: string; rotulo: string; filtro: { tipo?: "CLT" | "PJ"; senioridade: "APRENDIZ" | "ESTAGIARIO" | "OUTRAS" } }> = [
+  { tipo: "aprendizes", sufixo: "SALARIOS_APRENDIZES", rotulo: "Salários dos Aprendizes", filtro: { senioridade: "APRENDIZ" } },
+  { tipo: "estagiarios", sufixo: "SALARIOS_ESTAGIARIOS", rotulo: "Salários dos Estagiários", filtro: { senioridade: "ESTAGIARIO" } },
+  { tipo: "clt", sufixo: "SALARIOS_CLT", rotulo: "Salários CLT", filtro: { tipo: "CLT", senioridade: "OUTRAS" } },
+  { tipo: "pj", sufixo: "SALARIOS_PJ", rotulo: "Salários PJ", filtro: { tipo: "PJ", senioridade: "OUTRAS" } },
+];
+/** As linhas dos Salários de antes (as de cada mão de obra, "Salários dos Aprendizes (CPP.MOD)"): calculadas, a importação as ignora. */
+const SALARIOS_POR_MAO_DE_OBRA = /^Salários dos (Aprendizes|Estagiários) \(.+\)$/;
 
 /** A referência carregada no cenário analítico (11/11/2026): o realizado (o ano e os meses do período) ou o cenário de origem. */
 export type DetalheDaReferencia = { tipo: "REALIZADO"; ano: number; meses: number[] } | { tipo: "CENARIO"; cenarioId: string };
@@ -712,15 +719,8 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     calcularCenario(c.id),
     linhasDoQuadro(prisma, c.id),
   ]);
-  // Os grupos com linhas no Quadro de Lotação do cenário (09/11/2026): os colaboradores e as remunerações calculados.
-  const quadro = quadroDosGrupos(linhasDoQuadroDoCenario, grupos, (g) => contasDoGrupo(est, g).map((l) => l.codigo));
-  // A atribuição de cada centro (11/11/2026): a mão de obra das linhas dele, nas fórmulas do Excel sobre a aba Quadro de Lotação.
-  const atribuicaoDoCentro = new Map(
-    (await prisma.centroCusto.findMany({ where: { codigoRM: { not: null } }, select: { codigoRM: true, atribuicao: true } })).map((x) => [
-      x.codigoRM!,
-      x.atribuicao === "DIRETA" || x.atribuicao === "INDIRETA" ? x.atribuicao : null,
-    ]),
-  );
+  // Os grupos com linhas no Quadro de Lotação do cenário (09/11/2026): os colaboradores, os salários e as remunerações calculados.
+  const quadro = quadroDosGrupos(linhasDoQuadroDoCenario, grupos);
   const limites = limitesDe(c);
   const acimaDe = new Map(totaisDaDRE(est).linhas.map((l) => [l.linha.codigo, l.acima]));
   const limiteDa = (conta: string | null) => (conta && acimaDe.has(conta) ? limiteDaLinha(limites, conta, acimaDe.get(conta)!) : null);
@@ -733,7 +733,7 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
   const refP = (chave: string) => (fonte ? doze((mes) => fonte.prem.get(`${chave}|${mes}`)) : undefined);
   const refC = (chave: string) => (fonte ? doze((mes) => fonte.cen.get(`${chave}|${mes}`)) : undefined);
   const refI = (nome: string) => (fonte ? doze((mes) => fonte.ind.get(`${nome}|${mes}`)) : undefined);
-  const quadroDaReferencia = fonte?.linhasDoQuadro ? quadroDosGrupos(fonte.linhasDoQuadro, grupos, (g) => contasDoGrupo(est, g).map((l) => l.codigo)) : null;
+  const quadroDaReferencia = fonte?.linhasDoQuadro ? quadroDosGrupos(fonte.linhasDoQuadro, grupos) : null;
   for (const u of UNIDADES_PREMISSAS) {
     for (const venda of VENDAS_DA_UNIDADE[u]) {
       for (const l of linhasDaTabela(est, cadastro, u).filter((x) => x.tipo === "PREMISSA")) {
@@ -759,10 +759,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     // percentuais em fração; o mês em branco vale a Média de Referência, o padrão). Nos grupos com linhas na aba Quadro de
     // Lotação (11/11/2026), também os Colaboradores Aprendizes e Estagiários, antes dos CLT (calculados).
     const q = quadro.get(g.grupo);
-    // Os centros do grupo e os de cada mão de obra (11/11/2026): as fórmulas do Excel sobre a aba Quadro de Lotação.
+    // Os centros do grupo (11/11/2026): as fórmulas do Excel sobre a aba Quadro de Lotação.
     const codigos = g.centros.flatMap((x) => (x.codigo ? [x.codigo] : []));
     const maosDoGrupo = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
-    const centrosDa = (prefixo: string) => codigos.filter((x) => maoDeObraDaLinha(maosDoGrupo, atribuicaoDoCentro.get(x) ?? null)?.prefixo === prefixo);
     // Os colaboradores de todos os grupos (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é
     // a única fonte da contagem; antes, nos grupos sem linhas, digitados): em fórmula sobre a aba do arquivo, que não se importa.
     const doQuadroDa = (sufixo: string): LinhaDaPlanilha["doQuadro"] =>
@@ -817,28 +816,25 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
           })
         : undefined,
     });
-    // Os Salários dos Aprendizes de cada mão de obra (09/11/2026), do Quadro de Lotação do cenário: a base do FGTS Aprendiz;
-    // e os dos Estagiários (11/11/2026), que saem da base dos encargos.
-    for (const [tipo, rotuloDe] of [["APRENDIZ", rotuloDosAprendizes], ["ESTAGIARIO", rotuloDosEstagiarios]] as const) {
-      const salarios = (x: NonNullable<typeof q>, prefixo: string) => (tipo === "APRENDIZ" ? x.maos.get(prefixo)!.aprendizes : x.maos.get(prefixo)!.estagiarios);
-      for (const mo of q ? maosDoGrupo : []) {
-        const daReferencia = quadroDaReferencia?.get(g.grupo);
-        add({
-          aba: "centros",
-          grupo: g.grupo,
-          chave: `L|${g.grupo}|${tipo}|${mo.prefixo}`,
-          descricao: [g.grupo, "Quadro de Lotação", rotuloDe(mo.prefixo, maosDoGrupo.length, totais)],
-          und: "R$",
-          conta: null,
-          media: null,
-          meses: salarios(q!, mo.prefixo),
-          calculada: true,
-          // As linhas CLT da senioridade, nos centros da mão de obra (11/11/2026).
-          doQuadro: { centros: centrosDa(mo.prefixo), tipo: "CLT", senioridade: tipo, soma: "SALARIOS" },
-          referencia: fonte ? (daReferencia ? salarios(daReferencia, mo.prefixo) : doze(() => undefined)) : undefined,
-        });
-      }
-    }
+    // Os Salários de cada tipo de colaborador (12/11/2026, pedido do Adão; antes, os dos Aprendizes e dos Estagiários de cada
+    // mão de obra), em todos os grupos (sem linhas, em branco): no Excel, a soma da aba Quadro de Lotação do arquivo; deles
+    // saem as Remunerações e, os dos Aprendizes e dos Estagiários, os Encargos e Benefícios.
+    const daReferencia = quadroDaReferencia?.get(g.grupo);
+    for (const s of SALARIOS_DO_QUADRO)
+      add({
+        aba: "centros",
+        grupo: g.grupo,
+        chave: `L|${g.grupo}|${s.sufixo}`,
+        descricao: [g.grupo, "Quadro de Lotação", s.rotulo],
+        und: "R$",
+        conta: null,
+        media: null,
+        meses: doze((mes) => q?.salarios[s.tipo][mes - 1]),
+        calculada: true,
+        doQuadro: { centros: codigos, ...s.filtro, soma: "SALARIOS" },
+        referencia: fonte ? doze((mes) => daReferencia?.salarios[s.tipo][mes - 1]) : undefined,
+      });
+    const salario = (ref: (chave: string) => string, tipo: TipoDeColaborador) => `N(${ref(`L|${g.grupo}|${SALARIOS_DO_QUADRO.find((s) => s.tipo === tipo)!.sufixo}`)})`;
     for (const i of ITENS_DOS_ENCARGOS) {
       const ler = (mes: number) => prem.get(`0|${i.venda}|${g.grupo}|${mes}`);
       add({
@@ -856,8 +852,14 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     }
     const maos = new Map(maosDoGrupo.map((m) => [m.encargos, m]));
     // As Remunerações CLT e PJ vêm da aba Quadro de Lotação (09/11/2026, nos grupos com linhas; 11/11/2026, pedido do Adão, em
-    // todos): calculadas, em fórmula sobre a aba do arquivo.
-    const doQuadro = new Set(maosDoGrupo.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
+    // todos): calculadas — desde 12/11/2026, na mão de obra principal, a soma das linhas dos Salários (CLT: Aprendizes,
+    // Estagiários e CLT; PJ: PJ); na outra, zero.
+    const remuneracaoDa = new Map(
+      maosDoGrupo.flatMap((m) => [
+        [m.remuneracoes, (ref: (chave: string) => string) => (m.principal ? (["aprendizes", "estagiarios", "clt"] as const).map((t) => salario(ref, t)).join("+") : "0")],
+        [m.remuneracoesPJ, (ref: (chave: string) => string) => (m.principal ? salario(ref, "pj") : "0")],
+      ]),
+    );
     for (const l of contasDoGrupo(est, g)) {
       const atribuicao = totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "";
       const ler = (mes: number) => cen.get(`${g.grupo}|${l.codigo}|${mes}`);
@@ -870,17 +872,14 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
             // 20/10/2026: com o INSS e o FGTS também sobre as férias e o décimo terceiro.
             const [folha, provisoes] = [`(${item("INSS")}+${item("FGTS")})`, `(${item("FERIAS")}+${item("DECIMO_TERCEIRO")})`];
             const beneficios = mo.beneficios ? `+N(${ref(`E|${g.grupo}|BENEFICIOS`)})` : "";
-            // Os salários dos aprendizes e dos estagiários da mão de obra: as linhas do grupo com linhas no Quadro de Lotação; nos
-            // outros (11/11/2026), a soma da aba Quadro de Lotação do arquivo dentro da fórmula (sem ela no arquivo, zero, como no SIG).
-            const salarios = (tipo: "APRENDIZ" | "ESTAGIARIO") =>
-              q ? `N(${ref(`L|${g.grupo}|${tipo}|${mo.prefixo}`)})` : (doQuadroNoMes?.({ centros: centrosDa(mo.prefixo), tipo: "CLT", senioridade: tipo, soma: "SALARIOS" }) ?? "0");
+            // Os Salários dos Aprendizes e dos Estagiários do grupo (12/11/2026: as linhas dos Salários), só na mão de obra principal.
             // 09/11/2026: o FGTS Aprendiz sobre os salários dos aprendizes (a diferença para o FGTS CLT).
-            const aprendizes = `+(${item("FGTS_APRENDIZ")}-${item("FGTS")})*${salarios("APRENDIZ")}*(1+${provisoes})`;
+            const aprendizes = mo.principal ? `+(${item("FGTS_APRENDIZ")}-${item("FGTS")})*${salario(ref, "aprendizes")}*(1+${provisoes})` : "";
             // 11/11/2026: os salários dos estagiários saem da base (sem INSS, FGTS, férias com o terço e 13º).
-            const estagiarios = `-${salarios("ESTAGIARIO")}`;
+            const estagiarios = mo.principal ? `-${salario(ref, "estagiarios")}` : "";
             return `(N(${ref(`C|${g.grupo}|${mo.remuneracoes}`)})+N(${ref(`C|${g.grupo}|${mo.horasExtras}`)})${estagiarios})*(${folha}+${provisoes}+${folha}*${provisoes})${aprendizes}${beneficios}`;
           }
-        : undefined;
+        : remuneracaoDa.get(l.codigo);
       add({
         aba: "centros",
         grupo: g.grupo,
@@ -890,13 +889,8 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
         conta: l.codigo,
         media: ler(0) ?? null,
         meses: doze(ler),
-        calculada: !!mo || doQuadro.has(l.codigo),
+        calculada: !!mo || remuneracaoDa.has(l.codigo),
         formula,
-        // As Remunerações CLT e PJ (11/11/2026, pedido do Adão): no Excel, a soma dos salários das linhas do Tipo nos centros da
-        // mão de obra, na aba Quadro de Lotação do arquivo.
-        ...(doQuadro.has(l.codigo)
-          ? { doQuadro: { centros: centrosDa(l.codigo.split(".").slice(0, 2).join(".")), tipo: l.codigo.endsWith(".REMUNERACOES_PJ") ? ("PJ" as const) : ("CLT" as const), soma: "SALARIOS" as const } }
-          : {}),
         referencia: refC(`${g.grupo}|${l.codigo}`),
       });
     }
@@ -2274,7 +2268,7 @@ export const cenariosService = {
       linhasDoQuadro(getPrismaClient(), id),
     ]);
     // O Quadro de Lotação do cenário (09/11/2026): com linhas dos centros do grupo, os colaboradores e as remunerações são calculados.
-    const q = quadroDosGrupos(linhasDoCenario, [g], (x) => contasDoGrupo(est, x).map((l) => l.codigo)).get(grupo);
+    const q = quadroDosGrupos(linhasDoCenario, [g]).get(grupo);
     const maos = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
     // As Remunerações vêm da aba Quadro de Lotação em todos os grupos (11/11/2026, pedido do Adão; antes, só nos com linhas).
     const doQuadro = new Set(maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
@@ -2300,10 +2294,10 @@ export const cenariosService = {
         quadro: quadroDoGrupo(g).descricao,
         linhasDoQuadro: q?.linhas ?? 0,
       },
-      // Os Salários dos Aprendizes de cada mão de obra (09/11/2026; só nos grupos com linhas no Quadro de Lotação).
-      aprendizes: q ? maos.map((m) => ({ prefixo: m.prefixo, encargos: m.encargos, rotulo: rotuloDosAprendizes(m.prefixo, maos.length, totais), valores: q.maos.get(m.prefixo)!.aprendizes })) : [],
-      // Os Salários dos Estagiários (11/11/2026), que saem da base dos encargos.
-      estagiarios: q ? maos.map((m) => ({ prefixo: m.prefixo, encargos: m.encargos, rotulo: rotuloDosEstagiarios(m.prefixo, maos.length, totais), valores: q.maos.get(m.prefixo)!.estagiarios })) : [],
+      // Os Salários de cada tipo de colaborador (12/11/2026, pedido do Adão; antes, os dos Aprendizes e dos Estagiários de cada
+      // mão de obra), em todos os grupos (sem linhas, zero), e a mão de obra principal, que recebe as remunerações deles.
+      salarios: SALARIOS_DO_QUADRO.map((s) => ({ tipo: s.tipo, rotulo: s.rotulo, valores: q ? [...q.salarios[s.tipo]] : Array<number>(12).fill(0) })),
+      principal: maos.find((m) => m.principal)?.prefixo ?? null,
       encargos: ITENS_DOS_ENCARGOS.map((i) => ({ item: i.item, rotulo: i.rotulo, und: i.und, ...serie(i.venda, i.padrao, i.und === "%" ? 100 : 1) })),
       contas: contasDoGrupo(est, g).map((l) => ({
         codigo: l.codigo,
@@ -3211,6 +3205,8 @@ export const cenariosService = {
         // Pelo Código (os arquivos de antes) ou pela aba e pelas descrições (11/11/2026).
         const atual = l.chave !== null ? porChave.get(l.chave) : l.doTipo ? porDescricao.get(chaveDaDescricao(l.doTipo, l.descricao)) : undefined;
         if (!atual) {
+          // As linhas dos Salários de cada mão de obra (os arquivos de antes de 12/11/2026): calculadas, sem aviso.
+          if (l.doTipo === "centros" && SALARIOS_POR_MAO_DE_OBRA.test(String(l.descricao.at(-1) ?? "").trim())) continue;
           desconhecidas.push(`${l.aba}, linha ${l.numero}`);
           continue;
         }

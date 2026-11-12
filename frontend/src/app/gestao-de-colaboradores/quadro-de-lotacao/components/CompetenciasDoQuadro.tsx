@@ -58,11 +58,13 @@ function sugestao(itens: CompetenciaDoQuadro[], lancamentoInicial: string | null
 }
 
 /**
- * A tela inicial do Quadro de Lotação (06/11/2026, etapa 2): as competências próprias, abertas e fechadas aqui (fora do
- * Fechamento Mensal). Clicar numa linha abre a competência, nas abas Movimentações, Controle e Realizado.
+ * As competências do Quadro de Lotação (06/11/2026, etapa 2): as próprias, abertas e fechadas aqui (fora do Fechamento
+ * Mensal). Desde 12/11/2026 (pedido do Adão, como no Fechamento Mensal), o início da Gestão de Colaboradores
+ * (/gestao-de-colaboradores): clicar numa linha abre o Quadro de Lotação da competência, nas abas Movimentações, Controle e
+ * Realizado.
  */
 export function CompetenciasDoQuadro() {
-  useRegistrarAcessoTela("/gestao-de-colaboradores/quadro-de-lotacao");
+  useRegistrarAcessoTela("/gestao-de-colaboradores");
   const router = useRouter();
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -106,7 +108,7 @@ export function CompetenciasDoQuadro() {
   return (
     <div className="space-y-4">
       <CabecalhoDaTela
-        titulo="Quadro de Lotação"
+        titulo="Gestão de Colaboradores"
         sobre={
           <p>
             As competências do Quadro de Lotação, próprias deste processo: abertas e fechadas aqui, sem ligação com o Fechamento Mensal. Cada competência
@@ -117,7 +119,11 @@ export function CompetenciasDoQuadro() {
         comoUsar={
           <ul>
             <li>Use Abrir Competência, à direita do título, para abrir um mês; o modal sugere o seguinte ao mais recente.</li>
-            <li>Clique numa linha para abrir a competência, com as abas Movimentações, Controle e Realizado.</li>
+            <li>
+              Clique numa linha para abrir o Quadro de Lotação da competência, com as abas Movimentações, Controle e Realizado. Na barra do topo, “Gestão de
+              Colaboradores” volta a esta lista, e “Quadro de Lotação” abre a última competência aberta (ou a mais recente); no caminho do topo, o nome do
+              processo também volta aqui.
+            </li>
             <li>
               No menu Ações, Fechar trava as movimentações do mês (só fecha sem movimentações pendentes), Reabrir as libera de novo e Excluir apaga a competência
               aberta por engano, sem movimentações.

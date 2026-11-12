@@ -87,7 +87,7 @@ export type Bloco = Posicao &
      */
     | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string }
     /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
-    | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number }
+    | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number; /** As Bordas (12/11/2026). */ borda?: BordaDoTexto }
     /**
      * O Sumário (20/10/2026): as telas marcadas (da Introdução em diante), com o número do primeiro slide de cada uma, e, em
      * "TELAS_E_SLIDES", os slides delas; a lista e os números se montam a cada vez, com os slides do relatório.
@@ -163,6 +163,10 @@ export type RecorteDaImagem = { zoom: number; x: number; y: number };
 /** A transição dos slides de um grupo (27/10/2026), guardada em cada página dele. */
 export type Transicao = "ESMAECER" | "ROLAR_VERTICAL" | "ROLAR_HORIZONTAL";
 /** Uma página da aba (16/10/2026): cada departamento tem uma ou mais, cada uma com a sua grade. */
+/** As Bordas do Texto Livre (12/11/2026): as posições, o tipo, a espessura (px, de 1/4 a 60) e a cor (as dos textos). */
+export type LadoDaBorda = "CIMA" | "BAIXO" | "ESQUERDA" | "DIREITA";
+export type TipoDaBorda = "CONTINUA" | "TRACEJADA" | "PONTILHADA" | "DUPLA" | "SULCADA";
+export type BordaDoTexto = { lados: LadoDaBorda[]; tipo: TipoDaBorda; espessura: number; cor: string };
 export type Pagina = { id: string; /** O nome (16/10/2026), o do slide; sem ele, "Página N". */ nome?: string; blocos: Bloco[]; fundo?: Fundo; /** A transição do slide (27/10/2026; até 30/10/2026, a mesma em todas as páginas do grupo). */ transicao?: Transicao; /** Avançar Após (30/10/2026): na apresentação, o slide passa sozinho ao próximo depois desses segundos. */ avancarApos?: number; /** Recomeçar ao Terminar (11/11/2026, os painéis): depois do Avançar Após do último slide, a apresentação volta ao primeiro; marcado em todas as páginas do painel. */ recomecarAoTerminar?: boolean; /** Ocultar Página (12/11/2026): a página fica fora dos slides (o Apresentar pula para a próxima; fora também do PDF, do contador e do Sumário). */ oculta?: boolean };
 /** A Capa (20/10/2026): a primeira aba; os slides dela não entram na contagem. */
 export const CHAVE_DA_CAPA = "CAPA";

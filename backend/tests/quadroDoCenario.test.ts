@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 
 import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
 import type { GrupoDoCenario } from "../src/services/cenarios/centrosCenario.js";
-import { encargosDaBase, encargosDoGrupo, FATOR_PADRAO, itemDosEncargos, type ItemDosEncargos } from "../src/services/cenarios/encargosCenario.js";
+import { encargosDaBase, encargosDoGrupo, FATOR_PADRAO, itemDosEncargos, maosDeObraDoGrupo, type ItemDosEncargos } from "../src/services/cenarios/encargosCenario.js";
 import { abaDoQuadroDeLotacao, formulaDoQuadro, lerArquivoDePremissas, quadroDoArquivo } from "../src/services/cenarios/planilhaPremissas.js";
-import { ehAprendiz, ehEstagiario, quadroDosGrupos, type LinhaDoQuadro } from "../src/services/cenarios/quadroDoCenario.js";
+import { ehAprendiz, ehEstagiario, quadroDosGrupos, remuneracoesDoQuadro, type LinhaDoQuadro } from "../src/services/cenarios/quadroDoCenario.js";
 
 const padrao = (item: ItemDosEncargos) => itemDosEncargos(item)!.padrao ?? 0;
 const doze = (colaboradores: number, salarioBruto: number, adicional = 0) => Array.from({ length: 12 }, () => ({ colaboradores, salarioBruto, adicional }));
@@ -34,56 +34,63 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     // O mesmo que o FGTS de cada um sobre os seus salários.
     const semFgts = 10_000 * (0.29 + provisoes + 0.29 * provisoes);
     assert.ok(Math.abs(encargosDaBase(10_000, 3_000, padrao) - (semFgts + (0.02 * 3_000 + 0.08 * 7_000) * (1 + provisoes))) < 1e-9);
-    // Na conta do grupo, os aprendizes da mão de obra.
-    const r = encargosDoGrupo(CONTAS, "DIRETA", (c) => (c === "CPP.MOD.REMUNERACOES_CLT" ? 10_000 : 0), () => undefined, (prefixo) => (prefixo === "CPP.MOD" ? 3_000 : 0));
+    // Na conta do grupo, os Salários dos Aprendizes só na mão de obra principal (12/11/2026): a da atribuição do grupo.
+    const r = encargosDoGrupo(CONTAS, "DIRETA", (c) => (c === "CPP.MOD.REMUNERACOES_CLT" || c === "CPP.MOI.REMUNERACOES_CLT" ? 10_000 : 0), () => undefined, () => 3_000);
     assert.ok(Math.abs(r.get("CPP.MOD.ENCARGOS_E_BENEFICIOS")![0] - encargosDaBase(10_000, 3_000, padrao)) < 1e-9);
+    assert.ok(Math.abs(r.get("CPP.MOI.ENCARGOS_E_BENEFICIOS")![0] - encargosDaBase(10_000, 0, padrao)) < 1e-9);
   });
 
-  it("os grupos com linhas: os colaboradores CLT e PJ e as remunerações de cada mão de obra pela atribuição do centro", () => {
+  it("os grupos com linhas: os colaboradores e os Salários de cada tipo, todos na mão de obra da atribuição do grupo (12/11/2026)", () => {
     const grupos = [grupo("Montagem de Formas", "1.01", "INDIRETA"), grupo("Sem Linhas", "1.02", "DIRETA")];
     const linhas: LinhaDoQuadro[] = [
-      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "1.01", atribuicao: null, meses: doze(2, 1_500) },
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.01", atribuicao: "DIRETA", meses: doze(3, 4_000, 400) },
-      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "1.01", atribuicao: "INDIRETA", meses: doze(1, 8_000) },
+      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "1.01", meses: doze(2, 1_500) },
+      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.01", meses: doze(3, 4_000, 400) },
+      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "1.01", meses: doze(1, 8_000) },
       // Um centro fora dos grupos do cenário não conta.
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.96", atribuicao: null, meses: doze(9, 9_000) },
+      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.96", meses: doze(9, 9_000) },
     ];
-    const q = quadroDosGrupos(linhas, grupos, () => CONTAS);
+    const q = quadroDosGrupos(linhas, grupos);
     assert.deepEqual([...q.keys()], ["Montagem de Formas"]);
     const g = q.get("Montagem de Formas")!;
     assert.equal(g.linhas, 3);
     // 11/11/2026: os aprendizes à parte dos CLT.
     assert.deepEqual([g.aprendizes[0], g.estagiarios[0], g.clt[0], g.pj[0]], [2, 0, 3, 1]);
-    // O aprendiz (centro sem atribuição) vai para a mão de obra do grupo (Indireta); o Pleno, para a Direta.
-    assert.deepEqual([g.maos.get("CPP.MOI")!.clt[0], g.maos.get("CPP.MOI")!.aprendizes[0], g.maos.get("CPP.MOI")!.pj[0]], [3_000, 3_000, 8_000]);
-    assert.deepEqual([g.maos.get("CPP.MOD")!.clt[0], g.maos.get("CPP.MOD")!.aprendizes[0]], [13_200, 0]);
+    // Os Salários de cada tipo: colaboradores × (Salário Bruto + Insalubridade / Periculosidade).
+    assert.deepEqual([g.salarios.aprendizes[0], g.salarios.estagiarios[0], g.salarios.clt[0], g.salarios.pj[0]], [3_000, 0, 13_200, 8_000]);
+    // As Remunerações: CLT, os Aprendizes, os Estagiários e os CLT; PJ, os PJ — na mão de obra do grupo (Indireta: a MOI).
+    assert.deepEqual(remuneracoesDoQuadro(g.salarios, 0), { clt: 16_200, pj: 8_000 });
+    assert.deepEqual(maosDeObraDoGrupo(CONTAS, "INDIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", false], ["CPP.MOI", true]]);
+    assert.deepEqual(maosDeObraDoGrupo(CONTAS, "DIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", true], ["CPP.MOI", false]]);
     assert.ok(ehAprendiz(" aprendiz ") && ehAprendiz("APRENDIZ") && !ehAprendiz("Júnior"));
   });
 
   it("Aprendizes, Estagiários, CLT e PJ (11/11/2026): a contagem pela senioridade e os estagiários fora da base dos encargos", () => {
     const grupos = [grupo("Administrativo", "2.01", "INDIRETA")];
     const linhas: LinhaDoQuadro[] = [
-      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "2.01", atribuicao: "INDIRETA", meses: doze(2, 1_500) },
-      { vinculo: "CLT", aprendiz: false, estagiario: true, codigo: "2.01", atribuicao: "INDIRETA", meses: doze(3, 1_200) },
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "2.01", atribuicao: "INDIRETA", meses: doze(4, 5_000) },
-      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "2.01", atribuicao: "INDIRETA", meses: doze(1, 9_000) },
-      // Um estagiário cadastrado como PJ conta nos Estagiários; o salário fica nas Remunerações PJ (sem encargos).
-      { vinculo: "PJ", aprendiz: false, estagiario: true, codigo: "2.01", atribuicao: "INDIRETA", meses: doze(1, 1_000) },
+      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "2.01", meses: doze(2, 1_500) },
+      { vinculo: "CLT", aprendiz: false, estagiario: true, codigo: "2.01", meses: doze(3, 1_200) },
+      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "2.01", meses: doze(4, 5_000) },
+      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "2.01", meses: doze(1, 9_000) },
+      // Um estagiário cadastrado como PJ conta nos Estagiários e, desde 12/11/2026, o salário dele também (nas Remunerações CLT,
+      // fora da base dos encargos: o mesmo valor de encargos).
+      { vinculo: "PJ", aprendiz: false, estagiario: true, codigo: "2.01", meses: doze(1, 1_000) },
     ];
-    const g = quadroDosGrupos(linhas, grupos, () => CONTAS).get("Administrativo")!;
+    const g = quadroDosGrupos(linhas, grupos).get("Administrativo")!;
     assert.deepEqual([g.aprendizes[0], g.estagiarios[0], g.clt[0], g.pj[0]], [2, 4, 4, 1]);
     // O total: a soma dos quatro, as onze pessoas das linhas.
     assert.equal(g.aprendizes[0] + g.estagiarios[0] + g.clt[0] + g.pj[0], 11);
-    const s = g.maos.get("CPP.MOI")!;
-    assert.deepEqual([s.clt[0], s.pj[0], s.aprendizes[0], s.estagiarios[0]], [3_000 + 3_600 + 20_000, 10_000, 3_000, 3_600]);
+    const s = g.salarios;
+    assert.deepEqual([s.aprendizes[0], s.estagiarios[0], s.clt[0], s.pj[0]], [3_000, 4_600, 20_000, 9_000]);
+    const rem = remuneracoesDoQuadro(s, 0);
+    assert.deepEqual(rem, { clt: 3_000 + 4_600 + 20_000, pj: 9_000 });
     // Os encargos: a base sem os estagiários, com o FGTS dos aprendizes a 2%.
     const r = encargosDoGrupo(
       CONTAS,
       "INDIRETA",
-      (c) => (c === "CPP.MOI.REMUNERACOES_CLT" ? s.clt[0] : 0),
+      (c) => (c === "CPP.MOI.REMUNERACOES_CLT" ? rem.clt : 0),
       () => undefined,
-      (prefixo) => (prefixo === "CPP.MOI" ? s.aprendizes[0] : 0),
-      (prefixo) => (prefixo === "CPP.MOI" ? s.estagiarios[0] : 0),
+      () => s.aprendizes[0],
+      () => s.estagiarios[0],
     );
     const esperado = encargosDaBase(3_000 + 20_000, 3_000, padrao);
     assert.ok(Math.abs(r.get("CPP.MOI.ENCARGOS_E_BENEFICIOS")![0] - esperado) < 1e-9);

@@ -233,6 +233,19 @@ function Editor({
   // A página aberta: a escolhida, se ainda existe; senão, a primeira da aba.
   const pagina = daAba.find((p) => p.id === aberta.pagina) ?? daAba[0];
   const nPagina = pagina ? daAba.indexOf(pagina) : -1;
+  // As abas das páginas sem a barra de rolagem (12/11/2026, pedido do Adão): a lista rola sozinha até a aba da página aberta
+  // quando ela muda (Página Anterior, Próxima Página, uma página nova ou duplicada), para ela ficar à vista.
+  const listaDasPaginas = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const lista = listaDasPaginas.current;
+    const atual = lista?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!lista || !atual) return;
+    const [l, a] = [lista.getBoundingClientRect(), atual.getBoundingClientRect()];
+    // Uma folga, para a vizinha aparecer um pouco e se ver que há mais abas.
+    const folga = 32;
+    if (a.left < l.left) lista.scrollBy({ left: a.left - l.left - folga, behavior: "smooth" });
+    else if (a.right > l.right) lista.scrollBy({ left: a.right - l.right + folga, behavior: "smooth" });
+  }, [chave, pagina?.id, daAba.length]);
   const mudadas = relatorio.abas.filter((a) => a.podeEditar && JSON.stringify(paginas[a.chave] ?? []) !== JSON.stringify(gravadas[a.chave] ?? []));
   const mudouAba = mudadas.some((a) => a.chave === chave);
   // Os grupos que o salvamento automático grava: os alterados, menos o em conflito (espera a escolha do usuário).
@@ -863,7 +876,13 @@ function Editor({
       {configuracoes ? conteudoDasConfiguracoes(relatorio, botaoExcluir) : null}
       {!configuracoes && aba?.visivel ? (
         <div className="flex items-end">
-          <div role="tablist" aria-label={`Páginas de ${aba.nome}`} data-tour="abas" className="flex min-w-0 flex-1 gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-200">
+          <div
+            ref={listaDasPaginas}
+            role="tablist"
+            aria-label={`Páginas de ${aba.nome}`}
+            data-tour="abas"
+            className="flex min-w-0 flex-1 gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {daAba.map((p, k) => {
               const atual = p.id === pagina?.id;
               const classe = `-mb-px inline-flex shrink-0 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap ${atual ? "border-black font-bold text-gray-900" : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900"}`;
@@ -1358,7 +1377,12 @@ export function ItensDoComoUsar() {
       <li>
         Texto Livre inclui um texto com a formatação das anotações, com a fonte e o espaçamento entre as linhas (no menu da edição; o tamanho até 144 e o
         branco servem aos textos sobre a Imagem de Fundo), mas sem o destaque lateral, o título, o ícone e o fundo: na edição, o contorno tracejado aparece com o mouse
-        sobre ele. Como a anotação, ele cresce sozinho enquanto você escreve. Na apresentação, ele não se destaca nem se amplia.
+        sobre ele. No Texto Livre, o menu da edição tem também o Alinhamento, logo antes do espaçamento (Esquerda, Justificado, Centralizado ou
+        Direita: nos parágrafos selecionados; sem seleção, em todo o texto; o ícone do botão mostra o do parágrafo onde está o cursor), e as Bordas,
+        depois do espaçamento: o modal com as posições (Em Cima, Embaixo, Esquerda, Direita ou Todas), o tipo (Contínua, Tracejada, Pontilhada, Dupla
+        ou Sulcada), a espessura (de 1/4 a 8 px e os tamanhos dos textos, de 10 a 60) e a cor (as dos textos; Padrão é a cor do texto do tema), com a
+        prévia; Aplicar sem nenhuma posição marcada, ou Remover Bordas, tira as bordas, e o botão fica destacado no bloco com bordas. Como a anotação,
+        ele cresce sozinho enquanto você escreve. Na apresentação, ele não se destaca nem se amplia.
       </li>
       <li>
         {g ? (
@@ -1470,7 +1494,7 @@ export function ItensDoComoUsar() {
         125%, 150%, 200%, 250% ou 300%: o conteúdo inteiro — os textos, os valores e o gráfico — maior, no mesmo bloco; o que não couber, aumente o
         bloco), Configurar (as opções do
         gráfico — os rótulos e o tipo, neste card ou em todos os cards da aba; as cores seguem a Acessibilidade —, do Sumário ou da Tabela), os ajustes da
-        imagem, o Cortar e Posicionar, as notas das anotações, a formatação do texto (nas anotações, no Texto Livre, nas legendas e, a do Sumário, por nível) e excluir.
+        imagem, o Cortar e Posicionar, as notas das anotações, a formatação do texto (nas anotações, no Texto Livre — com o Alinhamento e as Bordas —, nas legendas e, a do Sumário, por nível) e excluir.
       </li>
       <li>
         {g ? (

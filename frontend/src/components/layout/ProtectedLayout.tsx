@@ -13,6 +13,7 @@ import { EtapasDoMes } from "@/components/layout/EtapasDoMes";
 import { FaixaDaPublicacao } from "@/components/layout/FaixaDaPublicacao";
 import { IntroducaoDoLayout } from "@/components/layout/IntroducaoAoSig";
 import { BarraDoCenario, lerRotaDoCenario } from "@/app/cenarios/components/BarraDoCenario";
+import { SituacaoDaCompetenciaDoQuadro, competenciaDoQuadroNaRota } from "@/app/gestao-de-colaboradores/quadro-de-lotacao/components/SituacaoDaCompetenciaDoQuadro";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
@@ -88,7 +89,15 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
         ) : null}
         <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
           {doMes && user ? <EtapasDoMes anoMes={doMes.anoMes} chave={doMes.chave} resto={doMes.resto} /> : null}
-          {doGrupo && user ? <BarraDeTelas grupo={doGrupo.grupo} atual={doGrupo.tela.title} /> : null}
+          {/* Na tela inicial do processo (12/11/2026: a lista das competências da Gestão de Colaboradores), sem a barra, como na do Fechamento Mensal. */}
+          {doGrupo?.tela && user ? (
+            <BarraDeTelas
+              grupo={doGrupo.grupo}
+              atual={doGrupo.tela?.title ?? ""}
+              // A situação da competência do Quadro de Lotação aberta (12/11/2026), à direita da barra, como no Fechamento Mensal.
+              etiquetas={competenciaDoQuadroNaRota(pathname) ? <SituacaoDaCompetenciaDoQuadro anoMes={competenciaDoQuadroNaRota(pathname)!} /> : undefined}
+            />
+          ) : null}
           {doCenario && user && !bloqueada ? <BarraDoCenario id={doCenario.id} tela={doCenario.tela} /> : null}
           {isLoading && exigida ? (
             <div className="h-40 animate-pulse rounded-sm bg-gray-100" />

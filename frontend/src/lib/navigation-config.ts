@@ -75,6 +75,13 @@ export type NavItem = {
   abas?: NavItem[];
   /** Um processo ainda por fazer (14/10/2026): a tela diz "Tela em desenvolvimento." e o menu o mostra em cinza. */
   emDesenvolvimento?: boolean;
+  /**
+   * A tela inicial de um processo com telas (12/11/2026: a lista das competências da Gestão de Colaboradores, como a do
+   * Fechamento Mensal), fora da barra das telas: o menu, o nome do processo na barra e o caminho do topo levam a ela.
+   */
+  inicio?: { href: string; permission: string };
+  /** O nome curto da tela na barra (12/11/2026: "Colaboradores", a tela Gestão de Colaboradores dos Cadastros Auxiliares). */
+  curto?: string;
 };
 
 export type NavGrupo = { titulo: string; itens: NavItem[] };
@@ -199,14 +206,41 @@ export const navGrupos: NavGrupo[] = [
       { title: "Gestão de Credores", href: "/processos-administrativos/gestao-de-credores", icon: ReceiptText, emDesenvolvimento: true },
       {
         title: "Gestão de Colaboradores",
-        href: "/gestao-de-colaboradores/cadastros/senioridades",
+        // A lista das competências é o início do processo (12/11/2026, pedido do Adão, como no Fechamento Mensal).
+        href: "/gestao-de-colaboradores",
+        inicio: { href: "/gestao-de-colaboradores", permission: "colaboradores_quadro:ler" },
         icon: UsersRound,
         recurso: "GESTAO_COLABORADORES",
         telas: [
+          // O Quadro de Lotação (06/11/2026, etapa 2): as abas Movimentações, Controle e Realizado de uma competência
+          // (/quadro-de-lotacao/aaaa-mm/<aba>); o endereço sem a competência abre a última aberta (12/11/2026).
+          { title: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao", icon: Network, permission: "colaboradores_quadro:ler" },
           {
-            title: "Cadastros",
+            title: "Painel de Bordo",
+            href: "/gestao-de-colaboradores/painel/resultados",
+            icon: LayoutDashboard,
+            permission: "colaboradores_painel:ler",
+            abas: [
+              { title: "Resultados", href: "/gestao-de-colaboradores/painel/resultados", icon: LayoutDashboard, permission: "colaboradores_painel.resultados:ler" },
+              { title: "Indicadores", href: "/gestao-de-colaboradores/painel/indicadores", icon: LayoutDashboard, permission: "colaboradores_painel.indicadores:ler" },
+            ],
+          },
+        ],
+      },
+      // Os Cadastros Auxiliares (12/11/2026, pedido do Adão): os cadastros dos Processos Auxiliares, uma tela por processo —
+      // a Gestão de Colaboradores ("Colaboradores" na barra; antes, a tela Cadastros da Gestão de Colaboradores), com uma aba
+      // por cadastro. Os endereços continuam os mesmos.
+      {
+        title: "Cadastros Auxiliares",
+        href: "/gestao-de-colaboradores/cadastros/senioridades",
+        icon: ClipboardList,
+        recurso: "CADASTROS_AUXILIARES",
+        telas: [
+          {
+            title: "Gestão de Colaboradores",
+            curto: "Colaboradores",
             href: "/gestao-de-colaboradores/cadastros/senioridades",
-            icon: ClipboardList,
+            icon: UsersRound,
             permission: "colaboradores_cadastros:ler",
             abas: [
               { title: "Senioridades", href: "/gestao-de-colaboradores/cadastros/senioridades", icon: ClipboardList, permission: "colaboradores_cadastros.senioridades:ler" },
@@ -219,19 +253,6 @@ export const navGrupos: NavGrupo[] = [
                 icon: ClipboardList,
                 permission: "colaboradores_cadastros.lancamento_inicial:ler",
               },
-            ],
-          },
-          // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências próprias; as abas Movimentações, Controle e
-          // Realizado ficam dentro de cada competência (/quadro-de-lotacao/aaaa-mm/<aba>).
-          { title: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao", icon: Network, permission: "colaboradores_quadro:ler" },
-          {
-            title: "Painel de Bordo",
-            href: "/gestao-de-colaboradores/painel/resultados",
-            icon: LayoutDashboard,
-            permission: "colaboradores_painel:ler",
-            abas: [
-              { title: "Resultados", href: "/gestao-de-colaboradores/painel/resultados", icon: LayoutDashboard, permission: "colaboradores_painel.resultados:ler" },
-              { title: "Indicadores", href: "/gestao-de-colaboradores/painel/indicadores", icon: LayoutDashboard, permission: "colaboradores_painel.indicadores:ler" },
             ],
           },
         ],
@@ -349,15 +370,21 @@ function telaPermitida(t: NavItem, pode: (p: string) => boolean): NavItem | null
 export function itemPermitido(item: NavItem, pode: (p: string) => boolean): NavItem | null {
   if (!item.telas) return !item.permission || pode(item.permission) ? item : null;
   const telas = item.telas.map((t) => telaPermitida(t, pode)).filter((t): t is NavItem => t !== null);
-  return telas.length > 0 ? { ...item, href: telas[0].href, telas } : null;
+  // Com a tela inicial (12/11/2026), o processo abre nela; sem a permissão dela, na primeira tela.
+  const inicio = item.inicio && pode(item.inicio.permission) ? item.inicio.href : null;
+  return telas.length > 0 ? { ...item, href: inicio ?? telas[0].href, telas } : null;
 }
 
-/** O grupo de telas da tela aberta, com a tela (e a aba, nas telas com abas): a barra no topo e o caminho usam os três. */
-export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem; aba: NavItem | null } | null {
+/**
+ * O grupo de telas da tela aberta, com a tela (e a aba, nas telas com abas): a barra no topo e o caminho usam os três. Na
+ * tela inicial do processo (12/11/2026), a tela é nula: sem a barra das telas (como na lista do Fechamento Mensal), e o caminho só com o processo.
+ */
+export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem | null; aba: NavItem | null } | null {
   for (const g of navGrupos) {
     for (const item of g.itens) {
       const tela = item.telas?.find((t) => naTelaOuAba(pathname, t));
       if (tela) return { grupo: item, tela, aba: tela.abas?.find((a) => naTela(pathname, a.href)) ?? null };
+      if (item.inicio && pathname === item.inicio.href) return { grupo: item, tela: null, aba: null };
     }
   }
   return null;
@@ -366,13 +393,13 @@ export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem; 
 /** As abas da tela aberta que o perfil alcança (17/10/2026), com a aberta; null fora das telas com abas. */
 export function abasDaTela(pathname: string, pode: (p: string) => boolean): { titulo: string; abas: NavItem[]; ativa: string } | null {
   const doGrupo = grupoDaTela(pathname);
-  if (!doGrupo?.tela.abas || !doGrupo.aba) return null;
+  if (!doGrupo?.tela?.abas || !doGrupo.aba) return null;
   return { titulo: doGrupo.tela.title, abas: doGrupo.tela.abas.filter((a) => !a.permission || pode(a.permission)), ativa: doGrupo.aba.href };
 }
 
 /** O item do menu aceso: o da tela, ou o grupo de telas que a contém. */
 export function itemAtivo(pathname: string, item: NavItem): boolean {
-  return item.telas ? item.telas.some((t) => naTelaOuAba(pathname, t)) : naTela(pathname, item.href);
+  return item.telas ? item.telas.some((t) => naTelaOuAba(pathname, t)) || pathname === item.inicio?.href : naTela(pathname, item.href);
 }
 
 /**
@@ -408,7 +435,9 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/analises-gerenciais\/relatorios-executivos(\/|$)/, "relatorios_executivos:ler"],
   [/^\/analises-gerenciais\/paineis-de-bordo(\/|$)/, "paineis_de_bordo:ler"],
   [/^\/central-de-conectividade\/biblioteca-de-apis(\/|$)/, "biblioteca_apis:ler"],
-  // A Gestão de Colaboradores (06/11/2026): as abas da tela Cadastros.
+  // A Gestão de Colaboradores (06/11/2026): a lista das competências (12/11/2026, o início do processo) e as abas da tela
+  // Gestão de Colaboradores dos Cadastros Auxiliares (antes, a tela Cadastros).
+  [/^\/gestao-de-colaboradores$/, "colaboradores_quadro:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/senioridades(\/|$)/, "colaboradores_cadastros.senioridades:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/funcoes(\/|$)/, "colaboradores_cadastros.funcoes:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/movimentacoes(\/|$)/, "colaboradores_cadastros.movimentacoes:ler"],
@@ -541,19 +570,18 @@ export function migalhas(pathname: string, rotuloDaEtapa: (chave: string) => str
   if (/^\/analises-gerenciais\/paineis-de-bordo\/[^/]+/.test(pathname)) {
     return [{ rotulo: "Painéis e Apresentações", href: "/analises-gerenciais/paineis-de-bordo" }, { rotulo: rotuloDoRelatorio ?? "Painel" }];
   }
-  // Uma competência do Quadro de Lotação (06/11/2026): "Gestão de Colaboradores › Quadro de Lotação › 11/2026 › Movimentações".
+  // Uma competência do Quadro de Lotação (06/11/2026; 12/11/2026, como no Fechamento Mensal: o processo leva à lista das
+  // competências): "Gestão de Colaboradores › 11/2026 › Quadro de Lotação › Movimentações".
   const quadro = pathname.match(/^\/gestao-de-colaboradores\/quadro-de-lotacao\/(\d{4})-(\d{2})\/([^/]+)/);
   if (quadro) {
     const aba = { movimentacoes: "Movimentações", controle: "Controle", realizado: "Realizado" }[quadro[3]] ?? quadro[3];
-    return [
-      { rotulo: "Gestão de Colaboradores", href: "/gestao-de-colaboradores/cadastros/senioridades" },
-      { rotulo: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao" },
-      { rotulo: `${quadro[2]}/${quadro[1]}` },
-      { rotulo: aba },
-    ];
+    return [{ rotulo: "Gestão de Colaboradores", href: "/gestao-de-colaboradores" }, { rotulo: `${quadro[2]}/${quadro[1]}` }, { rotulo: "Quadro de Lotação" }, { rotulo: aba }];
   }
   const doGrupo = grupoDaTela(pathname);
-  if (doGrupo) return [{ rotulo: doGrupo.grupo.title, href: doGrupo.grupo.href }, { rotulo: doGrupo.tela.title }, ...(doGrupo.aba ? [{ rotulo: doGrupo.aba.title }] : [])];
+  // A tela inicial do processo (12/11/2026): só o nome dele.
+  if (doGrupo && !doGrupo.tela) return [{ rotulo: doGrupo.grupo.title }];
+  if (doGrupo?.tela)
+    return [{ rotulo: doGrupo.grupo.title, href: doGrupo.grupo.inicio?.href ?? doGrupo.grupo.href }, { rotulo: doGrupo.tela.title }, ...(doGrupo.aba ? [{ rotulo: doGrupo.aba.title }] : [])];
   return [{ rotulo: getPageTitle(pathname) }];
 }
 

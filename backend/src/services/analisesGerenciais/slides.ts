@@ -78,7 +78,7 @@ export type BlocoDoRelatorio = { id: string; x: number; y: number; w: number; h:
    */
   | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string }
   /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
-  | { tipo: "TEXTO"; texto: string; html?: string; espacamento?: number }
+  | { tipo: "TEXTO"; texto: string; html?: string; espacamento?: number; /** As Bordas (12/11/2026). */ borda?: { lados: string[]; tipo: string; espessura: number; cor: string } }
   /**
    * O Sumário (20/10/2026): a lista das telas (as abas, da Introdução em diante; num painel, a tela Painel de Bordo) marcadas,
    * com o número do primeiro slide de cada uma, e, em "TELAS_E_SLIDES", também os slides delas; a tela monta a lista e os

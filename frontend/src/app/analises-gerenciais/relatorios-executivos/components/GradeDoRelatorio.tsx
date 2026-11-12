@@ -2,7 +2,7 @@
 
 import { useCallback, useContext, useEffect, useRef, useState, useLayoutEffect } from "react";
 import GridLayout, { type Layout } from "react-grid-layout";
-import { CalendarDays, ChartColumn, CircleAlert, CirclePlay, ClipboardPaste, Columns2, Copy, Crop, ImagePlus, Redo2, Settings, Sigma, SlidersHorizontal, ThumbsDown, ThumbsUp, Trash2, Undo2, ZoomIn } from "lucide-react";
+import { CalendarDays, ChartColumn, CircleAlert, CirclePlay, ClipboardPaste, Columns2, Copy, Crop, ImagePlus, Redo2, Settings, Sigma, SlidersHorizontal, Square, ThumbsDown, ThumbsUp, Trash2, Undo2, ZoomIn } from "lucide-react";
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -27,6 +27,7 @@ import { CamadaDoFundo } from "./FundoDoSlide";
 import { NaTelaPadrao, TELA_PADRAO } from "./TelaPadrao";
 import { BarraDoSumario, ConfigurarSumarioDialog, ListaDoSumario } from "./SumarioDoRelatorio";
 import { alturaDaLinha, BarraDeTexto, familiaDa, TAMANHO_DO_TITULO, TextoRico } from "./TextoRico";
+import { BordasDialog, estiloDaBorda } from "./BordasDoTexto";
 import { estadoDoPlayer, irPara, pausarPlayer, PlayerDoVideo } from "./PlayerDoVideo";
 import { videoDoLink } from "./videoIncorporado";
 import { ConfigurarTabelaDialog, TabelaDoBloco } from "./TabelaDoRelatorio";
@@ -1137,6 +1138,9 @@ export function BarraDeEdicao({
   // O texto formatado: as anotações, o Texto Livre e as legendas das fotos e dos vídeos (a fonte e o espaçamento, só nos dois primeiros).
   const comTexto = !!b && (b.tipo === "ANOTACAO" || b.tipo === "TEXTO" || (b.tipo === "FOTO" && !b.livre) || b.tipo === "VIDEO");
   const doTexto = b?.tipo === "ANOTACAO" || b?.tipo === "TEXTO";
+  // O Texto Livre (12/11/2026): o alinhamento dos parágrafos e as bordas do bloco.
+  const textoLivre = b?.tipo === "TEXTO" ? b : undefined;
+  const [bordas, setBordas] = useState(false);
   const separador = <span aria-hidden className="mx-1 h-5 w-px bg-gray-200" />;
   return (
     <div
@@ -1222,6 +1226,7 @@ export function BarraDeEdicao({
           // A fonte e o espaçamento entre as linhas (20/10/2026), nas anotações e no Texto Livre.
           fontes={doTexto}
           espacamento={doTexto ? { valor: b.espacamento, definir: (espacamento) => onMudar({ espacamento } as Partial<Bloco>) } : undefined}
+          alinhamento={!!textoLivre}
           titulo={
             b?.tipo === "ANOTACAO"
               ? {
@@ -1235,6 +1240,27 @@ export function BarraDeEdicao({
           }
         />
       )}
+      {/* As Bordas (12/11/2026, pedido do Adão): o modal com as posições, o tipo, a espessura e a cor; no Texto Livre. */}
+      <button
+        type="button"
+        className={`${botao} ${textoLivre?.borda ? "bg-gray-200 text-gray-900" : ""}`}
+        disabled={!textoLivre}
+        title={textoLivre?.borda ? "Bordas (com bordas)" : "Bordas"}
+        aria-label="Bordas"
+        onClick={() => setBordas(true)}
+      >
+        <Square className="size-4" />
+      </button>
+      {bordas && textoLivre ? (
+        <BordasDialog
+          inicial={textoLivre.borda}
+          onFechar={() => setBordas(false)}
+          onAplicar={(borda) => {
+            onMudar({ borda } as Partial<Bloco>);
+            setBordas(false);
+          }}
+        />
+      ) : null}
       {separador}
       <button type="button" className={`${botao} hover:text-red-700`} disabled={!b} title="Excluir o bloco (Delete)" aria-label="Excluir o bloco" onClick={onExcluir}>
         <Trash2 className="size-4" />
@@ -1344,8 +1370,8 @@ function ConteudoDoBloco({
   }
   if (b.tipo === "TEXTO") {
     // O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo; na edição,
-    // o contorno tracejado com o mouse sobre ele.
-    return (
+    // o contorno tracejado com o mouse sobre ele. As Bordas (12/11/2026) ficam em volta do bloco, na cor do texto (Padrão).
+    const texto = (
       <TextoRico
         html={b.html}
         texto={b.texto}
@@ -1357,6 +1383,14 @@ function ConteudoDoBloco({
         onMudar={(html, texto) => onMudar({ html, texto } as Partial<Bloco>)}
         className={`h-full w-full overflow-auto text-sm text-gray-900 ${editavel ? "rounded-sm border border-dashed border-transparent px-1 hover:border-gray-300 focus:border-gray-300" : "px-1"}`}
       />
+    );
+    const borda = estiloDaBorda(b.borda);
+    return borda ? (
+      <div className="h-full w-full text-gray-900" style={borda}>
+        {texto}
+      </div>
+    ) : (
+      texto
     );
   }
   if (b.tipo === "SUMARIO") return <ListaDoSumario b={b} sumario={sumario} editavel={editavel} />;

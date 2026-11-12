@@ -103,10 +103,13 @@ export type ContasDoCentro = {
    * entra. `referencia`: a Média de Referência (o mês 0; 15/10/2026).
    */
   lotacao: { aprendizes: SerieDoCentro | null; estagiarios: SerieDoCentro | null; clt: SerieDoCentro; pj: SerieDoCentro; quadro: string; linhasDoQuadro: number };
-  /** Os Salários dos Aprendizes de cada mão de obra (09/11/2026): nos grupos com linhas na aba Quadro de Lotação. */
-  aprendizes: Array<{ prefixo: string; encargos: string; rotulo: string; valores: number[] }>;
-  /** Os Salários dos Estagiários (11/11/2026), que saem da base dos encargos: como os dos aprendizes. */
-  estagiarios: Array<{ prefixo: string; encargos: string; rotulo: string; valores: number[] }>;
+  /**
+   * Os Salários de cada tipo de colaborador (12/11/2026: Aprendizes, Estagiários, CLT e PJ; antes, os dos Aprendizes e dos
+   * Estagiários de cada mão de obra), da aba Quadro de Lotação; deles saem as Remunerações da mão de obra principal.
+   */
+  salarios: Array<{ tipo: "aprendizes" | "estagiarios" | "clt" | "pj"; rotulo: string; valores: number[] }>;
+  /** A mão de obra principal do grupo (o prefixo "CPP.MOD"…): a da atribuição dele, que recebe as remunerações do Quadro de Lotação. */
+  principal: string | null;
   /** Os Encargos e Benefícios (19/10/2026): os percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$. */
   encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$" }>;
   /** `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026). */

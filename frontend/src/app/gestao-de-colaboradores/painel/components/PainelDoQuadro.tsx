@@ -8,7 +8,8 @@ import { ExportarTabela } from "@/components/shared/ExportarTabela";
 import { QuadroTabela } from "@/components/shared/QuadroTabela";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 import type { Coluna } from "@/lib/filtrosDeTabela";
-import { RotulosDoGrafico, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
+import { RotulosDoGrafico, SeletorRotulos, SeletorTipoGrafico, useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
+import { ConfigurarGraficos } from "@/app/relatorios/components/ConfigurarGraficos";
 import { blocoComparado, CardDoPainel, LegendaDoPainel, useCoresDoPainel, type FormatacaoDoCard } from "@/app/relatorios/painel/PainelContent";
 import type { ItemPainel } from "@/app/relatorios/services/relatoriosService";
 
@@ -66,9 +67,10 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
   const mes = meses.at(-1)?.mes ?? null;
   const cenario = comparacao.comparado;
   const marcacao = comparacao.atual?.rotulo ?? "Cenário";
-  const [tipo] = useTipoGrafico();
+  // O Tipo e os Rótulos do Configurar Gráficos (12/11/2026), guardados neste navegador: os mesmos dos outros painéis.
+  const [tipo, setTipo] = useTipoGrafico();
+  const [comRotulos, setComRotulos] = useRotulosDosValores();
   const [cores] = useCoresDoPainel();
-  const competencia = mes ? `${String(mes).padStart(2, "0")}/${ano}` : null;
 
   const linhas: LinhaDoIndicador[] = INDICADORES_DO_QUADRO.flatMap((ind) => {
     const real: LinhaDoIndicador = {
@@ -130,7 +132,7 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
         }
         comoUsar={
           <ul>
-            <li>O painel mostra sempre a competência mais recente do Quadro de Lotação (a em edição ou a última fechada), ao lado do título; o ano é o dela.</li>
+            <li>O painel mostra sempre a competência mais recente do Quadro de Lotação (a em edição ou a última fechada): o mês dela aparece nos cards, e o ano é o dela.</li>
             <li>
               A aba Resultados mostra um card padrão por indicador, como no Painel de Bordo de Resultados Empresariais: o nome e, à direita, a conta e o
               comportamento (o do cadastro dos indicadores); o Atual (o mês da competência) e o Acumulado (os meses do ano com competência até ela), com a
@@ -143,13 +145,25 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
               gráfico, o cenário ao lado do realizado; na tabela, abaixo de cada indicador, a linha do cenário (todos os meses) e a da diferença. O
               acumulado do cenário usa os mesmos meses do realizado (os do ano com competência do Quadro de Lotação).
             </li>
+            <li>
+              Na aba Resultados, “Configurar Gráficos”, depois da Comparação, escolhe os Rótulos (Com ou Sem os valores nos gráficos) e o Tipo (Barras ou
+              Área) dos cards; as escolhas valem na hora, ficam guardadas neste navegador e são as mesmas dos outros painéis (as cores seguem a
+              Acessibilidade, no menu do usuário).
+            </li>
           </ul>
         }
-        selo={competencia ? <span className="text-sm font-medium text-gray-900">{competencia}</span> : undefined}
         acoes={
           <div className="flex flex-wrap items-center justify-end gap-4">
             {aba === "resultados" && cenario ? <LegendaDoPainel tipo={tipo} cores={cores} comparado={cenario.cenario.nome} /> : null}
             <SeletorDaComparacao comparacao={comparacao} />
+            {/* O Configurar Gráficos (12/11/2026, pedido do Adão), como no Painel de Bordo de Resultados Empresariais: só os Rótulos e
+                o Tipo (a competência é sempre a mais recente); na aba Resultados, a dos gráficos. */}
+            {aba === "resultados" ? (
+              <ConfigurarGraficos>
+                <SeletorRotulos com={comRotulos} onMudar={setComRotulos} />
+                <SeletorTipoGrafico tipo={tipo} onMudar={setTipo} />
+              </ConfigurarGraficos>
+            ) : null}
           </div>
         }
         exportar={aba === "indicadores" ? <ExportarTabela titulo={`Gestão de Colaboradores · Indicadores · ${ano}`} colunas={colunas} linhas={linhas} /> : undefined}
@@ -171,6 +185,7 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
                 tipo={tipo}
                 cores={cores}
                 comGrafico
+                comRotulos={comRotulos}
                 formatacao={{ mes: formatacaoDo(ind), acumulado: formatacaoDo(ind) }}
               />
             ))}

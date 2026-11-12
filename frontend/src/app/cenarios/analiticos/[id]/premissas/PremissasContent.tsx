@@ -104,26 +104,28 @@ export function PremissasContent() {
                 : null}{" "}
               O grupo de centros com linhas conta por elas, na aba Centros de Custo, os Colaboradores Aprendizes (a senioridade Aprendiz: o Jovem
               Aprendiz), os Colaboradores Estagiários (a senioridade Estagiário: os estagiários e os bolsistas), os Colaboradores CLT e os PJ (as demais
-              senioridades, pelo Tipo) e as Remunerações CLT e PJ (colaboradores × Salário Total, pelo Tipo da linha; na mão de obra da atribuição do
-              centro da linha — Direta, a MOD; Indireta, a MOI; sem ela, a do grupo), que deixam de se digitar ali. Nos encargos, o Aprendiz tem o
-              Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os colaboradores e as Remunerações CLT e PJ
-              vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
+              senioridades, pelo Tipo), os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
+              todos vão para a mão de obra da atribuição do grupo (Direta, a MOD; Indireta ou sem atribuição, a MOI), com as Remunerações CLT = Salários
+              dos Aprendizes + Salários dos Estagiários + Salários CLT e as Remunerações PJ = Salários PJ; a outra mão de obra fica sem remunerações
+              daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
+              colaboradores, os salários e as Remunerações CLT e PJ vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
               “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
             </li>
             <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
               estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo (o Quadro de Lotação — os Colaboradores Aprendizes,
-              Estagiários, CLT e PJ e o Total de Colaboradores, a soma — vem da aba Quadro de Lotação e não se digita; nos grupos com linhas lá,
-              também os Salários dos Aprendizes e dos Estagiários): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
+              Estagiários, CLT e PJ, o Total de Colaboradores, a soma, e os Salários dos Aprendizes, dos Estagiários, CLT e PJ — vem da aba Quadro de
+              Lotação e não se digita): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
               8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
-              sempre da aba Quadro de Lotação, em todos os grupos, e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos
+              sempre dos Salários do Quadro de Lotação, na mão de obra da atribuição do grupo — as CLT, os Salários dos Aprendizes, dos Estagiários e
+              CLT; as PJ, os Salários PJ —, e na outra mão de obra e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
               tabelas das unidades, em R$ por unidade; a depreciação, nos investimentos). A conta Encargos e Benefícios não se digita: é a base
               (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
               Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais
-              (estes, na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ e os estagiários não têm
-              encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses” e “Reajustar Marcados”; o grupo com centros de
+              (os Salários dos Aprendizes e dos Estagiários e os Benefícios Adicionais, só na mão de obra da atribuição do grupo) — o FGTS de cada um
+              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses” e “Reajustar Marcados”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
               Cadastros da Controladoria). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
@@ -135,8 +137,9 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Investimentos, em cima, a Depreciação Base de cada unidade mês a mês (digitada: o maquinário de produção na Matriz e na Filial, o de
-              serviços em Serviços e o patrimônio em Despesas e Extra), com a depreciação dos investimentos e a total; embaixo, a lista dos investimentos
-              (“Exportar”, acima dela, leva a lista em Excel ou PDF).
+              serviços em Serviços e o patrimônio em Despesas e Extra), com a depreciação dos investimentos e a total; embaixo, a lista dos investimentos.
+              Cada uma tem o título e a descrição num card de destaque, com as funções dela à direita (na Depreciação, os valores marcados, “Marcar Todos
+              os Meses” e “Reajustar Marcados”; nos Investimentos, os botões da lista e “Exportar”, que leva a lista em Excel ou PDF).
               {podeEditar
                 ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”."
                 : null} Cada investimento
@@ -145,7 +148,8 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Extra-Operacional, como nos Lançamentos Manuais do fechamento, os valores mensais do imposto de renda e da contribuição social e das
-              receitas e despesas financeiras, em Despesas e Extra e no RN.
+              receitas e despesas financeiras, em Despesas e Extra e no RN, cada uma com o título num card de destaque e, à direita dele, os valores
+              marcados, “Marcar Todos os Meses” e “Reajustar Marcados”.
             </li>
             <li>
               Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE
@@ -195,11 +199,10 @@ export function PremissasContent() {
               referência do cenário (com ela: Realizado, o resultado realizado de cada mês do período; Referência, os meses do outro cenário — não se
               importam), a Média de Referência, o Total da Referência (a média × 12), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
               (uma fórmula: Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência) e a Justificativa, em texto
-              livre. Nos centros de custo, o Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores em fórmula; nos grupos com linhas
-              na aba Quadro de Lotação, também os Colaboradores Aprendizes e Estagiários, antes dos CLT, e os Salários dos Aprendizes e dos
-              Estagiários; as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas, os colaboradores e os Salários dos Aprendizes e dos
-              Estagiários são fórmulas sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e incluir ou
-              mudar as linhas ou os salários dela muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
+              livre. Nos centros de custo, o Quadro de Lotação (os Colaboradores Aprendizes, Estagiários, CLT e PJ e os Salários dos Aprendizes, dos
+              Estagiários, CLT e PJ, em fórmula sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e o
+              Total de Colaboradores, a soma; as Remunerações CLT e PJ da mão de obra da atribuição do grupo, em fórmula sobre os Salários, e as da
+              outra, zero: incluir ou mudar as linhas ou os salários da aba Quadro de Lotação muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
               Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula (as linhas calculadas não se importam nem se replicam). A aba
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
               em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), o Custo no Ano em fórmula
@@ -297,9 +300,11 @@ export function PremissasContent() {
               as férias e o décimo terceiro: base × [INSS + FGTS CLT + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo
               Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + Benefícios Adicionais, com a base =
               Remunerações CLT + Horas Extras − Salários dos Estagiários (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador
-              sobre os seus salários, os aprendizes (a senioridade Aprendiz, nas linhas CLT da aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as
-              Férias e o Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (a senioridade Estagiário; Lei 11.788/2008) não
-              têm INSS, FGTS, férias com o terço nem décimo terceiro: os salários deles nas Remunerações CLT saem da base. Os percentuais têm o mesmo padrão
+              sobre os seus salários, os aprendizes (a senioridade Aprendiz, na aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as Férias e o
+              Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (a senioridade Estagiário; Lei 11.788/2008) não têm INSS,
+              FGTS, férias com o terço nem décimo terceiro: os salários deles nas Remunerações CLT saem da base. Os Salários dos Aprendizes e dos
+              Estagiários entram só na mão de obra da atribuição do grupo, a que recebe as remunerações do Quadro de Lotação; na outra, a base é
+              Remunerações CLT + Horas Extras. Os percentuais têm o mesmo padrão
               em todos os cenários (29% — a confirmar com a contabilidade —, 2%, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
               Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo.
               Na referência realizada, os Benefícios Adicionais de cada mês fechado e a Média de Referência deles são a diferença entre os encargos

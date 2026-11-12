@@ -28,6 +28,73 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 13:25
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Centros de Custo, abaixo do Total de Colaboradores, uma linha de Salários para cada tipo de colaborador: Salários dos Aprendizes, dos Estagiários, CLT e PJ (colaboradores × Salário Total das linhas da aba Quadro de Lotação). Todos vão para a mão de obra da atribuição do grupo: as Remunerações CLT são a soma dos três primeiros, e as PJ, os Salários PJ; a outra mão de obra fica sem remunerações do Quadro de Lotação. No Exportar Premissas, as linhas e as Remunerações em fórmula.",
+      "Na aba Centros de Custo, sem o aviso das linhas do grupo na aba Quadro de Lotação.",
+      "Nas abas Investimentos e Extra-Operacional, cada tabela (Depreciação, Investimentos, Despesas e Extra e RN) tem o título e a descrição num card de destaque, com as funções dela à direita.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "No Texto Livre, o menu da edição ganhou o Alinhamento (Esquerda, Justificado, Centralizado ou Direita), antes do espaçamento, e as Bordas, depois dele: as posições, o tipo, a espessura e a cor.",
+      "Quando as abas das páginas não cabem, sem a barra de rolagem: elas rolam sozinhas até a página aberta (Página Anterior, Próxima Página, Nova Página ou Duplicar Página).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "No Texto Livre, o menu da edição ganhou o Alinhamento (Esquerda, Justificado, Centralizado ou Direita), antes do espaçamento, e as Bordas, depois dele: as posições, o tipo, a espessura e a cor.",
+      "Quando as abas não cabem, sem a barra de rolagem: elas rolam sozinhas até a aba aberta (Página Anterior, Próxima Página, Nova Página ou Duplicar Página).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores",
+    itens: [
+      "Como no Fechamento Mensal, o processo abre nas competências do Quadro de Lotação; clicar numa delas abre o Quadro de Lotação dela. O nome do processo, no menu, na barra e no caminho do topo, volta às competências; o Quadro de Lotação da barra abre a última competência aberta.",
+      "Os Cadastros passaram ao processo novo Cadastros Auxiliares.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "A situação da competência (Aberta ou Fechada) fica à direita da barra do topo, e o mês, no caminho do topo (saíram do lado do título).",
+      "No Realizado, sem os cards dos indicadores (ficam no Painel de Bordo) e sem o aviso do cenário sem a aba Quadro de Lotação; ao rolar, a tabela para logo abaixo do título, como nas outras telas.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: ["O Configurar Gráficos, depois da Comparação, com os Rótulos e o Tipo, como no Painel de Bordo de Resultados Empresariais; sem a competência ao lado do título (o mês aparece nos cards)."],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    itens: [
+      "O processo novo, abaixo da Gestão de Colaboradores, com os cadastros dos Processos Auxiliares: a tela Gestão de Colaboradores (“Colaboradores” na barra), antes a tela Cadastros da Gestão de Colaboradores, com as mesmas abas e permissões.",
+    ],
+  },
   // 12/11/2026, 11:10
   {
     publicada: "2026-11-12T11:10",

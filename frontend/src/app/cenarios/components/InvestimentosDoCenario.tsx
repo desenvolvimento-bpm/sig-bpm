@@ -113,9 +113,11 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
     });
   return (
     <div className="space-y-8">
+      {/* O título e a descrição no card de destaque, com as funções da tabela à direita (12/11/2026, pedido do Adão). */}
       <TabelaEditavel
         titulo="Depreciação"
         subtitulo="A Depreciação Base de cada unidade (digitada) e, somada a ela, a dos investimentos da lista abaixo, a partir do início de cada um."
+        tituloNoDestaque
         meses={dados.meses}
         linhas={dados.depreciacao}
         editavel={pode}
@@ -125,16 +127,16 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
         mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
       />
       <section className="space-y-2">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+        {/* O título e a descrição no card de destaque e, à direita dele, as funções da lista (12/11/2026, pedido do Adão), com o
+            Exportar por último, como nas barras das telas. */}
+        <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+          <div className="min-w-0 flex-1">
             <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">Investimentos</h2>
             <p className="text-xs text-gray-600">
               Depreciação Mensal = (Valor Total − Valor Pós Uso) ÷ Vida Útil, a partir do Início.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* O Exportar (30/10/2026): a lista dos investimentos. */}
-            <ExportarTabela titulo="Cenário · Investimentos" colunas={colunasDosInvestimentos} linhas={dados.investimentos} />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {pode ? (
               <>
                 <Button type="button" className={botaoPrimario} onClick={() => setAberto("novo")}>
@@ -154,6 +156,8 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                 </Button>
               </>
             ) : null}
+            {/* O Exportar (30/10/2026): a lista dos investimentos. */}
+            <ExportarTabela titulo="Cenário · Investimentos" colunas={colunasDosInvestimentos} linhas={dados.investimentos} />
           </div>
         </div>
         <div className="overflow-x-auto rounded-sm border border-gray-200 bg-white [--topo-tabela:0px]">
@@ -386,6 +390,8 @@ export function ExtraDoCenario({ id, editavel }: { id: string; editavel: boolean
         <TabelaEditavel
           key={t.unidade}
           titulo={t.nome}
+          // O título no card de destaque, com as funções da tabela à direita (12/11/2026, pedido do Adão).
+          tituloNoDestaque
           meses={dados.meses}
           linhas={t.linhas}
           editavel={editavel && dados.editavel}

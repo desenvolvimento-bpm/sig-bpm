@@ -69,6 +69,15 @@ const posicao = { id: z.string().min(1).max(60), x: z.number().int().min(0).max(
 // A fonte, o espaçamento entre as linhas e a formatação de um nível do Sumário (20/10/2026).
 const fonteDoTexto = z.enum(FONTES_DO_TEXTO);
 const espacamento = z.number().min(0.5).max(2).optional();
+// As Bordas do Texto Livre (12/11/2026): as posições, o tipo, a espessura (px) e a cor.
+const borda = z
+  .object({
+    lados: z.array(z.enum(["CIMA", "BAIXO", "ESQUERDA", "DIREITA"])).min(1).max(4),
+    tipo: z.enum(["CONTINUA", "TRACEJADA", "PONTILHADA", "DUPLA", "SULCADA"]),
+    espessura: z.number().min(0.25).max(60),
+    cor: z.string().regex(/^#[0-9a-f]{6}$/i),
+  })
+  .optional();
 const estiloDoSumario = z.object({ negrito: z.boolean().optional(), italico: z.boolean().optional(), sublinhado: z.boolean().optional(), tamanho: z.number().int().min(8).max(144).optional(), cor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), fonte: fonteDoTexto.optional() });
 /** O corte de uma imagem (27/10/2026): o zoom (1 a 4) e a posição (0 a 1), como na Imagem de Fundo. */
 const recorte = z.object({ zoom: z.number().min(1).max(4), x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
@@ -102,7 +111,7 @@ export function corpoDasPaginas(telasDoSumario: z.ZodType<string>, maximoDeTelas
       legendaHtml: z.string().max(5000).optional(),
     }),
     // O Texto Livre e o Sumário (20/10/2026).
-    z.object({ ...posicao, tipo: z.literal("TEXTO"), texto: z.string().max(5000), html: z.string().max(30000).optional(), espacamento }),
+    z.object({ ...posicao, tipo: z.literal("TEXTO"), texto: z.string().max(5000), html: z.string().max(30000).optional(), espacamento, borda }),
     // A tabela de Resultados (22/10/2026): a visão, o nível, as linhas escolhidas e os meses anteriores recolhidos.
     z.object({ ...posicao, tipo: z.literal("TABELA"), visao: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]), nivel: z.union([z.literal(1), z.literal(2), z.literal(3)]), linhas: z.array(z.string().min(1).max(200)).max(1000).optional(), recolhido: z.boolean().optional(), colunas: z.object({ unitario: z.boolean(), diferenca: z.boolean(), atingimento: z.boolean(), eficiencia: z.boolean() }).optional(), prova }),
     z.object({ ...posicao, tipo: z.literal("SUMARIO"), listar: z.enum(["TELAS", "TELAS_E_SLIDES"]), telas: z.array(telasDoSumario).max(maximoDeTelas), linha: z.enum(["PONTOS", "TRACOS", "LINHA", "NENHUM"]).optional(), estilos: z.object({ telas: estiloDoSumario.optional(), slides: estiloDoSumario.optional() }).optional() }),

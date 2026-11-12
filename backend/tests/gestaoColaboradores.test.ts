@@ -16,15 +16,18 @@ const aba = (nome: string, linhas: Array<Array<string | number | null>>): AbaEsc
 });
 
 describe("Gestão de Colaboradores (06/11/2026)", () => {
-  it("a tela Cadastros na matriz dos perfis, uma chave por aba", () => {
-    const doGrupo = CHAVES_DA_MATRIZ.filter((c) => c.recurso === "GESTAO_COLABORADORES").map((c) => c.chave);
-    assert.deepEqual(doGrupo, [
+  it("a tela dos cadastros na matriz dos perfis, uma chave por aba (12/11/2026: nos Cadastros Auxiliares)", () => {
+    // Os cadastros no processo Cadastros Auxiliares (12/11/2026, pedido do Adão), com as mesmas chaves.
+    assert.deepEqual(CHAVES_DA_MATRIZ.filter((c) => c.recurso === "CADASTROS_AUXILIARES").map((c) => c.chave), [
       "colaboradores_cadastros",
       "colaboradores_cadastros.senioridades",
       "colaboradores_cadastros.funcoes",
       "colaboradores_cadastros.movimentacoes",
       "colaboradores_cadastros.classificacoes",
       "colaboradores_cadastros.lancamento_inicial",
+    ]);
+    const doGrupo = CHAVES_DA_MATRIZ.filter((c) => c.recurso === "GESTAO_COLABORADORES").map((c) => c.chave);
+    assert.deepEqual(doGrupo, [
       "colaboradores_quadro",
       "colaboradores_quadro.movimentacoes",
       "colaboradores_quadro.controle",

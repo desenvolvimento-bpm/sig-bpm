@@ -22,10 +22,9 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * Quadro de Lotação (Colaboradores CLT e PJ e o Total de Colaboradores, de onde saem os quadros de lotação dos
  * indicadores), os Encargos e Benefícios (os percentuais e os Benefícios Adicionais) e as contas (mão de obra e gastos
  * gerais, por atribuição; a Encargos e Benefícios, calculada). O grupo com centros de baldes diferentes traz o aviso: o
- * valor vai pelo balde mais comum. As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (11/11/2026, pedido do Adão:
- * em todos os grupos; sem linhas do grupo lá, zero) e não se digitam. O grupo com linhas na aba Quadro de Lotação (09/11/2026)
- * tem também os colaboradores (11/11/2026: Aprendizes, Estagiários, CLT e PJ) e os Salários dos Aprendizes e dos Estagiários
- * calculados por elas, com o aviso.
+ * valor vai pelo balde mais comum. Os colaboradores (Aprendizes, Estagiários, CLT e PJ), os Salários de cada um (12/11/2026)
+ * e as Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (sem linhas do grupo lá, zero) e não se digitam (12/11/2026:
+ * sem o aviso das linhas do grupo, pedido do Adão; a explicação fica no Como Usar).
  */
 export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const [busca, setBusca] = useState("");
@@ -78,14 +77,6 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
               <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">
                 Os centros deste grupo têm baldes diferentes ({contas.data.grupo.baldes.join(", ")}): o valor vai pelo balde mais comum,{" "}
                 {contas.data.grupo.balde ?? "—"}. Revise o agrupamento no cadastro Centros de Custo para que o grupo tenha um balde só.
-              </p>
-            ) : null}
-            {/* O aviso só nos grupos com linhas na aba Quadro de Lotação (11/11/2026: sem linhas, sem aviso). */}
-            {contas.data.lotacao.linhasDoQuadro ? (
-              <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
-                Este grupo tem {contas.data.lotacao.linhasDoQuadro} {plural(contas.data.lotacao.linhasDoQuadro, "linha", "linhas")} na aba Quadro de
-                Lotação: os Colaboradores Aprendizes, Estagiários, CLT e PJ, as Remunerações CLT e PJ e os Salários dos Aprendizes e dos Estagiários vêm
-                de lá e não se digitam aqui.
               </p>
             ) : null}
             <TabelaEditavel
@@ -148,21 +139,22 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
       valores: clt.valores.map((_, k) => series.reduce((s, x) => s + (x.valores[k] ?? 0), 0)),
       gravados: clt.valores.map(() => false),
     },
-    // Os Salários dos Aprendizes de cada mão de obra (a base do FGTS Aprendiz) e os dos Estagiários (11/11/2026: saem da
-    // base dos encargos), da aba Quadro de Lotação.
-    ...[...dados.aprendizes.map((a) => ({ ...a, tipo: "APRENDIZ" })), ...dados.estagiarios.map((a) => ({ ...a, tipo: "ESTAGIARIO" }))].map(
-      (a): LinhaDaPremissa => ({
-        chave: `LOTACAO|${a.tipo}|${a.prefixo}`,
+    // Os Salários de cada tipo de colaborador (12/11/2026, pedido do Adão; antes, os dos Aprendizes e dos Estagiários de cada
+    // mão de obra), da aba Quadro de Lotação: as Remunerações saem deles, os dos Aprendizes têm o FGTS Aprendiz e os dos
+    // Estagiários saem da base dos encargos.
+    ...dados.salarios.map(
+      (s): LinhaDaPremissa => ({
+        chave: `SALARIOS|${s.tipo}`,
         secao: "QUADRO DE LOTAÇÃO",
         grupo: null,
-        rotulo: a.rotulo,
+        rotulo: s.rotulo,
         und: "R$",
         tipo: "CALCULO",
         negrito: false,
         casas: 2,
         referencia: null,
-        valores: a.valores,
-        gravados: a.valores.map(() => false),
+        valores: s.valores,
+        gravados: s.valores.map(() => false),
       }),
     ),
   ];

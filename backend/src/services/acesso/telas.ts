@@ -16,9 +16,11 @@ export type TelaDoCatalogo = { codigo: string; nome: string; abas?: AbaDoCatalog
  * O código de um processo do catálogo: um recurso do banco ou, desde 12/11/2026 (pedido do Adão), um dos processos das
  * Análises Gerenciais — os Relatórios Executivos e os Painéis e Apresentações, antes telas do recurso ANALISES_GERENCIAIS
  * (um grupo do menu, e não um processo). O código só identifica o processo na matriz dos Perfis e no menu; as permissões
- * gravadas são as das telas (`relatorios_executivos`, `paineis_de_bordo`), que não mudaram.
+ * gravadas são as das telas (`relatorios_executivos`, `paineis_de_bordo`), que não mudaram. Também os Cadastros Auxiliares
+ * (12/11/2026, pedido do Adão): a tela dos cadastros da Gestão de Colaboradores (`colaboradores_cadastros`, antes no processo
+ * Gestão de Colaboradores), agora "Gestão de Colaboradores".
  */
-export type ProcessoDoCatalogo = RecursoSistema | "RELATORIOS_EXECUTIVOS" | "PAINEIS_DE_BORDO";
+export type ProcessoDoCatalogo = RecursoSistema | "RELATORIOS_EXECUTIVOS" | "PAINEIS_DE_BORDO" | "CADASTROS_AUXILIARES";
 export type GrupoDoCatalogo = { recurso: ProcessoDoCatalogo; nome: string; area: string; telas: TelaDoCatalogo[] };
 
 const UNIDADES: AbaDoCatalogo[] = [
@@ -220,24 +222,13 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
       { codigo: "cadastro_tabela_estacas", nome: "Tabela de Estacas" },
     ],
   },
-  // A Gestão de Colaboradores (06/11/2026, pedido do Adão; Processos Administrativos, entre a Apuração e a Controladoria,
-  // como no menu): a tela Cadastros, com uma aba por cadastro. Editar cria, edita, inativa, exclui e importa.
+  // A Gestão de Colaboradores (06/11/2026, pedido do Adão; nos Processos Auxiliares, como no menu). A tela dos cadastros
+  // passou aos Cadastros Auxiliares (12/11/2026), logo abaixo.
   {
     recurso: "GESTAO_COLABORADORES",
     nome: "Gestão de Colaboradores",
     area: "gestao_colaboradores",
     telas: [
-      {
-        codigo: "colaboradores_cadastros",
-        nome: "Cadastros",
-        abas: [
-          { codigo: "senioridades", nome: "Senioridades" },
-          { codigo: "funcoes", nome: "Funções" },
-          { codigo: "movimentacoes", nome: "Movimentações" },
-          { codigo: "classificacoes", nome: "Classificações" },
-          { codigo: "lancamento_inicial", nome: "Lançamento Inicial" },
-        ],
-      },
       // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências (Editar abre, fecha, reabre e exclui) e as abas de
       // uma competência — Movimentações (Editar registra e exclui), Controle (Editar aprova e reprova) e Realizado.
       {
@@ -250,6 +241,27 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
         ],
       },
       { codigo: "colaboradores_painel", nome: "Painel de Bordo", abas: [{ codigo: "resultados", nome: "Resultados" }, { codigo: "indicadores", nome: "Indicadores" }] },
+    ],
+  },
+  // Os Cadastros Auxiliares (12/11/2026, pedido do Adão; abaixo da Gestão de Colaboradores, como no menu): os cadastros dos
+  // Processos Auxiliares, uma tela por processo — a Gestão de Colaboradores (antes, a tela Cadastros dela), com uma aba por
+  // cadastro. Editar cria, edita, inativa, exclui e importa. As permissões gravadas (colaboradores_cadastros…) continuam.
+  {
+    recurso: "CADASTROS_AUXILIARES",
+    nome: "Cadastros Auxiliares",
+    area: "cadastros_auxiliares",
+    telas: [
+      {
+        codigo: "colaboradores_cadastros",
+        nome: "Gestão de Colaboradores",
+        abas: [
+          { codigo: "senioridades", nome: "Senioridades" },
+          { codigo: "funcoes", nome: "Funções" },
+          { codigo: "movimentacoes", nome: "Movimentações" },
+          { codigo: "classificacoes", nome: "Classificações" },
+          { codigo: "lancamento_inicial", nome: "Lançamento Inicial" },
+        ],
+      },
     ],
   },
   // A Central de Conectividade (24/10/2026; desde 30/10/2026, um processo da Controladoria, acima dos Cadastros da

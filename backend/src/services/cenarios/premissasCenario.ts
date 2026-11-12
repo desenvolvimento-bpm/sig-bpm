@@ -6,7 +6,7 @@ import { diasUteis } from "./calendario.js";
 import { alocarCentros, contasDoGrupo, gruposDoCadastro } from "./centrosCenario.js";
 import { ehContaDeEncargos, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
 import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
-import { linhasDoQuadro, quadroDosGrupos, type QuadroDoGrupo } from "./quadroDoCenario.js";
+import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
 import { fatoresDasContas, resumoVazio } from "./reajustesCenario.js";
@@ -366,15 +366,15 @@ async function materializarEncargos(
   for (const g of grupos) {
     doCadastro.add(g.grupo);
     const codigos = contasDoGrupo(est, g).map((l) => l.codigo);
-    // Os salários dos aprendizes (09/11/2026) e dos estagiários (11/11/2026): os do Quadro de Lotação do cenário, por mão de obra.
+    // Os Salários dos Aprendizes (09/11/2026) e dos Estagiários (11/11/2026) do grupo (12/11/2026; antes, por mão de obra).
     const q = quadro.get(g.grupo);
     const r = encargosDoGrupo(
       codigos,
       g.atribuicao,
       (codigo, mes) => valor.get(`${g.grupo}|${codigo}|${mes}`) ?? 0,
       (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`),
-      (prefixo, mes) => q?.maos.get(prefixo)?.aprendizes[mes - 1] ?? 0,
-      (prefixo, mes) => q?.maos.get(prefixo)?.estagiarios[mes - 1] ?? 0,
+      (mes) => q?.salarios.aprendizes[mes - 1] ?? 0,
+      (mes) => q?.salarios.estagiarios[mes - 1] ?? 0,
     );
     for (const [codigo, lista] of r) lista.forEach((v, k) => (Math.abs(v) >= 0.00005 ? calculados.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
   }
@@ -392,8 +392,9 @@ async function materializarEncargos(
  * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO), e nos sem linhas, nenhum (12/11/2026: a aba,
  * alimentada pela Gestão de Colaboradores, é a única fonte da contagem); em todos os grupos (11/11/2026, pedido do
  * Adão: as Remunerações sempre vêm do Quadro de Lotação e não se digitam; antes, só nos grupos com linhas), as Remunerações
- * CLT e PJ de cada mão de obra (os centros) dos meses 1 a 12 — sem linhas, zero —, no lugar do que havia (a Média de
- * Referência, o mês 0, fica). Devolve os valores dos meses dos centros com elas.
+ * CLT e PJ dos meses 1 a 12 — na mão de obra principal do grupo (12/11/2026: a CLT, os Salários dos Aprendizes, dos
+ * Estagiários e CLT; a PJ, os Salários PJ); na outra e sem linhas, zero —, no lugar do que havia (a Média de Referência, o
+ * mês 0, fica). Devolve os valores dos meses dos centros com elas.
  */
 async function materializarQuadro(
   tx: Tx,
@@ -421,11 +422,18 @@ async function materializarQuadro(
         lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
     const doGrupo = new Set<string>();
     for (const mo of maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao)) {
-      const s = q?.maos.get(mo.prefixo);
-      for (const [codigo, lista] of [[mo.remuneracoes, s?.clt], [mo.remuneracoesPJ, s?.pj]] as const) {
+      // Só a mão de obra principal recebe as remunerações do quadro (12/11/2026, pedido do Adão: não faz sentido prever MOI num
+      // centro de custo que é MOD); a outra fica com zero.
+      const s = mo.principal ? q?.salarios : undefined;
+      for (const [codigo, clt] of [[mo.remuneracoes, true], [mo.remuneracoesPJ, false]] as const) {
         if (!idDaConta.has(codigo)) continue;
         doGrupo.add(codigo);
-        lista?.forEach((v, k) => (Math.abs(v) >= 0.00005 ? centros.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
+        if (!s) continue;
+        for (let k = 0; k < 12; k++) {
+          const r = remuneracoesDoQuadro(s, k);
+          const v = clt ? r.clt : r.pj;
+          if (Math.abs(v) >= 0.00005) centros.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v });
+        }
       }
     }
     if (doGrupo.size) remuneracoesDo.set(g.grupo, doGrupo);
@@ -469,7 +477,7 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
   const meses = valoresCentros.filter((x) => x.mes >= 1 && x.mes <= 12).map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
   // O Quadro de Lotação do cenário (09/11/2026): os colaboradores e as remunerações dos grupos com linhas, antes dos encargos.
-  const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos, (g) => contasDoGrupo(est, g).map((l) => l.codigo));
+  const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos);
   const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses);
   const valoresDosCentros = await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro);
   const alocados = alocarCentros(

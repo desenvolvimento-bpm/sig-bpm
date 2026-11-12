@@ -51,10 +51,9 @@ export function ControleContent() {
       <CabecalhoDoQuadro
         anoMes={anoMes}
         aba="controle"
-        status={lista.data?.competencia.status}
         sobre={
           <p>
-            As movimentações de aprovação Manual (o Modelo de Aprovação do tipo, nos Cadastros) do mês. Elas nascem Pendentes e só mudam o quadro depois de
+            As movimentações de aprovação Manual (o Modelo de Aprovação do tipo, nos Cadastros Auxiliares) do mês. Elas nascem Pendentes e só mudam o quadro depois de
             aprovadas; a reprovada fica registrada, com o motivo, e não conta. A competência só fecha sem movimentações pendentes.
           </p>
         }

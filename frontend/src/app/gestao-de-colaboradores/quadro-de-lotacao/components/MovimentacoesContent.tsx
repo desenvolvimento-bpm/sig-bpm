@@ -47,11 +47,10 @@ export function MovimentacoesContent() {
       <CabecalhoDoQuadro
         anoMes={anoMes}
         aba="movimentacoes"
-        status={lista.data?.competencia.status}
         sobre={
           <p>
             As movimentações do Quadro de Lotação no mês: admissões, reposições, desligamentos, aberturas e encerramentos de vaga (os tipos da aba
-            Movimentações dos Cadastros). As de aprovação Automática valem ao gravar; as de Manual ficam Pendentes até a aprovação na aba Controle. Só as
+            Movimentações dos Cadastros Auxiliares). As de aprovação Automática valem ao gravar; as de Manual ficam Pendentes até a aprovação na aba Controle. Só as
             aprovadas mudam o quadro: as de contagem Positiva somam um colaborador, as de Negativa subtraem um.
           </p>
         }

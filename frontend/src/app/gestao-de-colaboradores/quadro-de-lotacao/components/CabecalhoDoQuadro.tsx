@@ -1,13 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { Abas } from "@/components/shared/Abas";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
 import { usePermissions } from "@/context/PermissionContext";
-import { StatusCompetenciaBadge } from "@/app/competencias/components/StatusCompetenciaBadge";
 
-import type { StatusCompetenciaQuadro } from "../../services/quadroService";
+import { guardarCompetenciaAberta } from "./SituacaoDaCompetenciaDoQuadro";
 
 export type AbaDoQuadro = "movimentacoes" | "controle" | "realizado";
 const ABAS: Array<{ chave: AbaDoQuadro; rotulo: string }> = [
@@ -20,13 +19,14 @@ const ABAS: Array<{ chave: AbaDoQuadro; rotulo: string }> = [
 export const rotuloDoMes = (anoMes: string) => `${anoMes.slice(5, 7)}/${anoMes.slice(0, 4)}`;
 
 /**
- * O cabeçalho de uma competência do Quadro de Lotação (06/11/2026): o título, o mês e o estado à direita, as ações, e as
- * abas Movimentações, Controle e Realizado que o perfil alcança (cada uma com o endereço dela).
+ * O cabeçalho de uma competência do Quadro de Lotação (06/11/2026): o título, as ações e as abas Movimentações, Controle e
+ * Realizado que o perfil alcança (cada uma com o endereço dela). Desde 12/11/2026 (pedido do Adão), sem o mês e o estado ao
+ * lado do título: o mês fica no caminho do topo e o estado, à direita da barra das telas. Devolve o título e as abas sem
+ * envoltório, para o título ficar fixo ao rolar (filho direto do contêiner da página) e a tabela parar logo abaixo dele.
  */
 export function CabecalhoDoQuadro({
   anoMes,
   aba,
-  status,
   sobre,
   comoUsar,
   acoes,
@@ -34,7 +34,6 @@ export function CabecalhoDoQuadro({
 }: {
   anoMes: string;
   aba: AbaDoQuadro;
-  status?: StatusCompetenciaQuadro;
   sobre: ReactNode;
   comoUsar: ReactNode;
   acoes?: ReactNode;
@@ -45,22 +44,12 @@ export function CabecalhoDoQuadro({
     ...a,
     href: `/gestao-de-colaboradores/quadro-de-lotacao/${anoMes}/${a.chave}`,
   }));
+  // A competência e a aba abertas (12/11/2026): o Quadro de Lotação da barra volta a elas.
+  useEffect(() => guardarCompetenciaAberta(`/gestao-de-colaboradores/quadro-de-lotacao/${anoMes}/${aba}`), [anoMes, aba]);
   return (
-    <div className="space-y-4">
-      <CabecalhoDaTela
-        titulo="Quadro de Lotação"
-        selo={
-          <span className="inline-flex items-center gap-2 text-sm font-medium text-gray-900">
-            {rotuloDoMes(anoMes)}
-            {status ? <StatusCompetenciaBadge status={status} /> : null}
-          </span>
-        }
-        sobre={sobre}
-        comoUsar={comoUsar}
-        acoes={acoes}
-        exportar={exportar}
-      />
+    <>
+      <CabecalhoDaTela titulo="Quadro de Lotação" sobre={sobre} comoUsar={comoUsar} acoes={acoes} exportar={exportar} />
       <Abas rotulo="Abas da competência" ativa={aba} abas={abas} />
-    </div>
+    </>
   );
 }
