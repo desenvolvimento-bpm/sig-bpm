@@ -28,6 +28,14 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 14:22
+  {
+    publicada: "2026-11-12T14:22",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["No Exportar Premissas, o Total da Referência dos percentuais (os Encargos e Benefícios — INSS, FGTS, Férias e Décimo Terceiro — e os indicadores manuais em %) é a própria Média de Referência; nos valores, continua a Média × 12."],
+  },
   // 12/11/2026, 13:25
   {
     publicada: "2026-11-12T13:25",

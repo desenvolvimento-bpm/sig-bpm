@@ -197,7 +197,7 @@ export function PremissasContent() {
               departamento; Extra-Operacional, a aba Extra-Operacional — esses cinco com a depreciação e os investimentos de Despesas e Extra. Os
               indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz a descrição (as colunas antes da Und., que a identificam na importação: não as altere, nem o nome das abas; elas, a Und. e os rótulos ficam presos ao rolar a planilha — no Quadro de Lotação, os cadastros; nos Investimentos, até a Descrição), a unidade, os doze meses da
               referência do cenário (com ela: Realizado, o resultado realizado de cada mês do período; Referência, os meses do outro cenário — não se
-              importam), a Média de Referência, o Total da Referência (a média × 12), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
+              importam), a Média de Referência, o Total da Referência (a média × 12; nos percentuais, como os Encargos e Benefícios, a própria média), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
               (uma fórmula: Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência) e a Justificativa, em texto
               livre. Nos centros de custo, o Quadro de Lotação (os Colaboradores Aprendizes, Estagiários, CLT e PJ e os Salários dos Aprendizes, dos
               Estagiários, CLT e PJ, em fórmula sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e o

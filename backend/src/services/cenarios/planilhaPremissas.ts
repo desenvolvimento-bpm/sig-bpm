@@ -10,7 +10,7 @@ import { salarioTotal, type MesDaLinha } from "./quadroDoCenario.js";
  * A planilha das premissas de um cenário analítico (15/10/2026): o Exportar Premissas (só Excel) e o Importar Valores.
  * Cada aba da tela vira uma aba da planilha (os centros de custo numa aba só, um por aba ou um arquivo por centro): a
  * coluna Código (a chave da linha, que não se altera), as colunas que descrevem a linha, a unidade, a Média de
- * Referência, o Total da Referência (a média × 12) e a Variação Máxima da conta (do Comparativo) — 15/10/2026 —, os doze
+ * Referência, o Total da Referência (a média × 12; nos percentuais, desde 12/11/2026, a própria média) e a Variação Máxima da conta (do Comparativo) — 15/10/2026 —, os doze
  * meses (em branco: o mês sem valor), Justificar? (uma fórmula: Sim quando o total dos doze meses passa da variação
  * máxima em relação ao Total da Referência) e a Justificativa (texto livre). O Importar Valores lê os meses e a
  * Justificativa das linhas pela coluna Código; as colunas da referência e Justificar? não se importam. A aba
@@ -276,7 +276,7 @@ export function abaDaPlanilha(
       [
         {
           valor:
-            "Preencha os meses e a Justificativa e importe o arquivo em Premissas / Importar Valores. Em branco, o mês fica sem valor. As colunas antes da Und. identificam a linha: não as altere (nem o nome desta aba). Justificar? é Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência (a Média de Referência × 12). A Média, o Total da Referência, a Variação Máxima e Justificar? não se importam." +
+            "Preencha os meses e a Justificativa e importe o arquivo em Premissas / Importar Valores. Em branco, o mês fica sem valor. As colunas antes da Und. identificam a linha: não as altere (nem o nome desta aba). Justificar? é Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência (a Média de Referência × 12; nos percentuais, a própria Média). A Média, o Total da Referência, a Variação Máxima e Justificar? não se importam." +
             (referencia ? ` As colunas ${referencia.rotulo}, antes da Média, são os meses da referência do cenário (${referencia.descricao}) e também não se importam.` : ""),
           estilo: ESTILO.informacao,
         },
@@ -302,7 +302,10 @@ export function abaDaPlanilha(
           { valor: l.und },
           ...Array.from({ length: R }, (_, k) => numero(l, l.referencia?.[k] ?? null)),
           numero(l, l.media),
-          { ...numero(l, l.media === null ? null : l.media * 12), formula: `IF(${m}="","",${m}*12)` },
+          // Nos percentuais (12/11/2026, pedido do Adão: os Encargos e Benefícios), a própria Média; nos valores, a Média × 12.
+          l.percentual
+            ? { ...numero(l, l.media), formula: `IF(${m}="","",${m})` }
+            : { ...numero(l, l.media === null ? null : l.media * 12), formula: `IF(${m}="","",${m}*12)` },
           { valor: l.limite, estilo: ESTILO.itemNumero },
           ...l.meses.map((x, k) => ({ ...numero(l, x), formula: mesEmFormula(l, k) })),
           {

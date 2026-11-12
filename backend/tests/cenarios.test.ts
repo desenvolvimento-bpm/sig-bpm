@@ -181,6 +181,10 @@ describe("comparativo entre cenários", () => {
     // O Total da Referência e o Justificar? apontam para as colunas deslocadas.
     assert.equal(aba.linhas[5][17].formula, "IF(Q6=\"\",\"\",Q6*12)");
     assert.ok(String(aba.linhas[5][31].formula).includes("SUM(T6:AE6)"));
+    // Nos percentuais (12/11/2026: os Encargos e Benefícios), o Total da Referência é a própria Média.
+    const pct: LinhaDaPlanilha = { aba: "centros", chave: "E|ESTRUTURA|INSS", descricao: ["ESTRUTURA", "Encargos e Benefícios", "Previdência Social (INSS)"], und: "%", conta: null, limite: null, media: 0.29, meses: Array(12).fill(null), justificativa: null, percentual: true };
+    const comPct = abaDaPlanilha("Centros de Custo", "centros", [pct], meses, "teste");
+    assert.deepEqual([comPct.linhas[5][4].valor, comPct.linhas[5][5].valor, comPct.linhas[5][5].formula], [0.29, 0.29, "IF(E6=\"\",\"\",E6)"]);
     const [lido] = lerArquivoDePremissas("p.xlsx", gerarXlsx([aba]));
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.linhas.map((l) => [l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.justificativa]), [["centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, "Dissídio"]]);
