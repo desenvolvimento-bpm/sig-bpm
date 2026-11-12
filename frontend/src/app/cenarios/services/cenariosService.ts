@@ -471,8 +471,18 @@ export const cenariosService = {
   /** Mês a mês (os meses fechados) ou a média de um período (de–ate) replicada nos doze meses. */
   /** No analítico (14/10/2026), com os avisos do que não coube nas premissas. */
   /** Com `manterMeses` (11/11/2026), só as Médias de Referência mudam: os doze meses do cenário ficam. */
-  referenciaRealizado: async (id: string, ano: number, opcoes: { modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; manterMeses?: boolean } = { modo: "MES_A_MES" }) =>
-    (await api.post<{ data: Cenario & { avisos?: string[] } }>(`/proxy/cenarios/${id}/referencia/realizado`, { ano, ...opcoes })).data.data,
+  /** Com `importarQuadro` (12/11/2026), as linhas da aba Quadro de Lotação pelo QL Realizado mais recente da Gestão de Colaboradores. */
+  referenciaRealizado: async (
+    id: string,
+    ano: number,
+    opcoes: { modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; manterMeses?: boolean; importarQuadro?: boolean } = { modo: "MES_A_MES" },
+  ) =>
+    (
+      await api.post<{ data: Cenario & { avisos?: string[]; quadroVigente?: { competencia: string; colaboradores: number; linhas: number } } }>(
+        `/proxy/cenarios/${id}/referencia/realizado`,
+        { ano, ...opcoes },
+      )
+    ).data.data,
   /** A referência dos sintéticos por cenários e realizados (15/10/2026): uma ou duas partes, sem meses em comum. */
   referenciaComposta: async (id: string, partes: ParteDaReferencia[]) =>
     (await api.post<{ data: Cenario & { avisos?: string[] } }>(`/proxy/cenarios/${id}/referencia/composta`, { partes })).data.data,

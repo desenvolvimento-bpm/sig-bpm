@@ -38,14 +38,17 @@ export function ConfiguracoesContent() {
               <>
                 <li>
                   Na aba Referência (opcional): carregue o resultado realizado das competências fechadas de um exercício (Média do Período ou Mês a
-                  Mês) ou outro cenário analítico. O realizado traz só as Médias de Referência — das premissas, dos centros de custo (com o quadro de
-                  lotação), da depreciação base, do extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
+                  Mês) ou outro cenário analítico. O realizado traz só as Médias de Referência — das premissas, dos centros de custo, da depreciação base, do
+                  extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
                   cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, na tela Premissas, para levar as médias aos
                   meses. Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. A média de cada conta dos centros de
                   custo divide a soma do período só pelos meses em que a conta teve movimentação. Os avisos do que não coube aparecem embaixo. Marque
                   “Manter os Valores dos Meses” para trocar só as Médias de Referência: os doze meses do cenário (digitados ou importados), os
                   investimentos e as linhas do Quadro de Lotação ficam, e o Justificar? do Exportar Premissas passa a comparar os meses com as médias
-                  novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Com os reajustes aplicados na DRE
+                  novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das
+                  Premissas, alimentada pela Gestão de Colaboradores: no realizado, marque “Importar Quadro de Lotação Vigente” para trocar as linhas
+                  dela pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim da competência mais recente, em todos
+                  os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com os reajustes aplicados na DRE
                   (Premissas / Reajustes), a referência não se carrega nem se realoca, com o aviso na aba: use “Remover Reajustes” antes.
                 </li>
                 <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros da Controladoria / Linhas, no botão “Tarefas”.</li>

@@ -57,6 +57,9 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
   const origem = outros.find((c) => c.id === origemEscolhida) ?? outros[0] ?? null;
   // Manter os doze meses do cenário (11/11/2026, pedido do Adão): a referência muda só as Médias de Referência.
   const [manterMeses, setManterMeses] = useState(false);
+  // O Quadro de Lotação Vigente (12/11/2026, pedido do Adão): no realizado, as linhas da aba Quadro de Lotação pelo QL Realizado
+  // mais recente da Gestão de Colaboradores, qualquer que seja o período (De / Até).
+  const [importarQuadro, setImportarQuadro] = useState(false);
 
   const aoCarregar = (msg: string, lista: string[]) => {
     queryClient.invalidateQueries({ queryKey: ["cenarios"] });
@@ -68,17 +71,25 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
   const carregar = useMutation({
     mutationFn: () =>
       tipo === "cenario"
-        ? cenariosService.referenciaCenario(cenario.id, origem!.id, manterMeses).then(() => [] as string[])
-        : cenariosService.referenciaRealizado(cenario.id, ano!, modo === "MEDIA" ? { modo, de, ate, manterMeses } : { modo, manterMeses }).then((r) => r.avisos ?? []),
-    onSuccess: (lista) =>
+        ? cenariosService.referenciaCenario(cenario.id, origem!.id, manterMeses).then(() => ({ avisos: [] as string[], vigente: "" }))
+        : cenariosService
+            .referenciaRealizado(cenario.id, ano!, modo === "MEDIA" ? { modo, de, ate, manterMeses, importarQuadro } : { modo, manterMeses, importarQuadro })
+            .then((r) => ({
+              avisos: r.avisos ?? [],
+              // O Quadro de Lotação Vigente importado (12/11/2026), na mensagem.
+              vigente: r.quadroVigente
+                ? ` Quadro de Lotação Vigente importado: ${r.quadroVigente.colaboradores} colaboradores do fim de ${r.quadroVigente.competencia}, em ${r.quadroVigente.linhas} linhas.`
+                : "",
+            })),
+    onSuccess: ({ avisos: lista, vigente }) =>
       aoCarregar(
-        manterMeses
+        (manterMeses
           ? `Médias de Referência de ${tipo === "cenario" ? origem!.nome : `${ano} (${modo === "MEDIA" ? `${abrev(de)} a ${abrev(ate)}` : "Mês a Mês"})`} carregadas; os meses do cenário ficaram como estavam, e a DRE foi recalculada.`
           : tipo === "cenario"
             ? `${origem!.nome} carregado no cenário; a DRE foi recalculada.`
             : modo === "MEDIA"
               ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, nas Premissas).`
-              : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`,
+              : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`) + vigente,
         lista,
       ),
   });
@@ -215,6 +226,18 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
               <OpcaoEmLinha key={v} nome="modo-realizado-analitico" marcada={modo === v} onMarcar={() => setModo(v)} rotulo={rotulo} detalhe={detalhe} />
             ))}
           </fieldset>
+          {/* O Quadro de Lotação Vigente (12/11/2026): os colaboradores do cenário vêm só da aba Quadro de Lotação (a Gestão de Colaboradores). */}
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 accent-black" checked={importarQuadro} onChange={(e) => setImportarQuadro(e.target.checked)} />
+            <span>
+              <span className="font-medium text-gray-900">Importar Quadro de Lotação Vigente</span>
+              <span className="block text-xs text-gray-600">
+                {importarQuadro
+                  ? "As linhas da aba Quadro de Lotação (Premissas) passam a ser as do Quadro de Lotação mais recente da Gestão de Colaboradores — os colaboradores do fim da competência mais recente, em todos os meses —, qualquer que seja o período escolhido (De / Até). Os salários das linhas que o cenário já tinha ficam."
+                  : "Desmarcada, as linhas da aba Quadro de Lotação ficam como estão. Os colaboradores do cenário vêm só dessa aba (a referência não os traz)."}
+              </span>
+            </span>
+          </label>
           {modo === "MEDIA" ? (
             <div className="flex flex-wrap items-end gap-3">
               {(
@@ -304,6 +327,17 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                       <li>Os investimentos ficam. A DRE do cenário é recalculada.</li>
                     </>
                   )}
+                  {tipo === "realizado" ? (
+                    importarQuadro ? (
+                      <li>
+                        As linhas da aba Quadro de Lotação são trocadas pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim
+                        da competência mais recente, em todos os meses; os salários das linhas que já havia ficam): os colaboradores e as Remunerações dos centros
+                        de custo saem delas.
+                      </li>
+                    ) : (
+                      <li>As linhas da aba Quadro de Lotação ficam como estão: os colaboradores e as Remunerações dos centros de custo saem delas.</li>
+                    )
+                  ) : null}
                   {manterMeses ? null : <li>Os valores digitados nas premissas se perdem (para mantê-los, marque “Manter os Valores dos Meses”).</li>}
                 </ul>
               </DialogDescription>

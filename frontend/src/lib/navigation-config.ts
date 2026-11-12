@@ -94,7 +94,8 @@ export const navGrupos: NavGrupo[] = [
         href: "/analises-gerenciais/relatorios-executivos",
         icon: Presentation,
         permission: "relatorios_executivos:ler",
-        recurso: "ANALISES_GERENCIAIS",
+        // O processo na matriz dos Perfis (12/11/2026; antes, o recurso ANALISES_GERENCIAIS, junto com os Painéis).
+        recurso: "RELATORIOS_EXECUTIVOS",
       },
       // Resultados PROVA e Custos Operacionais saíram do menu em 04/11/2026 (pedido do Adão; estavam em desenvolvimento).
       // Painéis e Apresentações (antes, Painéis de Bordo: 31/10/2026, pedido do Adão; em desenvolvimento desde 27/10/2026;
@@ -105,7 +106,7 @@ export const navGrupos: NavGrupo[] = [
         href: "/analises-gerenciais/paineis-de-bordo",
         icon: PanelsTopLeft,
         permission: "paineis_de_bordo:ler",
-        recurso: "ANALISES_GERENCIAIS",
+        recurso: "PAINEIS_DE_BORDO",
       },
       // Demonstrativos Financeiros (27/10/2026), em desenvolvimento.
       { title: "Demonstrativos Financeiros", href: "/analises-gerenciais/demonstrativos-financeiros", icon: FileSpreadsheet, emDesenvolvimento: true },

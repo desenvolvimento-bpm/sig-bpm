@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, CloudOff, Crop, FilePlus2, FileX2, Image as Imagem, ImageOff, ImagePlus, ImageUp, LayoutGrid, LayoutList, ListOrdered, LoaderCircle, LockOpen, Pencil, Plus, Presentation, Settings, StickyNote, Table2, TableProperties, Trash2, Type, Video } from "lucide-react";
+import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, CloudOff, CopyPlus, Crop, EyeOff, FilePlus2, FileX2, Image as Imagem, ImageOff, ImagePlus, ImageUp, LayoutGrid, LayoutList, ListOrdered, LoaderCircle, LockOpen, Pencil, Plus, Presentation, Settings, StickyNote, Table2, TableProperties, Trash2, Type, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { EtiquetasDaBarra } from "@/components/layout/EtiquetasDaBarra";
@@ -51,6 +51,8 @@ function conflitoDe(e: unknown): Conflito | null {
 
 /** O nome da página: o escolhido ou, sem ele, "Página N". */
 const nomeDaPagina = (p: Pagina, k: number) => p.nome?.trim() || `Página ${k + 1}`;
+/** As páginas de uma aba: no máximo 30 (o limite da gravação). */
+const MAXIMO_DE_PAGINAS = 30;
 
 /** A aba e a página abertas. */
 type Aberta = { chave: string; pagina: string | null };
@@ -426,6 +428,22 @@ function Editor({
     mudarPaginas([...daAba.slice(0, nPagina + 1), nova, ...daAba.slice(nPagina + 1)]);
     setAberta({ chave, pagina: nova.id });
   };
+  // Duplicar Página (12/11/2026, pedido do Adão): a cópia inteira da aberta (os blocos, a Imagem de Fundo, a transição, o
+  // Avançar Após e o Ocultar), logo depois dela; o nome escolhido ganha "(Cópia)" (sem ele, a cópia fica "Página N").
+  const duplicarPagina = () => {
+    if (!pagina) return;
+    const copia: Pagina = {
+      ...structuredClone(pagina),
+      id: novoId(),
+      nome: pagina.nome?.trim() ? `${pagina.nome.trim().slice(0, 52)} (Cópia)` : undefined,
+      blocos: pagina.blocos.map((b) => ({ ...structuredClone(b), id: novoId() })),
+    };
+    mudarPaginas([...daAba.slice(0, nPagina + 1), copia, ...daAba.slice(nPagina + 1)]);
+    setAberta({ chave, pagina: copia.id });
+  };
+  const cheia = daAba.length >= MAXIMO_DE_PAGINAS;
+  // Ocultar Página (12/11/2026, pedido do Adão): a página oculta fica fora dos slides — o Apresentar pula para a próxima.
+  const ocultarPagina = () => mudarPaginas(daAba.map((p) => (p.id === pagina?.id ? { ...p, oculta: p.oculta ? undefined : true } : p)));
   const excluirPagina = () => {
     const resto = daAba.filter((p) => p.id !== pagina?.id);
     mudarPaginas(resto);
@@ -440,11 +458,11 @@ function Editor({
     if (s) setAberta(s);
   };
   // Os slides da apresentação: as páginas com algum bloco ou com a Imagem de Fundo (20/10/2026) das abas que o usuário vê
-  // (o que está na tela, gravado ou não). A contagem (o contador do topo dos slides e os números do Sumário) começa na
-  // Introdução: os slides da Capa e do Encerramento (20/10/2026) não contam.
+  // (o que está na tela, gravado ou não), menos as ocultas (12/11/2026). A contagem (o contador do topo dos slides e os
+  // números do Sumário) começa na Introdução: os slides da Capa e do Encerramento (20/10/2026) não contam.
   const comConteudo = relatorio.abas.flatMap((a) => {
     const ps = a.visivel ? (paginas[a.chave] ?? []) : [];
-    return ps.flatMap((p, k) => (p.blocos.length || p.fundo ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos, recomecarAoTerminar: p.recomecarAoTerminar }] : []));
+    return ps.flatMap((p, k) => (!p.oculta && (p.blocos.length || p.fundo) ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos, recomecarAoTerminar: p.recomecarAoTerminar }] : []));
   });
   const contados = comConteudo.filter((x) => !ABAS_SEM_NUMERO.has(x.aba)).length;
   let contagem = 0;
@@ -453,9 +471,12 @@ function Editor({
   const sumario: TelaDoSumario[] = relatorio.abas
     .filter((a) => !ABAS_SEM_NUMERO.has(a.chave))
     .map((a) => ({ chave: a.chave, titulo: a.titulo, slides: slides.filter((x) => x.aba === a.chave).map((x) => ({ nome: x.pagina, numero: x.numero ?? 0 })) }));
+  // A apresentação começa na página aberta; se ela não é slide (oculta ou vazia), na próxima que é (sem nenhuma depois, na primeira).
   const apresentar = () => {
     entrarEmTelaInteira();
-    setApresentando(Math.max(0, slides.findIndex((s) => s.chave === `${chave}|${pagina?.id}`)));
+    const ordem = relatorio.abas.flatMap((a) => (a.visivel ? (paginas[a.chave] ?? []).map((p) => `${a.chave}|${p.id}`) : []));
+    const daAberta = ordem.indexOf(`${chave}|${pagina?.id}`);
+    setApresentando(Math.max(0, slides.findIndex((s) => ordem.indexOf(s.chave) >= daAberta)));
   };
   const atualizar = (r: Relatorio) => {
     queryClient.setQueryData([rota, "relatorio", relatorio.id], r);
@@ -773,7 +794,13 @@ function Editor({
                 Reabrir
               </Button>
             ) : null}
-            <Button type="button" className={botaoPrimario} disabled={!slides.length} title={slides.length ? "Apresentar as páginas em tela inteira" : "Nenhuma página com blocos para apresentar"} onClick={apresentar}>
+            <Button
+              type="button"
+              className={botaoPrimario}
+              disabled={!slides.length}
+              title={slides.length ? "Apresentar as páginas em tela inteira" : "Nenhuma página com blocos (e não oculta) para apresentar"}
+              onClick={apresentar}
+            >
               <Presentation className="size-4" />
               Apresentar
             </Button>
@@ -871,7 +898,10 @@ function Editor({
                   aria-selected={atual}
                   onClick={() => setAberta({ chave, pagina: p.id })}
                   onDoubleClick={() => (editavel ? setRenomeando(p.id) : undefined)}
-                  title={editavel ? "Dois cliques para mudar o nome (o do slide); arraste para trocar de lugar" : undefined}
+                  title={
+                    [p.oculta ? "Página oculta: fora da apresentação" : "", editavel ? "Dois cliques para mudar o nome (o do slide); arraste para trocar de lugar" : ""].filter(Boolean).join(". ") ||
+                    undefined
+                  }
                   // Arrastar a aba para trocar a página de lugar (17/10/2026), na aba que se edita.
                   draggable={editavel}
                   onDragStart={(e) => {
@@ -898,6 +928,8 @@ function Editor({
                   }}
                   className={`${classe} ${editavel ? "cursor-grab active:cursor-grabbing" : ""} ${sobre === p.id ? "rounded-t-sm bg-gray-100" : ""} ${arrastando === p.id ? "opacity-50" : ""}`}
                 >
+                  {/* A página oculta (12/11/2026): o olho cortado antes do nome. */}
+                  {p.oculta ? <EyeOff className="mr-1.5 size-3.5 text-gray-400" aria-label="Oculta na apresentação" /> : null}
                   {nomeDaPagina(p, k)}
                 </button>
               );
@@ -909,8 +941,26 @@ function Editor({
                 <button type="button" className={botaoIcone} disabled={!pagina} onClick={() => pagina && setRenomeando(pagina.id)} title="Mudar o nome da página (o do slide)" aria-label="Mudar o nome da página">
                   <Pencil className="size-4" />
                 </button>
-                <button type="button" className={botaoIcone} onClick={novaPagina} title="Nova página (depois da aberta)" aria-label="Nova página">
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={cheia}
+                  onClick={novaPagina}
+                  title={cheia ? `A aba já tem ${MAXIMO_DE_PAGINAS} páginas (o máximo)` : "Nova Página (depois da aberta)"}
+                  aria-label="Nova Página"
+                >
                   <FilePlus2 className="size-4" />
+                </button>
+                {/* Duplicar Página (12/11/2026, pedido do Adão): a cópia inteira da aberta, logo depois dela. */}
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={!pagina || cheia}
+                  onClick={duplicarPagina}
+                  title={cheia ? `A aba já tem ${MAXIMO_DE_PAGINAS} páginas (o máximo)` : "Duplicar Página (a cópia da aberta entra depois dela)"}
+                  aria-label="Duplicar Página"
+                >
+                  <CopyPlus className="size-4" />
                 </button>
                 <button
                   type="button"
@@ -921,6 +971,18 @@ function Editor({
                   aria-label="Excluir a página"
                 >
                   <FileX2 className="size-4" />
+                </button>
+                {/* Ocultar Página (12/11/2026, pedido do Adão): ativo, o Apresentar pula a página (e ela fica fora do PDF). */}
+                <button
+                  type="button"
+                  className={`${botaoIcone} ${pagina?.oculta ? "bg-gray-200 text-gray-900 hover:bg-gray-300" : ""}`}
+                  disabled={!pagina}
+                  aria-pressed={!!pagina?.oculta}
+                  onClick={ocultarPagina}
+                  title={pagina?.oculta ? "Página oculta: o Apresentar a pula (clique para mostrá-la de novo)" : "Ocultar Página (o Apresentar a pula e passa à próxima)"}
+                  aria-label="Ocultar Página"
+                >
+                  <EyeOff className="size-4" />
                 </button>
                 {/* A Imagem de Fundo da página (20/10/2026): sem ela, o ícone que a envia (30/10/2026, pedido do Adão; antes, no
                     Adicionar); com ela, no lugar dele, os de ajustar e remover. */}
@@ -1249,15 +1311,20 @@ export function ItensDoComoUsar() {
         {g ? (
           <>
             Cada aba tem uma ou mais páginas, logo abaixo do título. O nome da página é o do slide na apresentação (de início, “Página 1”): na sua aba,
-            dois cliques nele (ou o lápis) o editam, e arrastar a aba de uma página para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões ao lado delas incluem uma página nova (depois da aberta), excluem a página aberta (com
-            blocos, pede confirmação; a única página não se exclui) e recuam ou avançam pelas páginas, passando de uma aba para a outra.
+            dois cliques nele (ou o lápis) o editam, e arrastar a aba de uma página para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões ao lado delas incluem uma página nova (depois da aberta), duplicam a página aberta (a
+            cópia inteira, com os blocos, a Imagem de Fundo e as transições, entra logo depois dela; o nome escolhido ganha “(Cópia)”), excluem a página aberta (com
+            blocos, pede confirmação; a única página não se exclui), ocultam a página aberta (ativo, o olho cortado aparece antes do nome da página, e a
+            apresentação a pula e passa à próxima; ela também fica fora do PDF, do contador dos slides e do Sumário; outro clique a mostra de novo) e recuam ou
+            avançam pelas páginas, passando de uma aba para a outra. Cada aba tem até 30 páginas.
           </>
         ) : (
           <>
             A tela tem uma ou mais abas (as páginas do painel), logo abaixo do título. O nome da aba é o do slide na apresentação (de início, “Página 1”):
             dois cliques nele (ou o lápis) o editam, e arrastar uma aba para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões
-            ao lado delas incluem uma aba nova (depois da aberta), excluem a aba aberta (com blocos, pede confirmação; a única não se exclui) e recuam ou
-            avançam pelas abas.
+            ao lado delas incluem uma aba nova (depois da aberta), duplicam a aba aberta (a cópia inteira, com os blocos, a Imagem de Fundo e as transições,
+            entra logo depois dela; o nome escolhido ganha “(Cópia)”), excluem a aba aberta (com blocos, pede confirmação; a única não se exclui), ocultam a
+            aba aberta (ativo, o olho cortado aparece antes do nome da aba, e a apresentação a pula e passa à próxima; ela também fica fora do PDF, do contador
+            dos slides e do Sumário; outro clique a mostra de novo) e recuam ou avançam pelas abas. O painel tem até 30 abas.
           </>
         )}{" "}
         A página tem o tamanho da tela padrão, 1920 × 1080 (o contorno tracejado): os blocos não passam dele. Na apresentação e no PDF, o slide se
@@ -1408,7 +1475,8 @@ export function ItensDoComoUsar() {
       <li>
         {g ? (
           <>
-            “Apresentar” mostra as páginas com blocos como slides, em tela inteira e sem o menu lateral, a partir da página aberta, com o grupo (o título da aba:
+            “Apresentar” mostra as páginas com blocos (menos as ocultas) como slides, em tela inteira e sem o menu lateral, a partir da página aberta (oculta ou
+            vazia, a partir da próxima), com o grupo (o título da aba:
             Introdução, Performance da Produção…), em cinza, a seta e o nome do slide (o da página), em preto, à esquerda do topo, e “Relatório Executivo”, em
             cinza, a seta, o período, em preto, e a logo da BPM à direita; embaixo, o rodapé, com o separador igual ao do cabeçalho (atrás da Imagem de Fundo, como o do cabeçalho): à esquerda, a legenda dos cards (nos slides
             com cards do Painel ou dos Indicadores; com cards PROVA, os cenários do slide, cada um na cor dele), e, à direita, o contador dos slides (“1/10”: o slide em preto e negrito e o total, contados da
@@ -1417,7 +1485,8 @@ export function ItensDoComoUsar() {
           </>
         ) : (
           <>
-            “Apresentar” mostra as páginas com blocos como slides, em tela inteira e sem o menu lateral, a partir da página aberta, com o nome do painel, em
+            “Apresentar” mostra as abas com blocos (menos as ocultas) como slides, em tela inteira e sem o menu lateral, a partir da aba aberta (oculta ou vazia,
+            a partir da próxima), com o nome do painel, em
             cinza, a seta e o nome do slide (o da página), em preto, à esquerda do topo, e “Painel de Bordo”, em cinza, a seta, a competência, em preto, e a
             logo da BPM à direita; embaixo, o rodapé, com o separador igual ao do cabeçalho (atrás da Imagem de Fundo, como o do cabeçalho): à esquerda, a
             legenda dos cards (nos slides com cards do Painel ou dos Indicadores; com cards PROVA, os cenários do slide, cada um na cor dele), e, à direita, o
@@ -1434,7 +1503,7 @@ export function ItensDoComoUsar() {
         não se selecionam.
       </li>
       <li>
-        “Exportar” baixa os slides em PDF, como na apresentação (um slide por página, na tela padrão, 1920 × 1080):{" "}
+        “Exportar” baixa os slides em PDF, como na apresentação (um slide por página, na tela padrão, 1920 × 1080; sem as páginas ocultas):{" "}
         {g
           ? "Toda a Apresentação, o Grupo Atual (a aba do relatório aberta: Capa, Introdução, Administrativo…) ou a Aba Atual (a página aberta)"
           : "Toda a Apresentação ou a Aba Atual (a página aberta)"}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
@@ -9,88 +8,67 @@ import { ExportarTabela } from "@/components/shared/ExportarTabela";
 import { QuadroTabela } from "@/components/shared/QuadroTabela";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 import type { Coluna } from "@/lib/filtrosDeTabela";
+import { RotulosDoGrafico, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
+import { blocoComparado, CardDoPainel, LegendaDoPainel, useCoresDoPainel, type FormatacaoDoCard } from "@/app/relatorios/painel/PainelContent";
+import type { ItemPainel } from "@/app/relatorios/services/relatoriosService";
 
 import { diferenca, INDICADORES_DO_QUADRO, SeletorDaComparacao, useComparacaoDoQuadro } from "../../components/ComparacaoDoQuadro";
 import { quadroService, type IndicadoresDoMes } from "../../services/quadroService";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-const classeSelect = "h-9 rounded-sm border border-gray-300 bg-white px-3 text-sm";
 type MesDoPainel = IndicadoresDoMes & { mes: number };
 type Indicador = (typeof INDICADORES_DO_QUADRO)[number];
 
 /**
- * O cartão de um indicador (aba Resultados): o valor do mês, o do mês anterior, o do ano e as barras dos meses; com a
- * Comparação (09/11/2026), o cenário e a diferença no mês e no acumulado.
+ * O card padrão de um indicador (12/11/2026, pedido do Adão; antes, um card próprio): o do Painel de Bordo de Resultados
+ * Empresariais — o Atual (o mês da competência) e o Acumulado (os meses do ano com competência até ela), cada um com o desvio
+ * contra o cenário da Comparação (vs. a marcação), e o gráfico dos meses e do acumulado (o realizado e o cenário). O
+ * comportamento (↑, ↓ ou acompanhamento) é o do indicador no cadastro dos indicadores.
  */
-function Cartao({ ind, meses, mes, cenario, marcacao }: { ind: Indicador; meses: MesDoPainel[]; mes: number; cenario: Array<number | null> | null; marcacao: string }) {
-  const atual = meses.find((m) => m.mes === mes);
-  const anterior = meses.filter((m) => m.mes < mes).at(-1);
+function itemDoCard(ind: Indicador, meses: MesDoPainel[], mes: number, cenario: Array<number | null> | null, sentido: string): ItemPainel {
   const ate = meses.filter((m) => m.mes <= mes);
-  const valores = meses.map((m) => ind.valor(m) ?? 0);
-  const maior = Math.max(1e-9, ...valores.map(Math.abs));
+  const atual = meses.find((m) => m.mes === mes);
   const real = atual ? ind.valor(atual) : null;
   const acumulado = ind.acumulado(ate.map((m) => ind.valor(m)));
-  // O acumulado do cenário nos mesmos meses (os do ano com competência até o escolhido).
   const cenarioNoMes = cenario ? cenario[mes - 1] : null;
   const acumuladoCenario = cenario ? ind.acumulado(ate.map((m) => cenario[m.mes - 1])) : null;
-  return (
-    <article className="rounded-sm border border-gray-200 bg-white p-4" title={ind.explicacao}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold text-gray-900">{ind.nome}</h3>
-        <span className="text-xs text-gray-500">{ind.unidade}</span>
-      </div>
-      <p className="mt-2 text-3xl font-bold text-gray-900">{ind.formatar(real)}</p>
-      <p className="text-xs text-gray-600">
-        {MESES[mes - 1]} · mês anterior: {ind.formatar(anterior ? ind.valor(anterior) : null)} · no ano: {ind.formatar(acumulado)}
-      </p>
-      {cenario ? (
-        <dl className="mt-2 grid grid-cols-[auto_1fr_1fr] gap-x-3 border-t border-gray-100 pt-2 text-xs text-gray-700">
-          <dt />
-          <dd className="text-right font-medium text-gray-500">Mês</dd>
-          <dd className="text-right font-medium text-gray-500">Acumulado</dd>
-          <dt>{marcacao}</dt>
-          <dd className="text-right">{ind.formatar(cenarioNoMes)}</dd>
-          <dd className="text-right">{ind.formatar(acumuladoCenario)}</dd>
-          <dt>Diferença</dt>
-          <dd className="text-right font-medium text-gray-900">{diferenca(ind, real, cenarioNoMes)}</dd>
-          <dd className="text-right font-medium text-gray-900">{diferenca(ind, acumulado, acumuladoCenario)}</dd>
-        </dl>
-      ) : null}
-      <div className="mt-3 flex h-16 items-end gap-1" aria-hidden>
-        {meses.map((m) => (
-          <div key={m.mes} className="flex flex-1 flex-col items-center gap-0.5">
-            <div
-              className={`w-full rounded-t-sm ${m.mes === mes ? "bg-bpm-primary" : "bg-gray-300"}`}
-              style={{ height: `${Math.max(2, (Math.abs(ind.valor(m) ?? 0) / maior) * 48)}px` }}
-              title={`${MESES[m.mes - 1]}: ${ind.formatar(ind.valor(m))}`}
-            />
-            <span className="text-[10px] text-gray-500">{MESES[m.mes - 1]}</span>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
+  return {
+    titulo: ind.nome,
+    sigla: ind.chave,
+    metodologia: ind.metodologia,
+    sentido: sentido as ItemPainel["sentido"],
+    formato: "PCT",
+    formatoAcumulado: "PCT",
+    base: null,
+    separar: false,
+    mes: blocoComparado(real, cenarioNoMes, sentido, !!cenario),
+    acumulado: blocoComparado(acumulado, acumuladoCenario, sentido, !!cenario),
+    serie: ate.map((m) => ({ mes: MESES[m.mes - 1].toUpperCase(), realizado: ind.valor(m), orcado: cenario ? cenario[m.mes - 1] : null })),
+  };
 }
+const formatacaoDo = (ind: Indicador): FormatacaoDoCard => ({ unidade: ind.unidade, formatar: ind.formatar, formatarCurto: ind.formatarCurto, fatorDaEscala: ind.fatorDaEscala });
 
 type LinhaDoIndicador = { chave: string; nome: string; unidade: string; meses: Record<number, string>; acumulado: string; explicacao: string; comparacao?: boolean };
 
 /**
- * O Painel de Bordo da Gestão de Colaboradores (06/11/2026, etapa 2): na aba Resultados, os cards dos indicadores do mês
- * escolhido; na aba Indicadores, a tabela de cada mês do ano. Os valores vêm das competências do Quadro de Lotação. Com a
- * Comparação (09/11/2026), o cenário marcado escolhido: nos cards, o mês e o acumulado; na tabela, as linhas do cenário e
- * da diferença de cada indicador.
+ * O Painel de Bordo da Gestão de Colaboradores (06/11/2026, etapa 2): na aba Resultados, os cards padrão dos indicadores
+ * (12/11/2026); na aba Indicadores, a tabela de cada mês do ano. Os valores vêm das competências do Quadro de Lotação, sempre
+ * no ano e no mês da competência mais recente (12/11/2026, pedido do Adão: a em edição ou a última lida; antes, as listas do
+ * ano e do mês). Com a Comparação (09/11/2026), o cenário marcado escolhido: nos cards, o mês e o acumulado; na tabela, as
+ * linhas do cenário e da diferença de cada indicador.
  */
 export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
   useRegistrarAcessoTela(`/gestao-de-colaboradores/painel/${aba}`);
-  const [ano, setAno] = useState(new Date().getFullYear());
-  const [mesEscolhido, setMesEscolhido] = useState<number | null>(null);
   const comparacao = useComparacaoDoQuadro();
-  const painel = useQuery({ queryKey: ["quadro", "painel", ano], queryFn: () => quadroService.painel(ano) });
+  const painel = useQuery({ queryKey: ["quadro", "painel", "recente"], queryFn: () => quadroService.painel() });
   const meses = painel.data?.meses ?? [];
-  const anos = [...new Set([...(painel.data?.anos ?? []), ano])].sort((a, b) => b - a);
-  const mes = mesEscolhido && meses.some((m) => m.mes === mesEscolhido) ? mesEscolhido : (meses.at(-1)?.mes ?? null);
+  const ano = painel.data?.ano ?? new Date().getFullYear();
+  const mes = meses.at(-1)?.mes ?? null;
   const cenario = comparacao.comparado;
   const marcacao = comparacao.atual?.rotulo ?? "Cenário";
+  const [tipo] = useTipoGrafico();
+  const [cores] = useCoresDoPainel();
+  const competencia = mes ? `${String(mes).padStart(2, "0")}/${ano}` : null;
 
   const linhas: LinhaDoIndicador[] = INDICADORES_DO_QUADRO.flatMap((ind) => {
     const real: LinhaDoIndicador = {
@@ -136,6 +114,8 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
   ];
 
   return (
+    // O rótulo do comparado (vs. a marcação) nos cards e na legenda (12/11/2026).
+    <RotulosDoGrafico.Provider value={{ realizado: "Realizado", orcado: marcacao }}>
     <div className="space-y-4">
       <CabecalhoDaTela
         titulo="Painel de Bordo"
@@ -150,36 +130,26 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
         }
         comoUsar={
           <ul>
-            <li>Escolha o ano (e, na aba Resultados, o mês) à direita do título.</li>
-            <li>A aba Resultados mostra um card por indicador: o valor do mês, o do mês anterior, o do ano e as barras dos meses; passe o mouse para ver a conta.</li>
+            <li>O painel mostra sempre a competência mais recente do Quadro de Lotação (a em edição ou a última fechada), ao lado do título; o ano é o dela.</li>
+            <li>
+              A aba Resultados mostra um card padrão por indicador, como no Painel de Bordo de Resultados Empresariais: o nome e, à direita, a conta e o
+              comportamento (o do cadastro dos indicadores); o Atual (o mês da competência) e o Acumulado (os meses do ano com competência até ela), com a
+              unidade no rótulo; o gráfico dos meses e do acumulado, à direita.
+            </li>
             <li>A aba Indicadores mostra a tabela dos meses do ano, com o acumulado: o Quadro de Lotação do último mês, e a soma dos meses nos demais.</li>
             <li>
               “Comparação” escolhe o cenário marcado (Forecast, Orçamento, Anterior ou Vendido) ou Sem Comparação; a escolha fica guardada neste navegador e
-              vale também no Quadro de Lotação. Nos cards, o cenário e a diferença (realizado − cenário) do mês e do acumulado; na tabela, abaixo de cada
-              indicador, a linha do cenário (todos os meses) e a da diferença. O acumulado do cenário usa os mesmos meses do realizado (os do ano com
-              competência do Quadro de Lotação).
+              vale também no Quadro de Lotação. Nos cards, o desvio do Atual e do Acumulado contra o cenário (vs. a marcação, com o valor dele) e, no
+              gráfico, o cenário ao lado do realizado; na tabela, abaixo de cada indicador, a linha do cenário (todos os meses) e a da diferença. O
+              acumulado do cenário usa os mesmos meses do realizado (os do ano com competência do Quadro de Lotação).
             </li>
           </ul>
         }
+        selo={competencia ? <span className="text-sm font-medium text-gray-900">{competencia}</span> : undefined}
         acoes={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            {aba === "resultados" && cenario ? <LegendaDoPainel tipo={tipo} cores={cores} comparado={cenario.cenario.nome} /> : null}
             <SeletorDaComparacao comparacao={comparacao} />
-            <select aria-label="Ano" value={ano} onChange={(e) => (setAno(Number(e.target.value)), setMesEscolhido(null))} className={classeSelect}>
-              {anos.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-            {aba === "resultados" && meses.length ? (
-              <select aria-label="Mês" value={mes ?? ""} onChange={(e) => setMesEscolhido(Number(e.target.value))} className={classeSelect}>
-                {meses.map((m) => (
-                  <option key={m.mes} value={m.mes}>
-                    {MESES[m.mes - 1]}
-                  </option>
-                ))}
-              </select>
-            ) : null}
           </div>
         }
         exportar={aba === "indicadores" ? <ExportarTabela titulo={`Gestão de Colaboradores · Indicadores · ${ano}`} colunas={colunas} linhas={linhas} /> : undefined}
@@ -189,13 +159,22 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
       ) : painel.isError ? (
         <ErroCarga mensagem="Erro ao carregar os indicadores." />
       ) : meses.length === 0 || mes === null ? (
-        <Vazio titulo={`Nenhuma competência do Quadro de Lotação em ${ano}`} dica="Abra as competências na tela Quadro de Lotação." />
+        <Vazio titulo="Nenhuma competência do Quadro de Lotação" dica="Abra as competências na tela Quadro de Lotação." />
       ) : aba === "resultados" ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {INDICADORES_DO_QUADRO.map((ind) => (
-            <Cartao key={ind.chave} ind={ind} meses={meses} mes={mes} cenario={cenario?.indicadores[ind.chave] ?? null} marcacao={marcacao} />
-          ))}
-        </div>
+        // Os cards padrão (12/11/2026), um embaixo do outro.
+          <div className="space-y-3">
+            {INDICADORES_DO_QUADRO.map((ind) => (
+              <CardDoPainel
+                key={ind.chave}
+                i={itemDoCard(ind, meses, mes, cenario?.indicadores[ind.chave] ?? null, painel.data?.sentidos[ind.chave] ?? "=")}
+                rotuloMes={`${MESES[mes - 1].toUpperCase()}/${ano}`}
+                tipo={tipo}
+                cores={cores}
+                comGrafico
+                formatacao={{ mes: formatacaoDo(ind), acumulado: formatacaoDo(ind) }}
+              />
+            ))}
+          </div>
       ) : (
         <QuadroTabela>
           <table className="tabela-sig w-full border-collapse text-sm">
@@ -226,5 +205,6 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
         </QuadroTabela>
       )}
     </div>
+    </RotulosDoGrafico.Provider>
   );
 }

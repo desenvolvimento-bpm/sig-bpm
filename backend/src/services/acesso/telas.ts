@@ -12,7 +12,14 @@ import type { AcaoPermissao, RecursoSistema } from "../../generated/prisma/enums
 
 export type AbaDoCatalogo = { codigo: string; nome: string };
 export type TelaDoCatalogo = { codigo: string; nome: string; abas?: AbaDoCatalogo[] };
-export type GrupoDoCatalogo = { recurso: RecursoSistema; nome: string; area: string; telas: TelaDoCatalogo[] };
+/**
+ * O código de um processo do catálogo: um recurso do banco ou, desde 12/11/2026 (pedido do Adão), um dos processos das
+ * Análises Gerenciais — os Relatórios Executivos e os Painéis e Apresentações, antes telas do recurso ANALISES_GERENCIAIS
+ * (um grupo do menu, e não um processo). O código só identifica o processo na matriz dos Perfis e no menu; as permissões
+ * gravadas são as das telas (`relatorios_executivos`, `paineis_de_bordo`), que não mudaram.
+ */
+export type ProcessoDoCatalogo = RecursoSistema | "RELATORIOS_EXECUTIVOS" | "PAINEIS_DE_BORDO";
+export type GrupoDoCatalogo = { recurso: ProcessoDoCatalogo; nome: string; area: string; telas: TelaDoCatalogo[] };
 
 const UNIDADES: AbaDoCatalogo[] = [
   { codigo: "consolidado", nome: "Consolidado" },
@@ -88,18 +95,12 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
 }
 
 export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
-  // As Análises Gerenciais (15/10/2026): os Relatórios Executivos e, desde 31/10/2026, o processo Painéis e Apresentações (de início,
-  // Painéis de Bordo; de 03 a 04/11/2026, Apresentações de Resultados); os demais
-  // processos do grupo ainda em desenvolvimento.
-  {
-    recurso: "ANALISES_GERENCIAIS",
-    nome: "Análises Gerenciais",
-    area: "analises_gerenciais",
-    telas: [
-      { codigo: "relatorios_executivos", nome: "Relatórios Executivos" },
-      { codigo: "paineis_de_bordo", nome: "Painéis e Apresentações" },
-    ],
-  },
+  // Os processos das Análises Gerenciais (12/11/2026, pedido do Adão; antes, as telas de um processo "Análises Gerenciais", que é
+  // o grupo do menu): os Relatórios Executivos (15/10/2026) e os Painéis e Apresentações (31/10/2026; de início, Painéis de
+  // Bordo; de 03 a 04/11/2026, Apresentações de Resultados), cada um com a sua tela; os demais processos do grupo ainda em
+  // desenvolvimento. A área de leitura do grupo continua a mesma nos dois.
+  { recurso: "RELATORIOS_EXECUTIVOS", nome: "Relatórios Executivos", area: "analises_gerenciais", telas: [{ codigo: "relatorios_executivos", nome: "Relatórios Executivos" }] },
+  { recurso: "PAINEIS_DE_BORDO", nome: "Painéis e Apresentações", area: "analises_gerenciais", telas: [{ codigo: "paineis_de_bordo", nome: "Painéis e Apresentações" }] },
   { recurso: "CENARIOS_SINTETICOS", nome: "Cenários Sintéticos", area: "cenarios", telas: telasDoCenario("cenarios", false) },
   { recurso: "CENARIOS_ANALITICOS", nome: "Cenários Analíticos", area: "cenarios_analiticos", telas: telasDoCenario("cenarios_analiticos", true) },
   // O Realizado por Obra (03/11/2026, pedido do Adão; antes, o processo Resultados por Obra, em desenvolvimento): os
@@ -320,7 +321,7 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
 ];
 
 /** Todas as chaves da matriz: as telas e as abas (`tela.aba`), com o grupo de cada uma. */
-export const CHAVES_DA_MATRIZ: Array<{ chave: string; recurso: RecursoSistema; tela: string; aba: string | null }> = CATALOGO_DE_TELAS.flatMap((g) =>
+export const CHAVES_DA_MATRIZ: Array<{ chave: string; recurso: ProcessoDoCatalogo; tela: string; aba: string | null }> = CATALOGO_DE_TELAS.flatMap((g) =>
   g.telas.flatMap((t) => [
     { chave: t.codigo, recurso: g.recurso, tela: t.codigo, aba: null },
     ...(t.abas ?? []).map((a) => ({ chave: `${t.codigo}.${a.codigo}`, recurso: g.recurso, tela: t.codigo, aba: a.codigo })),

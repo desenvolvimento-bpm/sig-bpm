@@ -25,7 +25,7 @@ export default function FuncoesPage() {
               </li>
               <li>
                 Use Importar para trazer as funções de uma planilha (.xlsx) com as colunas Função, Descrição, Senioridade, Competências e Atividades. A prévia mostra
-                cada linha como Nova, Alterada (a função já cadastrada, com outro conteúdo), Igual ou Inválida. Uma linha inválida (uma senioridade não cadastrada,
+                cada linha como Nova, Alterada (a função já cadastrada, com outro conteúdo), Igual ou Inválida; os rótulos da tabela da prévia filtram, como nas outras tabelas. Uma linha inválida (uma senioridade não cadastrada,
                 a mesma função com a mesma senioridade repetida na planilha) cancela a importação. Na planilha com várias abas, vale a que tem mais
                 dessas colunas. A importação substitui o cadastro inteiro: as funções que não estão na planilha são excluídas (a prévia lista quais), e as da planilha são cadastradas de novo — a já cadastrada com o mesmo nome e a mesma senioridade fica com os dados da planilha e continua ligada ao Lançamento Inicial, às movimentações e aos cenários. Se o Lançamento Inicial usa uma função excluída, ele é apagado junto (importe-o de novo em seguida); uma função excluída que está em movimentações do Quadro de Lotação ou nos cenários cancela a importação.
               </li>

@@ -106,15 +106,15 @@ export function PremissasContent() {
               Aprendiz), os Colaboradores Estagiários (a senioridade Estagiário: os estagiários e os bolsistas), os Colaboradores CLT e os PJ (as demais
               senioridades, pelo Tipo) e as Remunerações CLT e PJ (colaboradores × Salário Total, pelo Tipo da linha; na mão de obra da atribuição do
               centro da linha — Direta, a MOD; Indireta, a MOI; sem ela, a do grupo), que deixam de se digitar ali. Nos encargos, o Aprendiz tem o
-              Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). As Remunerações CLT e PJ vêm sempre
-              daqui, em todos os grupos (o grupo sem linhas fica com elas zeradas); os colaboradores do grupo sem linhas continuam digitados.
+              Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os colaboradores e as Remunerações CLT e PJ
+              vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
+              “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
             </li>
             <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
-              estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo: o Quadro de Lotação (os Colaboradores CLT e PJ
-              de cada mês; o Total de Colaboradores é a soma; nos grupos com linhas na aba Quadro de Lotação, os Colaboradores Aprendizes e
-              Estagiários vêm antes dos CLT, o Total soma os quatro, e eles e os Salários dos Aprendizes e dos Estagiários vêm de lá e não se
-              digitam); os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
+              estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo (o Quadro de Lotação — os Colaboradores Aprendizes,
+              Estagiários, CLT e PJ e o Total de Colaboradores, a soma — vem da aba Quadro de Lotação e não se digita; nos grupos com linhas lá,
+              também os Salários dos Aprendizes e dos Estagiários): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
               8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
               sempre da aba Quadro de Lotação, em todos os grupos, e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos

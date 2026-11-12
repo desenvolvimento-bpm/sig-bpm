@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -9,11 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { CampoArquivo } from "@/components/shared/CampoArquivo";
+import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import type { Coluna } from "@/lib/filtrosDeTabela";
 import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
 import { mensagemDeErro } from "@/app/cadastros/services/edicaoService";
 import { plural } from "@/lib/texto";
 
 import { colaboradoresService, type PreviaColaboradores, type SituacaoLinha, type TipoImportacaoColaboradores } from "../services/colaboradoresService";
+
+type LinhaDaPrevia = PreviaColaboradores["linhas"][number];
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const classeSelect = "h-9 rounded-sm border border-gray-300 bg-white px-3 text-sm";
@@ -86,6 +90,16 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
   const excluidas = previa?.excluidas?.total ?? 0;
   const aGravar = r ? r.NOVA + r.ALTERADA + excluidas : 0;
   const anos = [hoje.getFullYear() - 2, hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1];
+  // Os filtros nos rótulos da prévia (12/11/2026, pedido do Adão), como nas outras tabelas: a linha, as colunas da planilha e a situação.
+  const colunas = useMemo<Coluna<LinhaDaPrevia>[]>(
+    () => [
+      { chave: "linha", rotulo: "Linha", tipo: "numero", alinhamento: "direita", valor: (l) => l.linha },
+      ...(previa?.colunas ?? []).map((c): Coluna<LinhaDaPrevia> => ({ chave: `c-${c.chave}`, rotulo: c.rotulo, valor: (l) => l.valores[c.chave] || null })),
+      { chave: "situacao", rotulo: "Situação", valor: (l) => ROTULO_SITUACAO[l.situacao].rotulo },
+    ],
+    [previa],
+  );
+  const tabela = useTabelaFiltravel(previa?.linhas, colunas);
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
@@ -169,19 +183,10 @@ export function ImportarColaboradoresDialog({ tipo, onFechar }: { tipo: TipoImpo
             ) : null}
             <div className="min-h-0 flex-1 overflow-y-auto rounded-sm border border-gray-200 [--topo-tabela:0px]">
               <table className="tabela-sig w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 text-left text-xs font-bold text-gray-900">
-                    <th className="px-3 py-2 text-right">Linha</th>
-                    {previa.colunas.map((c) => (
-                      <th key={c.chave} className="px-3 py-2">
-                        {c.rotulo}
-                      </th>
-                    ))}
-                    <th className="px-3 py-2">Situação</th>
-                  </tr>
-                </thead>
+                {tabela.cabecalho}
                 <tbody>
-                  {previa.linhas.map((l) => (
+                  {tabela.visiveis.length === 0 ? <SemResultado colunas={colunas.length} onLimpar={tabela.limpar} /> : null}
+                  {tabela.visiveis.map((l) => (
                     <tr key={l.linha} className="border-b border-gray-100 align-top">
                       <td className="px-3 py-1.5 text-right text-gray-600">{l.linha}</td>
                       {previa.colunas.map((c) => (

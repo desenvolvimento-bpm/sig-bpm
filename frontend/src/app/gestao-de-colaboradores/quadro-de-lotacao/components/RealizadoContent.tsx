@@ -51,7 +51,8 @@ function Destaque({
   comparacao?: { marcacao: string; mes: string; diferenca: string; acumulado: string; acumuladoCenario: string; diferencaAcumulada: string };
 }) {
   return (
-    <div className="rounded-sm border border-gray-200 bg-white px-4 py-3" title={dica}>
+    // O destaque amarelo-ouro à esquerda (12/11/2026, pedido do Adão), como os cards dos painéis.
+    <div className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-3" title={dica}>
       <p className="text-xs font-medium text-gray-600">{rotulo}</p>
       <p className="text-2xl font-bold text-gray-900">{valor}</p>
       {comparacao ? (

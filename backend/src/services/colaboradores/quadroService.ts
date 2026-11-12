@@ -7,7 +7,7 @@ import { recusaDaFuncao } from "./funcaoPorSenioridade.js";
 import { gruposDoCadastro, type GrupoDoCenario } from "../cenarios/centrosCenario.js";
 import type { Acesso } from "../acesso/acesso.js";
 import { podeVerCentro } from "../acesso/recorteDepartamento.js";
-import { colaboradoresPorCentro, comparacaoDoQuadroService } from "./comparacaoDoQuadro.js";
+import { colaboradoresPorCentro, comparacaoDoQuadroService, NOMES_DOS_INDICADORES } from "./comparacaoDoQuadro.js";
 
 /**
  * O recorte (06/11/2026, etapa 3): quem tem recorte por departamento ou por centro de custo só vê, nas abas Movimentações,
@@ -162,26 +162,44 @@ async function quadrosDoBanco(db: Db) {
 }
 
 /**
- * O QL Realizado da competência mais recente do Quadro de Lotação (11/11/2026, o Exportar Premissas dos cenários com a
- * referência realizada): os colaboradores do fim do mês por centro de custo, vínculo, função e senioridade
- * ("centroId|CLT|funcaoId|senioridadeId"); nulo sem competência.
+ * O QL Realizado de cada competência do Quadro de Lotação, por linha (12/11/2026: a fonte dos colaboradores dos cenários
+ * analíticos): os colaboradores do fim de cada mês por centro de custo, vínculo, função e senioridade
+ * ("centroId|CLT|funcaoId|senioridadeId"), em ordem, e a unidade de cada linha (a mais comum dos colaboradores do Lançamento
+ * Inicial com a mesma chave; as linhas que só as movimentações trazem ficam sem ela).
  */
-export async function quadroRealizadoMaisRecente(db: Db) {
+export async function quadrosRealizadosPorLinha(db: Db) {
   const [competencias, cargaItens, movs] = await Promise.all([
     db.colaboradorCompetencia.findMany({ select: { id: true, ano: true, mes: true } }),
-    db.colaboradorCargaInicial.findMany({ select: { ano: true, mes: true, centroCustoId: true, vinculo: true, funcaoId: true, senioridadeId: true } }),
+    db.colaboradorCargaInicial.findMany({ select: { ano: true, mes: true, centroCustoId: true, vinculo: true, funcaoId: true, senioridadeId: true, unidadeNegocioId: true } }),
     db.colaboradorMovimentacao.findMany({
       select: { competenciaId: true, centroCustoId: true, vinculo: true, funcaoId: true, senioridadeId: true, status: true, tipoMovimentacao: { select: { contagem: true, nome: true } } },
     }),
   ]);
-  if (!competencias.length) return null;
+  const unidades = new Map<string, Map<string, number>>();
+  for (const i of cargaItens) {
+    const k = chaveDaLinhaDoQuadro(i);
+    const porUnidade = unidades.get(k) ?? new Map<string, number>();
+    porUnidade.set(i.unidadeNegocioId, (porUnidade.get(i.unidadeNegocioId) ?? 0) + 1);
+    unidades.set(k, porUnidade);
+  }
+  const unidadeDaChave = new Map([...unidades].map(([k, porUnidade]) => [k, [...porUnidade].sort((a, b) => b[1] - a[1])[0][0]]));
+  if (!competencias.length) return { quadros: [] as QuadroDoMes[], unidadeDaChave };
   const carga = cargaItens.length ? { ano: cargaItens[0].ano, mes: cargaItens[0].mes, itens: cargaItens } : null;
   const porCompetencia = new Map<string, MovimentoDoQuadro[]>();
   for (const m of movs) porCompetencia.set(m.competenciaId, [...(porCompetencia.get(m.competenciaId) ?? []), { ...m, contagem: m.tipoMovimentacao.contagem, tipo: m.tipoMovimentacao.nome }]);
   const idDe = new Map(competencias.map((c) => [ordem(c), c.id]));
-  const quadros = calcularQuadros(competencias, carga, (c) => porCompetencia.get(idDe.get(ordem(c)) ?? "") ?? [], chaveDaLinhaDoQuadro);
-  const ultimo = quadros.at(-1)!;
-  return { ano: ultimo.ano, mes: ultimo.mes, final: ultimo.final };
+  return { quadros: calcularQuadros(competencias, carga, (c) => porCompetencia.get(idDe.get(ordem(c)) ?? "") ?? [], chaveDaLinhaDoQuadro), unidadeDaChave };
+}
+
+/**
+ * O QL Realizado da competência mais recente do Quadro de Lotação (11/11/2026, o Exportar Premissas dos cenários com a
+ * referência realizada; 12/11/2026, também o Importar Quadro de Lotação Vigente da referência): os colaboradores do fim do
+ * mês por centro de custo, vínculo, função e senioridade ("centroId|CLT|funcaoId|senioridadeId"); nulo sem competência.
+ */
+export async function quadroRealizadoMaisRecente(db: Db) {
+  const { quadros, unidadeDaChave } = await quadrosRealizadosPorLinha(db);
+  const ultimo = quadros.at(-1);
+  return ultimo ? { ano: ultimo.ano, mes: ultimo.mes, final: ultimo.final, unidadeDaChave } : null;
 }
 /** A chave do QL Realizado por linha: o centro, o vínculo, a função e a senioridade. */
 export const chaveDaLinhaDoQuadro = (i: { centroCustoId: string; vinculo: string; funcaoId?: string; senioridadeId?: string }) =>
@@ -595,15 +613,23 @@ export const quadroService = {
 
   // ------------------------------------------------------------------------------------------------- o painel de bordo
   /** Os indicadores de cada competência do ano (Painel de Bordo), com os anos que têm competência. */
-  async painel(ano: number) {
+  /**
+   * O Painel de Bordo de um ano (sem ele, desde 12/11/2026, o da competência mais recente do Quadro de Lotação: a em edição ou
+   * a última lida), com o comportamento de cada indicador no cadastro dos indicadores (↑, ↓ ou acompanhamento), para os cards.
+   */
+  async painel(pedido?: number) {
     const db = getPrismaClient();
     const quadros = await quadrosDoBanco(db);
     const anos = [...new Set(quadros.map((q) => q.ano))].sort((a, b) => b - a);
+    const ano = pedido ?? anos[0] ?? new Date().getFullYear();
     const doAno = quadros.filter((q) => q.ano === ano);
+    const cadastro = await db.indicadorEstrutura.findMany({ where: { nome: { in: Object.values(NOMES_DOS_INDICADORES) } }, select: { nome: true, sentido: true } });
+    const sentidoDe = new Map(cadastro.map((i) => [i.nome, i.sentido]));
     return {
       ano,
       anos,
       meses: doAno.map((q) => ({ mes: q.mes, ...indicadoresDoMes(q), porTipo: q.porTipo })),
+      sentidos: Object.fromEntries(Object.entries(NOMES_DOS_INDICADORES).map(([chave, nome]) => [chave, sentidoDe.get(nome) ?? "="])) as Record<keyof typeof NOMES_DOS_INDICADORES, string>,
     };
   },
 };

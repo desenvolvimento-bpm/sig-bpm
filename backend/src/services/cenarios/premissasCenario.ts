@@ -389,7 +389,8 @@ async function materializarEncargos(
 
 /**
  * O Quadro de Lotação do cenário (09/11/2026, quadroDoCenario.ts): nos grupos com linhas, grava os Colaboradores
- * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO); em todos os grupos (11/11/2026, pedido do
+ * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO), e nos sem linhas, nenhum (12/11/2026: a aba,
+ * alimentada pela Gestão de Colaboradores, é a única fonte da contagem); em todos os grupos (11/11/2026, pedido do
  * Adão: as Remunerações sempre vêm do Quadro de Lotação e não se digitam; antes, só nos grupos com linhas), as Remunerações
  * CLT e PJ de cada mão de obra (os centros) dos meses 1 a 12 — sem linhas, zero —, no lugar do que havia (a Média de
  * Referência, o mês 0, fica). Devolve os valores dos meses dos centros com elas.
@@ -403,7 +404,6 @@ async function materializarQuadro(
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
 ) {
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
-  const comQuadro = [...quadro.keys()];
   const premissas: Array<{ cenarioId: string; unidade: number; venda: string; chave: string; mes: number; valor: Prisma.Decimal }> = [];
   const centros: Array<{ grupo: string; codigo: string; mes: number; valor: number }> = [];
   // As contas das Remunerações de cada grupo (11/11/2026: todos; sem linhas no Quadro de Lotação, zero).
@@ -430,10 +430,11 @@ async function materializarQuadro(
     }
     if (doGrupo.size) remuneracoesDo.set(g.grupo, doGrupo);
   }
-  if (comQuadro.length) {
-    await tx.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_LOTACAO }, chave: { in: comQuadro }, mes: { gte: 1, lte: 12 } } });
-    if (premissas.length) await tx.cenarioPremissa.createMany({ data: premissas });
-  }
+  // Os colaboradores só pela aba Quadro de Lotação (12/11/2026, pedido do Adão: a Gestão de Colaboradores é a única fonte da
+  // contagem; antes, os grupos sem linhas ficavam com os digitados ou com os das listas do Quadro de Lotação do realizado):
+  // em todos os grupos e meses, também a Média de Referência (o mês 0) — o grupo sem linhas fica sem colaboradores.
+  await tx.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_LOTACAO } } });
+  if (premissas.length) await tx.cenarioPremissa.createMany({ data: premissas });
   const ids = [...new Set([...remuneracoesDo.values()].flatMap((x) => [...x]))].map((c) => idDaConta.get(c)!);
   if (ids.length) await tx.cenarioCentro.deleteMany({ where: { cenarioId, grupo: { in: [...remuneracoesDo.keys()] }, mes: { gte: 1, lte: 12 }, linhaDREId: { in: ids } } });
   for (let i = 0; i < centros.length; i += 500)

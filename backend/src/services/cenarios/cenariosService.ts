@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { getPrismaClient } from "../../config/prisma.js";
@@ -76,10 +76,9 @@ import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosRe
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
 import { copiarQuadro, ehAprendiz, ehEstagiario, linhasDoQuadro, maoDeObraDaLinha, mesesDaLinha, quadroDosGrupos, type LinhaDoQuadro, type MesDaLinha } from "./quadroDoCenario.js";
-import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente } from "../colaboradores/quadroService.js";
+import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
 import { recusaDaFuncao } from "../colaboradores/funcaoPorSenioridade.js";
-import { lotacaoDosGrupos } from "../listas/lotacaoDosCentros.js";
 import { assinaturaDasRegras, avisosDosRateios, bloqueioPorRateios, mesesDoAno, percentuaisPelasRegras, regrasDeRateio, type RegraDoMes } from "../volumes/vigenciaDosRateios.js";
 
 /**
@@ -627,14 +626,6 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
         if (Math.abs(v) >= 0.005) prem.set(`0|${vendaDosBeneficios}|${g.grupo}|${f.mes}`, v);
       }
     }
-    // O quadro de lotação dos grupos: as listas do Quadro de Lotação de cada mês.
-    const { porCompetencia } = await lotacaoDosGrupos(fechadas.map((f) => f.id), grupos.map((g) => g.grupo));
-    for (const f of fechadas) {
-      for (const [grupo, v] of porCompetencia.get(f.id) ?? []) {
-        if (v.clt) prem.set(`0|${VENDA_LOTACAO_CLT}|${grupo}|${f.mes}`, v.clt);
-        if (v.pj) prem.set(`0|${VENDA_LOTACAO_PJ}|${grupo}|${f.mes}`, v.pj);
-      }
-    }
     // Os indicadores realizados dos meses (sem os de quadro de lotação, como na referência).
     const realizados = await indicadoresService.listar(ano, fechadas[fechadas.length - 1].mes, true);
     for (const i of realizados.indicadores) {
@@ -644,6 +635,9 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
       });
     }
   }
+  // Os colaboradores dos grupos em cada mês (12/11/2026: a Gestão de Colaboradores é a única fonte; antes, as listas do
+  // Quadro de Lotação do Fechamento Mensal): o QL Realizado do fim do mês, nos meses com a competência do Quadro de Lotação.
+  for (const [mes, doMes] of await colaboradoresRealizados(ano, detalhe.meses, await gruposDoCadastro())) for (const [k, n] of doMes) prem.set(`0|${k}|${mes}`, n);
   // O QL Realizado da competência mais recente do Quadro de Lotação (Gestão de Colaboradores).
   const ql = await quadroRealizadoMaisRecente(prisma);
   const periodo = detalhe.meses.length ? `${String(detalhe.meses[0]).padStart(2, "0")}${detalhe.meses.length > 1 ? ` a ${String(detalhe.meses[detalhe.meses.length - 1]).padStart(2, "0")}` : ""}` : "";
@@ -662,6 +656,40 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
         }
       : null,
   };
+}
+
+/**
+ * Os colaboradores realizados de cada grupo de centros nos meses de um exercício (12/11/2026, pedido do Adão: a Gestão de
+ * Colaboradores é a única fonte da contagem dos cenários analíticos): o QL Realizado do fim de cada mês com a competência do
+ * Quadro de Lotação, pelos centros dos grupos — os Aprendizes e os Estagiários pela senioridade, os demais pelo tipo (CLT ou
+ * PJ), como a aba Quadro de Lotação do cenário. Devolve mês → ("VENDA|grupo" → colaboradores).
+ */
+async function colaboradoresRealizados(ano: number, meses: number[], grupos: Awaited<ReturnType<typeof gruposDoCadastro>>) {
+  const prisma = getPrismaClient();
+  const { quadros } = await quadrosRealizadosPorLinha(prisma);
+  const doPeriodo = quadros.filter((q) => q.ano === ano && meses.includes(q.mes));
+  const r = new Map<number, Map<string, number>>();
+  if (!doPeriodo.length) return r;
+  const [centros, senioridades] = await Promise.all([
+    prisma.centroCusto.findMany({ select: { id: true, codigoRM: true } }),
+    prisma.colaboradorSenioridade.findMany({ select: { id: true, nome: true } }),
+  ]);
+  const codigoDe = new Map(centros.map((x) => [x.id, x.codigoRM]));
+  const grupoDoCodigo = new Map(grupos.flatMap((g) => g.centros.filter((x) => x.codigo).map((x) => [x.codigo!, g.grupo] as const)));
+  const nomeDa = new Map(senioridades.map((x) => [x.id, x.nome]));
+  for (const q of doPeriodo) {
+    const doMes = new Map<string, number>();
+    for (const [k, n] of q.final) {
+      const [centroId, vinculo, , senioridadeId] = k.split("|");
+      const grupo = grupoDoCodigo.get(codigoDe.get(centroId) ?? "");
+      if (!n || !grupo) continue;
+      const s = nomeDa.get(senioridadeId) ?? "";
+      const venda = ehAprendiz(s) ? VENDA_LOTACAO_APRENDIZ : ehEstagiario(s) ? VENDA_LOTACAO_ESTAGIARIO : vinculo === "CLT" ? VENDA_LOTACAO_CLT : VENDA_LOTACAO_PJ;
+      doMes.set(`${venda}|${grupo}`, (doMes.get(`${venda}|${grupo}`) ?? 0) + n);
+    }
+    r.set(q.mes, doMes);
+  }
+  return r;
 }
 
 /**
@@ -735,21 +763,17 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     const codigos = g.centros.flatMap((x) => (x.codigo ? [x.codigo] : []));
     const maosDoGrupo = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
     const centrosDa = (prefixo: string) => codigos.filter((x) => maoDeObraDaLinha(maosDoGrupo, atribuicaoDoCentro.get(x) ?? null)?.prefixo === prefixo);
+    // Os colaboradores de todos os grupos (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é
+    // a única fonte da contagem; antes, nos grupos sem linhas, digitados): em fórmula sobre a aba do arquivo, que não se importa.
     const doQuadroDa = (sufixo: string): LinhaDaPlanilha["doQuadro"] =>
-      !q
-        ? undefined
-        : sufixo === "APRENDIZES"
+      sufixo === "APRENDIZES"
           ? { centros: codigos, senioridade: "APRENDIZ", soma: "COLABORADORES" }
           : sufixo === "ESTAGIARIOS"
             ? { centros: codigos, senioridade: "ESTAGIARIO", soma: "COLABORADORES" }
             : { centros: codigos, tipo: sufixo === "CLT" ? "CLT" : "PJ", senioridade: "OUTRAS", soma: "COLABORADORES" };
     const lotacoes = [
-      ...(q
-        ? ([
-            [VENDA_LOTACAO_APRENDIZ, "APRENDIZES", "Colaboradores Aprendizes"],
-            [VENDA_LOTACAO_ESTAGIARIO, "ESTAGIARIOS", "Colaboradores Estagiários"],
-          ] as const)
-        : []),
+      [VENDA_LOTACAO_APRENDIZ, "APRENDIZES", "Colaboradores Aprendizes"],
+      [VENDA_LOTACAO_ESTAGIARIO, "ESTAGIARIOS", "Colaboradores Estagiários"],
       [VENDA_LOTACAO_CLT, "CLT", "Colaboradores CLT"],
       [VENDA_LOTACAO_PJ, "PJ", "Colaboradores PJ"],
     ] as const;
@@ -764,7 +788,7 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
         conta: null,
         media: ler(0) ?? null,
         meses: doze(ler),
-        calculada: quadro.has(g.grupo),
+        calculada: true,
         doQuadro: doQuadroDa(sufixo),
         referencia: refP(`0|${venda}|${g.grupo}`),
       });
@@ -948,6 +972,60 @@ async function cadastrosDoQuadro() {
   };
 }
 
+/**
+ * O Quadro de Lotação Vigente (12/11/2026, pedido do Adão: a caixa “Importar Quadro de Lotação Vigente” da referência
+ * realizada): as linhas do QL Realizado da competência mais recente da Gestão de Colaboradores — uma por centro, tipo, função
+ * e senioridade, com os colaboradores do fim do mês nos doze meses —, nos centros ativos, com código, dos grupos do cenário
+ * (os demais vão em `fora`, com os colaboradores). A unidade é a dos colaboradores do Lançamento Inicial com a mesma linha
+ * (sem ela, a dedicada do centro; sem ela, a da filial do grupo); os salários de cada mês, os da linha que o cenário já tinha
+ * com o mesmo centro, tipo, função e senioridade (sem ela, zero).
+ */
+async function quadroVigente(cenarioId: string) {
+  const prisma = getPrismaClient();
+  const ql = await quadroRealizadoMaisRecente(prisma);
+  if (!ql) throw new CenarioError(400, "Nenhuma competência no Quadro de Lotação (Gestão de Colaboradores) para importar.");
+  const [cad, centros, unidades, funcoes, existentes] = await Promise.all([
+    cadastrosDoQuadro(),
+    prisma.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, unidadeNegocioId: true } }),
+    prisma.unidadeNegocio.findMany({ select: { id: true, codigo: true } }),
+    prisma.colaboradorFuncao.findMany({ select: { id: true, nome: true } }),
+    prisma.cenarioLotacao.findMany({ where: { cenarioId }, select: { vinculo: true, senioridadeId: true, funcaoId: true, centroCustoId: true, meses: true } }),
+  ]);
+  const centroDe = new Map(centros.map((x) => [x.id, x]));
+  const ativos = new Set(cad.centros.map((x) => x.id));
+  const unidadeDoCodigo = new Map(unidades.map((u) => [u.codigo, u.id]));
+  const nomeDaFuncao = new Map(funcoes.map((f) => [f.id, f.nome]));
+  const salarios = new Map(existentes.map((l) => [chaveDaLinhaDoQuadro(l), mesesDaLinha(l.meses)]));
+  const linhas: DadosDaLinhaDoQuadro[] = [];
+  const fora = new Map<string, number>();
+  let total = 0;
+  for (const [k, n] of ql.final) {
+    if (n <= 0) continue;
+    const [centroCustoId, vinculo, funcaoId, senioridadeId] = k.split("|");
+    const c = centroDe.get(centroCustoId);
+    const g = c?.codigoRM && ativos.has(c.id) ? cad.grupoDoCodigo.get(c.codigoRM) : undefined;
+    if (!c || !g || !funcaoId || !senioridadeId || (vinculo !== "CLT" && vinculo !== "PJ")) {
+      const nome = c ? rotuloDoCentro(c) : "centro de custo excluído";
+      fora.set(nome, (fora.get(nome) ?? 0) + n);
+      continue;
+    }
+    const s = salarios.get(k);
+    linhas.push({
+      unidadeNegocioId: ql.unidadeDaChave.get(k) ?? c.unidadeNegocioId ?? unidadeDoCodigo.get(g.unidade) ?? unidades[0].id,
+      vinculo,
+      senioridadeId,
+      funcaoId,
+      centroCustoId,
+      meses: Array.from({ length: 12 }, (_, m) => ({ colaboradores: n, salarioBruto: s?.[m].salarioBruto ?? 0, adicional: s?.[m].adicional ?? 0 })),
+    });
+    total += n;
+  }
+  // Na ordem do centro, do tipo e da função.
+  const ordem = (l: DadosDaLinhaDoQuadro) => `${centroDe.get(l.centroCustoId)?.codigoRM ?? ""}|${l.vinculo}|${nomeDaFuncao.get(l.funcaoId) ?? ""}`;
+  linhas.sort((a, b) => ordem(a).localeCompare(ordem(b), "pt-BR"));
+  return { ano: ql.ano, mes: ql.mes, linhas, total, fora };
+}
+
 /** O motivo de recusar uma linha do Quadro de Lotação; null, certa. Os cadastros da linha que já existia valem, mesmo inativos. */
 function recusaDaLinha(d: DadosDaLinhaDoQuadro, cad: Awaited<ReturnType<typeof cadastrosDoQuadro>>, atual?: { senioridadeId: string; funcaoId: string; centroCustoId: string; unidadeNegocioId: string } | null) {
   const mantido = (campo: "senioridadeId" | "funcaoId" | "centroCustoId" | "unidadeNegocioId") => atual?.[campo] === d[campo];
@@ -1000,9 +1078,9 @@ async function aplicarMudancas(tx: Prisma.TransactionClient, cenarioId: string, 
     const [tipo, ...resto] = m.chave.split("|");
     if (tipo === "P") prem.push({ unidade: Number(resto[0]), venda: resto[1], chave: resto.slice(2).join("|"), mes: m.mes, valor: m.valor });
     else if (tipo === "L") {
-      // L|grupo|CLT e L|grupo|PJ (19/10/2026); o Total de Colaboradores é calculado e não se grava.
-      const sufixo = resto[resto.length - 1];
-      if (sufixo === "CLT" || sufixo === "PJ") prem.push({ unidade: 0, venda: sufixo === "CLT" ? VENDA_LOTACAO_CLT : VENDA_LOTACAO_PJ, chave: resto.slice(0, -1).join("|"), mes: m.mes, valor: m.valor });
+      // Os colaboradores (L|grupo|…) vêm da aba Quadro de Lotação (12/11/2026: a Gestão de Colaboradores é a única fonte) e
+      // não se gravam.
+      continue;
     } else if (tipo === "E") {
       // Os Encargos e Benefícios (19/10/2026): E|grupo|item.
       const item = itemDosEncargos(resto[resto.length - 1]);
@@ -1448,9 +1526,9 @@ export const cenariosService = {
     id: string,
     ano: number,
     usuario: Usuario,
-    opcoesDaReferencia: { modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; manterMeses?: boolean } = { modo: "MES_A_MES" },
+    opcoesDaReferencia: { modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; manterMeses?: boolean; importarQuadro?: boolean } = { modo: "MES_A_MES" },
   ) {
-    const { manterMeses: manter = false, ...opcoes } = opcoesDaReferencia;
+    const { manterMeses: manter = false, importarQuadro = false, ...opcoes } = opcoesDaReferencia;
     const c = await obterOuFalhar(id, usuario);
     exigirQuemCriou(c, usuario);
     exigirEditavel(c);
@@ -1516,36 +1594,15 @@ export const cenariosService = {
       return media ? medias : [...medias, ...xs];
     };
     const decimal = (v: number) => new Prisma.Decimal(v.toFixed(4));
-    // O quadro de lotação dos grupos (19/10/2026): os colaboradores de cada grupo nas listas do Quadro de Lotação (a aba
-    // de mesmo nome do LISTAS REALIZADO (OPERAÇÃO), nas Listas do mês) das competências do período — a soma dos centros
-    // da aba de cada grupo. A Média de Referência (o mês 0) é a soma nos meses com a lista ÷ o número deles; no Mês a
-    // Mês, também cada mês fechado no seu mês. Os indicadores de quadro de lotação do realizado não entram.
-    const lotacao: Array<{ cenarioId: string; unidade: number; venda: string; chave: string; mes: number; valor: Prisma.Decimal }> = [];
-    {
-      const { porCompetencia, semGrupo } = await lotacaoDosGrupos(fechadas.map((f) => f.id), grupos.map((g) => g.grupo));
-      const comLista = fechadas.filter((f) => porCompetencia.has(f.id));
-      // Os Colaboradores CLT e os PJ, cada um na sua venda (19/10/2026).
-      const somas = new Map<string, number>();
-      const empilhar = (venda: string, grupo: string, mes: number, v: number) => {
-        if (!v) return;
-        somas.set(`${venda}|${grupo}`, (somas.get(`${venda}|${grupo}`) ?? 0) + v);
-        if (!media) lotacao.push({ cenarioId: id, unidade: 0, venda, chave: grupo, mes, valor: new Prisma.Decimal(v) });
-      };
-      for (const f of comLista)
-        for (const [grupo, v] of porCompetencia.get(f.id)!) {
-          empilhar(VENDA_LOTACAO_CLT, grupo, f.mes, v.clt);
-          empilhar(VENDA_LOTACAO_PJ, grupo, f.mes, v.pj);
-        }
-      for (const [k, soma] of somas) {
-        const [venda, ...grupo] = k.split("|");
-        lotacao.push({ cenarioId: id, unidade: 0, venda, chave: grupo.join("|"), mes: 0, valor: decimal(soma / comLista.length) });
-      }
-      const semLista = fechadas.filter((f) => !porCompetencia.has(f.id)).map((f) => `${String(f.mes).padStart(2, "0")}/${ano}`);
-      if (!comLista.length) ref.avisos.push("Nenhum mês do período tem a lista do Quadro de Lotação (Listas do mês): o quadro de lotação dos grupos fica em branco.");
-      else if (semLista.length)
-        ref.avisos.push(`Sem a lista do Quadro de Lotação em ${semLista.join(", ")}: o quadro de lotação desses meses fica em branco, e a Média de Referência é a dos outros meses.`);
-      if (semGrupo.size) ref.avisos.push(`Quadro de lotação de centros de custo sem grupo no cadastro Centros de Custo (fica fora do cenário): ${[...semGrupo.keys()].join(", ")}.`);
-    }
+    // Os colaboradores (12/11/2026, pedido do Adão): a Gestão de Colaboradores é a única fonte da contagem — a referência não
+    // traz mais as listas do Quadro de Lotação do Fechamento Mensal; os colaboradores saem da aba Quadro de Lotação do cenário,
+    // que o Importar Quadro de Lotação Vigente (`importarQuadro`) preenche com o QL Realizado mais recente, qualquer que seja o
+    // período.
+    const vigente = importarQuadro ? await quadroVigente(id) : null;
+    if (vigente?.fora.size)
+      ref.avisos.push(
+        `Quadro de Lotação Vigente: ${[...vigente.fora.values()].reduce((s, n) => s + n, 0)} colaboradores de centros fora dos grupos do cenário (ou inativos) ficaram de fora: ${[...vigente.fora.entries()].map(([c, n]) => `${c} (${n})`).join(", ")}.`,
+      );
     await prisma.$transaction(
       async (tx) => {
         // Mantendo os meses (11/11/2026), só as Médias de Referência (o mês 0) saem e entram de novo.
@@ -1594,12 +1651,20 @@ export const cenariosService = {
           });
         });
         await gravarEmLotes(beneficios, (lote) => tx.cenarioPremissa.createMany({ data: lote }));
-        // O quadro de lotação dos grupos (19/10/2026; antes, os indicadores divididos pela mão de obra dos grupos): as
-        // listas do Quadro de Lotação dos meses do período (lotacaoDosGrupos, calculada antes da transação).
-        await gravarEmLotes(
-          lotacao.filter((x) => !manter || x.mes === 0),
-          (lote) => tx.cenarioPremissa.createMany({ data: lote }),
-        );
+        // O Quadro de Lotação Vigente (12/11/2026): as linhas da aba Quadro de Lotação do cenário trocadas pelas do QL
+        // Realizado mais recente (os salários de cada linha que já havia ficam); o cálculo, abaixo, conta os colaboradores.
+        if (vigente) {
+          await tx.cenarioLotacao.deleteMany({ where: { cenarioId: id } });
+          const novas = vigente.linhas.map((l, k) => ({ ...l, id: randomUUID(), ordem: k }));
+          await gravarEmLotes(
+            novas.map(({ meses: _m, ...l }) => ({ ...l, cenarioId: id })),
+            (lote) => tx.cenarioLotacao.createMany({ data: lote }),
+          );
+          await gravarEmLotes(
+            novas.flatMap((l) => mesesParaGravar(l.id, l.meses)),
+            (lote) => tx.cenarioLotacaoMes.createMany({ data: lote }),
+          );
+        }
         await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, ...soMedias } });
         // Os indicadores: a Média de Referência (o mês 0, a média dos meses do período com valor) e, no Mês a Mês, os
         // meses (15/10/2026: antes, na média, os doze meses iguais a ela).
@@ -1625,9 +1690,19 @@ export const cenariosService = {
       metadados: { cenario: c.nome, referencia: media ? "media do realizado" : "realizado", ano, meses, premissas: ref.premissas.length, centros: ref.centros.length, avisos: ref.avisos, manterMeses: manter },
     });
     await prisma.cenarioReajuste.create({
-      data: { cenarioId: id, usuarioId: usuario.id || null, usuarioNome: usuario.nome, tipo: "REFERENCIA", descricao: `${nomeArquivo}${manter ? " (só as Médias de Referência; os meses do cenário mantidos)" : ""}` },
+      data: {
+        cenarioId: id,
+        usuarioId: usuario.id || null,
+        usuarioNome: usuario.nome,
+        tipo: "REFERENCIA",
+        descricao: `${nomeArquivo}${manter ? " (só as Médias de Referência; os meses do cenário mantidos)" : ""}${vigente ? `; Quadro de Lotação Vigente (${String(vigente.mes).padStart(2, "0")}/${vigente.ano}: ${vigente.total} colaboradores em ${vigente.linhas.length} linhas)` : ""}`,
+      },
     });
-    return { ...(await this.obter(id, usuario)), avisos: ref.avisos };
+    return {
+      ...(await this.obter(id, usuario)),
+      avisos: ref.avisos,
+      ...(vigente ? { quadroVigente: { competencia: `${String(vigente.mes).padStart(2, "0")}/${vigente.ano}`, colaboradores: vigente.total, linhas: vigente.linhas.length } } : {}),
+    };
   },
 
   /**
@@ -2217,8 +2292,9 @@ export const cenariosService = {
       // O quadro de lotação do grupo (14/10/2026; 19/10/2026: CLT e PJ; 11/11/2026: com linhas no Quadro de Lotação, também os
       // Aprendizes e os Estagiários, sem eles nos CLT e nos PJ) e os quadros em que ele entra.
       lotacao: {
-        aprendizes: q ? serie(VENDA_LOTACAO_APRENDIZ, null) : null,
-        estagiarios: q ? serie(VENDA_LOTACAO_ESTAGIARIO, null) : null,
+        // Os quatro em todos os grupos (12/11/2026), calculados pela aba Quadro de Lotação (sem linhas, zero).
+        aprendizes: serie(VENDA_LOTACAO_APRENDIZ, null),
+        estagiarios: serie(VENDA_LOTACAO_ESTAGIARIO, null),
         clt: serie(VENDA_LOTACAO_CLT, null),
         pj: serie(VENDA_LOTACAO_PJ, null),
         quadro: quadroDoGrupo(g).descricao,
@@ -2274,9 +2350,10 @@ export const cenariosService = {
     const remuneracoes = new Set(maosDeObraDoGrupo([...contas.keys()], g.atribuicao).flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
     if (alteracoes.some((a) => remuneracoes.has(a.linha)))
       throw new CenarioError(400, `As Remunerações CLT e PJ vêm da aba Quadro de Lotação e não se digitam: inclua ou edite as linhas do grupo ${grupo} naquela aba.`);
-    const q = quadroDosGrupos(await linhasDoQuadro(prisma, id), [g], (x) => contasDoGrupo(est, x).map((l) => l.codigo)).get(grupo);
-    if (q && alteracoes.some((a) => a.linha.startsWith("LOTACAO|")))
-      throw new CenarioError(400, `O grupo ${grupo} tem linhas na aba Quadro de Lotação: os colaboradores vêm de lá. Edite-os naquela aba.`);
+    // Os colaboradores também (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é a única
+    // fonte da contagem; antes, os grupos sem linhas os digitavam).
+    if (alteracoes.some((a) => a.linha.startsWith("LOTACAO|")))
+      throw new CenarioError(400, `Os colaboradores vêm da aba Quadro de Lotação e não se digitam: inclua ou edite as linhas do grupo ${grupo} naquela aba (ou importe o Quadro de Lotação Vigente na Referência).`);
     // Os Benefícios Adicionais podem ser negativos (20/10/2026: a diferença da referência quando o realizado fica abaixo do cálculo).
     if (alteracoes.some((a) => premissa(a.linha) && a.linha !== "ENCARGOS|BENEFICIOS" && a.valor !== null && a.valor < 0))
       throw new CenarioError(400, "O quadro de lotação e os percentuais dos encargos não podem ser negativos.");

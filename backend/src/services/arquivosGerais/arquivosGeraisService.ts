@@ -96,19 +96,13 @@ export function tipoDoArquivo(tipo: string, nome: string) {
 
 /**
  * Os processos dos arquivos (11/11/2026, pedido do Adão): os vigentes, os do catálogo das telas dos perfis (os em
- * desenvolvimento não estão nele), na ordem do menu — as Análises Gerenciais com um processo por tela (Relatórios
- * Executivos e Painéis e Apresentações) e os Cenários Analíticos antes dos Sintéticos. Cada um com as áreas das telas
- * dele: o usuário vê o processo quando lê ou edita alguma tela (ou aba) dele.
+ * desenvolvimento não estão nele), na ordem do menu — os Relatórios Executivos e os Painéis e Apresentações (processos do
+ * catálogo desde 12/11/2026; os códigos RELATORIOS_EXECUTIVOS e PAINEIS_DE_BORDO, os mesmos de antes) e os Cenários Analíticos
+ * antes dos Sintéticos. Cada um com as áreas das telas dele: o usuário vê o processo quando lê ou edita alguma tela (ou aba) dele.
  */
 export function processosDosArquivos(): Array<{ codigo: string; nome: string; areas: string[] }> {
   const r: Array<{ codigo: string; nome: string; areas: string[] }> = [];
-  for (const g of CATALOGO_DE_TELAS) {
-    if (g.recurso === "ANALISES_GERENCIAIS") {
-      for (const t of g.telas) r.push({ codigo: t.codigo.toUpperCase(), nome: t.nome, areas: [t.codigo] });
-      continue;
-    }
-    r.push({ codigo: g.recurso, nome: g.nome, areas: g.telas.map((t) => t.codigo) });
-  }
+  for (const g of CATALOGO_DE_TELAS) r.push({ codigo: g.recurso, nome: g.nome, areas: g.telas.map((t) => t.codigo) });
   const i = r.findIndex((p) => p.codigo === "CENARIOS_SINTETICOS");
   const j = r.findIndex((p) => p.codigo === "CENARIOS_ANALITICOS");
   if (i >= 0 && j > i) [r[i], r[j]] = [r[j], r[i]];

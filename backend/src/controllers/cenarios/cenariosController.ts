@@ -557,6 +557,8 @@ export const cenariosController = {
         ate: z.number().int().min(1).max(12).optional(),
         // Só as Médias de Referência; os doze meses do cenário ficam (11/11/2026).
         manterMeses: z.boolean().optional(),
+        // O Quadro de Lotação Vigente (12/11/2026): as linhas da aba Quadro de Lotação pelo QL Realizado mais recente.
+        importarQuadro: z.boolean().optional(),
       })
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Exercício ou período inválido." });

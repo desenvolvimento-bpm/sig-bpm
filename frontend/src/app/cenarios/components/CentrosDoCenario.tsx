@@ -109,16 +109,14 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
 }
 
 /**
- * As linhas da tabela Premissas do grupo (19/10/2026): o Quadro de Lotação (Colaboradores CLT e PJ — com linhas na aba
- * Quadro de Lotação, também os Aprendizes e os Estagiários antes deles, 11/11/2026 — e o Total de Colaboradores, a soma), os
- * Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o total do centro no fim.
+ * As linhas da tabela Premissas do grupo (19/10/2026): o Quadro de Lotação (os Colaboradores Aprendizes, Estagiários, CLT e
+ * PJ e o Total de Colaboradores, a soma — desde 12/11/2026, sempre calculados pela aba Quadro de Lotação, alimentada pela
+ * Gestão de Colaboradores), os Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o
+ * total do centro no fim.
  */
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const { aprendizes, estagiarios, clt, pj } = dados.lotacao;
-  // Os colaboradores do grupo (11/11/2026: com linhas na aba Quadro de Lotação, os Aprendizes e os Estagiários à parte).
   const series = [aprendizes, estagiarios, clt, pj].filter((x): x is NonNullable<typeof x> => !!x);
-  // Com linhas na aba Quadro de Lotação (09/11/2026), os colaboradores são calculados.
-  const doQuadro = dados.lotacao.linhasDoQuadro > 0;
   const premissa = (chave: string, secao: string, rotulo: string, und: string, casas: number, x: SerieDoCentro): LinhaDaPremissa => ({
     chave,
     secao,
@@ -134,8 +132,9 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const lotacao: LinhaDaPremissa[] = [
     ...(aprendizes ? [{ ...premissa("LOTACAO|APRENDIZES", "QUADRO DE LOTAÇÃO", "Colaboradores Aprendizes", "colab.", 0, aprendizes), tipo: "CALCULO" as const }] : []),
     ...(estagiarios ? [{ ...premissa("LOTACAO|ESTAGIARIOS", "QUADRO DE LOTAÇÃO", "Colaboradores Estagiários", "colab.", 0, estagiarios), tipo: "CALCULO" as const }] : []),
-    { ...premissa("LOTACAO|CLT", "QUADRO DE LOTAÇÃO", "Colaboradores CLT", "colab.", 0, clt), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
-    { ...premissa("LOTACAO|PJ", "QUADRO DE LOTAÇÃO", "Colaboradores PJ", "colab.", 0, pj), ...(doQuadro ? { tipo: "CALCULO" as const } : {}) },
+    // Os colaboradores não se digitam em nenhum grupo (12/11/2026, pedido do Adão: a Gestão de Colaboradores é a única fonte).
+    { ...premissa("LOTACAO|CLT", "QUADRO DE LOTAÇÃO", "Colaboradores CLT", "colab.", 0, clt), tipo: "CALCULO" as const },
+    { ...premissa("LOTACAO|PJ", "QUADRO DE LOTAÇÃO", "Colaboradores PJ", "colab.", 0, pj), tipo: "CALCULO" as const },
     {
       chave: "LOTACAO|TOTAL",
       secao: "QUADRO DE LOTAÇÃO",

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { Seletor } from "@/app/relatorios/components/SeletorPeriodo";
+
 import { quadroService, type CenarioComparado, type IndicadoresDoMes, type MarcacaoComparavel } from "../services/quadroService";
 
 /**
@@ -13,36 +15,50 @@ export const INDICADORES_DO_QUADRO: Array<{
   chave: keyof CenarioComparado["indicadores"];
   nome: string;
   unidade: string;
+  /** A conta, à direita do nome no card padrão do Painel de Bordo (12/11/2026). */
+  metodologia: string;
   valor: (m: IndicadoresDoMes) => number | null;
   acumulado: (valores: Array<number | null>) => number | null;
   formatar: (v: number | null) => string;
+  /** O valor sem a unidade (o card padrão: a unidade vai no rótulo do Atual e do Acumulado) e o fator da escala dos gráficos. */
+  formatarCurto: (v: number | null) => string;
+  fatorDaEscala: number;
   explicacao: string;
 }> = [
   {
     chave: "quadroDeLotacao",
     nome: "Quadro de Lotação",
-    unidade: "und",
+    unidade: "colab.",
+    metodologia: "Início do Mês + Positivas − Negativas",
     valor: (m) => m.quadroDeLotacao,
     acumulado: (vs) => vs.filter((v): v is number => v !== null).at(-1) ?? null,
     formatar: (v) => (v === null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })),
+    formatarCurto: (v) => (v === null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })),
+    fatorDaEscala: 1,
     explicacao: "O quadro do fim do mês: o do início (o Lançamento Inicial, no mês dele, ou o fim do mês anterior) + as movimentações Positivas − as Negativas, aprovadas. No ano, o do último mês.",
   },
   {
     chave: "turnover",
     nome: "Turnover",
     unidade: "%",
+    metodologia: "(Positivas + Negativas) ÷ 2 ÷ Quadro de Lotação",
     valor: (m) => m.turnover,
     acumulado: (vs) => (vs.some((v) => v !== null) ? vs.reduce<number>((a, v) => a + (v ?? 0), 0) : null),
     formatar: (v) => (v === null ? "—" : `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`),
+    formatarCurto: (v) => (v === null ? "—" : (v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })),
+    fatorDaEscala: 100,
     explicacao: "(Movimentações Positivas + Negativas) ÷ 2 ÷ Quadro de Lotação do mês. No ano, a soma dos meses.",
   },
   {
     chave: "contratacoes",
     nome: "Abertura de Vagas x Contratações",
     unidade: "ocorr.",
+    metodologia: "Movimentações Positivas aprovadas",
     valor: (m) => m.contratacoes,
     acumulado: (vs) => (vs.some((v) => v !== null) ? vs.reduce<number>((a, v) => a + (v ?? 0), 0) : null),
     formatar: (v) => (v === null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })),
+    formatarCurto: (v) => (v === null ? "—" : v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })),
+    fatorDaEscala: 1,
     explicacao: "As contratações do mês: as movimentações aprovadas de contagem Positiva. No ano, a soma dos meses.",
   },
 ];
@@ -102,26 +118,22 @@ export function useComparacaoDoQuadro() {
 }
 export type ComparacaoDoQuadro = ReturnType<typeof useComparacaoDoQuadro>;
 
-/** A lista Comparação, na altura do título: os cenários marcados (pelo nome da marcação) ou Sem Comparação. */
+/**
+ * A lista Comparação, na altura do título: os cenários marcados (pelo nome da marcação) ou Sem Comparação. No padrão das
+ * listas da linha do título das outras telas (12/11/2026: o Seletor do Exercício de Resultados Empresariais).
+ */
 export function SeletorDaComparacao({ comparacao }: { comparacao: ComparacaoDoQuadro }) {
   if (!comparacao.opcoes.length) return null;
   const dica = comparacao.atual ? `Comparação: ${comparacao.atual.rotulo} (${comparacao.atual.cenario.nome}, ${comparacao.atual.cenario.ano})` : "Sem Comparação";
   return (
-    <label className="flex items-center gap-2" title={dica}>
-      <span className="text-xs font-medium whitespace-nowrap text-gray-600">Comparação</span>
-      <select
-        aria-label="Comparação"
-        value={comparacao.marcacao ?? ""}
-        onChange={(e) => comparacao.mudar((e.target.value || null) as MarcacaoComparavel | null)}
-        className="h-9 w-40 rounded-sm border border-gray-300 bg-white px-3 text-sm"
-      >
-        <option value="">Sem Comparação</option>
-        {comparacao.opcoes.map((o) => (
-          <option key={o.marcacao} value={o.marcacao}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
-    </label>
+    <span title={dica}>
+      <Seletor
+        rotulo="Comparação"
+        valor={comparacao.marcacao ?? "NENHUMA"}
+        opcoes={[{ valor: "NENHUMA", rotulo: "Sem Comparação" }, ...comparacao.opcoes.map((o) => ({ valor: o.marcacao, rotulo: o.rotulo }))]}
+        onMudar={(v) => comparacao.mudar(v === "NENHUMA" ? null : (v as MarcacaoComparavel))}
+        largura="w-40"
+      />
+    </span>
   );
 }

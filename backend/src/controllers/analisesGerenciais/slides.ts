@@ -108,7 +108,7 @@ export function corpoDasPaginas(telasDoSumario: z.ZodType<string>, maximoDeTelas
     z.object({ ...posicao, tipo: z.literal("SUMARIO"), listar: z.enum(["TELAS", "TELAS_E_SLIDES"]), telas: z.array(telasDoSumario).max(maximoDeTelas), linha: z.enum(["PONTOS", "TRACOS", "LINHA", "NENHUM"]).optional(), estilos: z.object({ telas: estiloDoSumario.optional(), slides: estiloDoSumario.optional() }).optional() }),
   ]);
   return z.object({
-    paginas: z.array(z.object({ id: z.string().min(1).max(40), nome: z.string().max(60).optional(), blocos: z.array(bloco).max(200), fundo: fundo.optional(), transicao: z.enum(["ESMAECER", "ROLAR_VERTICAL", "ROLAR_HORIZONTAL"]).optional(), avancarApos: z.number().int().min(1).max(3600).optional(), recomecarAoTerminar: z.boolean().optional() })).min(1).max(30),
+    paginas: z.array(z.object({ id: z.string().min(1).max(40), nome: z.string().max(60).optional(), blocos: z.array(bloco).max(200), fundo: fundo.optional(), transicao: z.enum(["ESMAECER", "ROLAR_VERTICAL", "ROLAR_HORIZONTAL"]).optional(), avancarApos: z.number().int().min(1).max(3600).optional(), recomecarAoTerminar: z.boolean().optional(), oculta: z.boolean().optional() })).min(1).max(30),
     versao: z.string().max(40).optional(),
     forcar: z.boolean().optional(),
   });

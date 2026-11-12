@@ -210,10 +210,11 @@ export function CompetenciasDoQuadro() {
             <DialogDescription>A competência do Quadro de Lotação nasce aberta: as movimentações do mês são registradas e aprovadas nela até ser fechada.</DialogDescription>
           </DialogHeader>
           {abrindo ? (
-            <div className="flex gap-3">
-              <div className="space-y-1.5">
+            // Os rótulos acima das listas (12/11/2026, pedido do Adão: antes, ao lado delas), como no Abrir Competência do Fechamento Mensal.
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="grid gap-1.5">
                 <Label htmlFor="quadro-mes">Mês</Label>
-                <select id="quadro-mes" value={abrindo.mes} onChange={(e) => setAbrindo({ ...abrindo, mes: Number(e.target.value) })} className={classeSelect}>
+                <select id="quadro-mes" value={abrindo.mes} onChange={(e) => setAbrindo({ ...abrindo, mes: Number(e.target.value) })} className={`${classeSelect} w-48`}>
                   {MESES.map((m, i) => (
                     <option key={m} value={i + 1}>
                       {String(i + 1).padStart(2, "0")} — {m}
@@ -221,9 +222,9 @@ export function CompetenciasDoQuadro() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-1.5">
+              <div className="grid gap-1.5">
                 <Label htmlFor="quadro-ano">Ano</Label>
-                <select id="quadro-ano" value={abrindo.ano} onChange={(e) => setAbrindo({ ...abrindo, ano: Number(e.target.value) })} className={classeSelect}>
+                <select id="quadro-ano" value={abrindo.ano} onChange={(e) => setAbrindo({ ...abrindo, ano: Number(e.target.value) })} className={`${classeSelect} w-32`}>
                   {anos.map((a) => (
                     <option key={a} value={a}>
                       {a}

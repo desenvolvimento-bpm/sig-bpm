@@ -28,6 +28,80 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 12/11/2026, 11:10
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "Ao lado do Nova Página, o Duplicar Página: a cópia inteira da página aberta (os blocos, a Imagem de Fundo e as transições) entra logo depois dela; o nome escolhido ganha “(Cópia)”.",
+      "Depois do Excluir a Página, o Ocultar Página: ativo, o olho cortado aparece antes do nome da página, e o Apresentar a pula e passa à próxima (ela também fica fora do PDF, do contador dos slides e do Sumário). Outro clique a mostra de novo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Ao lado do Nova Página, o Duplicar Página: a cópia inteira da aba aberta (os blocos, a Imagem de Fundo e as transições) entra logo depois dela; o nome escolhido ganha “(Cópia)”.",
+      "Depois do Excluir a Página, o Ocultar Página: ativo, o olho cortado aparece antes do nome da aba, e o Apresentar a pula e passa à próxima (ela também fica fora do PDF, do contador dos slides e do Sumário). Outro clique a mostra de novo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Os colaboradores (Aprendizes, Estagiários, CLT e PJ) vêm só da aba Quadro de Lotação, alimentada pela Gestão de Colaboradores: na aba Centros de Custo, são calculados em todos os grupos e não se digitam; o grupo sem linhas no Quadro de Lotação fica sem colaboradores.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: [
+      "Na Referência, com Resultado Realizado, a caixa Importar Quadro de Lotação Vigente: as linhas da aba Quadro de Lotação passam a ser as do Quadro de Lotação mais recente da Gestão de Colaboradores (em todos os meses), qualquer que seja o período De / Até; os salários das linhas que o cenário já tinha ficam.",
+      "A referência realizada não traz mais os colaboradores das listas do Fechamento Mensal.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    itens: ["Nos modais Importar das Funções e do Lançamento Inicial, os filtros nos rótulos da tabela da prévia."],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "No Realizado, os cards Quadro de Lotação, Turnover e Abertura de Vagas x Contratações com o destaque amarelo à esquerda.",
+      "A lista Comparação no padrão das outras telas; no Abrir Competência, os campos Mês e Ano no espaçamento dos outros modais.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: [
+      "Os indicadores nos cards padrão do Painel de Bordo de Resultados Empresariais: o Atual e o Acumulado, com a comparação e o gráfico dos meses.",
+      "Sem os campos do ano e do mês: o painel mostra sempre a competência mais recente do Quadro de Lotação (a em edição ou a última fechada), ao lado do título.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Controle de Usuários",
+    tela: "Perfis",
+    rota: "/perfis",
+    itens: ["No modal do perfil, os Relatórios Executivos e os Painéis e Apresentações são processos do grupo Análises Gerenciais, cada um com a sua tela (antes, abas de um processo Análises Gerenciais)."],
+  },
   // 12/11/2026, 09:00
   {
     publicada: "2026-11-12T09:00",

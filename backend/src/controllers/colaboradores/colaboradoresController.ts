@@ -93,7 +93,8 @@ export const colaboradoresController = {
   },
   movimentosDoMes: (request: Request, response: Response) => responder(response, () => apuracaoDoQuadroService.movimentos(anoMes(request))),
   painel: (request: Request, response: Response) => {
-    const ano = Number(request.query.ano) || new Date().getFullYear();
+    // Sem o ano (12/11/2026), o da competência mais recente do Quadro de Lotação.
+    const ano = Number(request.query.ano) || undefined;
     return responder(response, () => quadroService.painel(ano));
   },
 

@@ -124,6 +124,16 @@ export const quadroService = {
   /** A Comparação (09/11/2026): os cenários marcados e, com a marcação, o cenário dela mês a mês. */
   comparacao: (comparacao: MarcacaoComparavel | null) =>
     dados(api.get<{ data: { opcoes: OpcaoDaComparacao[]; comparado: CenarioComparado | null } }>(`${base}/comparacao`, { params: comparacao ? { comparacao } : {} })),
-  painel: (ano: number) =>
-    dados(api.get<{ data: { ano: number; anos: number[]; meses: Array<IndicadoresDoMes & { mes: number; porTipo: Record<string, number> }> } }>(`${base}/painel`, { params: { ano } })),
+  /** Sem o ano (12/11/2026), o da competência mais recente; `sentidos`: o comportamento de cada indicador no cadastro. */
+  painel: (ano?: number) =>
+    dados(
+      api.get<{
+        data: {
+          ano: number;
+          anos: number[];
+          meses: Array<IndicadoresDoMes & { mes: number; porTipo: Record<string, number> }>;
+          sentidos: Record<"quadroDeLotacao" | "turnover" | "contratacoes", string>;
+        };
+      }>(`${base}/painel`, { params: ano ? { ano } : {} }),
+    ),
 };
