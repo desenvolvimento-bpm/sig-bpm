@@ -237,14 +237,17 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
     area: "gestao_colaboradores",
     telas: [
       // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências (Editar abre, fecha, reabre e exclui) e as abas de
-      // uma competência — Movimentações (Editar registra e exclui), Controle (Editar aprova e reprova) e Realizado.
+      // uma competência — Movimentações (Editar registra e exclui), Aprovações (Editar aprova e reprova; o código continua
+      // "controle") e Realizado.
       {
         codigo: "colaboradores_quadro",
         nome: "Quadro de Lotação",
         abas: [
           { codigo: "movimentacoes", nome: "Movimentações" },
-          { codigo: "controle", nome: "Controle" },
+          { codigo: "controle", nome: "Aprovações" },
           { codigo: "realizado", nome: "Realizado" },
+          // A Jornada (13/11/2026): as horas extras e as faltas das linhas do quadro realizado (Editar digita).
+          { codigo: "jornada", nome: "Jornada" },
         ],
       },
       { codigo: "colaboradores_painel", nome: "Painel de Bordo", abas: [{ codigo: "resultados", nome: "Resultados" }, { codigo: "indicadores", nome: "Indicadores" }] },
@@ -274,10 +277,20 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
   // A Central de Conectividade (24/10/2026; desde 30/10/2026, um processo da Controladoria, acima dos Cadastros da
   // Controladoria, como no menu): a tela APIs — Ler usa as APIs e vê os próprios acessos; Editar vê os de todos e bloqueia
   // APIs, usuários e endereços.
-  { recurso: "CENTRAL_CONECTIVIDADE", nome: "Central de Conectividade", area: "conectividade", telas: [{ codigo: "biblioteca_apis", nome: "APIs" }] },
+  // A tela Acessos (13/11/2026, pedido do Adão), logo depois de APIs: a aba APIs (antes, a aba Acesso às APIs da tela APIs);
+  // Editar bloqueia e libera usuários e endereços.
+  {
+    recurso: "CENTRAL_CONECTIVIDADE",
+    nome: "Central de Conectividade",
+    area: "conectividade",
+    telas: [
+      { codigo: "biblioteca_apis", nome: "APIs" },
+      { codigo: "conectividade_acessos", nome: "Acessos", abas: [{ codigo: "apis", nome: "APIs" }] },
+    ],
+  },
   {
     recurso: "CADASTROS_CONTROLADORIA",
-    nome: "Cadastros da Controladoria",
+    nome: "Cadastros Gerais",
     area: "cadastros_controladoria",
     // Três telas com abas (17/10/2026; antes, uma tela por cadastro): Contábil, Controladoria e Analítico.
     telas: [
@@ -297,6 +310,8 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "linhas", nome: "Linhas" },
           { codigo: "estrutura_dre", nome: "Estrutura da DRE" },
           { codigo: "regras_rateio", nome: "Regras de Rateio" },
+          // As Redistribuições de Gastos (13/11/2026, pedido do Adão), depois das Regras de Rateio.
+          { codigo: "redistribuicoes", nome: "Redistribuições de Gastos" },
           // A Alocação nas Linhas (26/10/2026): os custos sem tarefa nas linhas, para a etapa Linhas da apuração.
           { codigo: "alocacao_linhas", nome: "Alocação nas Linhas" },
           // Os Departamentos (11/11/2026, pedido do Adão): a ordem, a unidade e o departamento.

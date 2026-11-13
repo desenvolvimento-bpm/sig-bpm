@@ -151,6 +151,10 @@ export function ResultadosDaObraContent() {
               obras genéricas ficam fora da base do rateio. Os valores são os gravados pela etapa Linhas de cada mês e ficam congelados com o fechamento.
             </p>
             <p>
+              Os lançamentos da obra são os do centro de custo que vale para cada um: o que uma contestação ou uma reclassificação por fornecedor levou a
+              outro centro, e o redistribuído, saem da obra — nos custos diretos, na receita, nos impostos e no extrato.
+            </p>
+            <p>
               Nos custos de Matérias Primas, de Gastos Gerais Variáveis da Produção e de Frete e Descarga, o custo realizado é ajustado mês a mês pelos
               Créditos de Impostos (Fechamento Mensal › Resultados › Impostos), com os percentuais da conta na unidade do custo (Matriz ou Filial): na venda mercantil, sem
               o Estornado (custo × (1 − % Estornado)); na venda global, sem o Estornado e com o Creditado reaplicado (custo × (1 − % Estornado) ÷ (1 − %

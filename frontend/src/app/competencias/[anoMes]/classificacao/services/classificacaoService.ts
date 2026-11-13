@@ -18,6 +18,8 @@ type Conta = {
   descricao: string;
   departamento: string | null;
   atribuicao: string | null;
+  /** Sem Resultado na Linha do DRE (13/11/2026): o lançamento fica fora da DRE, sem pendência. */
+  semResultado?: boolean;
 };
 
 export type LancamentoClassificado = {

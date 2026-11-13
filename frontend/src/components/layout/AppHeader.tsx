@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { podeSair } from "@/lib/alteracoesPendentes";
 import { useTema, type Tema } from "@/lib/tema";
 import { useAcessibilidade, type Acessibilidade } from "@/lib/acessibilidade";
-import { Bell, Eye, GraduationCap, KeyRound, LogOut, Palette } from "lucide-react";
+import { Bell, Eye, GraduationCap, House, KeyRound, LogOut, Palette } from "lucide-react";
 
 import {
   Avatar,
@@ -29,7 +29,12 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
@@ -38,6 +43,7 @@ import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { etapasDoMes, rotulosDaEtapa } from "@/lib/etapasDoMes";
 import { migalhas } from "@/lib/navigation-config";
+import { gravarTelaInicial, lerTelaInicial, processosAcessiveis } from "@/lib/telaInicial";
 import type { Novidade } from "@/lib/novidades";
 
 import { relatoriosExecutivosService } from "@/app/analises-gerenciais/relatorios-executivos/services/relatoriosExecutivosService";
@@ -83,8 +89,14 @@ export function AppHeader() {
     novidades.marcar();
   };
   const [tema, escolherTema] = useTema();
+  // A Tela Inicial (13/11/2026): a escolhida (guardada no navegador) e os processos que o perfil alcança (abaixo).
+  const [telaInicial, setTelaInicial] = useState<string | null>(null);
+  useEffect(() => {
+    if (user) setTelaInicial(lerTelaInicial(user.id));
+  }, [user]);
   const [acessibilidade, escolherAcessibilidade] = useAcessibilidade();
   const { hasPermission } = usePermissions();
+  const processos = processosAcessiveis(hasPermission);
   const etapas = etapasDoMes(hasPermission, user?.acesso);
   // O mês do relatório executivo aberto (16/10/2026), no caminho: a mesma consulta da tela, que o cache já tem.
   const idDoRelatorio = pathname.match(/^\/analises-gerenciais\/relatorios-executivos\/([0-9a-f-]{36})/)?.[1] ?? null;
@@ -170,6 +182,40 @@ export function AppHeader() {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            {/*
+              A Tela Inicial (13/11/2026, pedido do Adão), logo antes do Tema: o processo que o SIG abre ao entrar, entre os que o
+              perfil alcança (por grupo, como no menu lateral); Padrão, o início de sempre.
+            */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-1.5">
+                <House className="size-4 shrink-0" />
+                Tela Inicial
+                <span className="ml-auto max-w-32 truncate pl-2 text-xs text-muted-foreground">{telaInicial ?? "Padrão"}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-[70vh] w-64 overflow-y-auto">
+                <DropdownMenuRadioGroup
+                  value={telaInicial ?? ""}
+                  onValueChange={(v) => {
+                    if (!user) return;
+                    const escolhido = String(v) || null;
+                    gravarTelaInicial(user.id, escolhido);
+                    setTelaInicial(escolhido);
+                  }}
+                >
+                  <DropdownMenuRadioItem value="">Padrão</DropdownMenuRadioItem>
+                  {processos.map((g) => (
+                    <DropdownMenuGroup key={g.grupo}>
+                      <DropdownMenuLabel className="text-xs text-gray-500">{g.grupo}</DropdownMenuLabel>
+                      {g.processos.map((p) => (
+                        <DropdownMenuRadioItem key={p.titulo} value={p.titulo}>
+                          {p.titulo}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuGroup>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             {/* O tema (13/10/2026): três círculos — Padrão (preto | branco), Claro (branco) e Escuro (preto). */}
             <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-sm">
               {/* O ícone antes de Tema, como os dos demais itens do menu (13/10/2026). */}

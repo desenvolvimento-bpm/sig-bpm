@@ -21,9 +21,10 @@ const numero = (chave: keyof LinhaDoRealizado, rotulo: string): Coluna<LinhaDoRe
   alinhamento: "direita",
   valor: (l) => l[chave] as number,
 });
+// O Departamento antes do Centro de Custo (13/11/2026, pedido do Adão).
 const COLUNAS: Coluna<LinhaDoRealizado>[] = [
-  { chave: "centro", rotulo: "Centro de Custo", valor: (l) => l.centroCusto },
   { chave: "departamento", rotulo: "Departamento", valor: (l) => l.departamento },
+  { chave: "centro", rotulo: "Centro de Custo", valor: (l) => l.centroCusto },
   { chave: "atribuicao", rotulo: "Atribuição", valor: (l) => l.atribuicao },
   numero("inicial", "Início do Mês"),
   numero("entradas", "Entradas"),
@@ -68,7 +69,7 @@ export function RealizadoContent() {
         aba="realizado"
         sobre={
           <p>
-            O Quadro de Lotação Realizado do mês, por centro de custo: os colaboradores do início do mês (o Lançamento Inicial, no mês dele, ou o fim da
+            O Quadro de Lotação Realizado do mês, por departamento e centro de custo: os colaboradores do início do mês (o Lançamento Inicial, no mês dele, ou o fim da
             competência anterior), as entradas (as movimentações aprovadas de contagem Positiva), as saídas (as de Negativa) e os do fim do mês, CLT e PJ.
             Com a Comparação, por centro, os colaboradores do mês na aba Quadro de Lotação do cenário escolhido (nos cenários analíticos que a têm) e a
             diferença. Os indicadores do mês (Quadro de Lotação, Turnover e Abertura de Vagas x Contratações) ficam no Painel de Bordo.
@@ -102,8 +103,8 @@ export function RealizadoContent() {
           columns={colunas.map((c) => c.rotulo)}
           renderRow={(l) => (
             <tr key={l.centroCustoId} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-4 py-2 text-sm">{l.centroCusto}</td>
               <td className="px-4 py-2 text-sm">{l.departamento ?? <span className="text-gray-400">—</span>}</td>
+              <td className="px-4 py-2 text-sm">{l.centroCusto}</td>
               <td className="px-4 py-2 text-sm">{l.atribuicao ?? <span className="text-gray-400">—</span>}</td>
               <td className="px-4 py-2 text-right text-sm">{l.inicial}</td>
               <td className="px-4 py-2 text-right text-sm">{l.entradas || <span className="text-gray-400">0</span>}</td>

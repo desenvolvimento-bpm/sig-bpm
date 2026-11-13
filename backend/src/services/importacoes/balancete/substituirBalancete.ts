@@ -69,7 +69,7 @@ export async function substituirBalanceteDetalhado(opcoes: {
   }
   const [contas, centros, reclassificacoes] = await Promise.all([
     prisma.contaResultado.findMany({
-      select: { id: true, reduzido: true, tipoConta: true, departamento: true, atribuicao: true, balde: true, linhaDREId: true, linhaDRE: { select: { descricao: true } } },
+      select: { id: true, reduzido: true, tipoConta: true, departamento: true, atribuicao: true, balde: true, linhaDREId: true, semResultado: true, linhaDRE: { select: { descricao: true } } },
     }),
     prisma.centroCusto.findMany({ where: { codigoRM: { not: null } }, select: { id: true, codigoRM: true, departamento: true, atribuicao: true, balde: true } }),
     prisma.reclassificacaoConta.findMany({ where: { ativo: true }, select: { codigoCentroCusto: true, contaOrigemId: true, contaDestinoId: true } }),

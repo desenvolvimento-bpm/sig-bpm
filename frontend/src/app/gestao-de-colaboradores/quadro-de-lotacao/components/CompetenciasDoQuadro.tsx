@@ -60,7 +60,7 @@ function sugestao(itens: CompetenciaDoQuadro[], lancamentoInicial: string | null
 /**
  * As competências do Quadro de Lotação (06/11/2026, etapa 2): as próprias, abertas e fechadas aqui (fora do Fechamento
  * Mensal). Desde 12/11/2026 (pedido do Adão, como no Fechamento Mensal), o início da Gestão de Colaboradores
- * (/gestao-de-colaboradores): clicar numa linha abre o Quadro de Lotação da competência, nas abas Movimentações, Controle e
+ * (/gestao-de-colaboradores): clicar numa linha abre o Quadro de Lotação da competência, nas abas Movimentações, Aprovações e
  * Realizado.
  */
 export function CompetenciasDoQuadro() {
@@ -76,7 +76,7 @@ export function CompetenciasDoQuadro() {
   const [confirmando, setConfirmando] = useState<{ c: CompetenciaDoQuadro; acao: "fechar" | "reabrir" | "excluir" } | null>(null);
 
   // A primeira aba que o perfil alcança.
-  const abaInicial = ["movimentacoes", "controle", "realizado"].find((a) => hasPermission(`colaboradores_quadro.${a}:ler`));
+  const abaInicial = ["movimentacoes", "controle", "realizado", "jornada"].find((a) => hasPermission(`colaboradores_quadro.${a}:ler`));
   const entrar = (c: CompetenciaDoQuadro) => (abaInicial ? router.push(`/gestao-de-colaboradores/quadro-de-lotacao/${anoMes(c)}/${abaInicial}`) : undefined);
 
   const depois = () => void queryClient.invalidateQueries({ queryKey: ["quadro"] });
@@ -120,7 +120,7 @@ export function CompetenciasDoQuadro() {
           <ul>
             <li>Use Abrir Competência, à direita do título, para abrir um mês; o modal sugere o seguinte ao mais recente.</li>
             <li>
-              Clique numa linha para abrir o Quadro de Lotação da competência, com as abas Movimentações, Controle e Realizado. Na barra do topo, “Gestão de
+              Clique numa linha para abrir o Quadro de Lotação da competência, com as abas Movimentações, Aprovações e Realizado. Na barra do topo, “Gestão de
               Colaboradores” volta a esta lista, e “Quadro de Lotação” abre a última competência aberta (ou a mais recente); no caminho do topo, o nome do
               processo também volta aqui.
             </li>
@@ -128,7 +128,7 @@ export function CompetenciasDoQuadro() {
               No menu Ações, Fechar trava as movimentações do mês (só fecha sem movimentações pendentes), Reabrir as libera de novo e Excluir apaga a competência
               aberta por engano, sem movimentações.
             </li>
-            <li>Quadro Inicial e Quadro Final são os colaboradores do início e do fim do mês; Pendentes, as movimentações à espera de aprovação no Controle.</li>
+            <li>Quadro Inicial e Quadro Final são os colaboradores do início e do fim do mês; Pendentes, as movimentações à espera de aprovação na aba Aprovações.</li>
           </ul>
         }
         acoes={
@@ -178,7 +178,7 @@ export function CompetenciasDoQuadro() {
                       {c.status === "ABERTA" ? (
                         <DropdownMenuItem
                           disabled={c.pendentes > 0}
-                          title={c.pendentes ? `${c.pendentes} ${plural(c.pendentes, "movimentação pendente", "movimentações pendentes")}: aprove ou reprove no Controle antes de fechar.` : undefined}
+                          title={c.pendentes ? `${c.pendentes} ${plural(c.pendentes, "movimentação pendente", "movimentações pendentes")}: aprove ou reprove na aba Aprovações antes de fechar.` : undefined}
                           onClick={() => setConfirmando({ c, acao: "fechar" })}
                         >
                           <Lock />

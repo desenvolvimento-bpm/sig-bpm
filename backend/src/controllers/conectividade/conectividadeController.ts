@@ -174,6 +174,11 @@ export const conectividadeController = {
   async bloquear(request: Request, response: Response) {
     const b = bloqueioSchema.safeParse(request.body);
     if (!b.success) return response.status(400).json({ error: "Bloqueio inválido." });
+    // A API se bloqueia na tela APIs; o usuário e o endereço, na tela Acessos (13/11/2026).
+    const exige = b.data.tipo === "API" ? "biblioteca_apis:editar" : "conectividade_acessos.apis:editar";
+    if (!request.user!.permissions.includes(exige)) {
+      return response.status(403).json({ error: b.data.tipo === "API" ? "Bloquear uma API pede Editar na tela APIs." : "Bloquear um usuário ou um endereço pede Editar na tela Acessos." });
+    }
     return response.json({ data: await conectividadeService.bloquear(b.data.tipo, b.data.valor, b.data.bloqueado, request.user!) });
   },
 };

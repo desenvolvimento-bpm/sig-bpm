@@ -6,7 +6,11 @@ import {
   chaveDoFornecedor,
   classificarLancamento,
   corrigirCentroEConta,
+  filialDoDepartamento,
+  partesDoValor,
+  redistribuicaoDoMovimento,
   type CentroParaClassificar,
+  type RegraDeRedistribuicao,
   type ContaParaClassificar,
 } from "./regrasClassificacao.js";
 import { abasQueSomam } from "../dre/apuracaoUnidades.js";
@@ -80,7 +84,7 @@ export const classificacaoService = {
     const [lancamentos, centros, contas, reclassificacoes, porFornecedor, contestacoes] = await Promise.all([
       prisma.lancamentoContabil.findMany({
         where: { competenciaId },
-        select: { id: true, codigoCentroCusto: true, contaResultadoId: true, filial: true, cliForn: true },
+        select: { id: true, codigoCentroCusto: true, contaResultadoId: true, filial: true, cliForn: true, valorMovimento: true },
       }),
       // Todos os centros (27/10/2026): os do balancete pelo código; o de uma contestação, pelo id (com ou sem código).
       prisma.centroCusto.findMany({
@@ -100,6 +104,7 @@ export const classificacaoService = {
           atribuicao: true,
           balde: true,
           linhaDREId: true,
+          semResultado: true,
           linhaDRE: { select: { descricao: true } },
         },
       }),
@@ -145,12 +150,80 @@ export const classificacaoService = {
       centroDoFornecedor: new Map(porFornecedor.flatMap((r) => (centroPorId.has(r.centroCustoId) ? [[chaveDoFornecedor(r.fornecedor), centroPorId.get(r.centroCustoId)!] as const] : []))),
     };
 
+    // As redistribuições de gastos vigentes no mês (13/11/2026): a vigência por mês (dia 1º do início ao dia 1º do fim).
+    const doMes = new Date(Date.UTC(competencia.ano, competencia.mes - 1, 1));
+    const redistribuicoes: Array<RegraDeRedistribuicao<(typeof centros)[number]>> = (
+      await prisma.redistribuicaoGasto.findMany({
+        where: { ativo: true, vigenciaInicio: { lte: doMes }, OR: [{ vigenciaFim: null }, { vigenciaFim: { gte: doMes } }] },
+        orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
+        select: {
+          id: true,
+          linhaDREId: true,
+          fornecedores: true,
+          departamento: { select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } },
+          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } },
+        },
+      })
+    ).map((r) => ({
+      id: r.id,
+      linhaDREId: r.linhaDREId,
+      departamento: r.departamento ? { grupos: new Set(r.departamento.gruposDRE), filial: filialDoDepartamento(r.departamento.unidadeNegocio.codigo) } : null,
+      fornecedores: new Set(r.fornecedores.map(chaveDoFornecedor)),
+      destinos: r.destinos.flatMap((d) => (centroPorId.has(d.centroCustoId) ? [{ centro: centroPorId.get(d.centroCustoId)!, percentual: Number(d.percentual) }] : [])),
+    }));
+    const partes: Prisma.LancamentoRedistribuidoCreateManyInput[] = [];
+
     const agora = new Date();
     const contagem = new Map<ValidacaoLancamento, number>();
     let reclassificados = 0;
     let doFornecedor = 0;
+    let redistribuidos = 0;
+    // A combinação da linha e do balde que nenhuma aba soma (21/10/2026): a verificação "Sem Aba de Resultado".
+    const semAba = (linhaDREId: string | null, filial: number, balde: (typeof centros)[number]["balde"], alocacao: string) => {
+      const linha = linhaDREId ? linhaPorId.get(linhaDREId) : undefined;
+      if (!linha || linha.tipo !== "ITEM") return false;
+      const par = linha.grupoSigla === "CSM" && complementares.has(tripla("", linha.atribuicao, linha.descricao));
+      return !abasQueSomam(linha, { filial, balde, rateio: alocacao === "RATEIO", parNaComplementar: par }).length;
+    };
 
     const atualizacoes = lancamentos.map((l) => {
+      // A redistribuição de gastos (13/11/2026) vale por cima de tudo, inclusive da contestação (pedido do Adão): a conta da
+      // DRE é a das reclassificações (sem a contestação); o movimento se divide entre os centros dos destinos, e as partes
+      // não passam pela verificação de departamento e atribuição (o plano de contas resumido de 2027 vale para qualquer
+      // centro), só pela de aba.
+      const semContestacao = corrigirCentroEConta(l, regras, null);
+      const contaSem = contaPorId.get(semContestacao.contaId)!;
+      const rd = redistribuicoes.length
+        ? redistribuicaoDoMovimento({ linhaDREId: contaSem.linhaDREId, grupoSigla: contaSem.linhaDREId ? (linhaPorId.get(contaSem.linhaDREId)?.grupoSigla ?? null) : null, filial: l.filial, cliForn: l.cliForn }, redistribuicoes)
+        : null;
+      if (rd && rd.destinos.length) {
+        redistribuidos++;
+        if (semContestacao.porConta) reclassificados++;
+        if (semContestacao.porFornecedor) doFornecedor++;
+        const centroDoMovimento = semContestacao.centro ?? (l.codigoCentroCusto ? (centroPorCodigo.get(l.codigoCentroCusto) ?? null) : null);
+        const c = { ...classificarLancamento(semContestacao.codigoCentroCusto, centroDoMovimento, contaSem), validacao: "OK" as ValidacaoLancamento, contestacaoId: null, redistribuicaoId: rd.id };
+        const valores = partesDoValor(Number(l.valorMovimento), rd.destinos.map((d) => d.percentual));
+        rd.destinos.forEach((d, i) => {
+          const p = classificarLancamento(d.centro.codigoRM, d.centro, contaSem);
+          if (semAba(contaSem.linhaDREId, l.filial, p.balde, p.alocacao)) c.validacao = "SEM_ABA";
+          partes.push({
+            competenciaId,
+            lancamentoContabilId: l.id,
+            redistribuicaoId: rd.id,
+            filial: l.filial,
+            linhaDREId: contaSem.linhaDREId!,
+            centroCustoId: d.centro.id,
+            // Em texto (13/11/2026): o número do JavaScript gravava 9796.799999999999 no lugar de 9796.80.
+            percentual: String(d.percentual),
+            valorMovimento: valores[i].toFixed(2),
+            balde: p.balde,
+            alocacao: p.alocacao,
+            etiqueta: p.etiqueta,
+          });
+        });
+        contagem.set(c.validacao, (contagem.get(c.validacao) ?? 0) + 1);
+        return { id: l.id, data: { ...c, classificadoEm: agora } };
+      }
       // O centro e a conta que valem (13/11/2026): o centro imperativo do fornecedor, a troca de conta do centro e, por
       // cima, a contestação validada no balancete (o centro novo e a conta nova dela).
       const ct = contestacaoDo.get(l.id);
@@ -160,13 +233,9 @@ export const classificacaoService = {
       if (corrigido.porFornecedor) doFornecedor++;
       const conta = contaPorId.get(corrigido.contaId)!;
       const centro = corrigido.centro ?? (l.codigoCentroCusto ? (centroPorCodigo.get(l.codigoCentroCusto) ?? null) : null);
-      const c = { ...classificarLancamento(corrigido.codigoCentroCusto, centro, conta), contestacaoId: ct?.id ?? null };
+      const c = { ...classificarLancamento(corrigido.codigoCentroCusto, centro, conta), contestacaoId: ct?.id ?? null, redistribuicaoId: null as string | null };
       // Sem aba de resultado (21/10/2026): a combinação da linha e do balde que nenhuma aba soma.
-      const linha = c.linhaDREId ? linhaPorId.get(c.linhaDREId) : undefined;
-      if (c.validacao === "OK" && linha && linha.tipo === "ITEM") {
-        const par = linha.grupoSigla === "CSM" && complementares.has(tripla("", linha.atribuicao, linha.descricao));
-        if (!abasQueSomam(linha, { filial: l.filial, balde: c.balde, rateio: c.alocacao === "RATEIO", parNaComplementar: par }).length) c.validacao = "SEM_ABA";
-      }
+      if (c.validacao === "OK" && semAba(c.linhaDREId, l.filial, c.balde, c.alocacao)) c.validacao = "SEM_ABA";
       contagem.set(c.validacao, (contagem.get(c.validacao) ?? 0) + 1);
       return { id: l.id, data: { ...c, classificadoEm: agora } };
     });
@@ -182,9 +251,12 @@ export const classificacaoService = {
     }
     await prisma.$transaction(
       async (tx) => {
+        // As partes redistribuídas do mês (13/11/2026) se refazem junto com a classificação.
+        await tx.lancamentoRedistribuido.deleteMany({ where: { competenciaId } });
         for (const { data, ids } of porDados.values()) {
           for (let k = 0; k < ids.length; k += 5000) await tx.lancamentoContabil.updateMany({ where: { id: { in: ids.slice(k, k + 5000) } }, data });
         }
+        for (let k = 0; k < partes.length; k += 2000) await tx.lancamentoRedistribuido.createMany({ data: partes.slice(k, k + 2000) });
       },
       { timeout: 120_000 },
     );
@@ -198,6 +270,9 @@ export const classificacaoService = {
       reclassificados,
       /** Os movimentos que foram para o centro imperativo do fornecedor (13/11/2026). */
       porFornecedor: doFornecedor,
+      /** Os movimentos redistribuídos (13/11/2026) e as partes deles. */
+      redistribuidos,
+      partesRedistribuidas: partes.length,
       contestados,
       porValidacao: Object.fromEntries(contagem),
       duracaoMs: Date.now() - inicio,
@@ -305,6 +380,7 @@ export const classificacaoService = {
       descricao: true,
       departamento: true,
       atribuicao: true,
+      semResultado: true,
     } as const;
 
     const [itens, total] = await Promise.all([

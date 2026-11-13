@@ -121,7 +121,7 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const obra = { select: { codigo: true, tipoVenda: true } } as const;
   const linhaSel = { select: { codigo: true } } as const;
   const unidadeSel = { select: { codigo: true } } as const;
-  const [est, linhas, grupos, corr, unidades, centros, lancamentosDeCentros, producoes, pistas, metalurgias, armaduras, montagens, acompanhamentos, itens, requisicoes, notas, contas] = await Promise.all([
+  const [est, linhas, grupos, corr, unidades, centros, lancamentosDiretos, producoes, pistas, metalurgias, armaduras, montagens, acompanhamentos, itens, requisicoes, notas, contas] = await Promise.all([
     estrutura(),
     linhasDoCadastro(),
     gruposDoCadastro(),
@@ -138,7 +138,7 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
     // Os lançamentos das contas de centros (14/10/2026): os que não caem num grupo do cenário são as movimentações fora
     // dos padrões, que o usuário realoca.
     prisma.lancamentoContabil.findMany({
-      where: { ...naComp, OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
+      where: { ...naComp, redistribuicaoId: null, OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
       orderBy: [{ competencia: { mes: "asc" } }, { linhaArquivo: "asc" }],
       select: {
         competenciaId: true,
@@ -406,6 +406,22 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const daEstrutura = new Map(est.map((l) => [l.codigo, l]));
   const foraDoPadrao = new Map<string, Omit<MovimentacaoForaDoPadrao, "valores"> & { meses: number[] }>();
   const porFilial = new Map<string, Map<number, number>>();
+  // Os redistribuídos (13/11/2026) pelas partes, nos centros dos destinos.
+  const partes = await getPrismaClient().lancamentoRedistribuido.findMany({
+    where: { ...naComp, OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
+    select: {
+      competenciaId: true,
+      filial: true,
+      valorMovimento: true,
+      linhaDRE: { select: { codigo: true, tipo: true } },
+      centroCusto: { select: { nomeControladoria: true, nomeRM: true, codigoRM: true } },
+      lancamentoContabil: { select: { contaResultado: { select: { reduzido: true, descricao: true } } } },
+    },
+  });
+  const lancamentosDeCentros = [
+    ...lancamentosDiretos,
+    ...partes.map(({ lancamentoContabil, ...p }) => ({ ...p, codigoCentroCusto: p.centroCusto.codigoRM, nomeCentroCusto: p.centroCusto.nomeRM, contaResultado: lancamentoContabil.contaResultado })),
+  ];
   for (const l of lancamentosDeCentros) {
     const codigo = l.linhaDRE?.codigo;
     if (!codigo || l.linhaDRE?.tipo !== "ITEM" || !ehContaDeCentro(codigo)) continue;

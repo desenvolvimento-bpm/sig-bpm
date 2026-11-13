@@ -59,8 +59,8 @@ export type NovaMovimentacao = {
   data: string;
   centroCustoId: string;
   vinculo: "CLT" | "PJ";
+  /** A senioridade vai com a função (13/11/2026). */
   funcaoId: string;
-  senioridadeId: string;
   motivo: string | null;
   origem: "INICIATIVA_EMPRESA" | "PEDIDO_COLABORADOR" | null;
   gerarVaga: boolean;
@@ -82,6 +82,19 @@ export type LinhaDoRealizado = {
   cenario: number | null;
 };
 type DaCompetencia = { competencia: { ano: number; mes: number; status: StatusCompetenciaQuadro } };
+/** Uma linha da aba Jornada (13/11/2026): o centro e a função do quadro realizado, com as horas extras (minutos) e as faltas (dias). */
+export type LinhaDaJornada = {
+  centroCustoId: string;
+  funcaoId: string;
+  departamento: string | null;
+  centroCusto: string;
+  funcao: string;
+  colaboradores: number;
+  horasExtrasMinutos: number;
+  faltasDias: number;
+  atualizadoPorNome: string | null;
+  atualizadoEm: string | null;
+};
 
 /** As marcações dos cenários da Comparação (as mesmas de Resultados Empresariais). */
 export type MarcacaoComparavel = "PREVISAO" | "ORCAMENTO_EMPRESARIAL" | "RESULTADOS_ANTERIORES" | "RESULTADOS_VENDIDOS";
@@ -110,6 +123,9 @@ export const quadroService = {
   excluirMovimentacao: (id: string) => api.delete(`${base}/quadro/movimentacoes/${id}`),
   controle: (anoMes: string) => dados(api.get<{ data: DaCompetencia & { itens: Movimentacao[] } }>(`${base}/quadro/competencias/${anoMes}/controle`)),
   decidir: (id: string, aprovar: boolean, justificativa: string | null) => api.post(`${base}/quadro/movimentacoes/${id}/decisao`, { aprovar, justificativa }),
+  // A Jornada (13/11/2026).
+  jornada: (anoMes: string) => dados(api.get<{ data: DaCompetencia & { linhas: LinhaDaJornada[] } }>(`${base}/quadro/competencias/${anoMes}/jornada`)),
+  gravarJornada: (anoMes: string, v: { centroCustoId: string; funcaoId: string; horasExtras: string; faltas: number }) => api.put(`${base}/quadro/competencias/${anoMes}/jornada`, v),
   realizado: (anoMes: string, comparacao: MarcacaoComparavel | null) =>
     dados(
       api.get<{

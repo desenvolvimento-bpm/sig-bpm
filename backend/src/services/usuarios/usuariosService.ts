@@ -57,7 +57,7 @@ const ROTULO_RECURSO: Record<RecursoSistema, string> = {
   RESULTADOS_REALIZADOS: "Resultados Empresariais",
   FECHAMENTO_MENSAL: "Fechamento Mensal",
   CADASTROS_APURACAO: "Cadastros da Apuração",
-  CADASTROS_CONTROLADORIA: "Cadastros da Controladoria",
+  CADASTROS_CONTROLADORIA: "Cadastros Gerais",
   CONTROLE_USUARIOS: "Controle de Usuários",
   ANALISES_GERENCIAIS: "Análises Gerenciais",
   CENTRAL_CONECTIVIDADE: "Central de Conectividade",

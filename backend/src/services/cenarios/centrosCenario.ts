@@ -79,14 +79,17 @@ const maisComum = <T>(xs: T[]) => {
 /** Os grupos de centros de custo ativos (sem os de estoque e de investimento), com o balde e o destino. */
 export async function gruposDoCadastro(): Promise<GrupoDoCenario[]> {
   const prisma = getPrismaClient();
-  const [centros, filiais] = await Promise.all([
+  const [centros, diretos, partes] = await Promise.all([
     // Os vazios primeiro, como no SQLite (23/10/2026): o desempate do maisComum é a posição, e decide o balde do grupo.
     prisma.centroCusto.findMany({
       where: { ativo: true },
       orderBy: [{ nomeControladoria: { sort: "asc", nulls: "first" } }, { codigoRM: { sort: "asc", nulls: "first" } }, { criadoEm: "asc" }, { id: "asc" }],
     }),
-    prisma.lancamentoContabil.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true }, where: { centroCustoId: { not: null } } }),
+    prisma.lancamentoContabil.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true }, where: { centroCustoId: { not: null }, redistribuicaoId: null } }),
+    // Os redistribuídos (13/11/2026) contam nos centros dos destinos.
+    prisma.lancamentoRedistribuido.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true } }),
   ]);
+  const filiais = [...diretos, ...partes];
   const porGrupo = new Map<string, typeof centros>();
   for (const c of centros) {
     if (foraDoCenario(c)) continue;

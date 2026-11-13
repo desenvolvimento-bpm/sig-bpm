@@ -109,6 +109,9 @@ export function corpoDasPaginas(telasDoSumario: z.ZodType<string>, maximoDeTelas
       legenda: z.string().max(500),
       proporcao: z.number().positive().max(50),
       legendaHtml: z.string().max(5000).optional(),
+      // As Configurações do Vídeo (13/11/2026).
+      reproducaoAutomatica: z.boolean().optional(),
+      recomecarAoTerminar: z.boolean().optional(),
     }),
     // O Texto Livre e o Sumário (20/10/2026).
     z.object({ ...posicao, tipo: z.literal("TEXTO"), texto: z.string().max(5000), html: z.string().max(30000).optional(), espacamento, borda }),

@@ -245,7 +245,7 @@ export async function processarLista(importacaoId: string): Promise<void> {
                 ...leitura.avisos,
                 ...linhasInativas.map(
                   (l) =>
-                    `${l.registros} ${plural(l.registros, "registro cita", "registros citam")} a linha ${l.nome}, inativa em Cadastros da Controladoria › Linhas: corrija a linha na lista e importe de novo.`,
+                    `${l.registros} ${plural(l.registros, "registro cita", "registros citam")} a linha ${l.nome}, inativa em Cadastros Gerais › Linhas: corrija a linha na lista e importe de novo.`,
                 ),
               ],
               substituiu: ids,

@@ -10,7 +10,7 @@ export const NOME_DA_PLATAFORMA: Record<Plataforma, string> = { youtube: "YouTub
 export type VideoDoLink = {
   plataforma: Plataforma;
   /** O endereço do player: com ou sem os controles da plataforma, do início ou de um segundo, tocando ou não. */
-  embed: (o: { controles: boolean; inicio?: number; tocar?: boolean; mudo?: boolean }) => string;
+  embed: (o: { controles: boolean; inicio?: number; tocar?: boolean; mudo?: boolean; repetir?: boolean }) => string;
   /** A proporção do player (largura ÷ altura), para o bloco começar no tamanho dele. */
   proporcao: number;
   /** A página aceita comandos do player (só o YouTube). */
@@ -48,12 +48,17 @@ export function videoDoLink(texto: string): VideoDoLink | null {
       plataforma: "youtube",
       proporcao: vertical ? 9 / 16 : 16 / 9,
       comandos: true,
-      embed: ({ controles, inicio, tocar, mudo }) => {
+      embed: ({ controles, inicio, tocar, mudo, repetir }) => {
         const p = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", modestbranding: "1", controls: controles ? "1" : "0" });
         if (typeof window !== "undefined") p.set("origin", window.location.origin);
         if (inicio) p.set("start", String(Math.floor(inicio)));
         if (tocar) p.set("autoplay", "1");
         if (mudo) p.set("mute", "1");
+        // Recomeçar ao Terminar (13/11/2026): o YouTube repete com a lista de um vídeo só.
+        if (repetir) {
+          p.set("loop", "1");
+          p.set("playlist", id);
+        }
         return `https://www.youtube.com/embed/${id}?${p}`;
       },
     };

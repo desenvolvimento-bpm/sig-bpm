@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ListTree, MessageSquareWarning } from "lucide-react";
 
+import { EtiquetaRedistribuicao, textoDaRedistribuicao } from "@/components/shared/EtiquetaRedistribuicao";
 import { IconeDaCorrecao } from "@/components/shared/IconeDaCorrecao";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ export function BalanceteDialog({
         <span>
           {t}
           {m.centroOriginal ? (
-            <IconeDaCorrecao campo="centro" original={textoDe(m.centroOriginal)} atual={t} origem={m.contestacaoAplicada ? { tipo: "contestacao", numero: m.contestacaoAplicada.numero } : { tipo: "reclassificacao" }} />
+            <IconeDaCorrecao campo="centro" original={textoDe(m.centroOriginal)} atual={t} origem={m.redistribuicao?.parte ? { tipo: "redistribuicao" } : m.contestacaoAplicada ? { tipo: "contestacao", numero: m.contestacaoAplicada.numero } : { tipo: "reclassificacao" }} />
           ) : null}
         </span>
       );
@@ -163,6 +164,8 @@ export function BalanceteDialog({
         </span>
       );
     }
+    // O movimento redistribuído (13/11/2026) não se contesta: a etiqueta mostra os destinos.
+    if (m.redistribuicao) return podeContestar ? <EtiquetaRedistribuicao redistribuicao={m.redistribuicao} /> : null;
     // O reflexo de um rateio (30/10/2026): contesta-se o movimento na linha de origem, não aqui.
     if (m.rateioDe) {
       return podeContestar ? (
@@ -184,6 +187,7 @@ export function BalanceteDialog({
 
   /** Por que os itens do movimento não se contestam (nulo se se contestam): o reflexo de um rateio ou o movimento inteiro em contestação. */
   const bloqueioDosItens = (m: MovimentoDoBalancete) => {
+    if (m.redistribuicao) return textoDaRedistribuicao(m.redistribuicao);
     if (m.rateioDe) return `Reflexo do rateio: o movimento é da linha "${m.rateioDe.linha}". Para contestar os itens, abra o extrato da linha de origem.`;
     const andamento = m.contestacao && !m.contestacao.deItens && (m.contestacao.situacao === "PENDENTE" || m.contestacao.situacao === "ACATADA");
     return andamento ? `O movimento inteiro está na contestação nº ${m.contestacao!.numero} (${ROTULO_SITUACAO[m.contestacao!.situacao].toLowerCase()}).` : null;

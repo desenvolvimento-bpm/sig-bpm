@@ -21,6 +21,7 @@ import { useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/component
 import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
 import { EdicaoDRE } from "../../../components/EdicaoDRE";
 import { AvisoRateiosSemBase } from "../../../components/CentrosDoCenario";
+import { BotaoContasDoBalancete } from "../../../components/ContasDoBalancete";
 import { BotoesDeVersao } from "../../../components/VersaoCenario";
 import { cenariosService, type Cenario } from "../../../services/cenariosService";
 import { botaoPrimario } from "../../../components/CenarioDialog";
@@ -67,6 +68,13 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
       nomeVisao={nome}
       consultas={false}
       doCenario
+      // Nos analíticos (13/11/2026), as Contas do Balancete de cada conta (as linhas de item e os Impostos Operacionais, sem os volumes).
+      acaoDaLinha={
+        analitico
+          ? (l) =>
+              !l.volume && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
+          : undefined
+      }
     />
   );
 }
@@ -137,6 +145,13 @@ export function CenarioResultadosContent() {
           <ul>
             <li>Troque de cenário no nome dele, na barra do topo; ao lado, o Painel de Bordo, com a aba Indicadores.</li>
             {analitico ? <li>No cenário analítico, a DRE é calculada a partir das premissas e não se edita aqui: os valores mudam com as premissas.</li> : null}
+            {analitico ? (
+              <li>
+                Em todas as abas, o botão ao lado do nome de cada conta abre as Contas do Balancete: as contas do RM que caem nela (as que têm essa Linha da
+                DRE em Cadastros Gerais › Contábil › Contas de Resultado), com o Reduzido, a Conta, a Descrição, o Departamento, o Rateio e a
+                situação.
+              </li>
+            ) : null}
             <li>Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? "" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).</li>
             {analitico ? null : (
               <li>

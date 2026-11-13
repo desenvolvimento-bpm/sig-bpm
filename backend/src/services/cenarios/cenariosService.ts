@@ -156,7 +156,8 @@ export type ParteDaReferencia =
   | { tipo: "REALIZADO"; ano: number; modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; mesDe: number; mesAte: number }
   | { tipo: "CENARIO"; origemId: string; mesDe: number; mesAte: number };
 /** O que a tela fez numa gravação de valores (o histórico de reajustes, 12/10/2026). */
-export type OrigemDaGravacao = { tipo: "MARCADOS" | "VALOR"; modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO"; reajuste: number | null; replicado: boolean };
+/** `modo` REFERENCIA (13/11/2026): o Replicar Referências dos marcados (a Média de Referência de cada conta nos meses marcados). */
+export type OrigemDaGravacao = { tipo: "MARCADOS" | "VALOR"; modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO" | "REFERENCIA"; reajuste: number | null; replicado: boolean };
 /** As chamadas internas (testes, scripts) veem todos os cenários. */
 const SISTEMA: Usuario = { id: "", nome: "Sistema", admin: true };
 
@@ -2269,7 +2270,8 @@ export const cenariosService = {
           const chave = { cenarioId: id, unidade, venda: a.venda, chave: a.chave, mes: a.mes };
           if (a.valor === null) await tx.cenarioPremissa.deleteMany({ where: chave });
           else {
-            const valor = new Prisma.Decimal(a.valor.toFixed(4));
+            // O Replicar Referências (13/11/2026) grava a média como ela está (6 casas, como a Média de Referência e o Replicar Médias).
+            const valor = new Prisma.Decimal(a.valor.toFixed(origem?.modo === "REFERENCIA" ? 6 : 4));
             await tx.cenarioPremissa.upsert({ where: { cenarioId_unidade_venda_chave_mes: chave }, create: { ...chave, valor }, update: { valor } });
           }
         }
@@ -2629,7 +2631,8 @@ export const cenariosService = {
           const chave = { cenarioId: id, unidade: Number(a.linha.split("|")[0]), venda, chave: a.linha, mes: a.mes };
           if (!a.valor) await tx.cenarioPremissa.deleteMany({ where: chave });
           else {
-            const valor = new Prisma.Decimal(a.valor.toFixed(4));
+            // O Replicar Referências (13/11/2026) grava a média como ela está (6 casas).
+            const valor = new Prisma.Decimal(a.valor.toFixed(origem?.modo === "REFERENCIA" ? 6 : 4));
             await tx.cenarioPremissa.upsert({ where: { cenarioId_unidade_venda_chave_mes: chave }, create: { ...chave, valor }, update: { valor } });
           }
         }

@@ -32,6 +32,7 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
       "colaboradores_quadro.movimentacoes",
       "colaboradores_quadro.controle",
       "colaboradores_quadro.realizado",
+      "colaboradores_quadro.jornada",
       "colaboradores_painel",
       "colaboradores_painel.resultados",
       "colaboradores_painel.indicadores",

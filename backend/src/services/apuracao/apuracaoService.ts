@@ -261,7 +261,7 @@ function mudancas(apurado: Retrato | null, atual: Retrato): string[] {
 
 /**
  * As competências anteriores a esta (de qualquer exercício) que estão
- * apuradas, não fechadas, e com as entradas (ou os Cadastros da Controladoria,
+ * apuradas, não fechadas, e com as entradas (ou os Cadastros Gerais,
  * desde 17/10/2026) alterados depois da apuração — a bola da etapa DRE —, ou
  * com o mês anterior reapurado depois delas (o saldo inicial do estoque). Em
  * ordem, como "MM/AAAA".
@@ -327,7 +327,7 @@ async function desatualizadas(competencias: { id: string; ano: number; mes: numb
   for (const c of competencias) {
     if (!c.apuradaEm || c.status === "FECHADA") continue;
     const { entradasApuradas, cadastrosAssinatura } = await prisma.competencia.findUniqueOrThrow({ where: { id: c.id }, select: { entradasApuradas: true, cadastrosAssinatura: true } });
-    // Os Cadastros da Controladoria alterados depois da apuração (17/10/2026) também pedem reapurar.
+    // Os Cadastros Gerais alterados depois da apuração (17/10/2026) também pedem reapurar.
     let desatualizada = cadastrosMudados(cadastrosAssinatura, cadastros).length > 0 || mudancas(entradasApuradas as Retrato | null, await retratoEntradas(c.id)).length > 0;
     // O mês anterior reapurado depois muda o saldo inicial do estoque (como na situação).
     const a = anterior(c.ano, c.mes);
@@ -407,8 +407,8 @@ export const apuracaoService = {
     if (!apurada) motivosNaoFechar.push("A competência ainda não foi apurada.");
     // Os rateios sem regra vigente no mês (14/10/2026).
     const semRegra = chavesSemRegra(await regrasDeRateio(), ano, mes);
-    if (semRegra.length) motivosNaoFechar.push(`Rateios sem regra vigente no mês: ${semRegra.map((k) => NOME_DA_CHAVE_RATEIO[k] ?? k).join(", ")} (Cadastros da Controladoria / Regras de Rateio).`);
-    if (mudou.length) motivosNaoFechar.push("As entradas ou os Cadastros da Controladoria mudaram depois da apuração: reapure antes de fechar.");
+    if (semRegra.length) motivosNaoFechar.push(`Rateios sem regra vigente no mês: ${semRegra.map((k) => NOME_DA_CHAVE_RATEIO[k] ?? k).join(", ")} (Cadastros Gerais / Regras de Rateio).`);
+    if (mudou.length) motivosNaoFechar.push("As entradas ou os Cadastros Gerais mudaram depois da apuração: reapure antes de fechar.");
     // A etapa Linhas (26/10/2026): o mês apurado antes dela fecha só depois de reapurado, com as linhas gravadas.
     else if (apurada && c.status !== "FECHADA" && c.apuracaoLinhas === null) motivosNaoFechar.push("A competência foi apurada antes da etapa Linhas: reapure antes de fechar.");
     if (pendentes) motivosNaoFechar.push(`Há ${pendentes} ${plural(pendentes, "lançamento", "lançamentos")} com pendência de classificação.`);
@@ -514,7 +514,7 @@ export const apuracaoService = {
     // lista que termina de importar na fila) não entrou no cálculo e tem de
     // aparecer como mudança depois dela.
     const retrato = await retratoEntradas(c.id);
-    // Os Cadastros da Controladoria também (17/10/2026): mudar algum durante a apuração pede reapurar depois.
+    // Os Cadastros Gerais também (17/10/2026): mudar algum durante a apuração pede reapurar depois.
     const cadastros = await assinaturaDosCadastros(true);
     await congelar(c.id, false);
     const etapas: Array<{ etapa: string; resumo: unknown }> = [];
@@ -567,7 +567,7 @@ export const apuracaoService = {
         apuradaPor: usuarioId,
         apuracoes: { increment: 1 },
         entradasApuradas: retrato as Prisma.InputJsonValue,
-        // Os Cadastros da Controladoria na apuração (17/10/2026), para pedir reapurar se algum mudar antes de fechar.
+        // Os Cadastros Gerais na apuração (17/10/2026), para pedir reapurar se algum mudar antes de fechar.
         cadastrosAssinatura: JSON.stringify(cadastros),
         ...(c.status === "ABERTA" ? { status: "EM_CONFERENCIA" as const } : {}),
       },

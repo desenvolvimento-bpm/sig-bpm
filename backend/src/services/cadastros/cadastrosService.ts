@@ -89,6 +89,8 @@ export const cadastrosService = {
           atribuicao: true,
           balde: true,
           ativo: true,
+          // Sem Resultado (13/11/2026): a lista mostra o traço, e não "sem destino".
+          semResultado: true,
           linhaDRE: { select: { codigo: true, descricao: true } },
         },
       }),

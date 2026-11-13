@@ -20,7 +20,7 @@ const numeroDaConta = (reduzido: string) => parseInt(reduzido, 10) || 0;
 const COLUNAS: Coluna<ContaOpcao>[] = [
   { chave: "conta", rotulo: "Conta", tipo: "numero", valor: (c) => numeroDaConta(c.reduzido), texto: (c) => c.reduzido, classe: "w-20" },
   { chave: "descricao", rotulo: "Descrição", valor: (c) => c.descricao },
-  { chave: "linha", rotulo: "Linha da DRE", valor: (c) => c.linha?.descricao ?? null },
+  { chave: "linha", rotulo: "Linha do DRE", valor: (c) => c.linha?.descricao ?? null },
   { chave: "grupo", rotulo: "Grupo", valor: (c) => c.linha?.grupo ?? null },
   { chave: "departamento", rotulo: "Departamento", valor: (c) => (c.departamentoDoRecorte ? ROTULO_DEPARTAMENTO[c.departamentoDoRecorte] : null) },
   { chave: "atribuicao", rotulo: "Atribuição", valor: (c) => c.atribuicao },

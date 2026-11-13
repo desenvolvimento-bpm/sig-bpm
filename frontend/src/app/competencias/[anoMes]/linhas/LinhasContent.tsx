@@ -152,7 +152,7 @@ function Conferencia({ dados }: { dados: LinhasDoMes }) {
           rodape={
             <p className="text-xs text-gray-500">
               De que passo veio cada valor das linhas: a Receita Prévia (as receitas) e, nos custos, a Tarefa, a Regra do Centro, a Obra, o Percentual Fixo
-              (os percentuais por linha de um rateio fixo, em Regras de Rateio), a Regra do Rateio e o Volume da Unidade (Cadastros da Controladoria › Alocação
+              (os percentuais por linha de um rateio fixo, em Regras de Rateio), a Regra do Rateio e o Volume da Unidade (Cadastros Gerais › Alocação
               nas Linhas).
             </p>
           }
@@ -260,15 +260,17 @@ export function LinhasContent() {
               A receita vem da Receita Prévia das linhas. Os custos e as despesas variáveis de venda vêm dos lançamentos que formaram cada valor da unidade (os
               diretos e a parte de cada rateio), e cada lançamento vai às linhas por esta ordem: a tarefa das requisições e das notas fiscais (Cadastros da
               Controladoria › Linhas › Tarefas), a regra do centro de custo, a obra (os centros de obra, pela produção, pelos acompanhamentos ou pela receita da
-              própria obra), os percentuais por linha do rateio fixo (na parte de rateio de uma chave com percentuais fixos no mês: Cadastros da Controladoria ›
-              Regras de Rateio), a regra do rateio do centro (Cadastros da Controladoria › Alocação nas Linhas) e, por último, o volume da unidade.
+              própria obra), os percentuais por linha do rateio fixo (na parte de rateio de uma chave com percentuais fixos no mês: Cadastros Gerais ›
+              Regras de Rateio), a regra do rateio do centro (Cadastros Gerais › Alocação nas Linhas) e, por último, o volume da unidade.
             </p>
             <p>
               A etapa divide também cada linha entre as obras dela, para o Realizado por Obra: o direto de cada obra (a receita dela na Receita Prévia, os
               lançamentos dos centros de obra e os volumes dela nas listas) e a parte dela no rateio da linha — os custos que não vieram dos centros de obra,
               pelo m³ produzido (custos de produção), pelo m³ montado (custos de montagem da linha Montagem), pelos dias de acompanhamento (custos
               complementares e demais serviços) ou pela receita bruta
-              (despesas variáveis de venda) da obra no mês e, sem eles, no exercício até ele. As obras genéricas ficam fora da base do rateio.
+              (despesas variáveis de venda) da obra no mês e, sem eles, no exercício até ele. As obras genéricas ficam fora da base do rateio. O
+              lançamento é de um centro de obra pelo centro de custo que vale para ele: o que uma contestação ou uma reclassificação por fornecedor levou
+              a outro centro, e o redistribuído (pelos centros dos destinos), seguem o centro novo.
             </p>
           </>
         }

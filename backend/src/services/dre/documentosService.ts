@@ -39,7 +39,16 @@ const ondeDoBalancete = (competenciaId: string, filtro: FiltroDoBalancete) => ({
   contaResultado: { reduzido: filtro.conta },
   // O centro e a conta que valem (27/10/2026): com a contestação validada no balancete, o centro e a conta novos.
   ...(filtro.adotada ? { contaAdotada: { reduzido: filtro.adotada } } : {}),
-  ...(filtro.centro ? { OR: [{ centroCusto: { codigoRM: filtro.centro } }, { centroCustoId: null, codigoCentroCusto: filtro.centro }] } : {}),
+  // O redistribuído (13/11/2026) está nos centros dos destinos: no de cada parte, e não no dele.
+  ...(filtro.centro
+    ? {
+        OR: [
+          { redistribuicaoId: null, centroCusto: { codigoRM: filtro.centro } },
+          { redistribuicaoId: null, centroCustoId: null, codigoCentroCusto: filtro.centro },
+          { partesRedistribuidas: { some: { centroCusto: { codigoRM: filtro.centro } } } },
+        ],
+      }
+    : {}),
   ...(filtro.filial ? { filial: filtro.filial } : {}),
 });
 
@@ -72,6 +81,8 @@ export const documentosService = {
           contaAdotada: { select: { reduzido: true, descricao: true } },
           contestacaoId: true,
           linhaDRE: { select: { codigo: true, descricao: true, grupo: true } },
+          redistribuicaoId: true,
+          partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
         },
         // Sem emissão primeiro, como no SQLite (23/10/2026).
         orderBy: [{ emissao: { sort: "asc", nulls: "first" } }, { linhaArquivo: "asc" }],
@@ -93,27 +104,42 @@ export const documentosService = {
       conta: conta ?? { reduzido: filtro.conta, descricao: "" },
       /** O balancete do mês é o detalhado (sem ele, cada linha é a soma da filial, do centro e da conta). */
       detalhado: detalhados > 0,
-      linhas: lancamentos.map((l) => ({
+      linhas: lancamentos.map((l) => {
+        // A parte do centro pedido, num movimento redistribuído (13/11/2026): o valor e o centro dela.
+        const parte = filtro.centro && l.redistribuicaoId ? (l.partesRedistribuidas.find((p) => p.centroCusto.codigoRM === filtro.centro) ?? null) : null;
+        return {
         id: l.id,
         filial: l.filial,
-        codigoCentroCusto: l.centroCusto?.codigoRM ?? l.codigoCentroCusto,
-        nomeCentroCusto: l.centroCusto?.nomeRM ?? l.nomeCentroCusto,
+        codigoCentroCusto: parte ? parte.centroCusto.codigoRM : (l.centroCusto?.codigoRM ?? l.codigoCentroCusto),
+        nomeCentroCusto: parte ? parte.centroCusto.nomeRM : (l.centroCusto?.nomeRM ?? l.nomeCentroCusto),
         cliForn: l.cliForn,
         emissao: l.emissao,
         historico: l.historico,
         /** O ID do movimento no RM (a coluna ID do Balancete (Lista)) e quantos itens ele tem nas listas importadas. */
         idMovimento: l.idMovimento,
         itens: l.idMovimento ? (itens.get(l.idMovimento) ?? 0) : 0,
-        valor: l.valorMovimento.toFixed(2),
+        valor: (parte ? parte.valorMovimento : l.valorMovimento).toFixed(2),
         // O centro do balancete, quando o que vale é outro (a contestação), e a conta que vale na DRE, quando é outra.
-        centroOriginal: l.centroCusto && l.codigoCentroCusto && l.centroCusto.codigoRM !== l.codigoCentroCusto ? { codigoRM: l.codigoCentroCusto, nome: l.nomeCentroCusto } : null,
+        centroOriginal: parte
+          ? { codigoRM: l.codigoCentroCusto, nome: l.nomeCentroCusto }
+          : l.centroCusto && l.codigoCentroCusto && l.centroCusto.codigoRM !== l.codigoCentroCusto
+            ? { codigoRM: l.codigoCentroCusto, nome: l.nomeCentroCusto }
+            : null,
         contaNaDRE: l.contaAdotada && l.contaAdotada.reduzido !== filtro.conta ? l.contaAdotada : null,
         contestacaoAplicada: l.contestacaoId && aplicada.get(l.contestacaoId) ? { numero: aplicada.get(l.contestacaoId)!.numero, centro: !!aplicada.get(l.contestacaoId)!.centroNovoId, conta: !!aplicada.get(l.contestacaoId)!.contaNovaId } : null,
         contestacao: situacoes.get(l.id) ?? null,
         // O reflexo de um rateio (30/10/2026): o movimento é de outra linha da DRE e chega a esta pelo rateio (os da
         // Metalurgia e da Armadura nas linhas de Serviços, por exemplo). Contesta-se na linha de origem, não no reflexo.
         rateioDe: l.linhaDRE && l.linhaDRE.codigo !== filtro.linha ? { linha: l.linhaDRE.descricao, grupo: l.linhaDRE.grupo } : null,
-      })),
+        // A redistribuição de gastos (13/11/2026): os destinos (o centro, o percentual e o valor de cada parte). Não se contesta.
+        redistribuicao: l.redistribuicaoId
+          ? {
+              destinos: l.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })),
+              parte: !!parte,
+            }
+          : null,
+        };
+      }),
     };
   },
 

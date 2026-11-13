@@ -70,7 +70,7 @@ type Props = {
   titulo: string;
   descricao: string;
   comoUsar?: ReactNode;
-  /** A caixa "Apenas Ativas" (as telas dos Cadastros da Controladoria). */
+  /** A caixa "Apenas Ativas" (as telas dos Cadastros Gerais). */
   apenasAtivas?: boolean;
   /** Botões da tela antes do Novo (14/10/2026: a Correspondência Tarefa × Linha, na tela Linhas). */
   acoesExtras?: ReactNode;

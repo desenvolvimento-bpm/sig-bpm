@@ -10,7 +10,7 @@ import { RegraCadastroError } from "./definicoesCadastros.js";
 
 /**
  * Os valores da Metodologia nos modais dos cards (Painel de Bordo) e dos indicadores (11/11/2026, pedido do Adão), em
- * Cadastros da Controladoria / Analítico: ao lado de cada item que se pode inserir, o valor acumulado de janeiro até a
+ * Cadastros Gerais / Analítico: ao lado de cada item que se pode inserir, o valor acumulado de janeiro até a
  * competência fechada mais recente, como em Resultados Empresariais; e o Testar, que mostra o Realizado (Atual) do card
  * (ou do indicador) nesse mês, com a fórmula do formulário, antes de gravar.
  *

@@ -40,8 +40,12 @@ const total = (rotulo: string, colunaDoValor: number, valores: Array<Prisma.Deci
 /** A conta que vale na DRE (a corrigida pela reclassificação) e a do balancete, quando foi corrigida. */
 const contaNaDre = (l: { conta: { reduzido: string; descricao: string }; contaAdotada: { reduzido: string; descricao: string } | null }) => l.contaAdotada ?? l.conta;
 
-/** A chave que agrupa os movimentos num lançamento do extrato (a mesma do `agrupar` do detalhamento). */
-const chaveDoLancamento = (l: Lancamento) => [l.filial, l.centro?.codigoRM ?? "", l.conta.reduzido, l.contaAdotada?.reduzido ?? "", l.balde ?? "", l.alocacao ?? ""].join("|");
+/**
+ * A chave que agrupa os movimentos num lançamento do extrato (a do `agrupar` do detalhamento; 13/11/2026: com o centro do
+ * balancete e o que vale, a contestação e a redistribuição, para um lançamento não levar os movimentos de outro).
+ */
+const chaveDoLancamento = (l: Lancamento) =>
+  [l.filial, l.centroOriginal?.codigoRM ?? l.centro?.codigoRM ?? "", l.centro?.codigoRM ?? "", l.conta.reduzido, l.contaAdotada?.reduzido ?? "", l.balde ?? "", l.alocacao ?? "", l.contestacaoId ?? "", l.redistribuido ? "R" : ""].join("|");
 
 const selecaoMovimento = {
   filial: true,
@@ -57,33 +61,71 @@ const selecaoMovimento = {
   centroCusto: { select: { codigoRM: true, nomeRM: true } },
   contaResultado: { select: { reduzido: true, descricao: true } },
   contaAdotada: { select: { reduzido: true, descricao: true } },
+  contestacaoId: true,
 } satisfies Prisma.LancamentoContabilSelect;
-type Movimento = Prisma.LancamentoContabilGetPayload<{ select: typeof selecaoMovimento }>;
+/** `redistribuido`: a parte de um movimento redistribuído (13/11/2026), com o valor da parte e o centro do destino. */
+type Movimento = Prisma.LancamentoContabilGetPayload<{ select: typeof selecaoMovimento }> & { redistribuido?: boolean };
 
 const chaveDoMovimento = (m: Movimento) => {
   const adotada = m.contaAdotada && m.contaAdotada.reduzido !== m.contaResultado.reduzido ? m.contaAdotada.reduzido : "";
-  return [m.filial, m.centroCusto?.codigoRM ?? m.codigoCentroCusto ?? "", m.contaResultado.reduzido, adotada, m.balde ?? "", m.alocacao ?? ""].join("|");
+  const vale = m.centroCusto?.codigoRM ?? m.codigoCentroCusto ?? "";
+  return [m.filial, m.codigoCentroCusto ?? m.centroCusto?.codigoRM ?? "", vale, m.contaResultado.reduzido, adotada, m.balde ?? "", m.alocacao ?? "", m.contestacaoId ?? "", m.redistribuido ? "R" : ""].join("|");
 };
+
+/** As partes redistribuídas como movimentos (13/11/2026): o detalhe do movimento, com o valor e o centro da parte. */
+const selecaoParte = {
+  filial: true,
+  balde: true,
+  alocacao: true,
+  valorMovimento: true,
+  centroCusto: { select: { codigoRM: true, nomeRM: true } },
+  lancamentoContabil: {
+    select: { codigoCentroCusto: true, nomeCentroCusto: true, emissao: true, cliForn: true, historico: true, idMovimento: true, contaResultado: { select: { reduzido: true, descricao: true } }, contaAdotada: { select: { reduzido: true, descricao: true } } },
+  },
+} satisfies Prisma.LancamentoRedistribuidoSelect;
 
 /** Os movimentos do balancete dos lançamentos de um bloco (uma consulta por bloco, em partes de 200 lançamentos). */
 async function movimentosDoBloco(competenciaId: string, ls: Lancamento[]) {
   const prisma = getPrismaClient();
+  const adotada = (l: Lancamento): Prisma.LancamentoContabilWhereInput =>
+    l.contaAdotada ? { contaAdotada: { reduzido: l.contaAdotada.reduzido } } : { OR: [{ contaAdotadaId: null }, { contaAdotada: { reduzido: l.conta.reduzido } }] };
+  // O centro que vale (13/11/2026; antes, o do balancete, e o movimento com o centro corrigido pela contestação ou pela
+  // reclassificação por fornecedor ficava de fora): a chave do movimento acerta o resto.
   const onde = (l: Lancamento): Prisma.LancamentoContabilWhereInput => ({
     filial: l.filial,
-    codigoCentroCusto: l.centro?.codigoRM ?? null,
+    redistribuicaoId: null,
     contaResultado: { reduzido: l.conta.reduzido },
-    ...(l.contaAdotada ? { contaAdotada: { reduzido: l.contaAdotada.reduzido } } : { OR: [{ contaAdotadaId: null }, { contaAdotada: { reduzido: l.conta.reduzido } }] }),
+    AND: [{ OR: [{ codigoCentroCusto: l.centro?.codigoRM ?? null }, { centroCusto: { codigoRM: l.centro?.codigoRM ?? null } }] }, adotada(l)],
     balde: (l.balde ?? null) as never,
     alocacao: (l.alocacao ?? null) as never,
   });
+  // As partes redistribuídas (13/11/2026): pelo centro do destino.
+  const ondeParte = (l: Lancamento): Prisma.LancamentoRedistribuidoWhereInput => ({
+    filial: l.filial,
+    centroCusto: { codigoRM: l.centro?.codigoRM ?? null },
+    balde: (l.balde ?? null) as never,
+    alocacao: l.alocacao as never,
+    lancamentoContabil: { contaResultado: { reduzido: l.conta.reduzido }, ...adotada(l) },
+  });
   const porChave = new Map<string, Movimento[]>();
-  for (let k = 0; k < ls.length; k += 200) {
+  const guardar = (m: Movimento) => porChave.set(chaveDoMovimento(m), [...(porChave.get(chaveDoMovimento(m)) ?? []), m]);
+  const diretos = ls.filter((l) => !l.redistribuido);
+  const redistribuidos = ls.filter((l) => l.redistribuido);
+  for (let k = 0; k < diretos.length; k += 200) {
     const ms = await prisma.lancamentoContabil.findMany({
-      where: { competenciaId, OR: ls.slice(k, k + 200).map(onde) },
+      where: { competenciaId, OR: diretos.slice(k, k + 200).map(onde) },
       select: selecaoMovimento,
       orderBy: [{ emissao: { sort: "asc", nulls: "first" } }, { linhaArquivo: "asc" }, { id: "asc" }],
     });
-    for (const m of ms) porChave.set(chaveDoMovimento(m), [...(porChave.get(chaveDoMovimento(m)) ?? []), m]);
+    for (const m of ms) guardar(m);
+  }
+  for (let k = 0; k < redistribuidos.length; k += 200) {
+    const ps = await prisma.lancamentoRedistribuido.findMany({
+      where: { competenciaId, OR: redistribuidos.slice(k, k + 200).map(ondeParte) },
+      select: selecaoParte,
+      orderBy: [{ lancamentoContabil: { emissao: { sort: "asc", nulls: "first" } } }, { lancamentoContabil: { linhaArquivo: "asc" } }, { id: "asc" }],
+    });
+    for (const { lancamentoContabil: l, ...p } of ps) guardar({ ...l, ...p, contestacaoId: null, redistribuido: true });
   }
   return porChave;
 }

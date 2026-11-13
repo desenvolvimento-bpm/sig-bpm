@@ -40,6 +40,7 @@ export function CabecalhoDaTela({ titulo, sobre, comoUsar, selo, acoes, exportar
   const ref = useRef<HTMLDivElement>(null);
   const [preso, setPreso] = useState(false);
   const [sobreAberto, setSobreAberto] = useState(false);
+  const [comTabela, setComTabela] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -76,7 +77,11 @@ export function CabecalhoDaTela({ titulo, sobre, comoUsar, selo, acoes, exportar
             {sobre || comoUsar || exportar ? (
               <button
                 type="button"
-                onClick={() => setSobreAberto(true)}
+                onClick={() => {
+                  // A tela tem tabela fora dos modais (com cabeçalho): o Como Usar explica a largura das colunas.
+                  setComTabela(Array.from(document.querySelectorAll("main table thead")).some((t) => !t.closest('[role="dialog"]')));
+                  setSobreAberto(true);
+                }}
                 title="Sobre esta tela"
                 aria-label="Sobre esta tela"
                 className="rounded-sm p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-900"
@@ -101,6 +106,16 @@ export function CabecalhoDaTela({ titulo, sobre, comoUsar, selo, acoes, exportar
         {comoUsar || exportar ? (
           <SecaoPainel titulo="Como Usar Esta Tela">
             {comoUsar}
+            {/* A largura das colunas (13/11/2026), nas telas com tabela (fora dos modais): antes do Exportar, que fica por último. */}
+            {comTabela ? (
+              <ul className={comoUsar ? "mt-1.5" : undefined}>
+                <li>
+                  Para ajustar a largura de uma coluna, arraste a divisa à direita do rótulo dela (o traço claro entre os rótulos): a coluna alarga e a
+                  vizinha da direita estreita, sem mudar a ordem nem a largura da tabela. Dois cliques na divisa voltam a tabela às larguras padrão. O SIG
+                  guarda as larguras neste navegador.
+                </li>
+              </ul>
+            ) : null}
             {/*
              * O Exportar da tabela (30/10/2026), em todas as telas que o têm: o último item da lista do Como Usar (04/11/2026, pedido
              * do Adão; antes, numa seção à parte). Os Como Usar são listas: esta continua a da tela, com o mesmo espaço entre os itens.

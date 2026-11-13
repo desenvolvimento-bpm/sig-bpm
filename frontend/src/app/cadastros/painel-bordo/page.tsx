@@ -4,7 +4,7 @@ import { SemLeitura } from "@/components/shared/SemLeitura";
 
 import { ListaCadastroContent } from "../components/ListaCadastroContent";
 
-/** O cadastro do Painel de Bordo (17/10/2026; Cadastros da Controladoria / Analítico): os itens das abas Resultados e Performance. */
+/** O cadastro do Painel de Bordo (17/10/2026; Cadastros Gerais / Analítico): os itens das abas Resultados e Performance. */
 export default function PainelBordoPage() {
   return (
     <ProtectedLayout>
@@ -42,7 +42,7 @@ export default function PainelBordoPage() {
               </li>
               <li>Use “Novo” para incluir um item; o lápis edita, e a exclusão fica dentro da edição. Inativo, o item sai do Painel de Bordo.</li>
               <li>
-                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá,
+                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá,
                 ela não fecha, e a tela Resultados do mês mostra o aviso. Os cards dos
                 Relatórios Executivos acham o item pelo quadro, pelo nome e pela abreviação: mudá-los tira o card do relatório.
               </li>

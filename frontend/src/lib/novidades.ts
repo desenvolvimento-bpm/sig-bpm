@@ -28,6 +28,128 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 13/11/2026 (noite): as Redistribuições de Gastos, a Jornada, a Tela Inicial, a largura das colunas e os demais ajustes do dia.
+  {
+    publicada: "2026-11-13T18:55",
+    processo: TODO_O_SIG,
+    itens: [
+      "Em todas as tabelas (fora dos modais), arraste a divisa entre os rótulos de duas colunas para ajustar a largura delas; o duplo clique na divisa volta ao padrão. As larguras ficam guardadas neste navegador.",
+      "No menu do usuário, logo antes do Tema, a opção Tela Inicial: escolha o processo que o SIG abre depois do login (Padrão: as competências do Fechamento Mensal). A escolha fica guardada neste navegador.",
+      "Cadastros da Controladoria passa a se chamar Cadastros Gerais, no menu lateral, no caminho do topo e nos Perfis.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: [
+      "A aba Redistribuições de Gastos, depois das Regras de Rateio: escolha o Departamento e a Conta da DRE, marque os fornecedores com movimentos nessa combinação e diga para quais centros de custo os gastos vão, com o percentual de cada um (somando 100%) e a vigência por mês. Na apuração, cada movimento desses fornecedores se divide entre os centros escolhidos; a conta da DRE não muda.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/contas-resultado",
+    itens: [
+      "Em Contas de Resultado, o campo Linha da DRE passa a se chamar Linha do DRE e ganha a opção Sem Resultado, com ou sem departamento: a conta fica fora da DRE, e os movimentos dela não aparecem como pendência na Classificação dos fechamentos. Na lista, a conta aparece com o traço (—) das contas sintéticas.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "As colunas % e R$/m³, com as mesmas regras dos Resultados Empresariais, na tela e no Exportar.",
+      "O Exportar do extrato traz os movimentos com o centro de custo corrigido (pelas contestações, pelas reclassificações por fornecedor e pelas redistribuições), e o movimento contestado entra uma vez só.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Fechamento Mensal",
+    tela: "Classificação",
+    rota: "/competencias/0000-00/classificacao",
+    itens: ["O lançamento de uma conta Sem Resultado aparece com Sem Resultado na coluna Classificação na DRE, sem pendência."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Nas próximas apurações, os Resultados por Linha e a aba Obras seguem o centro de custo que vale para o movimento: o que uma contestação, uma reclassificação por fornecedor ou uma redistribuição tirou de uma obra deixa de contar nela.",
+      "O Exportar do extrato traz os movimentos com o centro de custo corrigido, e o movimento contestado entra uma vez só.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "A aba Controle passa a se chamar Aprovações e é a única com o recorte do perfil: Movimentações (inclusive o Excluir), Realizado e o Painel de Bordo mostram o quadro inteiro.",
+      "No modal Nova Movimentação, sai o campo Senioridade (vale a da função); o Tipo de Movimentação vem antes da Classificação, que lista só as do tipo escolhido; a caixa Gerar Vaga em Aberto fica ao lado da Origem.",
+      "No Realizado, a coluna Departamento vem antes do Centro de Custo.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao/0000-00/jornada",
+    itens: [
+      "A aba Jornada, depois do Realizado: as linhas do quadro realizado (Departamento, Centro de Custo e Função), com as Horas Extras (HH:MM) e as Faltas (dias). O Editar de cada linha abre o modal para informá-las, enquanto a competência está aberta.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: ["No Lançamento Inicial, o Importar e o Novo ficam bloqueados quando há competências fechadas na Gestão de Colaboradores; o aviso diz quais."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Central de Conectividade",
+    tela: "Acessos",
+    rota: "/central-de-conectividade/acessos",
+    itens: ["A tela Acessos, depois da tela APIs. A aba APIs traz o que ficava na aba Acesso às APIs: os pedidos do período, os recusados, os usuários e os endereços, com o bloqueio de um usuário ou de um endereço para quem edita."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Replicar Referências, logo depois do Reajustar Marcados: põe a Média de Ref. nas contas e nos meses marcados (no Histórico, Referências Replicadas).",
+      "Na aba Centros de Custo, o botão ao lado de cada conta abre as Contas do Balancete: as contas do RM que caem nela.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: ["Em todas as abas, o botão ao lado de cada conta abre as Contas do Balancete: as contas do RM que caem nela."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Relatórios Executivos",
+    rota: RE,
+    itens: [
+      "Com um vídeo escolhido na edição, o Configurar da barra abre as Configurações do Vídeo: Reprodução Automática (o vídeo começa sozinho na leitura e na apresentação) e Recomeçar ao Terminar. Valem nos vídeos do computador e do YouTube; no Facebook, só a Reprodução Automática.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Painéis e Apresentações",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Com um vídeo escolhido na edição, o Configurar da barra abre as Configurações do Vídeo: Reprodução Automática (o vídeo começa sozinho na leitura e na apresentação) e Recomeçar ao Terminar. Valem nos vídeos do computador e do YouTube; no Facebook, só a Reprodução Automática.",
+    ],
+  },
   // 13/11/2026: as Reclassificações Por Fornecedor e o Acesso às Informações dos cenários analíticos.
   {
     publicada: "2026-11-13T08:44",

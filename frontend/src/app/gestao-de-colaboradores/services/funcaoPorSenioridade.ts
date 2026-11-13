@@ -1,7 +1,7 @@
 /**
  * A função por senioridade (11/11/2026, pedido do Adão): a mesma função (o nome) é cadastrada uma vez para cada senioridade;
- * a sem senioridade vale para todas. Os modais que escolhem a função e a senioridade (a Nova Movimentação do Quadro de
- * Lotação e a linha do Quadro de Lotação dos cenários) mostram a função com a senioridade ao lado e mantêm as duas de acordo.
+ * a sem senioridade vale para todas. A linha do Quadro de Lotação dos cenários mostra a função com a senioridade ao lado e
+ * mantém as duas de acordo; a Nova Movimentação do Quadro de Lotação mostra a função com a senioridade ao lado e leva a dela.
  */
 export type FuncaoComSenioridade = { id: string; nome: string; senioridadeId: string | null };
 

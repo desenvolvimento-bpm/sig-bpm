@@ -4,7 +4,7 @@ import { SemLeitura } from "@/components/shared/SemLeitura";
 
 import { ListaCadastroContent } from "../components/ListaCadastroContent";
 
-/** Os Departamentos (11/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria): a ordem, a unidade e o departamento. */
+/** Os Departamentos (11/11/2026, pedido do Adão; Cadastros Gerais / Controladoria): a ordem, a unidade e o departamento. */
 export default function DepartamentosPage() {
   return (
     <ProtectedLayout>

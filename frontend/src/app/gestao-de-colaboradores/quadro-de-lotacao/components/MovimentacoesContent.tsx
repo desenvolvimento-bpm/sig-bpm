@@ -50,21 +50,25 @@ export function MovimentacoesContent() {
         sobre={
           <p>
             As movimentações do Quadro de Lotação no mês: admissões, reposições, desligamentos, aberturas e encerramentos de vaga (os tipos da aba
-            Movimentações dos Cadastros Auxiliares). As de aprovação Automática valem ao gravar; as de Manual ficam Pendentes até a aprovação na aba Controle. Só as
-            aprovadas mudam o quadro: as de contagem Positiva somam um colaborador, as de Negativa subtraem um.
+            Movimentações dos Cadastros Auxiliares). As de aprovação Automática valem ao gravar; as de Manual ficam Pendentes até a aprovação na aba Aprovações. Só as
+            aprovadas mudam o quadro: as de contagem Positiva somam um colaborador, as de Negativa subtraem um. A aba mostra (e exclui) as movimentações
+            de todos os centros de custo, com qualquer recorte.
           </p>
         }
         comoUsar={
           <ul>
             <li>
-              Use Novo, à direita do título, para registrar uma movimentação: a classificação (que já escolhe a movimentação) ou a movimentação, a data (hoje,
-              por padrão), o centro de custo, o tipo (CLT ou PJ), a função, a senioridade (a da função, por padrão) e o motivo.
+              Use Novo, à direita do título, para registrar uma movimentação: o tipo de movimentação e a classificação (a lista traz só as do tipo), a data
+              (hoje, por padrão), o centro de custo, o tipo (CLT ou PJ), a função (com a senioridade ao lado: a movimentação leva a senioridade da função) e o
+              motivo.
             </li>
             <li>
-              Num desligamento, escolha a Origem (Iniciativa da Empresa ou Pedido do Colaborador). Com Gerar Vaga em Aberto, marcada por padrão, o SIG cria a
-              Abertura de Vaga com os mesmos dados, já aprovada.
+              Num desligamento, escolha a Origem (Iniciativa da Empresa ou Pedido do Colaborador). Com Gerar Vaga em Aberto, ao lado dela e marcada por padrão,
+              o SIG cria a Abertura de Vaga com os mesmos dados, já aprovada.
             </li>
-            <li>No menu Ações, Excluir apaga a movimentação, depois da confirmação; o desligamento leva junto a vaga que gerou.</li>
+            <li>
+              No menu Ações, Excluir apaga a movimentação, depois da confirmação; o desligamento leva junto a vaga que gerou.
+            </li>
             <li>Com a competência fechada, as movimentações ficam como estão: reabra-a na lista das competências para mudar.</li>
           </ul>
         }

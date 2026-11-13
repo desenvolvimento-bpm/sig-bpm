@@ -22,8 +22,9 @@ import { CabecalhoDoQuadro, rotuloDoMes } from "./CabecalhoDoQuadro";
 import { colunasParaExportar, TabelaDeMovimentacoes } from "./TabelaDeMovimentacoes";
 
 /**
- * A aba Controle de uma competência do Quadro de Lotação (06/11/2026): as movimentações de aprovação manual, Pendentes até
- * a gestão aprovar (Aprovada) ou reprovar (Reprovada, com o motivo) no menu Ações.
+ * A aba Aprovações de uma competência do Quadro de Lotação (06/11/2026; antes, Controle): as movimentações de aprovação
+ * manual, Pendentes até a gestão aprovar (Aprovada) ou reprovar (Reprovada, com o motivo) no menu Ações. É a única aba com o
+ * recorte do usuário (13/11/2026, pedido do Adão).
  */
 export function ControleContent() {
   const { anoMes } = useParams<{ anoMes: string }>();
@@ -54,7 +55,8 @@ export function ControleContent() {
         sobre={
           <p>
             As movimentações de aprovação Manual (o Modelo de Aprovação do tipo, nos Cadastros Auxiliares) do mês. Elas nascem Pendentes e só mudam o quadro depois de
-            aprovadas; a reprovada fica registrada, com o motivo, e não conta. A competência só fecha sem movimentações pendentes.
+            aprovadas; a reprovada fica registrada, com o motivo, e não conta. A competência só fecha sem movimentações pendentes. Quem tem recorte
+            por departamento ou por centro de custo vê e decide só as dos centros que alcança.
           </p>
         }
         comoUsar={
@@ -64,10 +66,11 @@ export function ControleContent() {
             <li>Com a competência fechada, as decisões ficam como estão: reabra-a na lista das competências para mudar.</li>
           </ul>
         }
-        exportar={<ExportarTabela titulo={`Quadro de Lotação · Controle · ${rotuloDoMes(anoMes)}`} colunas={colunasParaExportar(true)} linhas={lista.data?.itens ?? []} />}
+        exportar={<ExportarTabela titulo={`Quadro de Lotação · Aprovações · ${rotuloDoMes(anoMes)}`} colunas={colunasParaExportar(true)} linhas={lista.data?.itens ?? []} />}
       />
       {pendentes ? (
-        <p className="rounded-sm border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+        // O destaque padrão das pendentes, com a borda esquerda espessa em vermelho (13/11/2026, pedido do Adão).
+        <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">
           {pendentes} {plural(pendentes, "movimentação aguarda", "movimentações aguardam")} a aprovação.
         </p>
       ) : null}

@@ -23,7 +23,7 @@ export function SeloDaSituacao({ status }: { status: StatusMovimentacao }) {
 const decididaPor = (m: Movimentacao) => (m.decididaEm && m.decididaPorNome !== "Automática" ? m.decididaPorNome : null);
 
 /**
- * As colunas da exportação: as da tabela e, em colunas próprias, a Origem, quem registrou e (no Controle) quem decidiu, que a
+ * As colunas da exportação: as da tabela e, em colunas próprias, a Origem, quem registrou e (em Aprovações) quem decidiu, que a
  * tabela mostra em linhas menores abaixo da movimentação, da data e da situação.
  */
 export function colunasParaExportar(controle: boolean): Coluna<Movimentacao>[] {
@@ -51,7 +51,7 @@ export function colunasDasMovimentacoes(): Coluna<Movimentacao>[] {
   ];
 }
 
-/** A tabela das movimentações (as abas Movimentações e Controle), com o menu Ações na última coluna, quando há. */
+/** A tabela das movimentações (as abas Movimentações e Aprovações), com o menu Ações na última coluna, quando há. */
 export function TabelaDeMovimentacoes({
   itens,
   controle = false,

@@ -42,6 +42,9 @@ const selecao = {
   contaResultado: { select: { reduzido: true, descricao: true } },
   contaAdotada: { select: { reduzido: true, descricao: true } },
   linhaDRE: { select: { codigo: true, descricao: true, grupo: true, grupoSigla: true, atribuicaoSigla: true } },
+  // A redistribuição de gastos (13/11/2026): os destinos, para a etiqueta no lugar do Contestar.
+  redistribuicaoId: true,
+  partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
 } satisfies Prisma.LancamentoContabilSelect;
 type Movimento = Prisma.LancamentoContabilGetPayload<{ select: typeof selecao }>;
 
@@ -141,6 +144,9 @@ export const pesquisaDosResultados = {
           centroOriginal: m.centroCusto && m.codigoCentroCusto && m.centroCusto.codigoRM !== m.codigoCentroCusto ? { codigoRM: m.codigoCentroCusto, nome: m.nomeCentroCusto } : null,
           contestacaoAplicada: aplicada ? { numero: aplicada.numero, centro: !!aplicada.centroNovoId, conta: !!aplicada.contaNovaId } : null,
           contestacao: situacoes.get(m.id) ?? null,
+          redistribuicao: m.redistribuicaoId
+            ? { destinos: m.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })) }
+            : null,
         };
       }),
     };

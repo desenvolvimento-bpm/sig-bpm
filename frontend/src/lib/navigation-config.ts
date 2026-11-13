@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   ChartPie,
   ClipboardList,
+  GitFork,
   SlidersHorizontal,
   Factory,
   FolderOpen,
@@ -69,7 +70,7 @@ export type NavItem = {
    */
   telas?: NavItem[];
   /**
-   * As abas de uma tela (17/10/2026: os Cadastros da Controladoria), cada uma com o endereço e a permissão dela: a tela
+   * As abas de uma tela (17/10/2026: os Cadastros Gerais), cada uma com o endereço e a permissão dela: a tela
    * abre na primeira aba que o perfil alcança, e as abas ficam logo abaixo do título (`AbasDaTela`).
    */
   abas?: NavItem[];
@@ -222,7 +223,7 @@ export const navGrupos: NavGrupo[] = [
         icon: UsersRound,
         recurso: "GESTAO_COLABORADORES",
         telas: [
-          // O Quadro de Lotação (06/11/2026, etapa 2): as abas Movimentações, Controle e Realizado de uma competência
+          // O Quadro de Lotação (06/11/2026, etapa 2): as abas Movimentações, Aprovações (o endereço /controle) e Realizado de uma competência
           // (/quadro-de-lotacao/aaaa-mm/<aba>); o endereço sem a competência abre a última aberta (12/11/2026).
           { title: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao", icon: Network, permission: "colaboradores_quadro:ler" },
           {
@@ -279,16 +280,20 @@ export const navGrupos: NavGrupo[] = [
     titulo: "Controladoria",
     itens: [
       // A Central de Conectividade (30/10/2026, pedido do Adão: um processo da Controladoria, acima dos Cadastros da
-      // Controladoria): a tela APIs, que abre os dados do SIG a outros aplicativos. O endereço da tela continua o mesmo.
+      // Controladoria): a tela APIs, que abre os dados do SIG a outros aplicativos (o endereço continua o mesmo), e, desde
+      // 13/11/2026 (pedido do Adão), a tela Acessos, com a aba APIs (antes, a aba Acesso às APIs da tela APIs).
       {
         title: "Central de Conectividade",
         href: "/central-de-conectividade/biblioteca-de-apis",
         icon: Cable,
         recurso: "CENTRAL_CONECTIVIDADE",
-        telas: [{ title: "APIs", href: "/central-de-conectividade/biblioteca-de-apis", icon: Library, permission: "biblioteca_apis:ler" }],
+        telas: [
+          { title: "APIs", href: "/central-de-conectividade/biblioteca-de-apis", icon: Library, permission: "biblioteca_apis:ler" },
+          { title: "Acessos", href: "/central-de-conectividade/acessos", icon: History, permission: "conectividade_acessos:ler" },
+        ],
       },
       {
-        title: "Cadastros da Controladoria",
+        title: "Cadastros Gerais",
         href: "/cadastros/unidades",
         icon: Database,
         recurso: "CADASTROS_CONTROLADORIA",
@@ -314,6 +319,8 @@ export const navGrupos: NavGrupo[] = [
               { title: "Linhas", href: "/cadastros/linhas", icon: Rows3, permission: "cadastro_controladoria.linhas:ler" },
               { title: "Estrutura da DRE", href: "/cadastros/estrutura-dre", icon: ListTree, permission: "cadastro_controladoria.estrutura_dre:ler" },
               { title: "Regras de Rateio", href: "/cadastros/regras-rateio", icon: Percent, permission: "cadastro_controladoria.regras_rateio:ler" },
+              // As Redistribuições de Gastos (13/11/2026, pedido do Adão), depois das Regras de Rateio.
+              { title: "Redistribuições de Gastos", href: "/cadastros/redistribuicoes-gastos", icon: GitFork, permission: "cadastro_controladoria.redistribuicoes:ler" },
               // Os custos sem tarefa nas linhas, para a etapa Linhas da apuração (26/10/2026).
               { title: "Alocação nas Linhas", href: "/cadastros/alocacao-linhas", icon: Split, permission: "cadastro_controladoria.alocacao_linhas:ler" },
               // Os Departamentos (11/11/2026, pedido do Adão).
@@ -431,6 +438,7 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/cadastros\/estrutura-indicadores(\/|$)/, "cadastro_analitico.estrutura_indicadores:ler"],
   [/^\/cadastros\/painel-bordo(\/|$)/, "cadastro_analitico.painel_bordo:ler"],
   [/^\/cadastros\/regras-rateio(\/|$)/, "cadastro_controladoria.regras_rateio:ler"],
+  [/^\/cadastros\/redistribuicoes-gastos(\/|$)/, "cadastro_controladoria.redistribuicoes:ler"],
   [/^\/cadastros\/alocacao-linhas(\/|$)/, "cadastro_controladoria.alocacao_linhas:ler"],
   [/^\/cadastros\/departamentos(\/|$)/, "cadastro_controladoria.departamentos:ler"],
   [/^\/cadastros\/estrutura-dre(\/|$)/, "cadastro_controladoria.estrutura_dre:ler"],
@@ -446,6 +454,7 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/analises-gerenciais\/relatorios-executivos(\/|$)/, "relatorios_executivos:ler"],
   [/^\/analises-gerenciais\/paineis-de-bordo(\/|$)/, "paineis_de_bordo:ler"],
   [/^\/central-de-conectividade\/biblioteca-de-apis(\/|$)/, "biblioteca_apis:ler"],
+  [/^\/central-de-conectividade\/acessos(\/|$)/, "conectividade_acessos:ler"],
   // A Gestão de Colaboradores (06/11/2026): a lista das competências (12/11/2026, o início do processo) e as abas da tela
   // Gestão de Colaboradores dos Cadastros Auxiliares (antes, a tela Cadastros).
   [/^\/gestao-de-colaboradores$/, "colaboradores_quadro:ler"],
@@ -458,6 +467,7 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/movimentacoes/, "colaboradores_quadro.movimentacoes:ler"],
   [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/controle/, "colaboradores_quadro.controle:ler"],
   [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/realizado/, "colaboradores_quadro.realizado:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/jornada/, "colaboradores_quadro.jornada:ler"],
   [/^\/gestao-de-colaboradores\/quadro-de-lotacao(\/|$)/, "colaboradores_quadro:ler"],
   [/^\/gestao-de-colaboradores\/painel\/resultados(\/|$)/, "colaboradores_painel.resultados:ler"],
   [/^\/gestao-de-colaboradores\/painel\/indicadores(\/|$)/, "colaboradores_painel.indicadores:ler"],
@@ -538,6 +548,7 @@ export const pageTitles: Record<string, string> = {
   "/cadastros/linhas": "Linhas",
   "/cadastros/estrutura-indicadores": "Indicadores",
   "/cadastros/regras-rateio": "Regras de Rateio",
+  "/cadastros/redistribuicoes-gastos": "Redistribuições de Gastos",
   "/cadastros/alocacao-linhas": "Alocação nas Linhas",
   "/cadastros/departamentos": "Departamentos",
   "/cadastros/tipos-movimento": "Tipos de Movimento",
@@ -551,6 +562,7 @@ export const pageTitles: Record<string, string> = {
   "/cenarios/sinteticos": "Cenários Sintéticos",
   "/cenarios/analiticos": "Cenários Analíticos",
   "/central-de-conectividade/biblioteca-de-apis": "APIs",
+  "/central-de-conectividade/acessos": "Acessos",
 };
 
 /** Uma parte do caminho no topo da tela; sem href, é a tela atual. */
@@ -586,7 +598,7 @@ export function migalhas(pathname: string, rotuloDaEtapa: (chave: string) => str
   // competências): "Gestão de Colaboradores › 11/2026 › Quadro de Lotação › Movimentações".
   const quadro = pathname.match(/^\/gestao-de-colaboradores\/quadro-de-lotacao\/(\d{4})-(\d{2})\/([^/]+)/);
   if (quadro) {
-    const aba = { movimentacoes: "Movimentações", controle: "Controle", realizado: "Realizado" }[quadro[3]] ?? quadro[3];
+    const aba = { movimentacoes: "Movimentações", controle: "Aprovações", realizado: "Realizado", jornada: "Jornada" }[quadro[3]] ?? quadro[3];
     return [{ rotulo: "Gestão de Colaboradores", href: "/gestao-de-colaboradores" }, { rotulo: `${quadro[2]}/${quadro[1]}` }, { rotulo: "Quadro de Lotação" }, { rotulo: aba }];
   }
   const doGrupo = grupoDaTela(pathname);

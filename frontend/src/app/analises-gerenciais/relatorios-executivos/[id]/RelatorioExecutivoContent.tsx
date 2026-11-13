@@ -1444,6 +1444,11 @@ export function ItensDoComoUsar() {
         e na leitura, o vídeo tem os controles do player.
       </li>
       <li>
+        Com o vídeo escolhido, o Configurar (a engrenagem do menu da edição) abre as Configurações do Vídeo: Reprodução Automática (começa a tocar sozinho
+        na leitura e na apresentação, quando o slide aparece; sem um clique na página antes, o navegador pode exigir que comece sem som) e Recomeçar ao
+        Terminar (volta ao início e toca de novo). Valem no vídeo do computador e no do YouTube; no Facebook, só a Reprodução Automática.
+      </li>
+      <li>
         A Imagem de Fundo fica nos botões ao lado das páginas: o ícone de imagem envia uma (reduzida a até 2560 px) e abre o modal Imagem de Fundo,
         com a miniatura da tela inteira: arraste a imagem
         para posicioná-la e use o Tamanho (ou a roda do mouse sobre ela) para aumentá-la; “Restaurar Ajustes” a centraliza a 100% (o tamanho que

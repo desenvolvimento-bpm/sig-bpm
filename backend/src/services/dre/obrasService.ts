@@ -8,6 +8,9 @@ import { avaliarEstrutura, soSoma } from "./consolidacao.js";
 import { estrutura, RegraDREError } from "./dreService.js";
 import { volumesDasObras } from "./volumesDaLinhaService.js";
 import { numeroDaObra } from "../resultadosLinha/alocacaoNasLinhas.js";
+import { codigoQueVale } from "../classificacao/centrosObra.js";
+import { basesDasLinhas, comParticipacoes } from "./participacoesDoMes.js";
+export { codigoQueVale } from "../classificacao/centrosObra.js";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -49,6 +52,15 @@ const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${
 
 export const CENTRO_DE_OBRA = /^1\.9[89]\./;
 const ehCentroDeObra = (codigo: string | null): codigo is string => !!codigo && CENTRO_DE_OBRA.test(codigo);
+
+/**
+ * Os movimentos cujo centro que vale (codigoQueVale, 13/11/2026) é o do filtro (o código ou um começo dele). O redistribuído
+ * vai aos centros dos destinos (as partes), e não à obra.
+ */
+export const ondeOCentroVale = (f: string | Prisma.StringFilter): Prisma.LancamentoContabilWhereInput => ({
+  redistribuicaoId: null,
+  OR: [{ centroCustoId: null, codigoCentroCusto: f }, { centroCusto: { codigoRM: f } }],
+});
 
 /** As linhas cuja movimentação entra com o sinal trocado: as receitas. */
 const RECEITAS = new Set(["ROB", "RFC", "RFNC"]);
@@ -150,9 +162,11 @@ async function apuracao(competenciaId: string) {
 async function movimentos(competenciaId: string, linhas: LinhaEstrutura[], acesso: Acesso, obra?: string) {
   const [ls, cpv]: [Movimento[], Set<string>] = await Promise.all([
     getPrismaClient().lancamentoContabil.findMany({
-      where: { competenciaId, linhaDREId: { not: null }, ...(obra ? { codigoCentroCusto: obra } : { OR: [{ codigoCentroCusto: { startsWith: "1.98." } }, { codigoCentroCusto: { startsWith: "1.99." } }] }) },
-      select: { codigoCentroCusto: true, nomeCentroCusto: true, linhaDREId: true, valorMovimento: true, contaResultadoId: true, contaAdotadaId: true },
-    }),
+      // Pelo centro que vale (13/11/2026): sem os movimentos que saíram da obra pela contestação, pela reclassificação por
+      // fornecedor ou pela redistribuição.
+      where: { competenciaId, linhaDREId: { not: null }, ...(obra ? ondeOCentroVale(obra) : { OR: [ondeOCentroVale({ startsWith: "1.98." }), ondeOCentroVale({ startsWith: "1.99." })] }) },
+      select: { codigoCentroCusto: true, nomeCentroCusto: true, centroCustoId: true, centroCusto: { select: { codigoRM: true, nomeRM: true } }, linhaDREId: true, valorMovimento: true, contaResultadoId: true, contaAdotadaId: true },
+    }).then((ms) => ms.map(({ centroCusto, centroCustoId, ...m }) => ({ ...m, codigoCentroCusto: codigoQueVale({ ...m, centroCustoId, centroCusto }), nomeCentroCusto: centroCusto?.nomeRM ?? m.nomeCentroCusto }))),
     contasDoReconhecimentoDoCpv(),
   ]);
   const porId = new Map(linhas.filter((l) => podeVerLinhaNaObra(acesso, l)).map((l) => [l.id, l]));
@@ -211,7 +225,7 @@ export async function previasDasObras(competenciaId: string, numero?: string) {
  */
 export async function previasDaObra(competenciaId: string, obra: string) {
   if (obra.startsWith("1.99.")) {
-    const irma = await getPrismaClient().lancamentoContabil.findFirst({ where: { competenciaId, linhaDREId: { not: null }, codigoCentroCusto: obra.replace(/^1\.99\./, "1.98.") }, select: { id: true } });
+    const irma = await getPrismaClient().lancamentoContabil.findFirst({ where: { competenciaId, linhaDREId: { not: null }, ...ondeOCentroVale(obra.replace(/^1\.99\./, "1.98.")) }, select: { id: true } });
     if (irma) return undefined;
   }
   const numero = numeroDaObra(obra);
@@ -243,10 +257,12 @@ export function comAsPrevias(itens: Map<string, { valor: Decimal; n: number }>, 
  */
 export async function receitasDaObra(competenciaIds: string[], numero: string) {
   const [ls, cpv] = await Promise.all([
-    getPrismaClient().lancamentoContabil.findMany({
-      where: { competenciaId: { in: competenciaIds }, linhaDREId: { not: null }, codigoCentroCusto: { endsWith: numero } },
-      select: { competenciaId: true, codigoCentroCusto: true, valorMovimento: true, contaResultadoId: true, contaAdotadaId: true, linhaDRE: { select: { codigo: true } } },
-    }),
+    getPrismaClient()
+      .lancamentoContabil.findMany({
+        where: { competenciaId: { in: competenciaIds }, linhaDREId: { not: null }, ...ondeOCentroVale({ endsWith: numero }) },
+        select: { competenciaId: true, codigoCentroCusto: true, centroCustoId: true, centroCusto: { select: { codigoRM: true } }, valorMovimento: true, contaResultadoId: true, contaAdotadaId: true, linhaDRE: { select: { codigo: true } } },
+      })
+      .then((ms) => ms.map(({ centroCusto, centroCustoId, ...m }) => ({ ...m, codigoCentroCusto: codigoQueVale({ ...m, centroCustoId, centroCusto }) }))),
     contasDoReconhecimentoDoCpv(),
   ]);
   const r = new Map(competenciaIds.map((id) => [id, { receitas: new Map<string, number>(), centros: new Map<string, number>() }]));
@@ -299,12 +315,14 @@ export const obrasService = {
     const [[o], volumes, previas] = await Promise.all([movimentos(c.id, linhas, acesso, obra), volumesDaObra(c.id, linhas, acesso, obra), previasDaObra(c.id, obra)]);
     if (!o && !volumes.size && !previas) throw new RegraDREError(404, `Nenhum lançamento nem volume da obra ${obra} em ${rotulo(ano, mes)}.`);
     const itens = comAsPrevias(new Map([...volumes, ...(o?.itens ?? [])]), previas);
+    const daObra = linhasDaObra(linhas, itens, !acesso.recorteDepartamento && !acesso.recorteCentro, acesso);
     return {
       competencia: { ano, mes, status: c.status },
       obra: { codigo: obra, nome: o?.nome ?? obra },
       apuradoEm: ap?.apuradoEm ?? null,
       congelado: ap?.congelado ?? false,
-      linhas: linhasDaObra(linhas, itens, !acesso.recorteDepartamento && !acesso.recorteCentro, acesso).filter((l) => !CALCULADOS.has(l.codigo)),
+      // O % e o R$/m³ (13/11/2026), sobre a receita e os volumes da própria obra (as bases antes de tirar os calculados).
+      linhas: comParticipacoes(daObra, "obras", basesDasLinhas(daObra)).filter((l) => !CALCULADOS.has(l.codigo)),
     };
   },
 };

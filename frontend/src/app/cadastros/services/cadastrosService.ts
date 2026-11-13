@@ -35,6 +35,8 @@ export type ContaResultado = {
   atribuicao: string | null;
   balde: string | null;
   ativo: boolean;
+  /** Sem Resultado na Linha do DRE (13/11/2026): fora da DRE, sem pendência. */
+  semResultado: boolean;
   linhaDRE: { codigo: string; descricao: string } | null;
 };
 

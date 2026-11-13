@@ -92,6 +92,7 @@ export const ROTULO_ENTIDADE: Record<string, string> = {
   conta_resultado: "Conta de resultado",
   reclassificacao: "Reclassificação de conta",
   reclassificacao_fornecedor: "Reclassificação por fornecedor",
+  redistribuicao_gasto: "Redistribuição de gastos",
   linha_dre: "Linha da DRE",
   unidade_negocio: "Unidade de negócio",
   regra_rateio: "Regra de rateio",
@@ -112,6 +113,7 @@ export const ROTULO_ENTIDADE: Record<string, string> = {
   colaborador_carga_inicial: "Lançamento Inicial",
   colaborador_competencia: "Competência do Quadro de Lotação",
   colaborador_movimentacao: "Movimentação do Quadro de Lotação",
+  colaborador_jornada: "Jornada do Quadro de Lotação",
 };
 
 /** Deixa o JSON gravável: Decimal e Date viram texto, undefined some. */

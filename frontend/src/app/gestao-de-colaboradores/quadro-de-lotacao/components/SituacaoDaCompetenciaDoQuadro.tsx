@@ -58,7 +58,7 @@ export function AbrirQuadroDeLotacao() {
     const daUltima = ultima ? competenciaDoQuadroNaRota(ultima) : null;
     if (ultima && daUltima && itens.some((c) => anoMes(c) === daUltima)) return void router.replace(ultima);
     const escolhida = itens.find((c) => c.status === "ABERTA") ?? itens[0];
-    const aba = ["movimentacoes", "controle", "realizado"].find((a) => hasPermission(`colaboradores_quadro.${a}:ler`));
+    const aba = ["movimentacoes", "controle", "realizado", "jornada"].find((a) => hasPermission(`colaboradores_quadro.${a}:ler`));
     router.replace(escolhida && aba ? `/gestao-de-colaboradores/quadro-de-lotacao/${anoMes(escolhida)}/${aba}` : "/gestao-de-colaboradores");
   }, [lista.data, lista.isError, hasPermission, router]);
   return <div className="h-40 animate-pulse rounded-sm bg-gray-100" />;

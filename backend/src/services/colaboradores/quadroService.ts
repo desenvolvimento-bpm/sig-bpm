@@ -10,8 +10,9 @@ import { podeVerCentro } from "../acesso/recorteDepartamento.js";
 import { colaboradoresPorCentro, comparacaoDoQuadroService, NOMES_DOS_INDICADORES } from "./comparacaoDoQuadro.js";
 
 /**
- * O recorte (06/11/2026, etapa 3): quem tem recorte por departamento ou por centro de custo só vê, nas abas Movimentações,
- * Controle e Realizado, as dos centros que alcança (como nas movimentações da DRE). O Painel de Bordo fica inteiro.
+ * O recorte (13/11/2026, pedido do Adão): quem tem recorte por departamento ou por centro de custo só vê e decide, na aba
+ * Aprovações, as movimentações dos centros que alcança; as abas Movimentações (também o Excluir) e Realizado e o Painel de
+ * Bordo ficam inteiros.
  */
 const doRecorte = (acesso: Acesso | undefined, centro: { id: string; departamento: string | null }) => !acesso || podeVerCentro(acesso, centro);
 
@@ -21,7 +22,7 @@ const doRecorte = (acesso: Acesso | undefined, centro: { id: string; departament
  * - **Competências próprias:** abertas e fechadas aqui, fora do Fechamento Mensal. Só a aberta recebe movimentações (e
  *   aprovações); fechar exige nenhuma pendente.
  * - **Movimentações:** uma por colaborador ou vaga, com a data dentro do mês da competência. A aprovação vem do tipo
- *   (Cadastros › Movimentações): Automática nasce Aprovada; Manual nasce Pendente, até o Controle aprovar ou reprovar. Um
+ *   (Cadastros › Movimentações): Automática nasce Aprovada; Manual nasce Pendente, até a aba Aprovações aprovar ou reprovar. Um
  *   desligamento (contagem Negativa) pede a Origem e, com "Gerar Vaga em Aberto", cria a Abertura de Vaga com os mesmos
  *   dados (sem a Origem e a Classificação), já aprovada.
  * - **O quadro:** o saldo inicial é o Lançamento Inicial, no mês dele, ou o saldo final da competência anterior; o final
@@ -44,6 +45,14 @@ type Db = ReturnType<typeof getPrismaClient>;
 type Quem = { id: string; nome: string | null };
 const mesAno = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 const ordem = (c: { ano: number; mes: number }) => c.ano * 12 + c.mes;
+
+/** As horas extras da Jornada (13/11/2026): "12:30" → 750 minutos; null fora do formato HH:MM (até 9999 horas). */
+export function minutosDeHHMM(t: string): number | null {
+  const m = /^(\d{1,4}):([0-5]\d)$/.exec(t.trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+/** 750 minutos → "12:30". */
+export const hhmm = (minutos: number) => `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
 
 export function lerAnoMes(anoMes: string) {
   const m = /^(\d{4})-(\d{2})$/.exec(anoMes);
@@ -330,7 +339,8 @@ export type NovaMovimentacao = {
   centroCustoId: string;
   vinculo: VinculoColaborador;
   funcaoId: string;
-  senioridadeId: string;
+  /** Opcional (13/11/2026): sem ela, a da função (a Nova Movimentação não tem mais o campo). */
+  senioridadeId?: string | null;
   motivo?: string | null;
   origem?: OrigemDesligamento | null;
   gerarVaga?: boolean;
@@ -387,7 +397,7 @@ export const quadroService = {
     if (c.status === "FECHADA") throw new QuadroError(409, `A competência ${mesAno(c.ano, c.mes)} já está fechada.`);
     const pendentes = await db.colaboradorMovimentacao.count({ where: { competenciaId: c.id, status: "PENDENTE" } });
     if (pendentes) {
-      throw new QuadroError(409, `A competência tem ${pendentes} ${plural(pendentes, "movimentação pendente", "movimentações pendentes")}: aprove ou reprove no Controle antes de fechar.`);
+      throw new QuadroError(409, `A competência tem ${pendentes} ${plural(pendentes, "movimentação pendente", "movimentações pendentes")}: aprove ou reprove na aba Aprovações antes de fechar.`);
     }
     await db.colaboradorCompetencia.update({ where: { id: c.id }, data: { status: "FECHADA", fechadaEm: new Date(), fechadaPorNome: quem.nome } });
     await auditar({ usuarioId: quem.id, acao: "FECHAMENTO", entidade: "colaborador_competencia", entidadeId: c.id, metadados: { competencia: mesAno(c.ano, c.mes) } });
@@ -425,13 +435,14 @@ export const quadroService = {
     return { tipos, classificacoes, centros: centros.map((c) => ({ id: c.id, nome: centroRotulo(c) })), funcoes, senioridades };
   },
 
-  async movimentacoes(anoMes: string, acesso?: Acesso) {
+  /** Todas as movimentações do mês, sem o recorte (13/11/2026). */
+  async movimentacoes(anoMes: string) {
     const db = getPrismaClient();
     const c = await competencia(db, anoMes);
     const lista = (await db.colaboradorMovimentacao.findMany({ where: { competenciaId: c.id }, include: INCLUIR, orderBy: [{ data: "asc" }, { registradaEm: "asc" }] })) as MovimentacaoLida[];
     return {
       competencia: { ano: c.ano, mes: c.mes, status: c.status },
-      itens: lista.filter((m) => doRecorte(acesso, { id: m.centroCustoId, departamento: m.centroCusto.departamento })).map(apresentar),
+      itens: lista.map(apresentar),
     };
   },
 
@@ -443,18 +454,22 @@ export const quadroService = {
     if (Number.isNaN(data.getTime()) || data.getUTCFullYear() !== c.ano || data.getUTCMonth() + 1 !== c.mes) {
       throw new QuadroError(400, `A data da movimentação precisa estar em ${mesAno(c.ano, c.mes)}.`);
     }
-    const [tipo, classificacao, centro, funcao, senioridade] = await Promise.all([
+    const [tipo, classificacao, centro, funcao] = await Promise.all([
       db.colaboradorTipoMovimentacao.findUnique({ where: { id: v.tipoMovimentacaoId } }),
       v.classificacaoId ? db.colaboradorClassificacao.findUnique({ where: { id: v.classificacaoId } }) : null,
       db.centroCusto.findUnique({ where: { id: v.centroCustoId }, select: { id: true, ativo: true } }),
       db.colaboradorFuncao.findUnique({ where: { id: v.funcaoId }, select: { id: true, ativo: true, nome: true, senioridadeId: true, senioridade: { select: { nome: true } } } }),
-      db.colaboradorSenioridade.findUnique({ where: { id: v.senioridadeId }, select: { id: true, ativo: true } }),
     ]);
     if (!tipo?.ativo) throw new QuadroError(400, "Escolha um tipo de movimentação ativo.");
     if (v.classificacaoId && (!classificacao?.ativo || classificacao.tipoMovimentacaoId !== tipo.id)) throw new QuadroError(400, `A classificação não é de ${tipo.nome}.`);
     if (!centro?.ativo) throw new QuadroError(400, "Escolha um centro de custo ativo.");
     if (!funcao?.ativo) throw new QuadroError(400, "Escolha uma função ativa.");
-    if (!senioridade?.ativo) throw new QuadroError(400, "Escolha uma senioridade ativa.");
+    // A senioridade da função (13/11/2026, pedido do Adão: a Nova Movimentação não tem mais o campo); a informada só serve
+    // à função sem senioridade.
+    const senioridadeId = funcao.senioridadeId ?? v.senioridadeId ?? null;
+    if (!senioridadeId) throw new QuadroError(400, `A função ${funcao.nome} não tem senioridade no cadastro: cadastre-a com a senioridade em Cadastros › Funções.`);
+    const senioridade = await db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { id: true, ativo: true, nome: true } });
+    if (!senioridade?.ativo) throw new QuadroError(400, senioridade ? `A senioridade ${senioridade.nome}, da função ${funcao.nome}, está inativa.` : "Escolha uma senioridade ativa.");
     // A função da senioridade (11/11/2026: a mesma função tem uma por senioridade).
     const recusaDaSenioridade = recusaDaFuncao(funcao, senioridade.id);
     if (recusaDaSenioridade) throw new QuadroError(400, recusaDaSenioridade);
@@ -519,8 +534,8 @@ export const quadroService = {
     await auditar({ usuarioId: quem.id, acao: "EXCLUSAO", entidade: "colaborador_movimentacao", entidadeId: id, antes: apresentar(m), metadados: { competencia: mesAno(m.competencia.ano, m.competencia.mes) } });
   },
 
-  // ------------------------------------------------------------------------------------------------------- o controle
-  /** As movimentações de aprovação manual da competência (Pendentes, Aprovadas e Reprovadas). */
+  // ---------------------------------------------------------------------------------------------------- as aprovações
+  /** As movimentações de aprovação manual da competência (Pendentes, Aprovadas e Reprovadas): a aba Aprovações, com o recorte. */
   async controle(anoMes: string, acesso?: Acesso) {
     const db = getPrismaClient();
     const c = await competencia(db, anoMes);
@@ -565,7 +580,7 @@ export const quadroService = {
    * A aba Realizado. Com a Comparação (09/11/2026, `marcacao`: o cenário marcado), cada centro traz os colaboradores do mês na
    * aba Quadro de Lotação do cenário (nos analíticos com linhas; os centros só do cenário entram, com o realizado zero).
    */
-  async realizado(anoMes: string, acesso?: Acesso, marcacao?: MarcacaoCenario) {
+  async realizado(anoMes: string, marcacao?: MarcacaoCenario) {
     const db = getPrismaClient();
     const c = await competencia(db, anoMes);
     const quadros = await quadrosDoBanco(db);
@@ -581,6 +596,7 @@ export const quadroService = {
       ...movs.map((m) => m.centroCustoId),
       ...[...(doCenario ?? new Map<string, number[]>())].filter(([, vs]) => vs[c.mes - 1]).map(([id]) => id),
     ]);
+    // Sem o recorte (13/11/2026, pedido do Adão): o Realizado mostra todos os centros.
     const centros = await db.centroCusto.findMany({ where: { id: { in: [...ids] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } });
     const contar = (quadro: Contagem | undefined, id: string, vinculo?: string) =>
       [...(quadro ?? new Map()).entries()].filter(([k]) => k.startsWith(`${id}|`) && (!vinculo || k.endsWith(`|${vinculo}`))).reduce((a, [, n]) => a + n, 0);
@@ -599,7 +615,6 @@ export const quadroService = {
         cenario: doCenario ? (doCenario.get(ct.id)?.[c.mes - 1] ?? 0) : null,
       }))
       .filter((l) => l.inicial || l.entradas || l.saidas || l.final || l.cenario)
-      .filter((l) => doRecorte(acesso, { id: l.centroCustoId, departamento: l.departamento }))
       .sort((a, b) => a.centroCusto.localeCompare(b.centroCusto, "pt-BR"));
     return {
       competencia: { ano: c.ano, mes: c.mes, status: c.status },
@@ -609,6 +624,87 @@ export const quadroService = {
       doAno: quadros.filter((x) => x.ano === c.ano && x.mes <= c.mes).map((x) => ({ mes: x.mes, ...indicadoresDoMes(x) })),
       comparacao: cenario ? { cenario: { nome: cenario.nome, ano: cenario.ano, analitico: cenario.tipo === "ANALITICO" }, porCentro: doCenario !== null } : null,
     };
+  },
+
+  // ------------------------------------------------------------------------------------------------------- a jornada
+  /**
+   * A aba Jornada (13/11/2026, pedido do Adão): as linhas do quadro realizado do fim do mês — o centro de custo e a função,
+   * que traz a senioridade (os vínculos CLT e PJ juntos) —, com as horas extras realizadas (em minutos; a tela mostra HH:MM)
+   * e as faltas aferidas (em dias) digitadas; a linha que tem a jornada e saiu do quadro continua. Sem o recorte (só a aba
+   * Aprovações tem).
+   */
+  async jornada(anoMes: string) {
+    const db = getPrismaClient();
+    const c = await competencia(db, anoMes);
+    const { quadros } = await quadrosRealizadosPorLinha(db);
+    const q = quadros.find((x) => ordem(x) === ordem(c));
+    const colaboradores = new Map<string, number>();
+    for (const [k, n] of q?.final ?? new Map<string, number>()) {
+      const [centroId, , funcaoId] = k.split("|");
+      if (n <= 0 || !centroId || !funcaoId) continue;
+      colaboradores.set(`${centroId}|${funcaoId}`, (colaboradores.get(`${centroId}|${funcaoId}`) ?? 0) + n);
+    }
+    const jornadas = await db.colaboradorJornada.findMany({ where: { competenciaId: c.id } });
+    const daJornada = new Map(jornadas.map((j) => [`${j.centroCustoId}|${j.funcaoId}`, j]));
+    const chaves = [...new Set([...colaboradores.keys(), ...daJornada.keys()])];
+    const [centros, funcoes] = await Promise.all([
+      db.centroCusto.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[0]))] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true } }),
+      db.colaboradorFuncao.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[1]))] } }, select: { id: true, nome: true, senioridade: { select: { nome: true } } } }),
+    ]);
+    const centroDe = new Map(centros.map((x) => [x.id, x]));
+    const funcaoDe = new Map(funcoes.map((x) => [x.id, x]));
+    const linhas = chaves.flatMap((k) => {
+      const [centroCustoId, funcaoId] = k.split("|");
+      const ct = centroDe.get(centroCustoId);
+      const f = funcaoDe.get(funcaoId);
+      if (!ct || !f) return [];
+      const j = daJornada.get(k);
+      return [
+        {
+          centroCustoId,
+          funcaoId,
+          departamento: ct.departamento,
+          centroCusto: centroRotulo(ct),
+          funcao: f.senioridade ? `${f.nome} · ${f.senioridade.nome}` : f.nome,
+          colaboradores: colaboradores.get(k) ?? 0,
+          horasExtrasMinutos: j?.horasExtrasMinutos ?? 0,
+          faltasDias: j ? Number(j.faltasDias) : 0,
+          atualizadoPorNome: j?.atualizadoPorNome ?? null,
+          atualizadoEm: j?.atualizadoEm.toISOString() ?? null,
+        },
+      ];
+    });
+    linhas.sort(
+      (a, b) =>
+        (a.departamento ?? "~").localeCompare(b.departamento ?? "~", "pt-BR") || a.centroCusto.localeCompare(b.centroCusto, "pt-BR") || a.funcao.localeCompare(b.funcao, "pt-BR"),
+    );
+    return { competencia: { ano: c.ano, mes: c.mes, status: c.status }, linhas };
+  },
+
+  /** Grava as horas extras (HH:MM) e as faltas (dias) de uma linha da Jornada, na competência aberta. */
+  async gravarJornada(anoMes: string, v: { centroCustoId: string; funcaoId: string; horasExtras: string; faltas: number }, quem: Quem) {
+    const db = getPrismaClient();
+    const c = await competencia(db, anoMes);
+    exigirAberta(c);
+    const minutos = minutosDeHHMM(v.horasExtras);
+    if (minutos === null) throw new QuadroError(400, "As horas extras vão no formato HH:MM (por exemplo, 12:30).");
+    if (!Number.isFinite(v.faltas) || v.faltas < 0 || v.faltas > 9999) throw new QuadroError(400, "As faltas vão em dias, a partir de zero (meio dia: 0,5).");
+    const faltas = Math.round(v.faltas * 100) / 100;
+    const linha = (await this.jornada(anoMes)).linhas.find((l) => l.centroCustoId === v.centroCustoId && l.funcaoId === v.funcaoId);
+    if (!linha) throw new QuadroError(404, "A linha não está no quadro realizado da competência.");
+    const chave = { competenciaId: c.id, centroCustoId: v.centroCustoId, funcaoId: v.funcaoId };
+    const dados = { horasExtrasMinutos: minutos, faltasDias: faltas, atualizadoPorNome: quem.nome };
+    await db.colaboradorJornada.upsert({ where: { competenciaId_centroCustoId_funcaoId: chave }, create: { ...chave, ...dados }, update: dados });
+    await auditar({
+      usuarioId: quem.id,
+      acao: "ALTERACAO",
+      entidade: "colaborador_jornada",
+      entidadeId: `${c.id}|${v.centroCustoId}|${v.funcaoId}`,
+      antes: { horasExtras: hhmm(linha.horasExtrasMinutos), faltas: linha.faltasDias },
+      depois: { horasExtras: hhmm(minutos), faltas },
+      metadados: { competencia: mesAno(c.ano, c.mes), centroCusto: linha.centroCusto, funcao: linha.funcao },
+    });
+    return { ...linha, horasExtrasMinutos: minutos, faltasDias: faltas };
   },
 
   // ------------------------------------------------------------------------------------------------- o painel de bordo

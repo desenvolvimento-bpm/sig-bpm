@@ -3,6 +3,7 @@ import { ArquivoInvalidoError, lerAba, listarAbas, type LinhaPlanilha, type Valo
 import { auditar } from "../auditoriaService.js";
 import { localizarCabecalho } from "../importacoes/listas/leituraListas.js";
 import { plural } from "../../utils/plural.js";
+import { travaDoLancamentoInicial } from "./travaDoLancamentoInicial.js";
 
 /**
  * As importações da tela Cadastros da Gestão de Colaboradores (06/11/2026, pedido do Adão): a planilha de Funções (as colunas
@@ -299,11 +300,18 @@ export const importacaoColaboradoresService = {
   async importar(input: { tipo: TipoImportacaoColaboradores; nomeArquivo: string; conteudo: Uint8Array; competencia?: string; gravar: boolean; usuarioId: string }) {
     if (input.conteudo.length === 0) throw new ImportacaoColaboradoresError(400, "O arquivo enviado está vazio.");
     const db = getPrismaClient();
+    // Com competências fechadas na Gestão de Colaboradores, o Lançamento Inicial não se importa (13/11/2026, pedido do Adão).
+    const trava = await travaDoLancamentoInicial(db);
+    if (input.tipo === "lancamento-inicial" && trava) throw new ImportacaoColaboradoresError(409, trava);
     const competencia = input.tipo === "lancamento-inicial" ? lerCompetencia(input.competencia) : null;
     const { aba, itens } = lerPlanilha(input.conteudo, input.tipo);
     if (itens.length === 0) throw new ImportacaoColaboradoresError(400, `A aba ${aba} não tem nenhuma linha preenchida abaixo do cabeçalho.`);
 
     const funcoes = input.tipo === "funcoes" ? await previaFuncoes(db, itens) : null;
+    // A importação das Funções que apagaria o Lançamento Inicial também para com a trava (13/11/2026).
+    if (funcoes && !funcoes.bloqueio && funcoes.naCarga && trava) {
+      funcoes.bloqueio = `${funcoes.naCarga} ${plural(funcoes.naCarga, "função que sai da planilha está", "funções que saem da planilha estão")} no Lançamento Inicial, e a importação o apagaria. ${trava}`;
+    }
     const carga = input.tipo === "lancamento-inicial" ? await previaLancamentoInicial(db, itens) : null;
     const linhas = (funcoes ?? carga)!.linhas;
     const resumo = resumoDe(linhas);

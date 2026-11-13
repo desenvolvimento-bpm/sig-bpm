@@ -462,6 +462,8 @@ model Departamento {
   ativo            Boolean        @default(true)
   criadoEm         DateTime       @default(now()) @map("criado_em")
   atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
+  /// As redistribuições de gastos do departamento (13/11/2026).
+  redistribuicoes  RedistribuicaoGasto[]
 
   @@unique([unidadeNegocioId, nome])
   @@map("departamentos")
@@ -502,6 +504,11 @@ model CentroCusto {
   colaboradoresIniciais      ColaboradorCargaInicial[]
   movimentacoesQuadro        ColaboradorMovimentacao[]
   lotacaoDosCenarios         CenarioLotacao[]
+  /// A Jornada do Quadro de Lotação (13/11/2026): as horas extras e as faltas das linhas deste centro.
+  jornadasQuadro             ColaboradorJornada[]
+  /// Os destinos das redistribuições de gastos e as partes redistribuídas a este centro (13/11/2026).
+  destinosRedistribuicao     RedistribuicaoDestino[]
+  partesRedistribuidas       LancamentoRedistribuido[]
   /// As reclassificações por fornecedor com este centro imperativo (13/11/2026).
   reclassificacoesFornecedor ReclassificacaoFornecedor[]
 
@@ -533,6 +540,9 @@ model ContaResultado {
 
   balde BaldeAlocacao? @map("balde")
   linhaDREId  String?      @map("linha_dre_id")
+  /// Sem Resultado (13/11/2026, pedido do Adão): a conta não vai à DRE (a opção da Linha da DRE no cadastro); os movimentos
+  /// dela ficam fora do resultado e não viram pendência na classificação. Sem linha da DRE.
+  semResultado Boolean @default(false) @map("sem_resultado")
 
   linhaDRE LinhaDRE? @relation(fields: [linhaDREId], references: [id])
 
@@ -592,6 +602,9 @@ model LinhaDRE {
   @@index([grupoSigla])
   @@map("linhas_dre")
   cenariosCentros CenarioCentro[]
+  /// As redistribuições de gastos desta conta da DRE e as partes redistribuídas nela (13/11/2026).
+  redistribuicoes      RedistribuicaoGasto[]
+  partesRedistribuidas LancamentoRedistribuido[]
 }
 
 /// LISTA-DE: LinhaDRE.unidadesAplicaveis (seria `String[]` no PostgreSQL)
@@ -823,6 +836,8 @@ model Competencia {
   lancamentosManuaisDoMovimento LancamentoManual[] @relation("LancamentoManualCompetenciaMovimento")
   contestacoes         Contestacao[]
   movimentosContestados ContestacaoMovimento[]
+  /// As partes dos movimentos redistribuídos do mês (13/11/2026).
+  partesRedistribuidas LancamentoRedistribuido[]
   estoqueSaldos        EstoqueSaldo[]
   estoqueIniciais      EstoqueSaldoInicial[]
   indicadoresImportados IndicadorImportado[]
@@ -1179,6 +1194,9 @@ model LancamentoContabil {
   /// A contestação validada no balancete que a classificação aplicou (27/10/2026): o centro e a conta dela valem no
   /// lugar dos do balancete (que ficam, para mostrar o original). Derivado, como os demais.
   contestacaoId String?             @map("contestacao_id")
+  /// A redistribuição de gastos aplicada (13/11/2026; derivada, como os demais): o movimento vale dividido entre os centros
+  /// da regra (as partes em `lancamentos_redistribuidos`), no lugar do centro dele, e não se contesta. Nulo sem redistribuição.
+  redistribuicaoId String?          @map("redistribuicao_id")
 
   criadoEm DateTime @default(now()) @map("criado_em")
 
@@ -1192,6 +1210,9 @@ model LancamentoContabil {
   contestacoes   Contestacao[]
   /// O item nos movimentos das contestações (30/10/2026: o contestado e os das anteriores e posteriores).
   movimentosContestados ContestacaoMovimento[]
+  redistribuicao RedistribuicaoGasto? @relation(fields: [redistribuicaoId], references: [id], onDelete: SetNull)
+  /// As partes do movimento redistribuído (13/11/2026).
+  partesRedistribuidas LancamentoRedistribuido[]
 
   @@index([competenciaId, validacao])
   @@index([competenciaId, etiqueta])
@@ -2032,6 +2053,85 @@ model ReclassificacaoFornecedor {
   @@map("reclassificacoes_fornecedor")
 }
 
+/// Redistribuição de gastos (13/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria / Redistribuições de
+/// Gastos): os movimentos dos fornecedores marcados, numa conta da DRE (e num departamento, ou em todos), valem divididos
+/// entre os centros de custo dos destinos, pelos percentuais (somam 100%), nas competências da vigência. Mantêm a conta da
+/// DRE; as partes não passam pela verificação de departamento e atribuição (o plano de contas resumido de 2027 vale para
+/// qualquer centro). Vale por cima das reclassificações e das contestações, e o movimento redistribuído não se contesta.
+model RedistribuicaoGasto {
+  id             String    @id @default(uuid())
+  /// O departamento da DRE (do cadastro Departamentos); nulo = Todos.
+  departamentoId String?   @map("departamento_id")
+  /// A conta da DRE: uma linha ITEM da Estrutura da DRE.
+  linhaDREId     String    @map("linha_dre_id")
+  /// LISTA: os fornecedores marcados (o CLI_FORN do balancete, como na lista do modal); comparados sem espaços nas pontas e
+  /// sem caixa. Só os marcados: um fornecedor novo na conta não entra sem ser incluído.
+  fornecedores   String[]  @default([])
+  /// A vigência por mês: do mês do início (dia 1º) ao mês do fim (dia 1º; nulo = sem fim).
+  vigenciaInicio DateTime  @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim")
+  descricao      String?
+  ordem          Int       @default(0)
+  ativo          Boolean   @default(true)
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
+
+  departamento Departamento?           @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
+  linhaDRE     LinhaDRE                @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+  destinos     RedistribuicaoDestino[]
+  lancamentos  LancamentoContabil[]
+  partes       LancamentoRedistribuido[]
+
+  @@index([linhaDREId])
+  @@map("redistribuicoes_gastos")
+}
+
+/// Um destino de uma redistribuição de gastos (13/11/2026): o centro de custo e o percentual dele (0 a 1).
+model RedistribuicaoDestino {
+  id               String  @id @default(uuid())
+  redistribuicaoId String  @map("redistribuicao_id")
+  centroCustoId    String  @map("centro_custo_id")
+  /// DECIMAL: 0 a 1; os destinos de uma redistribuição somam 1 (100%).
+  percentual       Decimal
+  ordem            Int     @default(0)
+
+  redistribuicao RedistribuicaoGasto @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
+  centroCusto    CentroCusto         @relation(fields: [centroCustoId], references: [id], onDelete: Restrict)
+
+  @@unique([redistribuicaoId, centroCustoId])
+  @@map("redistribuicoes_gastos_destinos")
+}
+
+/// Uma parte de um movimento redistribuído (13/11/2026): o valor do movimento × o percentual de um destino, no centro dele,
+/// com o rateio (balde) e a alocação desse centro. Derivada: a classificação a refaz e a apuração a congela, como os campos
+/// derivados do lançamento. As apurações (a DRE das unidades e dos centros, os rateios, as Linhas) usam as partes no lugar
+/// do movimento redistribuído. Os nomes dos campos são os do lançamento, para os mesmos filtros valerem nos dois.
+model LancamentoRedistribuido {
+  id                  String         @id @default(uuid())
+  competenciaId       String         @map("competencia_id")
+  lancamentoContabilId String        @map("lancamento_contabil_id")
+  redistribuicaoId    String         @map("redistribuicao_id")
+  filial              Int
+  linhaDREId          String         @map("linha_dre_id")
+  centroCustoId       String         @map("centro_custo_id")
+  /// DECIMAL: o percentual do destino (0 a 1) e o valor da parte (as partes de um movimento somam o valor dele).
+  percentual          Decimal
+  valorMovimento      Decimal        @map("valor_movimento")
+  balde               BaldeAlocacao? @map("balde")
+  alocacao            TipoAlocacao
+  etiqueta            String
+
+  competencia        Competencia         @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
+  lancamentoContabil LancamentoContabil  @relation(fields: [lancamentoContabilId], references: [id], onDelete: Cascade)
+  redistribuicao     RedistribuicaoGasto @relation(fields: [redistribuicaoId], references: [id], onDelete: Restrict)
+  linhaDRE           LinhaDRE            @relation(fields: [linhaDREId], references: [id])
+  centroCusto        CentroCusto         @relation(fields: [centroCustoId], references: [id], onDelete: Restrict)
+
+  @@index([competenciaId, linhaDREId])
+  @@index([lancamentoContabilId])
+  @@map("lancamentos_redistribuidos")
+}
+
 /// De onde veio cada parcela da receita prévia.
 enum OrigemReceita {
   PRODUCAO
@@ -2498,7 +2598,8 @@ model CenarioReajuste {
   /// MARCADOS (o reajuste dos valores marcados), VALOR (a edição de um valor) ou REFERENCIA (a carga de um arquivo ou
   /// do resultado realizado).
   tipo        String
-  /// PERCENTUAL, ABSOLUTO ou DIGITADO (o valor digitado direto); nulo na referência.
+  /// PERCENTUAL, ABSOLUTO, DIGITADO (o valor digitado direto) ou REFERENCIA (13/11/2026: o Replicar Referências dos marcados);
+  /// nulo na referência.
   modo        String?
   /// O reajuste informado: o percentual (5 = 5%) ou o valor somado; nulo no valor digitado e na referência.
   reajuste    Decimal?
@@ -3049,6 +3150,7 @@ model ColaboradorFuncao {
   cargaInicial  ColaboradorCargaInicial[]
   movimentacoes ColaboradorMovimentacao[]
   cenarios      CenarioLotacao[]
+  jornadas      ColaboradorJornada[]
 
   @@unique([nome, senioridadeId])
   @@map("colaboradores_funcoes")
@@ -3152,9 +3254,32 @@ model ColaboradorCompetencia {
   atualizadoEm  DateTime                @updatedAt @map("atualizado_em")
 
   movimentacoes ColaboradorMovimentacao[]
+  jornadas      ColaboradorJornada[]
 
   @@unique([ano, mes])
   @@map("colaboradores_competencias")
+}
+
+/// A Jornada do Quadro de Lotação (13/11/2026, pedido do Adão): as horas extras realizadas e as faltas aferidas de cada linha
+/// do quadro realizado da competência (o centro de custo e a função, que traz a senioridade), digitadas na aba Jornada.
+model ColaboradorJornada {
+  id                 String   @id @default(uuid())
+  competenciaId      String   @map("competencia_id")
+  centroCustoId      String   @map("centro_custo_id")
+  funcaoId           String   @map("funcao_id")
+  /// As horas extras em minutos (a tela mostra HH:MM).
+  horasExtrasMinutos Int      @default(0) @map("horas_extras_minutos")
+  /// As faltas em dias (com até duas casas: meio dia = 0,5).
+  faltasDias         Decimal  @default(0) @map("faltas_dias") @db.Decimal(8, 2)
+  atualizadoPorNome  String?  @map("atualizado_por_nome")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  competencia ColaboradorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
+  centroCusto CentroCusto            @relation(fields: [centroCustoId], references: [id], onDelete: Cascade)
+  funcao      ColaboradorFuncao      @relation(fields: [funcaoId], references: [id], onDelete: Cascade)
+
+  @@unique([competenciaId, centroCustoId, funcaoId])
+  @@map("colaboradores_jornada")
 }
 
 /// A situação da movimentação: as de aprovação manual nascem Pendentes; as automáticas, Aprovadas. Só as aprovadas contam.

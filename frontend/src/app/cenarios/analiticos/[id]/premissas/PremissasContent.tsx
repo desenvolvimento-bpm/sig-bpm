@@ -125,9 +125,9 @@ export function PremissasContent() {
               (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
               Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais
               (os Salários dos Aprendizes e dos Estagiários e os Benefícios Adicionais, só na mão de obra da atribuição do grupo) — o FGTS de cada um
-              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses” e “Reajustar Marcados”; o grupo com centros de
+              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
-              Cadastros da Controladoria). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
+              Cadastros Gerais). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
             </li>
             <li>
@@ -139,7 +139,7 @@ export function PremissasContent() {
               Na aba Investimentos, em cima, a Depreciação Base de cada unidade mês a mês (digitada: o maquinário de produção na Matriz e na Filial, o de
               serviços em Serviços e o patrimônio em Despesas e Extra), com a depreciação dos investimentos e a total; embaixo, a lista dos investimentos.
               Cada uma tem o título e a descrição num card de destaque, com as funções dela à direita (na Depreciação, os valores marcados, “Marcar Todos
-              os Meses” e “Reajustar Marcados”; nos Investimentos, os botões da lista e “Exportar”, que leva a lista em Excel ou PDF).
+              os Meses”, “Reajustar Marcados” e “Replicar Referências”; nos Investimentos, os botões da lista e “Exportar”, que leva a lista em Excel ou PDF).
               {podeEditar
                 ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”."
                 : null} Cada investimento
@@ -149,7 +149,7 @@ export function PremissasContent() {
             <li>
               Na aba Extra-Operacional, como nos Lançamentos Manuais do fechamento, os valores mensais do imposto de renda e da contribuição social e das
               receitas e despesas financeiras, em Despesas e Extra e no RN, cada uma com o título num card de destaque e, à direita dele, os valores
-              marcados, “Marcar Todos os Meses” e “Reajustar Marcados”.
+              marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”.
             </li>
             <li>
               Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE
@@ -225,6 +225,11 @@ export function PremissasContent() {
               volume × o kg por unidade), a Receita Líquida Média, a conta das comissões (a soma das Receitas Brutas Médias × as Comissões) e, no fim, o
               Resultado das Premissas em R$ (o que a tabela leva para a DRE).
             </li>
+            <li>
+              Na aba Centros de Custo, o botão ao lado do nome de cada conta abre as Contas do Balancete: as contas do RM que caem nela (as que têm essa Linha
+              da DRE em Cadastros Gerais › Contábil › Contas de Resultado), com o Reduzido, a Conta, a Descrição, o Departamento, o Rateio e a
+              situação.
+            </li>
             {podeEditar ? (
               <>
                 <li>
@@ -234,6 +239,11 @@ export function PremissasContent() {
                 <li>
                   Para reajustar vários valores: marque as premissas (a caixa de uma seção ou de uma linha de produto marca as premissas dela) e os meses (a
                   caixa no rótulo de cada mês, ou “Marcar Todos os Meses”), e clique em “Reajustar Marcados”.
+                </li>
+                <li>
+                  Para levar a Média de Referência aos meses: marque as premissas e os meses e clique em “Replicar Referências”, ao lado de “Reajustar
+                  Marcados”. Depois da confirmação, cada premissa marcada recebe a Média de Ref. dela nos meses marcados; as sem a média ficam como estão.
+                  Também nas abas Centros de Custo, Investimentos (a Depreciação) e Extra-Operacional; a aba Rateios não tem a Média de Referência.
                 </li>
                 <li>Os valores em cinza-claro são os padrões (os dias úteis do calendário, ou zero), ainda não gravados. Cada gravação recalcula a DRE do cenário (tela Resultados) e fica no histórico (tela Reajustes).</li>
               </>
@@ -268,7 +278,7 @@ export function PremissasContent() {
               Na referência realizada, a receita de cada conta (Pré-Fabricado, Frete, Devoluções e Inventários, Montagem e Complementar) é a da DRE da unidade, dividida entre as
               linhas e as vendas pelos itens da receita prévia, e os impostos são os dos itens, ajustados aos da DRE da unidade. Os custos (Mão de Obra
               Terceirizada, Matérias Primas, Gastos Gerais Variáveis e Estoque) e as despesas variáveis de venda de cada conta e mês são os da DRE da unidade, divididos entre as
-              linhas na proporção das requisições e das notas fiscais com a tarefa de cada linha (a Correspondência Tarefa × Linha, nos Cadastros da Controladoria / Linhas);
+              linhas na proporção das requisições e das notas fiscais com a tarefa de cada linha (a Correspondência Tarefa × Linha, nos Cadastros Gerais / Linhas);
               o que não tem tarefa vai pelo m³ das linhas (pela receita, nas despesas variáveis de venda e em Serviços). A armadura e a metalurgia por
               unidade são as das listas de cada linha ÷ o volume dela. A Metalúrgica, na Matriz, presta serviço às outras linhas e não entra nas premissas: os custos dela ficam com a Estrutura, e a metalurgia que as linhas consomem é a Metalúrgica (Interno) Unit. delas. As Comissões são as da DRE da unidade
               em % da receita bruta, por venda (as da unidade divididas entre a Global e a Mercantil pela receita bruta de cada uma).

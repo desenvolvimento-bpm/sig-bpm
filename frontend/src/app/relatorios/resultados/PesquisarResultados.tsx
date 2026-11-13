@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListTree, MessageSquareWarning, Search } from "lucide-react";
 
 import { BuscaNaLista, type OpcaoDaBusca } from "@/components/shared/BuscaNaLista";
+import { EtiquetaRedistribuicao, textoDaRedistribuicao } from "@/components/shared/EtiquetaRedistribuicao";
 import { IconeDaCorrecao } from "@/components/shared/IconeDaCorrecao";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import { Button } from "@/components/ui/button";
@@ -123,12 +124,15 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
   };
   /** Por que os itens não se contestam (nulo se se contestam): o movimento inteiro em contestação. */
   const bloqueioDosItens = (o: OcorrenciaDaPesquisa) => {
+    if (o.redistribuicao) return textoDaRedistribuicao(o.redistribuicao);
     const andamento = o.contestacao && !o.contestacao.deItens && (o.contestacao.situacao === "PENDENTE" || o.contestacao.situacao === "ACATADA");
     return andamento ? `O movimento inteiro está na contestação nº ${o.contestacao!.numero} (${ROTULO_SITUACAO[o.contestacao!.situacao].toLowerCase()}).` : null;
   };
 
   /** A coluna Ações, na parte da contestação: a situação da em andamento, os itens contestados ou o Contestar. */
   const acaoDaContestacao = (o: OcorrenciaDaPesquisa) => {
+    // O movimento redistribuído (13/11/2026) não se contesta: a etiqueta mostra os destinos.
+    if (o.redistribuicao) return podeContestar ? <EtiquetaRedistribuicao redistribuicao={o.redistribuicao} /> : null;
     const andamento = o.contestacao && (o.contestacao.situacao === "PENDENTE" || o.contestacao.situacao === "ACATADA");
     if (andamento) {
       return (

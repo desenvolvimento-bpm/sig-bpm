@@ -28,8 +28,9 @@ export function LoginForm() {
 
     try {
       await login(email, password);
-      const redirectTo = getSafeInternalPath(searchParams.get("from"));
-      router.push(redirectTo);
+      // Sem um destino pedido, a raiz, que abre a Tela Inicial do usuário (13/11/2026).
+      const de = searchParams.get("from");
+      router.push(de ? getSafeInternalPath(de) : "/");
       router.refresh();
     } catch {
       setError("E-mail ou senha inválidos.");

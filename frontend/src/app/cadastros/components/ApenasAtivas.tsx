@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 export type ControleApenasAtivas = { marcado: boolean; onMudar: (marcado: boolean) => void };
 
 /**
- * A caixa "Apenas Ativas" dos Cadastros da Controladoria (11/10/2026): marcada, a tabela esconde os registros
+ * A caixa "Apenas Ativas" dos Cadastros Gerais (11/10/2026): marcada, a tabela esconde os registros
  * inativos (nas regras de rateio, os de vigência encerrada). Começa desmarcada, com o cadastro inteiro.
  */
 export function useApenasAtivas<T>(itens: T[] | undefined, ativo: (t: T) => boolean) {

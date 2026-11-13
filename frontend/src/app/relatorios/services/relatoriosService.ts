@@ -1,3 +1,4 @@
+import type { RedistribuicaoDoMovimento } from "@/components/shared/EtiquetaRedistribuicao";
 import { api } from "@/lib/api";
 
 export type MesRelatorio = { mes: number; rotulo: string; apurado: boolean };
@@ -174,6 +175,8 @@ export type OcorrenciaDaPesquisa = {
   centroOriginal: { codigoRM: string | null; nome: string | null } | null;
   contestacaoAplicada: { numero: number; centro: boolean; conta: boolean } | null;
   contestacao: { numero: number; situacao: "PENDENTE" | "ACATADA" | "RECUSADA" | "VALIDADA"; deItens: boolean; comItensContestados: boolean } | null;
+  /** A redistribuição de gastos (13/11/2026): os destinos; o movimento redistribuído não se contesta. */
+  redistribuicao?: RedistribuicaoDoMovimento | null;
 };
 export type TipoDaPesquisa = "fornecedor" | "conta";
 export type ResultadoDaPesquisa = {

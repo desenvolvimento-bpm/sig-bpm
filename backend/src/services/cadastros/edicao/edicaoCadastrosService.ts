@@ -34,7 +34,7 @@ function definicao(entidade: string): DefinicaoCadastro {
 }
 
 /**
- * Os Cadastros da Controladoria (17/10/2026): mudar qualquer um pede reapurar as competências apuradas e abertas
+ * Os Cadastros Gerais (17/10/2026): mudar qualquer um pede reapurar as competências apuradas e abertas
  * (apuracao/assinaturaCadastros.ts); a tela diz quais, depois de gravar.
  */
 const DA_CONTROLADORIA = new Set(["unidades", "centros-custo", "contas-resultado", "linhas", "estrutura-dre", "regras-rateio", "estrutura-indicadores", "painel-bordo"]);
@@ -55,13 +55,20 @@ async function aplicarNaClassificacao(d: DefinicaoCadastro) {
   return { reclassificadas, apuradasPorReapurar: abertas.filter((x) => x.apuradaEm).map((c) => rotulo(c.ano, c.mes)) };
 }
 
+/** A trava do cadastro inteiro (13/11/2026): com o motivo, nada se grava. */
+async function exigirSemTrava(d: DefinicaoCadastro, db: ReturnType<typeof getPrismaClient>) {
+  const trava = d.trava ? await d.trava(db) : null;
+  if (trava) throw new RegraCadastroError(409, trava);
+}
+
 export const edicaoCadastrosService = {
   /** Os campos do cadastro, com as opções já resolvidas, para a tela montar o formulário. */
   async definicao(entidade: string) {
     const d = definicao(entidade);
     const db = getPrismaClient();
     const campos = await Promise.all(d.campos.map(async ({ opcoes, ...c }) => ({ ...c, opcoes: opcoes ? await opcoes(db) : undefined })));
-    return { entidade: d.entidade, titulo: d.titulo, criar: d.criar, excluir: d.excluir, reclassifica: !!d.reclassifica, explicacao: d.explicacao ?? null, campos };
+    const trava = d.trava ? await d.trava(db) : null;
+    return { entidade: d.entidade, titulo: d.titulo, criar: d.criar, excluir: d.excluir, reclassifica: !!d.reclassifica, explicacao: d.explicacao ?? null, campos, trava };
   },
 
   async listar(entidade: string, busca?: string) {
@@ -79,6 +86,7 @@ export const edicaoCadastrosService = {
     const d = definicao(entidade);
     if (!d.criar) throw new RegraCadastroError(409, `${d.titulo}: o cadastro não aceita registros novos.`);
     const db = getPrismaClient();
+    await exigirSemTrava(d, db);
     const dados = await d.preparar(db, valores, null);
     const id = await d.gravar(db, dados, null);
     const depois = apresentar(await d.ler(db, id));
@@ -91,6 +99,7 @@ export const edicaoCadastrosService = {
     const db = getPrismaClient();
     const antes = apresentar(await d.ler(db, id));
     if (!antes) throw new RegraCadastroError(404, "Registro não encontrado.");
+    await exigirSemTrava(d, db);
     // Os campos de criação e os derivados não vêm da tela na edição: valem os gravados.
     const fixos = Object.fromEntries(d.campos.filter((c) => c.somenteNaCriacao).map((c) => [c.nome, antes[c.nome]]));
     const dados = await d.preparar(db, { ...antes, ...valores, ...fixos }, id);
@@ -115,6 +124,7 @@ export const edicaoCadastrosService = {
     const db = getPrismaClient();
     const antes = apresentar(await d.ler(db, id));
     if (!antes) throw new RegraCadastroError(404, "Registro não encontrado.");
+    await exigirSemTrava(d, db);
     const impedimento = d.impedimentoExclusao ? await d.impedimentoExclusao(db, id) : null;
     if (impedimento) throw new RegraCadastroError(409, impedimento);
     await d.remover(db, id);

@@ -41,6 +41,9 @@ colaboradoresRoutes.delete("/quadro/movimentacoes/:id", autenticacao, pode("cola
 colaboradoresRoutes.get("/quadro/competencias/:anoMes/controle", autenticacao, pode("colaboradores_quadro.controle:ler"), asyncHandler(c.controle));
 colaboradoresRoutes.post("/quadro/movimentacoes/:id/decisao", autenticacao, pode("colaboradores_quadro.controle:editar"), asyncHandler(c.decidir));
 colaboradoresRoutes.get("/quadro/competencias/:anoMes/realizado", autenticacao, pode("colaboradores_quadro.realizado:ler"), asyncHandler(c.realizado));
+// A Jornada (13/11/2026): Ler vê as linhas; Editar grava as horas extras e as faltas (na competência aberta).
+colaboradoresRoutes.get("/quadro/competencias/:anoMes/jornada", autenticacao, pode("colaboradores_quadro.jornada:ler"), asyncHandler(c.jornada));
+colaboradoresRoutes.put("/quadro/competencias/:anoMes/jornada", autenticacao, pode("colaboradores_quadro.jornada:editar"), asyncHandler(c.gravarJornada));
 colaboradoresRoutes.get("/painel", autenticacao, pode("colaboradores_painel:ler"), asyncHandler(c.painel));
 // A Comparação com um cenário marcado (09/11/2026, etapa 4): no Quadro de Lotação e no Painel de Bordo.
 colaboradoresRoutes.get("/comparacao", autenticacao, verificarAlgumaPermissao("colaboradores_quadro:ler", "colaboradores_painel:ler"), asyncHandler(c.comparacao));

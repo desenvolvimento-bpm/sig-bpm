@@ -76,7 +76,7 @@ export type BlocoDoRelatorio = { id: string; x: number; y: number; w: number; h:
    * Facebook ou LinkedIn (`url`, o endereço colado; a tela monta o player incorporado), com a legenda e a proporção. Vazio
    * (sem arquivo e sem link), o quadro esperando o vídeo.
    */
-  | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string }
+  | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string; /** As Configurações do Vídeo (13/11/2026). */ reproducaoAutomatica?: boolean; recomecarAoTerminar?: boolean }
   /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
   | { tipo: "TEXTO"; texto: string; html?: string; espacamento?: number; /** As Bordas (12/11/2026). */ borda?: { lados: string[]; tipo: string; espessura: number; cor: string } }
   /**

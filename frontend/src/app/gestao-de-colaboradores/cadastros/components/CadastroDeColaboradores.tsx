@@ -62,15 +62,18 @@ type Props = {
 /**
  * Uma aba da tela Cadastros da Gestão de Colaboradores (06/11/2026, pedido do Adão): a caixa Apenas Ativas, o Importar
  * (nas abas que importam planilha) e o Novo na altura do título; na última coluna, o menu Ações — Editar, Inativar (ou
- * Reativar) e Excluir, que só vale no registro sem uso em outras telas (o motivo aparece ao passar o mouse).
+ * Reativar) e Excluir, que só vale no registro sem uso em outras telas (o motivo aparece ao passar o mouse). Com a trava
+ * do cadastro (13/11/2026: o Lançamento Inicial com competências fechadas na Gestão de Colaboradores), sem o Importar, o
+ * Novo e o menu Ações, e o motivo num destaque acima da tabela.
  */
 export function CadastroDeColaboradores({ entidade, aba, rota, titulo, descricao, comoUsar, oRegistro, importar, lancamentoInicial }: Props) {
   const semAtivo = lancamentoInicial;
   useRegistrarAcessoTela(rota);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const pode = hasPermission(`colaboradores_cadastros.${aba}:editar`);
   const def = useQuery({ queryKey: ["edicao", entidade, "definicao"], queryFn: () => edicaoService.definicao(entidade) });
+  const trava = def.data?.trava ?? null;
+  const pode = hasPermission(`colaboradores_cadastros.${aba}:editar`) && !trava;
   const lista = useQuery({ queryKey: ["edicao", entidade, "lista"], queryFn: () => edicaoService.listar(entidade) });
   // undefined: fechado; null: novo; string: o registro em edição.
   const [editando, setEditando] = useState<string | null | undefined>(undefined);
@@ -133,7 +136,15 @@ export function CadastroDeColaboradores({ entidade, aba, rota, titulo, descricao
       onPorPaginaChange={tabela.setPorPagina}
       onPaginaChange={tabela.setPagina}
       carregando={def.isPending || lista.isPending}
-      aviso={lancamentoInicial && lista.data?.length ? <ResumoDaCarga lista={lista.data} /> : null}
+      aviso={
+        trava || (lancamentoInicial && lista.data?.length) ? (
+          <div className="space-y-2">
+            {lancamentoInicial && lista.data?.length ? <ResumoDaCarga lista={lista.data} /> : null}
+            {/* A trava do cadastro, no destaque padrão com a borda vermelha. */}
+            {trava ? <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">{trava}</p> : null}
+          </div>
+        ) : null
+      }
     >
       <DataTable<Registro>
         data={tabela.visiveis}

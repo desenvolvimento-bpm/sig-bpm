@@ -3,7 +3,7 @@
 import { createContext, useContext } from "react";
 
 /**
- * As abas da tela aberta (17/10/2026: os Cadastros da Controladoria — Contábil, Controladoria e Analítico): o layout
+ * As abas da tela aberta (17/10/2026: os Cadastros Gerais — Contábil, Controladoria e Analítico): o layout
  * as descobre pelo endereço (navigation-config, `abasDaTela`) e o `CabecalhoDaTela` mostra o nome da tela no título e
  * as abas logo abaixo dele, cada uma com o endereço do cadastro dela.
  */

@@ -98,6 +98,11 @@ export type DefinicaoCadastro = {
   /** Por que não pode ser excluído (nulo se pode). */
   impedimentoExclusao?: (db: Db, id: string) => Promise<string | null>;
   /**
+   * Por que o cadastro inteiro não se edita agora (13/11/2026: o Lançamento Inicial com competências fechadas na Gestão de
+   * Colaboradores), ou nulo: com o motivo, o servidor recusa o Novo, a edição e a exclusão, e a tela esconde os botões.
+   */
+  trava?: (db: Db) => Promise<string | null>;
+  /**
    * Os movimentos do registro (lançamentos, valores apurados, registros das listas…), em texto, ou nulo sem nenhum.
    * Com movimentos, os campos travaComMovimento não mudam e a exclusão é recusada.
    */
@@ -186,7 +191,7 @@ async function departamentos(db: Db) {
 
 async function linhaPorId(db: Db, id: string) {
   const l = await db.linhaDRE.findUnique({ where: { id }, select: { id: true, tipo: true, grupo: true, atribuicao: true, ativo: true } });
-  if (!l) throw new RegraCadastroError(400, "Linha da DRE inexistente.");
+  if (!l) throw new RegraCadastroError(400, "Linha do DRE inexistente.");
   return l;
 }
 
@@ -226,7 +231,7 @@ async function exigirAbaQueLeia(db: Db, linhaId: string, balde: string | null) {
   }));
   throw new RegraCadastroError(
     400,
-    `Nenhuma aba de resultado lê a linha “${escolhida.descricao}” (${escolhida.grupoSigla}) com o rateio ${balde ?? "vazio"}: os lançamentos que seguem o rateio da conta (de obras, de centros fora do cadastro e sem centro) ficariam fora do resultado, com a pendência Sem Aba de Resultado. ${sugestoes.length ? "Escolha uma das combinações que alguma aba lê:" : "Nenhum rateio faz uma aba ler esta linha: escolha outra Linha da DRE."}`,
+    `Nenhuma aba de resultado lê a linha “${escolhida.descricao}” (${escolhida.grupoSigla}) com o rateio ${balde ?? "vazio"}: os lançamentos que seguem o rateio da conta (de obras, de centros fora do cadastro e sem centro) ficariam fora do resultado, com a pendência Sem Aba de Resultado. ${sugestoes.length ? "Escolha uma das combinações que alguma aba lê:" : "Nenhum rateio faz uma aba ler esta linha: escolha outra Linha do DRE."}`,
     sugestoes,
   );
 }
@@ -327,6 +332,13 @@ const centros: DefinicaoCadastro = {
 };
 
 // --------------------------------------------------------- contas de resultado
+/**
+ * A opção Sem Resultado da Linha do DRE (13/11/2026, pedido do Adão): sem grupo, aparece com qualquer departamento (e sem
+ * ele); grava a conta sem linha e com `semResultado`, e os movimentos dela não viram pendência na classificação. Na lista
+ * do cadastro, a conta aparece com o traço das sintéticas. O rótulo do campo é "Linha do DRE" (13/11/2026, pedido do Adão).
+ */
+export const SEM_RESULTADO = "SEM_RESULTADO";
+
 const contas: DefinicaoCadastro = {
   entidade: "contas-resultado",
   titulo: "Conta de resultado",
@@ -345,23 +357,26 @@ const contas: DefinicaoCadastro = {
       rotulo: "Departamento",
       tipo: "opcao",
       larguraInteira: true,
-      ajuda: "O grupo da DRE. A Linha da DRE mostra só as linhas dele.",
+      ajuda: "O grupo da DRE. A Linha do DRE mostra só as linhas dele.",
       opcoes: async (db) => [...new Set((await linhasDasContas(db)).map((l) => l.grupo))].map((g) => ({ valor: g, rotulo: g })),
     },
     {
       nome: "linhaDREId",
-      rotulo: "Linha da DRE",
+      rotulo: "Linha do DRE",
       tipo: "opcao",
       filtradoPor: "departamento",
       larguraInteira: true,
-      ajuda: "O destino na DRE. Ao trocar o departamento, fica a linha de mesma atribuição e descrição, quando ele tem uma. A atribuição sai da linha.",
-      opcoes: async (db) =>
-        (await linhasDasContas(db)).map((l) => ({
+      ajuda:
+        "O destino na DRE. Ao trocar o departamento, fica a linha de mesma atribuição e descrição, quando ele tem uma. A atribuição sai da linha. Sem Resultado (com qualquer departamento, ou sem ele; o traço das contas sintéticas na lista): a conta não vai à DRE, e os movimentos dela não viram pendência no fechamento.",
+      opcoes: async (db) => [
+        { valor: SEM_RESULTADO, rotulo: "Sem Resultado" },
+        ...(await linhasDasContas(db)).map((l) => ({
           valor: l.id,
           rotulo: `${l.grupoSigla} › ${l.atribuicao ?? "—"} › ${l.descricao}`,
           grupos: [l.grupo],
           chave: `${l.atribuicao ?? ""}|${l.descricao}`.toUpperCase(),
         })),
+      ],
     },
     { nome: "atribuicao", rotulo: "Atribuição", tipo: "texto", derivado: true },
     { nome: "balde", rotulo: "Rateio", tipo: "opcao", opcoes: opcoesFixas(BALDES) },
@@ -369,14 +384,15 @@ const contas: DefinicaoCadastro = {
   ],
   async listar(db, busca) {
     const cs = await db.contaResultado.findMany({ orderBy: [{ conta: "asc" }, { ordem: "asc" }] });
-    return cs.filter((c) => contem(busca, c.reduzido, c.conta, c.descricao));
+    // Sem Resultado aparece na coluna Linha do DRE.
+    return cs.filter((c) => contem(busca, c.reduzido, c.conta, c.descricao)).map(({ semResultado, ...c }) => ({ ...c, linhaDREId: semResultado ? SEM_RESULTADO : c.linhaDREId }));
   },
   // Com linha, o departamento é sempre o grupo dela (a lista da linha é filtrada por ele).
   async ler(db, id) {
     const c = await db.contaResultado.findUnique({ where: { id }, include: { linhaDRE: { select: { grupo: true } } } });
     if (!c) return null;
-    const { linhaDRE, ...conta } = c;
-    return { ...conta, departamento: linhaDRE?.grupo ?? conta.departamento };
+    const { linhaDRE, semResultado, ...conta } = c;
+    return { ...conta, linhaDREId: semResultado ? SEM_RESULTADO : conta.linhaDREId, departamento: linhaDRE?.grupo ?? conta.departamento };
   },
   async preparar(db, v, id) {
     const reduzido = exigir(v.reduzido, "O reduzido");
@@ -385,11 +401,13 @@ const contas: DefinicaoCadastro = {
     const tipoConta = exigir(v.tipoConta, "O tipo");
     if (!["ANALITICA", "SINTETICA"].includes(tipoConta)) throw new RegraCadastroError(400, "Tipo deve ser analítica ou sintética.");
     const departamento = texto(v.departamento);
-    const linhaDREId = texto(v.linhaDREId);
+    // Sem Resultado (13/11/2026): sem linha, com o departamento escolhido (ou nenhum).
+    const semResultado = texto(v.linhaDREId) === SEM_RESULTADO;
+    const linhaDREId = semResultado ? null : texto(v.linhaDREId);
     const linha = linhaDREId ? await linhaPorId(db, linhaDREId) : null;
     if (linha && linha.tipo !== "ITEM" && linha.tipo !== "TOTAL") throw new RegraCadastroError(400, "A conta só aponta para linha de item (ou para os impostos operacionais).");
-    if ((linha || departamento) && tipoConta === "SINTETICA") throw new RegraCadastroError(400, "Conta sintética não classifica: deixe o Departamento e a Linha da DRE vazios.");
-    if (linha && departamento && departamento !== linha.grupo) throw new RegraCadastroError(400, `A Linha da DRE escolhida é do departamento ${linha.grupo}, e não de ${departamento}.`);
+    if ((linha || departamento) && tipoConta === "SINTETICA") throw new RegraCadastroError(400, "Conta sintética não classifica: deixe o Departamento vazio e a Linha do DRE vazia ou em Sem Resultado.");
+    if (linha && departamento && departamento !== linha.grupo) throw new RegraCadastroError(400, `A Linha do DRE escolhida é do departamento ${linha.grupo}, e não de ${departamento}.`);
     const balde = opcaoBalde(v.balde);
     if (linha?.tipo === "ITEM" && tipoConta === "ANALITICA") await exigirAbaQueLeia(db, linha.id, balde);
     return {
@@ -398,6 +416,7 @@ const contas: DefinicaoCadastro = {
       descricao: exigir(v.descricao, "A descrição"),
       tipoConta,
       linhaDREId,
+      semResultado,
       departamento: linha?.grupo ?? departamento,
       atribuicao: linha?.atribuicao ?? null,
       balde,
@@ -1463,7 +1482,7 @@ async function validarFormulaDoPainel(db: Db, formula: string, rotulo: string) {
   }
   const nomes = new Set((await db.indicadorEstrutura.findMany({ select: { nome: true } })).map((i) => i.nome));
   for (const i of compilada.itens.values()) {
-    if (i.tipo !== "INDICADOR") throw new RegraCadastroError(400, `${rotulo}: use só os indicadores do cadastro Indicadores (Cadastros da Controladoria / Analítico).`);
+    if (i.tipo !== "INDICADOR") throw new RegraCadastroError(400, `${rotulo}: use só os indicadores do cadastro Indicadores (Cadastros Gerais / Analítico).`);
     // O Acumulado no Ano (23/10/2026) é dos indicadores; o painel já tem o Atual e o Acumulado.
     if (i.acumulado) throw new RegraCadastroError(400, `${rotulo}: o Acumulado no Ano vale só na Metodologia dos Indicadores.`);
     if (!nomes.has(i.nome)) throw new RegraCadastroError(400, `${rotulo}: o indicador “${i.nome}” não está no cadastro Indicadores.`);
@@ -1487,7 +1506,7 @@ const comTextos = <T extends { formula: string; casasPercentual: number }>(i: T)
  * indicadores, montada como a dos Indicadores; antes, um modelo de apuração fixo), com o formato, o percentual sob o
  * valor e o espaço antes. Os Painéis de Bordo (Resultados Empresariais, cenários e os cards dos Relatórios Executivos)
  * leem os itens ativos daqui, na ordem; os quadros seguem a ordem do primeiro item de cada um. Mudar o cadastro com uma
- * competência apurada e ainda aberta pede reapurar, como todos os Cadastros da Controladoria (assinaturaCadastros.ts).
+ * competência apurada e ainda aberta pede reapurar, como todos os Cadastros Gerais (assinaturaCadastros.ts).
  */
 const painelBordo: DefinicaoCadastro = {
   entidade: "painel-bordo",
@@ -1639,7 +1658,7 @@ async function gruposDaDRE(db: Db) {
 }
 
 /**
- * Os Departamentos (11/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria): a ordem, a unidade de negócio
+ * Os Departamentos (11/11/2026, pedido do Adão; Cadastros Gerais / Controladoria): a ordem, a unidade de negócio
  * (a lista do cadastro Unidades), o nome do departamento, único na unidade, e os Departamentos da DRE (12/11/2026: os grupos
  * da DRE do departamento, pela sigla; só os que têm linhas na unidade, e cada grupo num departamento só da unidade). Inativo,
  * o departamento sai das listas.

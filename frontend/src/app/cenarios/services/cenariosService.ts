@@ -46,6 +46,11 @@ export type LinhaDaPremissa = {
   gravados: boolean[];
 };
 export type TabelaDePremissas = { venda: "GLOBAL" | "MERCANTIL"; titulo: string; linhas: LinhaDaPremissa[] };
+/** As Contas do Balancete de uma conta da DRE (13/11/2026): as contas do RM com essa Linha da DRE. */
+export type ContasDoBalancete = {
+  linha: { codigo: string; descricao: string; grupo: string; grupoSigla: string; atribuicao: string | null };
+  contas: Array<{ reduzido: string; conta: string; descricao: string; departamento: string | null; balde: string | null; ativo: boolean }>;
+};
 /**
  * Um grupo de centros de custo no cenário analítico (13/10/2026): o grupo da Controladoria, os centros, o balde (o mais
  * comum; `baldes` com mais de um dá o aviso), o grupo da DRE das contas, o destino do valor e o total do exercício.
@@ -288,7 +293,8 @@ export type Cenario = {
 };
 
 /** O que a tela fez numa gravação de valores (o histórico de reajustes). */
-export type OrigemDaGravacao = { tipo: "MARCADOS" | "VALOR"; modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO"; reajuste: number | null; replicado: boolean };
+/** `modo` REFERENCIA (13/11/2026): o Replicar Referências dos marcados. */
+export type OrigemDaGravacao = { tipo: "MARCADOS" | "VALOR"; modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO" | "REFERENCIA"; reajuste: number | null; replicado: boolean };
 /** Uma linha do histórico de reajustes. */
 export type ReajusteDoCenario = {
   id: string;
@@ -296,7 +302,7 @@ export type ReajusteDoCenario = {
   usuarioNome: string;
   /** RECALCULO (14/10/2026), MEDIAS e IMPORTACAO (15/10/2026: Replicar Médias / Apagar Valores e Importar Valores). */
   tipo: "MARCADOS" | "VALOR" | "REFERENCIA" | "RECALCULO" | "MEDIAS" | "IMPORTACAO";
-  modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO" | null;
+  modo: "PERCENTUAL" | "ABSOLUTO" | "DIGITADO" | "REFERENCIA" | null;
   reajuste: number | null;
   visao: number | null;
   replicado: boolean;
@@ -447,6 +453,8 @@ export const cenariosService = {
   exportarPremissas: async (id: string, escopo: "todas" | "centros_abas" | "centros_arquivos", departamentos: DepartamentoDasPremissas[]) =>
     api.get<Blob>(`/proxy/cenarios/${id}/premissas/exportar`, { params: { escopo, departamentos: departamentos.join(","), formato: "xlsx" }, responseType: "blob" }),
   centros: async (id: string) => (await api.get<{ data: CentrosDoCenario }>(`/proxy/cenarios/${id}/centros`)).data.data,
+  contasDoBalancete: async (id: string, linha: string) =>
+    (await api.get<{ data: ContasDoBalancete }>(`/proxy/cenarios/${id}/contas-do-balancete`, { params: { linha } })).data.data,
   centro: async (id: string, grupo: string) => (await api.get<{ data: ContasDoCentro }>(`/proxy/cenarios/${id}/centros/contas`, { params: { grupo } })).data.data,
   gravarCentro: async (id: string, grupo: string, alteracoes: Array<{ linha: string; mes: number; valor: number | null }>, origem?: OrigemDaGravacao) =>
     (await api.put<{ data: { alteradas: number; meses: number[] } }>(`/proxy/cenarios/${id}/centros`, { grupo, alteracoes, origem })).data.data,
@@ -531,7 +539,7 @@ export const cenariosService = {
   /** A referência de um analítico por outro analítico (14/10/2026). */
   referenciaCenario: async (id: string, origemId: string, manterMeses = false) =>
     (await api.post<{ data: Cenario }>(`/proxy/cenarios/${id}/referencia/cenario`, { origemId, manterMeses })).data.data,
-  /** A correspondência tarefa × linha (14/10/2026), nos Cadastros da Controladoria / Linhas. */
+  /** A correspondência tarefa × linha (14/10/2026), nos Cadastros Gerais / Linhas. */
   correspondencias: async () => (await api.get<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias")).data.data,
   gravarCorrespondencias: async (itens: CorrespondenciaDeTarefa[]) => (await api.put<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias", { itens })).data.data,
   resultados: async (id: string, visao: number) => (await api.get<{ data: Resultados }>(`/proxy/cenarios/${id}/resultados`, { params: { visao } })).data.data,

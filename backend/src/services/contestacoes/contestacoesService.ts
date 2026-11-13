@@ -158,6 +158,8 @@ const LANCAMENTO_SEL = {
   // Os itens do movimento (10/11/2026): o ID do RM e a conta do balancete (o código reduzido).
   idMovimento: true,
   contaResultado: { select: { reduzido: true } },
+  // A redistribuição de gastos (13/11/2026): o movimento redistribuído não se contesta.
+  redistribuicaoId: true,
 } satisfies Prisma.LancamentoContabilSelect;
 type LancamentoDoMovimento = Prisma.LancamentoContabilGetPayload<{ select: typeof LANCAMENTO_SEL }>;
 
@@ -265,7 +267,8 @@ async function combinacao(l: LancamentoDoMovimento, acesso: Acesso, destino: { c
   if (!l.cliForn) return vazio;
   const prisma = getPrismaClient();
   const outros = await prisma.lancamentoContabil.findMany({
-    where: { cliForn: l.cliForn, contaResultadoId: l.contaResultadoId, codigoCentroCusto: l.codigoCentroCusto, competenciaId: { not: l.competenciaId } },
+    // Sem os redistribuídos (13/11/2026), que não se contestam.
+    where: { cliForn: l.cliForn, contaResultadoId: l.contaResultadoId, codigoCentroCusto: l.codigoCentroCusto, competenciaId: { not: l.competenciaId }, redistribuicaoId: null },
     select: LANCAMENTO_SEL,
     orderBy: [{ competencia: { ano: "asc" } }, { competencia: { mes: "asc" } }, { emissao: "asc" }, { linhaArquivo: "asc" }],
   });
@@ -518,6 +521,10 @@ async function exigirContestacao(id: string) {
 async function exigirLancamento(id: string) {
   const l = await getPrismaClient().lancamentoContabil.findUnique({ where: { id }, select: LANCAMENTO_SEL });
   if (!l) throw new RegraContestacaoError(404, "Movimento não encontrado no balancete.");
+  // Como os reflexos dos rateios, o movimento redistribuído (13/11/2026) não se contesta: a redistribuição vale sempre.
+  if (l.redistribuicaoId) {
+    throw new RegraContestacaoError(409, "O movimento é redistribuído (Cadastros Gerais / Redistribuições de Gastos) e não pode ser contestado.");
+  }
   return l;
 }
 

@@ -85,7 +85,19 @@ export type Bloco = Posicao &
      * Um vídeo (20/10/2026): um arquivo do computador (`arquivo`, guardado no servidor, até 200 MB) ou um link do YouTube,
      * Instagram, Facebook ou LinkedIn (`url`, o endereço colado), com a legenda e a proporção; vazio, o quadro esperando o vídeo.
      */
-    | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string }
+    | {
+        tipo: "VIDEO";
+        origem: "ARQUIVO" | "LINK";
+        arquivo: string;
+        url: string;
+        legenda: string;
+        proporcao: number;
+        legendaHtml?: string;
+        /** As Configurações do Vídeo (13/11/2026): começa a tocar sozinho na leitura e na apresentação. */
+        reproducaoAutomatica?: boolean;
+        /** As Configurações do Vídeo (13/11/2026): ao terminar, recomeça do início. */
+        recomecarAoTerminar?: boolean;
+      }
     /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
     | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number; /** As Bordas (12/11/2026). */ borda?: BordaDoTexto }
     /**

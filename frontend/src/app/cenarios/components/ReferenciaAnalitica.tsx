@@ -126,7 +126,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
       <p className="text-sm text-gray-600">
         Opcional: uma base para as premissas do cenário, que depois se editam na tela Premissas. A DRE do cenário analítico é sempre calculada das
         premissas, dos centros de custo, dos investimentos e do extra-operacional. Os custos do realizado vão para as linhas pela Correspondência
-        Tarefa × Linha (Cadastros da Controladoria / Linhas, botão “Tarefas”).
+        Tarefa × Linha (Cadastros Gerais / Linhas, botão “Tarefas”).
       </p>
       <p className="text-sm text-gray-700">
         Referência atual:{" "}

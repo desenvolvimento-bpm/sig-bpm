@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { CODIGO_ADMINISTRADOR } from "../../services/acesso/acesso.js";
 import { ABA_DA_PERMISSAO, CenarioError, cenariosService } from "../../services/cenarios/cenariosService.js";
+import { contasDoBalancete } from "../../services/cenarios/contasDoBalancete.js";
 import { abaDaChave, ABAS_DAS_PREMISSAS, DEPARTAMENTOS, NOME_DA_ABA, type AbaDasPremissas, type Departamento } from "../../services/cenarios/planilhaPremissas.js";
 
 /** As abas das premissas que o perfil lê ou edita (15/10/2026: a planilha das premissas). */
@@ -100,6 +101,12 @@ function id(request: Request, response: Response) {
 const unidadeSchema = z.coerce.number().int().min(1).max(3);
 
 export const cenariosController = {
+  /** GET /cenarios/:id/contas-do-balancete?linha=<código> (13/11/2026): as contas do RM que caem numa conta da DRE. */
+  async contasDoBalancete(request: Request, response: Response) {
+    const linha = z.string().trim().min(1).max(200).safeParse(request.query.linha);
+    if (!linha.success) return response.status(400).json({ error: "Informe a conta (a linha da DRE)." });
+    return responder(response, () => contasDoBalancete(linha.data));
+  },
   /** As premissas de uma unidade de um cenário analítico (?unidade=1 a 3). */
   premissas(request: Request, response: Response) {
     const c = id(request, response);
@@ -178,7 +185,7 @@ export const cenariosController = {
         grupo: z.string().trim().min(1).max(200),
         alteracoes: z.array(z.object({ linha: z.string().min(1).max(200), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).min(1).max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -205,7 +212,7 @@ export const cenariosController = {
         tipo: z.enum(["BASE", "EXTRA"]),
         alteracoes: z.array(z.object({ linha: z.string().min(1).max(200), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).min(1).max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -285,7 +292,7 @@ export const cenariosController = {
           .min(1)
           .max(60_000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -309,7 +316,7 @@ export const cenariosController = {
           .min(1)
           .max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -556,7 +563,7 @@ export const cenariosController = {
         origem: z
           .object({
             tipo: z.enum(["MARCADOS", "VALOR"]),
-            modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]),
+            modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]),
             reajuste: z.number().finite().nullable(),
             replicado: z.boolean(),
           })

@@ -7,7 +7,7 @@ import { conflitoDeVigencia, descreverVigencia, lacunasDasRegras, type RegraComV
 import { peloTexto } from "../../lib/ordemDoSqlite.js";
 
 /**
- * Os percentuais fixos das regras de rateio (14/10/2026, a tela Percentuais Fixos de Cadastros da Controladoria / Regras
+ * Os percentuais fixos das regras de rateio (14/10/2026, a tela Percentuais Fixos de Cadastros Gerais / Regras
  * de Rateio): numa chave e num período, cada destino fica com um percentual digitado, e os destinos somam 100%. Os
  * destinos são sempre os quatro — Matriz, Filial, Montagem e Complementar (14/10/2026; antes, só os que a chave usava
  * por volume) —, cada um com a linha de volume dele (o volume continua apurado, só para a tela). O conjunto (uma regra por destino, com a mesma vigência) se grava e se exclui junto.

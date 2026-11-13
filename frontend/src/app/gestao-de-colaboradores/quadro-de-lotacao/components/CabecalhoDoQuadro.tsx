@@ -8,18 +8,21 @@ import { usePermissions } from "@/context/PermissionContext";
 
 import { guardarCompetenciaAberta } from "./SituacaoDaCompetenciaDoQuadro";
 
-export type AbaDoQuadro = "movimentacoes" | "controle" | "realizado";
+export type AbaDoQuadro = "movimentacoes" | "controle" | "realizado" | "jornada";
 const ABAS: Array<{ chave: AbaDoQuadro; rotulo: string }> = [
   { chave: "movimentacoes", rotulo: "Movimentações" },
-  { chave: "controle", rotulo: "Controle" },
+  // A aba Aprovações (13/11/2026, pedido do Adão; antes, Controle): o endereço e a permissão continuam "controle".
+  { chave: "controle", rotulo: "Aprovações" },
   { chave: "realizado", rotulo: "Realizado" },
+  // A Jornada (13/11/2026): as horas extras e as faltas das linhas do quadro realizado.
+  { chave: "jornada", rotulo: "Jornada" },
 ];
 
 /** "2026-11" → "11/2026". */
 export const rotuloDoMes = (anoMes: string) => `${anoMes.slice(5, 7)}/${anoMes.slice(0, 4)}`;
 
 /**
- * O cabeçalho de uma competência do Quadro de Lotação (06/11/2026): o título, as ações e as abas Movimentações, Controle e
+ * O cabeçalho de uma competência do Quadro de Lotação (06/11/2026): o título, as ações e as abas Movimentações, Aprovações e
  * Realizado que o perfil alcança (cada uma com o endereço dela). Desde 12/11/2026 (pedido do Adão), sem o mês e o estado ao
  * lado do título: o mês fica no caminho do topo e o estado, à direita da barra das telas. Devolve o título e as abas sem
  * envoltório, para o título ficar fixo ao rolar (filho direto do contêiner da página) e a tabela parar logo abaixo dele.

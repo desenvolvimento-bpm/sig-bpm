@@ -1,6 +1,7 @@
 import type { Prisma } from "../../../generated/prisma/client.js";
 import { plural } from "../../../utils/plural.js";
 import { recusaDaFuncao, rotuloDaFuncao } from "../../colaboradores/funcaoPorSenioridade.js";
+import { travaDoLancamentoInicial } from "../../colaboradores/travaDoLancamentoInicial.js";
 import type { DefinicaoCadastro, Opcao, Valores } from "./definicoesCadastros.js";
 import { RegraCadastroError } from "./erroCadastro.js";
 
@@ -266,6 +267,8 @@ const lancamentoInicial: DefinicaoCadastro = {
   criar: true,
   excluir: true,
   explicacao: "Um colaborador do quadro de lotação do início da competência do Lançamento Inicial. Para trocar a competência, importe a planilha de novo.",
+  // Com competências fechadas na Gestão de Colaboradores, o quadro inicial não muda (13/11/2026, pedido do Adão).
+  trava: travaDoLancamentoInicial,
   campos: [
     { nome: "competencia", rotulo: "Competência", tipo: "texto", derivado: true, noFormulario: false, estreita: true },
     { nome: "unidadeNegocioId", rotulo: "Unidade", tipo: "opcao", obrigatorio: true, opcoes: opcoesUnidades },

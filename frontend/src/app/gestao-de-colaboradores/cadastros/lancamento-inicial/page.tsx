@@ -31,6 +31,10 @@ export default function LancamentoInicialPage() {
               </li>
               <li>Use Novo para incluir um colaborador no Lançamento Inicial já importado (na mesma competência).</li>
               <li>No menu Ações de cada linha, Editar muda o colaborador e Excluir o tira do Lançamento Inicial, depois da confirmação.</li>
+              <li>
+                Com alguma competência fechada no Quadro de Lotação, o Lançamento Inicial não se edita: o Importar, o Novo e o menu Ações somem, e o destaque
+                vermelho diz quais competências reabrir. A importação das Funções que apagaria o Lançamento Inicial também é recusada.
+              </li>
               <li>No destaque acima da tabela ficam a competência do quadro e o total de colaboradores, CLT e PJ. Use os filtros nos rótulos das colunas.</li>
             </ul>
           }

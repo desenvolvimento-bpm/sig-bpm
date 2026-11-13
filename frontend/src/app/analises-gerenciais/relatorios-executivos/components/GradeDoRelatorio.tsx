@@ -29,6 +29,7 @@ import { BarraDoSumario, ConfigurarSumarioDialog, ListaDoSumario } from "./Sumar
 import { alturaDaLinha, BarraDeTexto, familiaDa, TAMANHO_DO_TITULO, TextoRico } from "./TextoRico";
 import { BordasDialog, estiloDaBorda } from "./BordasDoTexto";
 import { estadoDoPlayer, irPara, pausarPlayer, PlayerDoVideo } from "./PlayerDoVideo";
+import { ConfiguracoesDoVideoDialog } from "./VideoDialog";
 import { videoDoLink } from "./videoIncorporado";
 import { ConfigurarTabelaDialog, TabelaDoBloco } from "./TabelaDoRelatorio";
 import { guardarCopia, textoDoBloco, TIPO_DA_COPIA, type Copia } from "./copiarColar";
@@ -856,6 +857,19 @@ export function GradeDoRelatorio({
           />
         ) : null;
       })()}
+      {doCard?.tipo === "VIDEO" ? (
+        <ConfiguracoesDoVideoDialog
+          inicial={{ reproducaoAutomatica: !!doCard.reproducaoAutomatica, recomecarAoTerminar: !!doCard.recomecarAoTerminar }}
+          origem={doCard.origem}
+          url={doCard.url}
+          onFechar={() => setConfigurando(null)}
+          onAplicar={(o) => {
+            // Desmarcadas, as opções saem do bloco.
+            mudarBloco(doCard.id, { reproducaoAutomatica: o.reproducaoAutomatica || undefined, recomecarAoTerminar: o.recomecarAoTerminar || undefined } as Partial<Bloco>);
+            setConfigurando(null);
+          }}
+        />
+      ) : null}
       {doCard?.tipo === "SUMARIO" ? (
         <ConfigurarSumarioDialog
           titulo="Configurar Sumário"
@@ -1133,7 +1147,16 @@ export function BarraDeEdicao({
 }) {
   const botao = "inline-flex size-7 items-center justify-center rounded-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-default disabled:text-gray-300 disabled:hover:bg-transparent";
   const card = b?.tipo === "PAINEL" || b?.tipo === "INDICADOR" ? b : undefined;
-  const configurar = card && modoDoGrafico(card) !== "NENHUM" ? "Configurar o gráfico" : b?.tipo === "SUMARIO" ? "Configurar o sumário" : b?.tipo === "TABELA" ? "Configurar a tabela" : null;
+  const configurar =
+    card && modoDoGrafico(card) !== "NENHUM"
+      ? "Configurar o gráfico"
+      : b?.tipo === "SUMARIO"
+        ? "Configurar o sumário"
+        : b?.tipo === "TABELA"
+          ? "Configurar a tabela"
+          : b?.tipo === "VIDEO"
+            ? "Configurações do vídeo"
+            : null;
   const imagem = b?.tipo === "FOTO" && b.arquivo ? b : undefined;
   // O texto formatado: as anotações, o Texto Livre e as legendas das fotos e dos vídeos (a fonte e o espaçamento, só nos dois primeiros).
   const comTexto = !!b && (b.tipo === "ANOTACAO" || b.tipo === "TEXTO" || (b.tipo === "FOTO" && !b.livre) || b.tipo === "VIDEO");
@@ -1183,7 +1206,7 @@ export function BarraDeEdicao({
       )}
       {/* O Zoom do card (30/10/2026): o conteúdo inteiro maior, no mesmo bloco. */}
       <BotaoDoZoom zoom={card?.zoom ?? 1} botao={botao} desabilitado={!card} onEscolher={(z) => onMudar({ zoom: z === 1 ? undefined : z } as Partial<Bloco>)} />
-      {/* O Configurar: as opções do gráfico dos cards com gráfico, o sumário ou a tabela. */}
+      {/* O Configurar: as opções do gráfico dos cards com gráfico, o sumário, a tabela ou o vídeo (13/11/2026). */}
       <button type="button" className={botao} disabled={!configurar} title={configurar ?? "Configurar"} aria-label={configurar ?? "Configurar"} onClick={onConfigurar}>
         <Settings className="size-4" />
       </button>
@@ -1524,7 +1547,7 @@ function ConteudoDoBloco({
     return <CardComZoom zoom={b.zoom}>{card}</CardComZoom>;
   }
   const i = dados.indicadores.indicadores.find((x) => x.nome === b.nome);
-  if (!i) return indisponivel(`O indicador ${b.nome} não está mais no cadastro Indicadores (Cadastros da Controladoria / Analítico).`);
+  if (!i) return indisponivel(`O indicador ${b.nome} não está mais no cadastro Indicadores (Cadastros Gerais / Analítico).`);
   const ate = dados.indicadores.ate;
   // O card do indicador é o card do Painel de Bordo (22/10/2026), com a formatação do indicador: "Atual" e "Acumulado" com a
   // unidade entre parênteses, os valores sem ela, o destaque do desvio, o gráfico (o modo do ícone) e, à direita do nome,

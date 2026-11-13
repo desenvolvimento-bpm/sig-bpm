@@ -144,6 +144,7 @@ export function TabelaResultados({
   rotulosDoTotal,
   consultaDaVenda,
   recolheTodosOsMeses = false,
+  acaoDaLinha,
 }: {
   dados: Resultados;
   titulo: string;
@@ -197,6 +198,8 @@ export function TabelaResultados({
    * e o comparado) e as variações.
    */
   recolheTodosOsMeses?: boolean;
+  /** Um botão depois da descrição da linha (13/11/2026: as Contas do Balancete nos Resultados dos Cenários Analíticos). */
+  acaoDaLinha?: (l: LinhaResultado) => ReactNode;
 }) {
   // Sem o primeiro total da ROL (21/10/2026): ele repete o segundo (depois da receita bruta e dos impostos). Nas visões
   // com um só (Despesas e Extra e RN, a ROL do Consolidado no topo), ele fica.
@@ -426,6 +429,7 @@ export function TabelaResultados({
                     <span className="truncate" title={l.descricao}>
                       {l.descricao}
                     </span>
+                    {acaoDaLinha ? acaoDaLinha(l) : null}
                   </span>
                 </td>
                 {l.meses.map((c, i) => {

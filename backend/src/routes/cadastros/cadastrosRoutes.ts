@@ -6,6 +6,7 @@ import { verificarAlgumaPermissao, verificarPermissao, verificarTodasAsPermissoe
 import { cadastrosController } from "../../controllers/cadastros/cadastrosController.js";
 import { cenariosController } from "../../controllers/cenarios/cenariosController.js";
 import { percentuaisFixosController } from "../../controllers/cadastros/percentuaisFixosController.js";
+import { redistribuicoesController } from "../../controllers/cadastros/redistribuicoesController.js";
 import { autenticacao } from "../../middlewares/autenticacao.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 
@@ -20,7 +21,7 @@ cadastrosRoutes.get(
   asyncHandler(cadastrosController.resumo),
 );
 
-// Recarga a partir da planilha, para o período de paralelo (nas telas dos Cadastros da Controladoria).
+// Recarga a partir da planilha, para o período de paralelo (nas telas dos Cadastros Gerais).
 cadastrosRoutes.post(
   "/recarga/previa",
   autenticacao,
@@ -83,6 +84,17 @@ cadastrosRoutes.get(
 // linha de cada uma, que a referência realizada dos cenários analíticos usa para dividir os custos entre as linhas.
 cadastrosRoutes.get("/linhas/correspondencias", autenticacao, verificarPermissao("cadastro_controladoria.linhas:ler"), asyncHandler(cenariosController.correspondencias));
 cadastrosRoutes.put("/linhas/correspondencias", autenticacao, verificarPermissao("cadastro_controladoria.linhas:editar"), express.json(), asyncHandler(cenariosController.gravarCorrespondencias));
+
+// As Redistribuições de Gastos (13/11/2026; Cadastros Gerais / Controladoria): a lista, as listas do modal, os
+// fornecedores da combinação (departamento e conta da DRE) e a gravação.
+const redistribuicoesLer = verificarPermissao("cadastro_controladoria.redistribuicoes:ler");
+const redistribuicoesEditar = verificarPermissao("cadastro_controladoria.redistribuicoes:editar");
+cadastrosRoutes.get("/redistribuicoes", autenticacao, redistribuicoesLer, asyncHandler(redistribuicoesController.listar));
+cadastrosRoutes.get("/redistribuicoes/opcoes", autenticacao, redistribuicoesLer, asyncHandler(redistribuicoesController.opcoes));
+cadastrosRoutes.get("/redistribuicoes/fornecedores", autenticacao, redistribuicoesLer, asyncHandler(redistribuicoesController.fornecedores));
+cadastrosRoutes.post("/redistribuicoes", autenticacao, redistribuicoesEditar, express.json(), asyncHandler(redistribuicoesController.criar));
+cadastrosRoutes.put("/redistribuicoes/:id", autenticacao, redistribuicoesEditar, express.json(), asyncHandler(redistribuicoesController.atualizar));
+cadastrosRoutes.delete("/redistribuicoes/:id", autenticacao, redistribuicoesEditar, asyncHandler(redistribuicoesController.excluir));
 
 // Os percentuais fixos das regras de rateio e a verificação das vigências (14/10/2026; na tela Regras de Rateio).
 cadastrosRoutes.get("/regras-rateio/percentuais-fixos", autenticacao, verificarPermissao("cadastro_controladoria.regras_rateio:ler"), asyncHandler(percentuaisFixosController.listar));

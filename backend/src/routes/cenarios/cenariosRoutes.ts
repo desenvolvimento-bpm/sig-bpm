@@ -27,6 +27,8 @@ cenariosRoutes.post("/", autenticacao, express.json(), tela("lista", "editar"), 
 cenariosRoutes.post("/importar/analise", autenticacao, editarSinteticos, express.raw({ type: () => true, limit: `${env.UPLOAD_MAX_MB}mb` }), asyncHandler(c.analisar));
 cenariosRoutes.post("/importar", autenticacao, editarSinteticos, express.json(), asyncHandler(c.importar));
 cenariosRoutes.get("/:id", autenticacao, ler, asyncHandler(c.obter));
+// As Contas do Balancete de uma conta da DRE (13/11/2026): de quem lê o cenário (Premissas / Centros de Custo e Resultados).
+cenariosRoutes.get("/:id/contas-do-balancete", autenticacao, ler, asyncHandler(c.contasDoBalancete));
 cenariosRoutes.patch("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.atualizar));
 cenariosRoutes.delete("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), asyncHandler(c.excluir));
 cenariosRoutes.put("/:id/marcacao", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.marcar));

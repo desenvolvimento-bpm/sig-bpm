@@ -1,3 +1,4 @@
+import type { RedistribuicaoDoMovimento } from "@/components/shared/EtiquetaRedistribuicao";
 import { api } from "@/lib/api";
 
 import type { StatusCompetencia } from "../../../services/competenciasService";
@@ -25,6 +26,12 @@ export type LinhaDRE = {
   composicao: Composicao | null;
   /** O usuário alcança as movimentações desta linha (recorte por departamento). */
   podeDetalhar?: boolean;
+  /**
+   * O % (a fração: 0,25 = 25%) e o R$/m³ (13/11/2026), com as regras dos Resultados Empresariais: nulos com a base zerada
+   * ou sem ela; ausentes nas linhas sem a coluna (as seções, os volumes, as contas sem R$/m³).
+   */
+  pct?: number | null;
+  unitario?: number | null;
 };
 
 export type DREUnidade = {
@@ -71,6 +78,8 @@ export type LancamentoDetalhe = {
   parcela: string;
   /** O centro do balancete, quando o que vale é outro (uma contestação; 27/10/2026). */
   centroOriginal?: { codigoRM: string | null; nome: string | null } | null;
+  /** A parte de um movimento redistribuído (13/11/2026): o centro é o do destino; o original, o do movimento. */
+  redistribuido?: boolean;
   /** A contestação aplicada no lançamento: o número e o que ela mudou (o centro, a conta). */
   contestacao?: { numero: number; centro: boolean; conta: boolean } | null;
 };
@@ -104,6 +113,8 @@ export type MovimentoDoBalancete = {
   contestacao: { numero: number; situacao: SituacaoContestacao; deItens: boolean; comItensContestados: boolean } | null;
   /** O reflexo de um rateio (30/10/2026): o movimento é de outra linha da DRE (a de origem) e chega a esta pelo rateio. */
   rateioDe: { linha: string; grupo: string } | null;
+  /** A redistribuição de gastos (13/11/2026): os destinos; o movimento redistribuído não se contesta. */
+  redistribuicao?: RedistribuicaoDoMovimento | null;
 };
 /** Os itens de um movimento (10/11/2026): os das requisições e os das notas fiscais com o ID dele (o IDENTIFICADOR das listas). */
 export type ItemDaRequisicao = {

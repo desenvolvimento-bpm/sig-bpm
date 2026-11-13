@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { BarraDeRolagem } from "@/components/shared/BarraDeRolagem";
+import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { Button } from "@/components/ui/button";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -80,7 +81,8 @@ export function TabelaPremissas({ id, dados, tabela, editavel }: { id: string; d
  * A tabela editável mês a mês (13/10/2026): as premissas de uma unidade e venda e as contas de um centro de custo. As
  * linhas vêm em seções, com subtítulos; depois da descrição, a unidade, a Média de Referência (`comReferencia`) e os
  * meses (em branco, os meses sem valor gravado, 15/10/2026). Clicar num valor edita aquele mês (com a chave de replicar aos meses seguintes); as caixas das linhas e dos
- * meses marcam valores, e "Reajustar Marcados" aplica um reajuste a todos. As linhas de cálculo não se editam. Com
+ * meses marcam valores, e "Reajustar Marcados" aplica um reajuste a todos; "Replicar Referências" (13/11/2026, nas tabelas com
+ * a Média de Referência) leva a média de cada linha marcada aos meses marcados. As linhas de cálculo não se editam. Com
  * `tituloNoDestaque` (11/11/2026: a aba Centros de Custo), o título e o subtítulo ficam dentro do card de destaque, à
  * esquerda, e a marcação à direita, antes de "Reajustar Marcados"; com `semTitulo` (a aba Rateios), sem o título.
  */
@@ -98,6 +100,7 @@ export function TabelaEditavel({
   cabecalho = "PREMISSAS",
   tituloNoDestaque = false,
   semTitulo = false,
+  acaoDaLinha,
 }: {
   titulo: string;
   subtitulo?: React.ReactNode;
@@ -115,11 +118,14 @@ export function TabelaEditavel({
   tituloNoDestaque?: boolean;
   /** Sem o título nem o subtítulo acima da tabela (11/11/2026: a aba Rateios); o título continua no modal do reajuste. */
   semTitulo?: boolean;
+  /** Um botão depois da descrição da linha (13/11/2026: as Contas do Balancete das contas da aba Centros de Custo). */
+  acaoDaLinha?: (l: LinhaDaPremissa) => React.ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [linhas, setLinhas] = useState<Set<string>>(new Set());
   const [meses, setMeses] = useState<Set<number>>(new Set());
   const [reajuste, setReajuste] = useState(false);
+  const [replicandoReferencias, setReplicandoReferencias] = useState(false);
   const [valor, setValor] = useState<{ l: LinhaDaPremissa; i: number } | null>(null);
   const gravar = useMutation({
     mutationFn: ({ alteracoes, origem }: { alteracoes: Array<{ linha: string; mes: number; valor: number }>; origem: OrigemDaGravacao }) => aoGravar!(alteracoes, origem),
@@ -128,6 +134,7 @@ export function TabelaEditavel({
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
       toast.success(mensagem ? mensagem(r.alteradas) : `${r.alteradas} ${plural(r.alteradas, "valor gravado", "valores gravados")}.`);
       setReajuste(false);
+      setReplicandoReferencias(false);
       setValor(null);
     },
   });
@@ -136,6 +143,13 @@ export function TabelaEditavel({
   const marcados = [...linhas]
     .filter((c) => porChave.get(c)?.tipo === "PREMISSA")
     .flatMap((c) => [...meses].sort((a, b) => a - b).map((i) => ({ linha: c, mes: mesesDaTabela[i].mes, atual: porChave.get(c)!.valores[i] ?? 0 })));
+  // Replicar Referências (13/11/2026, pedido do Adão): a Média de Referência de cada linha marcada nos meses marcados; as
+  // linhas sem a média ficam como estão.
+  const dasReferencias = marcados.flatMap((m) => {
+    const referencia = porChave.get(m.linha)!.referencia;
+    return referencia === null || referencia === undefined ? [] : [{ linha: m.linha, mes: m.mes, valor: referencia }];
+  });
+  const linhasSemReferencia = new Set(marcados.filter((m) => porChave.get(m.linha)!.referencia === null || porChave.get(m.linha)!.referencia === undefined).map((m) => m.linha)).size;
   const marcarLinhas = (chaves: string[], marcar: boolean) =>
     setLinhas((s) => {
       const n = new Set(s);
@@ -210,6 +224,7 @@ export function TabelaEditavel({
           <span className="inline-flex items-center gap-2">
             {editavel && ePremissa ? <Caixa marcada={marcada} rotulo={`Marcar ${l.rotulo}`} onMudar={(m) => marcarLinhas([l.chave], m)} /> : editavel ? <span className="size-3.5 shrink-0" aria-hidden /> : null}
             {l.rotulo}
+            {acaoDaLinha ? acaoDaLinha(l) : null}
           </span>
         </td>
         <td className="px-3 py-1.5 text-xs whitespace-nowrap text-gray-500">{l.und}</td>
@@ -265,9 +280,17 @@ export function TabelaEditavel({
     </>
   );
   const reajustar = (
-    <Button type="button" className={`${botaoPrimario} ${tituloNoDestaque ? "" : "ml-auto"}`} disabled={marcados.length === 0} onClick={() => setReajuste(true)}>
-      Reajustar Marcados
-    </Button>
+    <>
+      <Button type="button" className={`${botaoPrimario} ${tituloNoDestaque ? "" : "ml-auto"}`} disabled={marcados.length === 0} onClick={() => setReajuste(true)}>
+        Reajustar Marcados
+      </Button>
+      {/* Logo depois do Reajustar Marcados, nas tabelas com a Média de Referência (13/11/2026, pedido do Adão). */}
+      {comReferencia ? (
+        <Button type="button" className={botaoPrimario} disabled={dasReferencias.length === 0} onClick={() => setReplicandoReferencias(true)}>
+          Replicar Referências
+        </Button>
+      ) : null}
+    </>
   );
   return (
     <section className="space-y-2">
@@ -362,6 +385,29 @@ export function TabelaEditavel({
             gravar.reset();
           }}
         />
+      ) : null}
+      {replicandoReferencias ? (
+        <ConfirmacaoDialog
+          titulo="Replicar Referências"
+          descricao={`${titulo}. A Média de Referência de cada ${item[0]} marcada vai para os meses marcados: ${dasReferencias.length} ${plural(dasReferencias.length, "valor", "valores")}.`}
+          acao="Replicar"
+          acaoPendente="Replicando…"
+          destrutiva={false}
+          pendente={gravar.isPending}
+          onConfirmar={() => gravar.mutate({ alteracoes: dasReferencias, origem: { tipo: "MARCADOS", modo: "REFERENCIA", reajuste: null, replicado: false } })}
+          onFechar={() => {
+            setReplicandoReferencias(false);
+            gravar.reset();
+          }}
+        >
+          {linhasSemReferencia ? (
+            <p className="text-sm text-gray-600">
+              {linhasSemReferencia} {plural(linhasSemReferencia, `${item[0]} marcada não tem`, `${item[1]} marcadas não têm`)} a Média de Referência e{" "}
+              {plural(linhasSemReferencia, "fica", "ficam")} como {plural(linhasSemReferencia, "está", "estão")}.
+            </p>
+          ) : null}
+          {erroGravar ? <p className="text-sm text-red-700">{erroGravar}</p> : null}
+        </ConfirmacaoDialog>
       ) : null}
       {valor ? (
         <ValorDialog

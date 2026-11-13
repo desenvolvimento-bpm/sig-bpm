@@ -42,7 +42,8 @@ const novaMovimentacao = z.object({
   centroCustoId: z.string().min(1),
   vinculo: z.enum(["CLT", "PJ"]),
   funcaoId: z.string().min(1),
-  senioridadeId: z.string().min(1),
+  // Opcional (13/11/2026): sem ela, a da função.
+  senioridadeId: z.string().min(1).nullish(),
   motivo: z.string().max(1000).nullish(),
   origem: z.enum(["INICIATIVA_EMPRESA", "PEDIDO_COLABORADOR"]).nullish(),
   gerarVaga: z.boolean().optional(),
@@ -60,20 +61,29 @@ export const colaboradoresController = {
   reabrirCompetencia: (request: Request, response: Response) => responder(response, () => quadroService.reabrir(anoMes(request), quem(request))),
   excluirCompetencia: (request: Request, response: Response) => responder(response, () => quadroService.excluir(anoMes(request), quem(request))),
   opcoes: (_request: Request, response: Response) => responder(response, () => quadroService.opcoes()),
-  movimentacoes: (request: Request, response: Response) => responder(response, () => quadroService.movimentacoes(anoMes(request), request.user!.acesso)),
+  movimentacoes: (request: Request, response: Response) => responder(response, () => quadroService.movimentacoes(anoMes(request))),
   registrar: (request: Request, response: Response) => {
     const corpo = novaMovimentacao.safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Preencha a movimentação: tipo, data, centro de custo, tipo (CLT ou PJ), função e nível." });
     return responder(response, () => quadroService.registrar(anoMes(request), corpo.data, quem(request)), 201);
   },
   excluirMovimentacao: (request: Request, response: Response) => responder(response, () => quadroService.excluirMovimentacao(String(request.params.id), quem(request))),
+  // A Jornada (13/11/2026): as horas extras e as faltas das linhas do quadro realizado.
+  jornada: (request: Request, response: Response) => responder(response, () => quadroService.jornada(anoMes(request))),
+  gravarJornada: (request: Request, response: Response) => {
+    const corpo = z
+      .object({ centroCustoId: z.string().min(1).max(100), funcaoId: z.string().min(1).max(100), horasExtras: z.string().trim().max(10), faltas: z.number().finite() })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Informe as horas extras (HH:MM) e as faltas (dias)." });
+    return responder(response, () => quadroService.gravarJornada(anoMes(request), corpo.data, quem(request)));
+  },
   controle: (request: Request, response: Response) => responder(response, () => quadroService.controle(anoMes(request), request.user!.acesso)),
   decidir: (request: Request, response: Response) => {
     const corpo = z.object({ aprovar: z.boolean(), justificativa: z.string().max(1000).nullish() }).safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Informe a decisão." });
     return responder(response, () => quadroService.decidir(String(request.params.id), corpo.data.aprovar, corpo.data.justificativa ?? null, quem(request), request.user!.acesso));
   },
-  realizado: (request: Request, response: Response) => responder(response, () => quadroService.realizado(anoMes(request), request.user!.acesso, marcacao(request))),
+  realizado: (request: Request, response: Response) => responder(response, () => quadroService.realizado(anoMes(request), marcacao(request))),
   // A Comparação (09/11/2026, etapa 4): os cenários marcados e, com ?comparacao=, os indicadores do cenário mês a mês.
   comparacao: (request: Request, response: Response) =>
     responder(response, async () => {

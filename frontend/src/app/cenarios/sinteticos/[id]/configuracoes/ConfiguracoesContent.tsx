@@ -52,7 +52,7 @@ export function ConfiguracoesContent() {
                   os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com os reajustes aplicados na DRE
                   (Premissas / Reajustes), a referência não se carrega nem se realoca, com o aviso na aba: use “Remover Reajustes” antes.
                 </li>
-                <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros da Controladoria / Linhas, no botão “Tarefas”.</li>
+                <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros Gerais / Linhas, no botão “Tarefas”.</li>
                 <li>
                   Se a carga do realizado encontrar movimentações fora dos padrões das premissas (mão de obra e gastos gerais sem centro de custo, em
                   centros fora do cenário — estoque, investimento, obras — ou numa conta fora do grupo do centro), o quadro “Movimentações Fora dos

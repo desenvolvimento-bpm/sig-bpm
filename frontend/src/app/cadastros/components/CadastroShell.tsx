@@ -22,7 +22,7 @@ type CadastroShellProps = {
   carregando: boolean;
   /** Botões à direita do título, como o de recarga da planilha. */
   acoes?: ReactNode;
-  /** A caixa "Apenas Ativas" (Cadastros da Controladoria), logo antes dos botões. */
+  /** A caixa "Apenas Ativas" (Cadastros Gerais), logo antes dos botões. */
   apenasAtivas?: ControleApenasAtivas;
   /** O Exportar da tabela (30/10/2026, `ExportarTabela`). */
   exportar?: ReactNode;

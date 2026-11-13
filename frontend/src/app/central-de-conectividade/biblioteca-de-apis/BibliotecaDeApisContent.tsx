@@ -15,7 +15,6 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { botaoPrimario, Erro } from "@/app/cenarios/components/CenarioDialog";
 
 import { conectividadeService, copiarTexto, enderecoDaApi, type ApiDoCatalogo, type Catalogo } from "../services/conectividadeService";
-import { AcessosDaApi } from "./components/AcessosDaApi";
 import { Deslizante } from "./components/Deslizante";
 import { PreviaDaApi } from "./components/PreviaDaApi";
 
@@ -224,12 +223,11 @@ function CartaoDaApi({ a, podeEditar, onPrevia }: { a: ApiDoCatalogo; podeEditar
   );
 }
 
-/** As abas da tela (24/10/2026): como conectar, as APIs de cada origem e os acessos. */
+/** As abas da tela (24/10/2026): como conectar e as APIs de cada origem (os acessos ficam na tela Acessos, 13/11/2026). */
 const ABAS = [
   { chave: "conectar", rotulo: "Como Conectar" },
   { chave: "resultados", rotulo: "Resultados Empresariais" },
   { chave: "cenarios", rotulo: "Cenários" },
-  { chave: "acessos", rotulo: "Acesso às APIs" },
 ] as const;
 type ChaveDaAba = (typeof ABAS)[number]["chave"];
 const ORIGEM_DA_ABA = { resultados: "Resultados Empresariais", cenarios: "Cenários" } as const;
@@ -237,9 +235,9 @@ const ORIGEM_DA_ABA = { resultados: "Resultados Empresariais", cenarios: "Cenár
 /**
  * A tela APIs (24/10/2026, pedido do Adão; até 30/10/2026, o processo Biblioteca de APIs), na Central de Conectividade: o catálogo das APIs que abrem a outros
  * aplicativos os dados das DREs, dos cards e dos indicadores dos Resultados Empresariais e dos Cenários — com o código, os
- * parâmetros, os formatos (dados e visual) e a pré-visualização —, como conectar e os acessos (quem e de onde), com os
- * controles deslizantes de quem edita a tela para bloquear APIs, usuários e endereços. Em abas, com os blocos um abaixo do
- * outro (24/10/2026, pedido do Adão).
+ * parâmetros, os formatos (dados e visual) e a pré-visualização — e como conectar, com o controle deslizante de quem edita a
+ * tela para bloquear uma API. Em abas, com os blocos um abaixo do outro (24/10/2026, pedido do Adão). Os acessos (quem e de
+ * onde) ficam na tela Acessos (13/11/2026).
  */
 export function BibliotecaDeApisContent() {
   useRegistrarAcessoTela("/central-de-conectividade/biblioteca-de-apis");
@@ -261,7 +259,7 @@ export function BibliotecaDeApisContent() {
         }
         comoUsar={
           <ul>
-            <li>A tela tem quatro abas: Como Conectar, Resultados Empresariais, Cenários e Acesso às APIs.</li>
+            <li>A tela tem três abas: Como Conectar, Resultados Empresariais e Cenários. Quem acessa as APIs, e de onde, fica na tela Acessos, logo abaixo desta no menu.</li>
             <li>
               Como Conectar: no alto, em destaque, a situação — na produção, as APIs ficam desligadas até o TI pôr o SIG atrás do endereço com HTTPS e ligá-las
               (regra do TI); até lá, os aplicativos recebem a recusa “API desligada”, sem a senha ser conferida; ligadas, funcionam só por HTTPS. Abaixo, os dois
@@ -280,14 +278,9 @@ export function BibliotecaDeApisContent() {
               sem um parâmetro obrigatório, o Ver fica desabilitado. Sem a leitura dos dados no seu perfil, o botão Pré-visualizar fica desabilitado.
             </li>
             <li>
-              Acesso às APIs (os últimos 7, 30 ou 90 dias): os destaques do período (os pedidos, os recusados, os usuários e os endereços — os computadores ou
-              servidores que chamam as APIs) e, um abaixo do outro, os pedidos por dia, por usuário, por endereço e por API e os últimos pedidos, com o motivo das
-              recusas. Quem só lê a tela vê os próprios acessos. “Exportar”, ao lado do período, leva os últimos pedidos em Excel ou PDF.
-            </li>
-            <li>
-              Quem edita a tela (o perfil com Editar em APIs, na Central de Conectividade) vê os acessos de todos e bloqueia ou libera, nos controles deslizantes, uma
-              API (no cartão dela, nas abas das origens), um usuário ou um endereço (nas tabelas de Acesso às APIs): o bloqueio vale na hora, para os pedidos e para
-              o token, e fica na Auditoria. Os bloqueados sem pedidos no período continuam nas tabelas, para liberar.
+              Quem edita a tela (o perfil com Editar em APIs, na Central de Conectividade) bloqueia ou libera uma API no controle deslizante do cartão dela, nas abas
+              das origens: o bloqueio vale na hora, para os pedidos e para o token, e fica na Auditoria. Os bloqueios de usuários e de endereços ficam na tela
+              Acessos.
             </li>
             <li>
               Para um usuário usar as APIs, o perfil dele precisa da tela APIs (Ler, na Central de Conectividade) e da leitura das telas dos dados, na tela Perfis. Na Auditoria, os
@@ -297,9 +290,7 @@ export function BibliotecaDeApisContent() {
         }
       />
       <Abas rotulo="Abas de APIs" ativa={aba} onMudar={(a) => setAba(a as ChaveDaAba)} abas={[...ABAS]} />
-      {aba === "acessos" ? (
-        <AcessosDaApi />
-      ) : consulta.isError ? (
+      {consulta.isError ? (
         <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar as APIs.")} />
       ) : !c ? (
         <div className="h-96 animate-pulse rounded-sm bg-gray-100" />

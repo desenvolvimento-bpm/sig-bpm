@@ -10,6 +10,7 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { cenariosService, type ContasDoCentro, type LinhaDaPremissa, type RateiosDoCenario as Rateios, type SerieDoCentro } from "../services/cenariosService";
 import { Erro } from "./CenarioDialog";
 import { TabelaEditavel } from "./TabelaPremissas";
+import { BotaoContasDoBalancete } from "./ContasDoBalancete";
 import { plural } from "@/lib/texto";
 
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
@@ -91,6 +92,8 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
               cabecalho="PREMISSAS"
               aoGravar={(alteracoes, origem) => cenariosService.gravarCentro(id, grupo!, alteracoes, origem)}
               mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; a DRE e os quadros de lotação do cenário foram recalculados.`}
+              // As Contas do Balancete de cada conta (13/11/2026; não nas linhas do quadro de lotação, dos encargos e do total).
+              acaoDaLinha={(l) => (contas.data.contas.some((c) => c.codigo === l.chave) ? <BotaoContasDoBalancete id={id} linha={l.chave} descricao={l.rotulo} /> : null)}
             />
           </>
         )}

@@ -49,7 +49,7 @@ export default function EstruturaIndicadoresPage() {
                 outros é calculado com os valores deles no cenário (os importados, com as metas).
               </li>
               <li>O Nome de um indicador com metas em cenários, valores importados ou digitados, usado no Painel de Bordo ou na Metodologia de outro indicador, não muda, e o indicador não se exclui: inative-o.</li>
-              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
             </ul>
           }
           descricao="Os indicadores de resultado, com a fórmula que os calcula no Painel de Bordo de Resultados Empresariais (também na aba Indicadores e no Exportar): linhas da DRE apurada por unidade, totalizadores das Listas, indicadores do Comercial e do Administrativo e metas do Orçamento (o cenário marcado) e outros indicadores do cadastro."

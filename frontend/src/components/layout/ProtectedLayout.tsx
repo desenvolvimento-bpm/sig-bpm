@@ -20,6 +20,7 @@ import { usePermissions } from "@/context/PermissionContext";
 import { abasDoMes, lerRotaDoMes } from "@/lib/etapasDoMes";
 import { abasDaTela, grupoDaTela, permissaoDaTela, primeiraTelaPermitida } from "@/lib/navigation-config";
 import { AbasDaTela } from "@/components/shared/AbasDaTela";
+import { LargurasDasColunas } from "@/components/shared/LargurasDasColunas";
 
 type ProtectedLayoutProps = {
   children: ReactNode;
@@ -59,7 +60,7 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
   const doGrupo = grupoDaTela(pathname);
   // Nas telas de um cenário sintético, a barra do cenário (Resultados e Indicadores).
   const doCenario = lerRotaDoCenario(pathname);
-  // Nas telas com abas (17/10/2026: os Cadastros da Controladoria), o nome da tela e as abas que o perfil alcança.
+  // Nas telas com abas (17/10/2026: os Cadastros Gerais), o nome da tela e as abas que o perfil alcança.
   // Nas etapas do mês com abas (27/10/2026: Totais e Prévias), o nome da etapa e as abas dela.
   const abas = abasDaTela(pathname, hasPermission) ?? abasDoMes(pathname, hasPermission);
 
@@ -67,6 +68,8 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
     <SidebarProvider>
       {/* O aviso ao sair com alterações não gravadas (13/10/2026), em todas as telas. */}
       <AvisoDeSaida />
+      {/* A largura das colunas (13/11/2026), em todas as tabelas fora dos modais, guardada no navegador. */}
+      <LargurasDasColunas />
       {/* A Introdução ao SIG (21/10/2026), aberta pelo menu do usuário: por cima do menu lateral e da tela. */}
       <IntroducaoDoLayout />
       <AppSidebar />

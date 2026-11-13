@@ -6,7 +6,7 @@ import { History } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /** De onde veio a correção: o cadastro de reclassificações ou uma contestação validada. */
-export type OrigemDaCorrecao = { tipo: "reclassificacao" } | { tipo: "contestacao"; numero: number };
+export type OrigemDaCorrecao = { tipo: "reclassificacao" } | { tipo: "contestacao"; numero: number } | { tipo: "redistribuicao" };
 
 /**
  * O ícone ao lado do centro de custo ou da conta corrigidos (27/10/2026, pedido do Adão): nos modais dos movimentos das
@@ -16,7 +16,7 @@ export type OrigemDaCorrecao = { tipo: "reclassificacao" } | { tipo: "contestaca
 export function IconeDaCorrecao({ campo, original, atual, origem }: { campo: "centro" | "conta"; original: string; atual: string; origem: OrigemDaCorrecao }) {
   const [aberto, setAberto] = useState(false);
   const nome = campo === "centro" ? "Centro de Custo" : "Conta";
-  const por = origem.tipo === "contestacao" ? `Contestação nº ${origem.numero}` : "Reclassificação";
+  const por = origem.tipo === "contestacao" ? `Contestação nº ${origem.numero}` : origem.tipo === "redistribuicao" ? "Redistribuição" : "Reclassificação";
   return (
     <>
       <button
@@ -39,7 +39,9 @@ export function IconeDaCorrecao({ campo, original, atual, origem }: { campo: "ce
               <DialogDescription>
                 {origem.tipo === "contestacao"
                   ? `Pela contestação nº ${origem.numero} (Contestações de Gastos), validada pela Controladoria.`
-                  : campo === "centro"
+                  : origem.tipo === "redistribuicao"
+                    ? "Pela redistribuição de gastos (Cadastros Gerais / Controladoria / Redistribuições de Gastos): o movimento é dividido entre os centros da regra, e este é um deles."
+                    : campo === "centro"
                     ? "Pela reclassificação do cadastro (Cadastros da Apuração › Reclassificações › Por Fornecedor): o centro de custo imperativo do fornecedor."
                     : "Pela reclassificação do cadastro (Cadastros da Apuração › Reclassificações › Por Conta)."}
               </DialogDescription>
@@ -47,7 +49,7 @@ export function IconeDaCorrecao({ campo, original, atual, origem }: { campo: "ce
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
               <dt className="font-medium text-gray-600">Original</dt>
               <dd className="text-gray-900">{original}</dd>
-              <dt className="font-medium text-gray-600">{origem.tipo === "contestacao" ? "Corrigido" : "Reclassificado"}</dt>
+              <dt className="font-medium text-gray-600">{origem.tipo === "contestacao" ? "Corrigido" : origem.tipo === "redistribuicao" ? "Redistribuído" : "Reclassificado"}</dt>
               <dd className="font-semibold text-gray-900">{atual}</dd>
             </dl>
           </DialogContent>
