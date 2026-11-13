@@ -174,3 +174,39 @@ export function classificarLancamento(
     validacao,
   };
 }
+
+/** O fornecedor como a reclassificação o compara (13/11/2026): o nome do CLI_FORN sem espaços nas pontas e sem caixa. */
+export const chaveDoFornecedor = (nome: string) => nome.trim().toUpperCase();
+
+/**
+ * O centro e a conta que valem para um movimento do balancete (13/11/2026), na ordem das correções:
+ *  1. a reclassificação por fornecedor: o centro imperativo do fornecedor no lugar do centro do RM — só o centro;
+ *  2. a reclassificação por conta, pelo centro do RM (o do balancete), também no movimento que foi para o centro
+ *     imperativo: a troca de conta não depende da reclassificação por fornecedor (decisão do Adão, 13/11/2026, depois da
+ *     simulação de 01 a 09/2026: com a troca pelo centro imperativo, a VJR ENGENHARIA perdia as trocas Externo → Interno
+ *     do centro do RM e mudava de linha na DRE consolidada);
+ *  3. por cima das duas, a contestação validada no balancete: o centro novo dela (sem ele, fica o da 1 ou o do RM) e a
+ *     conta nova (sem ela, fica a da 2 ou a do RM).
+ * `centro` é nulo quando vale o do RM (`codigoCentroCusto`, o do balancete); senão, é o corrigido, com o código dele.
+ */
+export function corrigirCentroEConta<C extends { codigoRM: string | null }>(
+  l: { codigoCentroCusto: string | null; contaResultadoId: string; cliForn: string | null },
+  regras: {
+    /** "código do centro|conta de origem" → a conta de destino (a reclassificação por conta). */
+    contaDestino: Map<string, string>;
+    /** A chave do fornecedor → o centro imperativo (a reclassificação por fornecedor). */
+    centroDoFornecedor: Map<string, C>;
+  },
+  contestacao: { centroNovo: C | null; contaNovaId: string | null } | null,
+): { centro: C | null; codigoCentroCusto: string | null; contaId: string; porFornecedor: boolean; porConta: boolean } {
+  const imperativo = l.cliForn ? (regras.centroDoFornecedor.get(chaveDoFornecedor(l.cliForn)) ?? null) : null;
+  const destino = l.codigoCentroCusto ? regras.contaDestino.get(`${l.codigoCentroCusto}|${l.contaResultadoId}`) : undefined;
+  const centro = contestacao?.centroNovo ?? imperativo;
+  return {
+    centro,
+    codigoCentroCusto: centro ? centro.codigoRM : l.codigoCentroCusto,
+    contaId: contestacao?.contaNovaId ?? destino ?? l.contaResultadoId,
+    porFornecedor: !!imperativo && imperativo.codigoRM !== l.codigoCentroCusto,
+    porConta: !!destino,
+  };
+}

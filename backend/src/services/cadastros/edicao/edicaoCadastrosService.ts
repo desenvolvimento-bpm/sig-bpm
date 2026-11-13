@@ -126,6 +126,6 @@ export const edicaoCadastrosService = {
 /** O nome que identifica o registro no log. */
 function rotuloDoRegistro(v: Valores | null) {
   if (!v) return null;
-  const partes = [v.codigoRM ?? v.reduzido ?? v.codigo ?? v.codigoCentroCusto ?? v.secao, v.nomeRM ?? v.descricao ?? v.nome ?? v.rotulo ?? v.peca].filter(Boolean);
+  const partes = [v.codigoRM ?? v.reduzido ?? v.codigo ?? v.codigoCentroCusto ?? v.secao, v.nomeRM ?? v.descricao ?? v.nome ?? v.rotulo ?? v.peca ?? v.fornecedor].filter(Boolean);
   return partes.join(" · ") || null;
 }

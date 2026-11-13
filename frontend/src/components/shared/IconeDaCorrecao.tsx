@@ -39,7 +39,9 @@ export function IconeDaCorrecao({ campo, original, atual, origem }: { campo: "ce
               <DialogDescription>
                 {origem.tipo === "contestacao"
                   ? `Pela contestação nº ${origem.numero} (Contestações de Gastos), validada pela Controladoria.`
-                  : "Pela reclassificação do cadastro (Cadastros da Apuração › Reclassificações)."}
+                  : campo === "centro"
+                    ? "Pela reclassificação do cadastro (Cadastros da Apuração › Reclassificações › Por Fornecedor): o centro de custo imperativo do fornecedor."
+                    : "Pela reclassificação do cadastro (Cadastros da Apuração › Reclassificações › Por Conta)."}
               </DialogDescription>
             </DialogHeader>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

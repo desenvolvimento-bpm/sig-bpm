@@ -43,7 +43,22 @@ const linhaDoQuadroSchema = z.object({
 });
 
 /** Quem pede; o Administrador (Editar no Controle de Usuários) vê também os cenários particulares. */
-const usuario = (request: Request) => ({ id: request.user!.sub, nome: request.user!.nome, admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR });
+/** O usuário da requisição, com o recorte do perfil (12/11/2026: o Acesso às Informações Por Recorte dos analíticos). */
+/** O Departamento de um investimento de Despesas e Extra (12/11/2026): um dos cinco do patrimônio, ou nenhum. */
+const departamentoDoInvestimentoSchema = z
+  .enum(["LOGISTICA", "TECNICO", "COMERCIAL", "ADMINISTRATIVO", "EXTRA_OPERACIONAL"])
+  .nullish()
+  .transform((x) => x ?? null);
+
+const usuario = (request: Request) => {
+  const a = request.user!.acesso;
+  return {
+    id: request.user!.sub,
+    nome: request.user!.nome,
+    admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR,
+    recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
+  };
+};
 
 /** Envia um arquivo exportado (14/10/2026), com a auditoria; os erros do cenário viram a resposta. */
 async function enviarArquivo(request: Request, response: Response, gerar: () => Promise<{ nomeArquivo: string; tipo: string; conteudo: Uint8Array; visoes: string[] }>) {
@@ -215,6 +230,8 @@ export const cenariosController = {
         valorTotal: z.number().finite().positive("O valor total precisa ser maior que zero."),
         valorPosUso: z.number().finite().min(0),
         vidaUtil: z.number().int().min(1, "A vida útil é de pelo menos 1 mês.").max(600),
+        // O Departamento dos investimentos de Despesas e Extra (12/11/2026).
+        departamento: departamentoDoInvestimentoSchema,
       })
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Investimento inválido." });
@@ -323,7 +340,15 @@ export const cenariosController = {
   atualizar(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const corpo = z.object({ nome: nomeSchema, descricao: descricaoSchema, visualizacao: visualizacaoSchema, edicaoConfiguracoes: z.enum(["PARTICULAR", "PUBLICA"]).optional() }).safeParse(request.body);
+    const corpo = z
+      .object({
+        nome: nomeSchema,
+        descricao: descricaoSchema,
+        visualizacao: visualizacaoSchema,
+        edicaoConfiguracoes: z.enum(["PARTICULAR", "PUBLICA"]).optional(),
+        acessoInformacoes: z.enum(["GERAL", "POR_RECORTE"]).optional(),
+      })
+      .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Dados inválidos." });
     return responder(response, () => cenariosService.atualizar(c, corpo.data, usuario(request)));
   },
@@ -402,6 +427,7 @@ export const cenariosController = {
       valorTotal: z.number().finite().positive(),
       valorPosUso: z.number().finite().min(0),
       vidaUtil: z.number().int().min(1).max(600),
+      departamento: departamentoDoInvestimentoSchema,
     });
     const corpo = z
       .object({
@@ -502,8 +528,10 @@ export const cenariosController = {
     const todas = tem(`${base}_painel.metas`);
     const resultados = todas;
     const manuais = todas || tem(`${base}_${base === "cenarios_analiticos" ? "premissas" : "resultados"}.manuais`);
+    // O Acesso às Informações Por Recorte (12/11/2026): a aba Indicadores Manuais (?aba=manuais) ou quem só a lê, recortada.
+    const recortar = request.query.aba === "manuais" || !todas;
     return responder(response, async () => {
-      const r = await cenariosService.indicadores(c, usuario(request));
+      const r = await cenariosService.indicadores(c, usuario(request), recortar);
       return { ...r, indicadores: todas ? r.indicadores : r.indicadores.filter((i) => (i.classe === "MANUAL" ? manuais : i.classe === "RESULTADO" ? resultados : false)) };
     });
   },

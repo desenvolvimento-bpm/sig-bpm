@@ -21,7 +21,7 @@ export function ConfiguracoesContent() {
   const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
   // ?aba=comparativo (ou referencia) abre direto na aba: os avisos do comparativo levam para cá.
   const pedida = useSearchParams().get("aba");
-  const abaInicial: AbaDasConfiguracoes = pedida === "comparativo" || pedida === "referencia" || pedida === "indices" ? pedida : "cenario";
+  const abaInicial: AbaDasConfiguracoes = pedida === "comparativo" || pedida === "referencia" || pedida === "indices" || pedida === "reajustes" ? pedida : "cenario";
   const analitico = t.tipo === "ANALITICO";
   return (
     <div className="space-y-6">
@@ -84,11 +84,45 @@ export function ConfiguracoesContent() {
                 </li>
               </>
             )}
+            {analitico ? (
+              <>
+                <li>
+                  Na aba Cenário, o Acesso às Informações: Geral (o padrão), todos os usuários com acesso ao cenário veem todas as premissas e todo o
+                  histórico; Por Recorte, quem tem recorte no perfil (Controle de Usuários / Perfis) vê só o seu recorte nas Premissas e no Histórico — o
+                  Gestor (recorte por Departamento), o que é dos departamentos dele, pela regra do Exportar Premissas (Produção: Matriz, Filial, os
+                  centros de produção, os rateios, a depreciação e os investimentos delas; Serviços: a aba Serviços, os centros de serviços, os rateios e
+                  os seus investimentos; Logística, Técnico, Comercial e Administrativo: os centros do departamento; Extra-Operacional: a aba
+                  Extra-Operacional; os investimentos de Despesas e Extra, pelo Departamento de cada um; os indicadores manuais, pelo grupo); o
+                  Coordenador (recorte por Centros de Custo), só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e
+                  nos Rateios. Quem criou o cenário e os Administradores veem tudo; Resultados e Painel de Bordo mostram sempre a DRE inteira. Só quem
+                  criou o cenário ou o Administrador muda o Acesso às Informações.
+                </li>
+                <li>
+                  Na aba Reajustes, dois quadros. Em Índices de Reajuste, cada índice tem a Descrição, a Observação e até quatro reajustes, cada um com o
+                  Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro e
+                  2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante). Use “Incluir Índice” para uma
+                  linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a
+                  coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Aplicação dos Reajustes, cada conta da DRE escolhe um índice
+                  (Produção e Serviços aparece, recolhida em Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se
+                  reajustam); o de um total ou de uma atribuição vale para as contas abaixo dele, e “Preencher Selecionados” aplica um índice às contas
+                  marcadas; “Gravar Aplicação” grava os índices das contas.
+                </li>
+                <li>
+                  Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada conta
+                  com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; com eles aplicados, o botão vira “Remover Reajustes”, que faz o
+                  inverso e volta aos valores das premissas — nunca duas vezes seguidas (grave a aplicação antes, se mudou). O aviso no topo da aba diz
+                  se os reajustes estão aplicados. Com eles aplicados, a barra do cenário mostra a etiqueta Reajustes Aplicados, as abas das Premissas
+                  (menos Indicadores Manuais) ficam bloqueadas para edição, “Importar Valores” sai da tela Premissas, a referência não se carrega,
+                  gravar um quadro recalcula a DRE e o “Recalcular” da tela Resultados os mantém; o histórico registra cada aplicação e remoção (tela
+                  Histórico). As premissas não mudam: o reajuste fica só na DRE.
+                </li>
+              </>
+            ) : null}
             <li>Troque de cenário no nome dele, na barra do topo; ao lado, as telas {analitico ? "Premissas, Resultados, Painel de Bordo e Histórico" : "Resultados, Painel de Bordo e Reajustes"}.</li>
             <li>Aparecem só as abas que o seu perfil lê, e os botões de cada aba só com a permissão de editar nela (Controle de Usuários / Perfis); sem ela, a aba se lê, com um aviso.</li>
             <li>
               A Edição das Configurações vale para toda esta tela (todas as abas e ações: o cenário, Marcar e Excluir, a referência, as realocações,
-              o Replicar Médias e o Apagar Valores, o comparativo e os índices). Particular (o padrão): só quem criou o cenário
+              o Replicar Médias e o Apagar Valores, o comparativo, os índices e os reajustes). Particular (o padrão): só quem criou o cenário
               (ou o Administrador) altera as Configurações; num cenário público de outro usuário, as abas se leem, com um aviso que diz de quem é o
               cenário. Pública: todos os usuários com permissão de editar as Configurações as alteram.
             </li>

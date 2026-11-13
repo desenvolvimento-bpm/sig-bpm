@@ -183,6 +183,12 @@ model Usuario {
 /// Quais tipos de lista o Alimentador pode preencher. Reaproveita
 /// `TipoImportacao` porque o recorte de permissão é exatamente por tipo de lista.
 /// Os sete departamentos do recorte do Gestor (decisão do usuário, 30/09/2026).
+/// O Acesso às Informações de um cenário analítico (12/11/2026): Geral ou Por Recorte.
+enum AcessoInformacoesCenario {
+  GERAL
+  POR_RECORTE
+}
+
 enum DepartamentoAcesso {
   PRODUCAO
   SERVICOS
@@ -496,6 +502,8 @@ model CentroCusto {
   colaboradoresIniciais      ColaboradorCargaInicial[]
   movimentacoesQuadro        ColaboradorMovimentacao[]
   lotacaoDosCenarios         CenarioLotacao[]
+  /// As reclassificações por fornecedor com este centro imperativo (13/11/2026).
+  reclassificacoesFornecedor ReclassificacaoFornecedor[]
 
   @@index([nomeControladoria])
   @@index([balde])
@@ -2003,6 +2011,27 @@ model ReclassificacaoConta {
   @@map("reclassificacoes_conta")
 }
 
+/// Reclassificação por fornecedor (13/11/2026, pedido do Adão; Cadastros da Apuração › Reclassificações › Por Fornecedor):
+/// todos os movimentos do fornecedor (o CLI_FORN do balancete detalhado) vão para o centro de custo imperativo, seja qual
+/// for o centro em que o RM os lançou. Só o centro: a reclassificação por conta continua pelo centro do RM. Vale, como a
+/// reclassificação por conta, nas competências ainda não apuradas; a contestação validada no balancete continua por cima
+/// (o centro novo dela vale no lugar do imperativo). O fornecedor é o nome, como no balancete; a classificação o compara
+/// sem espaços nas pontas e sem caixa.
+model ReclassificacaoFornecedor {
+  id            String   @id @default(uuid())
+  fornecedor    String   @unique
+  centroCustoId String   @map("centro_custo_id")
+  motivo        String?
+  ordem         Int      @default(0)
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  centroCusto CentroCusto @relation(fields: [centroCustoId], references: [id], onDelete: Restrict)
+
+  @@map("reclassificacoes_fornecedor")
+}
+
 /// De onde veio cada parcela da receita prévia.
 enum OrigemReceita {
   PRODUCAO
@@ -2167,6 +2196,9 @@ model Cenario {
   /// A Edição das Configurações (12/11/2026, pedido do Adão): Particular (o padrão, a regra de antes), só quem criou o cenário
   /// e o Administrador alteram a tela Configurações (todas as abas e ações); Pública, todos com a permissão do perfil.
   edicaoConfiguracoes VisualizacaoCenario @default(PARTICULAR) @map("edicao_configuracoes")
+  /// O Acesso às Informações dos analíticos (12/11/2026, pedido do Adão): Geral (o padrão: todos veem todas as premissas) ou
+  /// Por Recorte (quem tem recorte no perfil vê só as premissas e o histórico do seu recorte; recorteCenario.ts).
+  acessoInformacoes AcessoInformacoesCenario @default(GERAL) @map("acesso_informacoes")
   /// O comparativo (12/10/2026): o cenário com que este se compara; com ele, as contas que variam acima da variação
   /// máxima do total delas pedem justificativa (tela Justificativas).
   comparadoComId   String?  @map("comparado_com_id")
@@ -2353,6 +2385,9 @@ model CenarioInvestimento {
   valorPosUso          Decimal  @default(0) @map("valor_pos_uso")
   /// A vida útil, em meses.
   vidaUtil             Int      @map("vida_util")
+  /// O departamento de um investimento de Despesas e Extra (12/11/2026: Logística, Técnico, Comercial, Administrativo ou
+  /// Extra-Operacional), para o Acesso às Informações Por Recorte; sem ele, é dos cinco. Nas demais unidades, nulo.
+  departamento         DepartamentoAcesso?
   ordem                Int      @default(0)
   criadoEm             DateTime @default(now()) @map("criado_em")
   atualizadoEm         DateTime @updatedAt @map("atualizado_em")
@@ -2480,6 +2515,9 @@ model CenarioReajuste {
   somaDepois  Decimal? @map("soma_depois")
   /// A descrição da referência carregada (o arquivo, ou o realizado e o período).
   descricao   String?
+  /// O alcance da alteração (12/11/2026): { departamentos, grupos } das premissas tocadas, para o Histórico Por Recorte;
+  /// nulo nas de antes e nas do cenário inteiro (a referência, as médias, os reajustes).
+  alcance     Json?    @db.Json
 
   cenario Cenario @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
 

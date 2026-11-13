@@ -158,7 +158,7 @@ export function CenarioResultadosContent() {
             {analitico ? (
               <li>
                 “Recalcular” só refaz a DRE (as premissas e as regras de rateio de hoje), com os Reajustes das Premissas como estão: aplicados ou
-                removidos antes, na tela Premissas, aba Reajustes (com eles aplicados, a etiqueta Reajustes Aplicados aparece na barra do cenário).
+                removidos antes, na tela Configurações, aba Reajustes (com eles aplicados, a etiqueta Reajustes Aplicados aparece na barra do cenário).
               </li>
             ) : null}
             <li>
@@ -231,7 +231,7 @@ export function CenarioResultadosContent() {
 
 /**
  * O botão Recalcular (14/10/2026): refaz a DRE do analítico em aberto com as regras de rateio de hoje, com os Reajustes das
- * Premissas como estão (11/11/2026: aplicados ou removidos na aba Reajustes das Premissas).
+ * Premissas como estão (aplicados ou removidos em Configurações / Reajustes).
  */
 function BotaoRecalcular({ id }: { id: string }) {
   const queryClient = useQueryClient();

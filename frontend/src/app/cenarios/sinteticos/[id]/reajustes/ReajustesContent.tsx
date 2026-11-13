@@ -137,6 +137,13 @@ export function ReajustesContent() {
               deixa de passar da variação sai da lista (a justificativa fica guardada). Com o cenário marcado ou com a versão congelada, as
               justificativas só se leem. “Exportar”, acima da tabela, leva as contas da aba (com os meses e as justificativas) em Excel ou PDF.
             </li>
+            {analitico ? (
+              <li>
+                Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só as alterações do seu recorte (as
+                que tocaram só as premissas dos departamentos dele ou, para o Coordenador, dos grupos de centros dele) e as do cenário inteiro (a
+                referência, os recálculos e os reajustes); nas Justificativas, só as contas dos departamentos dele (o Coordenador não as vê).
+              </li>
+            ) : null}
           </ul>
         }
         sobre={

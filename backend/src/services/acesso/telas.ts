@@ -53,6 +53,8 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
         // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
         ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),
         { codigo: "comparativo", nome: "Comparativo" },
+        // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; os perfis com a aba nas Premissas a herdaram).
+        ...(analitico ? [{ codigo: "reajustes", nome: "Reajustes" }] : []),
       ],
     },
     ...(analitico
@@ -71,9 +73,6 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "investimentos", nome: "Investimentos" },
               { codigo: "extra", nome: "Extra-Operacional" },
               { codigo: "manuais", nome: "Indicadores Manuais" },
-              // A aba Reajustes (11/11/2026, pedido do Adão): os Índices de Reajuste e a Aplicação dos Reajustes; os perfis com
-              // a aba Indicadores Manuais a herdaram.
-              { codigo: "reajustes", nome: "Reajustes" },
             ],
           },
         ]
@@ -216,7 +215,15 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
     nome: "Cadastros da Apuração",
     area: "cadastros_apuracao",
     telas: [
-      { codigo: "cadastro_reclassificacoes", nome: "Reclassificações" },
+      // As abas Por Conta (o cadastro de antes) e Por Fornecedor (o centro de custo imperativo do fornecedor), de 13/11/2026.
+      {
+        codigo: "cadastro_reclassificacoes",
+        nome: "Reclassificações",
+        abas: [
+          { codigo: "por_conta", nome: "Por Conta" },
+          { codigo: "por_fornecedor", nome: "Por Fornecedor" },
+        ],
+      },
       { codigo: "cadastro_precos_contrato", nome: "Preços do Contrato" },
       { codigo: "cadastro_tipos_movimento", nome: "Tipos de Movimento" },
       { codigo: "cadastro_tabela_estacas", nome: "Tabela de Estacas" },

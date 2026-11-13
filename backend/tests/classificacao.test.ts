@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   classificarLancamento,
+  corrigirCentroEConta,
   verificarLancamento,
   type CentroParaClassificar,
   type ContaParaClassificar,
@@ -93,5 +94,52 @@ describe("classificarLancamento", () => {
     const c = classificarLancamento("1.12.00000001", centro("CUSTOS DE PRODUÇÃO (CP)", "DIRETA"), conta({ linhaDREId: null, linhaDREDescricao: null }));
     assert.equal(c.validacao, "SEM_DESTINO");
     assert.equal(c.etiqueta, "CUSTOS DE PRODUÇÃO (CP).Mão de Obra Direta.-");
+  });
+});
+
+describe("corrigirCentroEConta (Reclassificações por Fornecedor e por Conta, 13/11/2026)", () => {
+  const ccImperativo = { id: "cc-imp", codigoRM: "1.02.003" };
+  const ccContestacao = { id: "cc-ct", codigoRM: "1.05.001" };
+  const regras = {
+    contaDestino: new Map([
+      ["1.01.001|conta-a", "conta-do-centro-rm"],
+      ["1.02.003|conta-a", "conta-do-imperativo"],
+    ]),
+    centroDoFornecedor: new Map([["SKIBA GAS", ccImperativo]]),
+  };
+  const mov = (cliForn: string | null) => ({ codigoCentroCusto: "1.01.001", contaResultadoId: "conta-a", cliForn });
+
+  it("sem regra do fornecedor: o centro do RM e a troca de conta dele", () => {
+    const r = corrigirCentroEConta(mov("OUTRO"), regras, null);
+    assert.deepEqual([r.centro, r.codigoCentroCusto, r.contaId, r.porFornecedor, r.porConta], [null, "1.01.001", "conta-do-centro-rm", false, true]);
+  });
+
+  it("o fornecedor vai para o centro imperativo, comparado sem caixa e sem espaços nas pontas", () => {
+    const r = corrigirCentroEConta(mov("  skiba gas "), regras, null);
+    assert.equal(r.centro, ccImperativo);
+    assert.equal(r.codigoCentroCusto, "1.02.003");
+    assert.equal(r.porFornecedor, true);
+  });
+
+  it("o fornecedor só troca o centro: a troca de conta continua pelo centro do RM, e não pelo imperativo", () => {
+    const r = corrigirCentroEConta(mov("SKIBA GAS"), regras, null);
+    assert.deepEqual([r.codigoCentroCusto, r.contaId, r.porConta], ["1.02.003", "conta-do-centro-rm", true]);
+  });
+
+  it("a contestação sobrepõe: o centro novo no lugar do imperativo e a conta nova no lugar da reclassificada", () => {
+    const r = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: ccContestacao, contaNovaId: "conta-da-contestacao" });
+    assert.deepEqual([r.centro, r.codigoCentroCusto, r.contaId], [ccContestacao, "1.05.001", "conta-da-contestacao"]);
+  });
+
+  it("a contestação só da conta mantém o centro imperativo; a só do centro mantém a conta reclassificada", () => {
+    const soConta = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: null, contaNovaId: "conta-da-contestacao" });
+    assert.deepEqual([soConta.centro, soConta.contaId], [ccImperativo, "conta-da-contestacao"]);
+    const soCentro = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: ccContestacao, contaNovaId: null });
+    assert.deepEqual([soCentro.centro, soCentro.contaId], [ccContestacao, "conta-do-centro-rm"]);
+  });
+
+  it("movimento sem fornecedor (o balancete agregado) não muda de centro", () => {
+    const r = corrigirCentroEConta(mov(null), regras, null);
+    assert.deepEqual([r.centro, r.porFornecedor], [null, false]);
   });
 });

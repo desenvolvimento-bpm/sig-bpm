@@ -214,6 +214,8 @@ export function RateiosDoCenario({ id }: { id: string }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "rateios"], queryFn: () => cenariosService.rateios(id) });
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar os rateios.")} />;
   if (consulta.isPending) return <Carregando />;
+  // Com o Acesso às Informações Por Recorte (12/11/2026), só os rateios dos grupos de centros (e dos destinos) do recorte.
+  if (!consulta.data.rateios.length) return <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Nenhum rateio no seu recorte.</p>;
   return (
     <TabelaEditavel
       titulo="Rateios"

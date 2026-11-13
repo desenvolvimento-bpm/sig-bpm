@@ -187,7 +187,17 @@ export const navGrupos: NavGrupo[] = [
         icon: SlidersHorizontal,
         recurso: "CADASTROS_APURACAO",
         telas: [
-          { title: "Reclassificações", href: "/cadastros/reclassificacoes", icon: Shuffle, permission: "cadastro_reclassificacoes:ler" },
+          // As abas Por Conta e Por Fornecedor (13/11/2026, pedido do Adão; antes, a tela Reclassificações de Conta).
+          {
+            title: "Reclassificações",
+            href: "/cadastros/reclassificacoes",
+            icon: Shuffle,
+            permission: "cadastro_reclassificacoes:ler",
+            abas: [
+              { title: "Por Conta", href: "/cadastros/reclassificacoes", icon: Shuffle, permission: "cadastro_reclassificacoes.por_conta:ler" },
+              { title: "Por Fornecedor", href: "/cadastros/reclassificacoes-fornecedor", icon: Shuffle, permission: "cadastro_reclassificacoes.por_fornecedor:ler" },
+            ],
+          },
           { title: "Preços do Contrato", href: "/cadastros/precos-contrato", icon: BadgeDollarSign, permission: "cadastro_precos_contrato:ler" },
           { title: "Tipos de Movimento", href: "/cadastros/tipos-movimento", icon: ArrowLeftRight, permission: "cadastro_tipos_movimento:ler" },
           { title: "Tabela de Estacas", href: "/cadastros/tabela-estacas", icon: Columns3, permission: "cadastro_tabela_estacas:ler" },
@@ -409,7 +419,8 @@ export function itemAtivo(pathname: string, item: NavItem): boolean {
  * A primeira regra que casar vale.
  */
 const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
-  [/^\/cadastros\/reclassificacoes(\/|$)/, "cadastro_reclassificacoes:ler"],
+  [/^\/cadastros\/reclassificacoes(\/|$)/, "cadastro_reclassificacoes.por_conta:ler"],
+  [/^\/cadastros\/reclassificacoes-fornecedor(\/|$)/, "cadastro_reclassificacoes.por_fornecedor:ler"],
   [/^\/cadastros\/precos-contrato(\/|$)/, "cadastro_precos_contrato:ler"],
   [/^\/cadastros\/tipos-movimento(\/|$)/, "cadastro_tipos_movimento:ler"],
   [/^\/cadastros\/tabela-estacas(\/|$)/, "cadastro_tabela_estacas:ler"],
@@ -520,7 +531,8 @@ export const pageTitles: Record<string, string> = {
   "/cadastros/centros-custo": "Centros de Custo",
   "/cadastros/contas-resultado": "Contas de Resultado",
   "/cadastros/estrutura-dre": "Estrutura da DRE",
-  "/cadastros/reclassificacoes": "Reclassificações de Conta",
+  "/cadastros/reclassificacoes": "Reclassificações",
+  "/cadastros/reclassificacoes-fornecedor": "Reclassificações",
   "/cadastros/precos-contrato": "Preços do Contrato",
   "/cadastros/unidades": "Unidades de Negócio",
   "/cadastros/linhas": "Linhas",

@@ -3,7 +3,9 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { ValidacaoLancamento } from "../../generated/prisma/enums.js";
 import { lancamentosManuaisService } from "../lancamentosManuais/lancamentosManuaisService.js";
 import {
+  chaveDoFornecedor,
   classificarLancamento,
+  corrigirCentroEConta,
   type CentroParaClassificar,
   type ContaParaClassificar,
 } from "./regrasClassificacao.js";
@@ -75,10 +77,10 @@ export const classificacaoService = {
       );
     }
 
-    const [lancamentos, centros, contas, reclassificacoes, contestacoes] = await Promise.all([
+    const [lancamentos, centros, contas, reclassificacoes, porFornecedor, contestacoes] = await Promise.all([
       prisma.lancamentoContabil.findMany({
         where: { competenciaId },
-        select: { id: true, codigoCentroCusto: true, contaResultadoId: true, filial: true },
+        select: { id: true, codigoCentroCusto: true, contaResultadoId: true, filial: true, cliForn: true },
       }),
       // Todos os centros (27/10/2026): os do balancete pelo código; o de uma contestação, pelo id (com ou sem código).
       prisma.centroCusto.findMany({
@@ -105,6 +107,8 @@ export const classificacaoService = {
         where: { ativo: true },
         select: { codigoCentroCusto: true, contaOrigemId: true, contaDestinoId: true },
       }),
+      // As reclassificações por fornecedor (13/11/2026): o centro imperativo de cada fornecedor.
+      prisma.reclassificacaoFornecedor.findMany({ where: { ativo: true }, select: { fornecedor: true, centroCustoId: true } }),
       // Os movimentos contestados corrigidos no balancete (27/10/2026; desde 30/10/2026, os de cada contestação, com as
       // anteriores e as posteriores): o centro e a conta novos valem no lugar dos do RM.
       prisma.contestacaoMovimento
@@ -136,26 +140,27 @@ export const classificacaoService = {
     const tripla = (g: string, a: string | null, d: string) => `${g.trim().toUpperCase()}|${(a ?? "").trim().toUpperCase()}|${d.trim().toUpperCase()}`;
     const complementares = new Set(linhasDRE.filter((l) => l.tipo === "ITEM" && l.grupoSigla === "CSC").map((l) => tripla("", l.atribuicao, l.descricao)));
 
-    const destinoDe = new Map(
-      reclassificacoes.map((r) => [`${r.codigoCentroCusto}|${r.contaOrigemId}`, r.contaDestinoId]),
-    );
+    const regras = {
+      contaDestino: new Map(reclassificacoes.map((r) => [`${r.codigoCentroCusto}|${r.contaOrigemId}`, r.contaDestinoId])),
+      centroDoFornecedor: new Map(porFornecedor.flatMap((r) => (centroPorId.has(r.centroCustoId) ? [[chaveDoFornecedor(r.fornecedor), centroPorId.get(r.centroCustoId)!] as const] : []))),
+    };
 
     const agora = new Date();
     const contagem = new Map<ValidacaoLancamento, number>();
     let reclassificados = 0;
+    let doFornecedor = 0;
 
     const atualizacoes = lancamentos.map((l) => {
-      const destino = l.codigoCentroCusto
-        ? destinoDe.get(`${l.codigoCentroCusto}|${l.contaResultadoId}`)
-        : undefined;
-      if (destino) reclassificados++;
-      // A contestação validada no balancete: a conta nova (sem ela, a de sempre) e o centro novo (sem ele, o do RM).
+      // O centro e a conta que valem (13/11/2026): o centro imperativo do fornecedor, a troca de conta do centro e, por
+      // cima, a contestação validada no balancete (o centro novo e a conta nova dela).
       const ct = contestacaoDo.get(l.id);
       if (ct) contestados++;
-      const conta = contaPorId.get(ct?.contaNovaId ?? destino ?? l.contaResultadoId)!;
-      const centroNovo = ct?.centroNovoId ? (centroPorId.get(ct.centroNovoId) ?? null) : null;
-      const centro = centroNovo ?? (l.codigoCentroCusto ? (centroPorCodigo.get(l.codigoCentroCusto) ?? null) : null);
-      const c = { ...classificarLancamento(centroNovo ? centroNovo.codigoRM : l.codigoCentroCusto, centro, conta), contestacaoId: ct?.id ?? null };
+      const corrigido = corrigirCentroEConta(l, regras, ct ? { centroNovo: ct.centroNovoId ? (centroPorId.get(ct.centroNovoId) ?? null) : null, contaNovaId: ct.contaNovaId } : null);
+      if (corrigido.porConta) reclassificados++;
+      if (corrigido.porFornecedor) doFornecedor++;
+      const conta = contaPorId.get(corrigido.contaId)!;
+      const centro = corrigido.centro ?? (l.codigoCentroCusto ? (centroPorCodigo.get(l.codigoCentroCusto) ?? null) : null);
+      const c = { ...classificarLancamento(corrigido.codigoCentroCusto, centro, conta), contestacaoId: ct?.id ?? null };
       // Sem aba de resultado (21/10/2026): a combinação da linha e do balde que nenhuma aba soma.
       const linha = c.linhaDREId ? linhaPorId.get(c.linhaDREId) : undefined;
       if (c.validacao === "OK" && linha && linha.tipo === "ITEM") {
@@ -191,6 +196,8 @@ export const classificacaoService = {
       lancamentos: lancamentos.length,
       manuais,
       reclassificados,
+      /** Os movimentos que foram para o centro imperativo do fornecedor (13/11/2026). */
+      porFornecedor: doFornecedor,
       contestados,
       porValidacao: Object.fromEntries(contagem),
       duracaoMs: Date.now() - inicio,

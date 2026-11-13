@@ -38,7 +38,7 @@ const rotuloDoIndice = (i: IndiceDosReajustes, meses: Meses) =>
   `${i.descricao} (${i.reajustes.map((r) => `${duasCasas(Number(r.valor))}% em ${rotuloDoMes(meses, r.mes)}`).join(", ")})`;
 
 /**
- * A aba Reajustes das Premissas dos cenários analíticos (11/11/2026, pedido do Adão): a cópia da aba Comparativo das
+ * A aba Reajustes dos cenários analíticos (11/11/2026, pedido do Adão; 12/11/2026: nas Configurações): a cópia da aba Comparativo das
  * Configurações, sem o Cenário Comparado. Em cima, os Índices de Reajuste — cada um com até quatro reajustes, o Valor (%) e o
  * mês em que Inicia Em, cada um sobre os anteriores —; embaixo, a Aplicação dos Reajustes, o índice de cada conta da DRE.
  * Os reajustes entram na DRE pelo botão do quadro de baixo, depois de “Gravar Aplicação”: “Aplicar Reajustes” ou, com eles

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CopyCheck, Download, Eraser, FileUp, FolderUp, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -152,12 +152,18 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
   const [departamentos, setDepartamentos] = useState<DepartamentoDasPremissas[]>(DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave));
   const [tipo, setTipo] = useState<(typeof TIPOS_DE_EXPORTACAO)[number]["chave"]>("todas");
   const [gerando, setGerando] = useState(false);
-  const todos = departamentos.length === DEPARTAMENTOS_DAS_PREMISSAS.length;
+  // Com o Acesso às Informações Por Recorte (12/11/2026): o Gestor marca só os departamentos dele; o Coordenador não marca (o
+  // arquivo leva os grupos de centros dele).
+  const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
+  const recorte = cenario.data?.recorte ?? null;
+  const disponiveis = recorte ? DEPARTAMENTOS_DAS_PREMISSAS.filter((d) => !recorte.porCentro && recorte.departamentos.includes(d.chave)) : DEPARTAMENTOS_DAS_PREMISSAS;
+  const marcados = recorte?.porCentro ? DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave) : departamentos.filter((d) => disponiveis.some((x) => x.chave === d));
+  const todos = disponiveis.every((d) => departamentos.includes(d.chave));
   const alternar = (d: DepartamentoDasPremissas) => setDepartamentos((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : DEPARTAMENTOS_DAS_PREMISSAS.map((x) => x.chave).filter((x) => x === d || ds.includes(x))));
   const exportar = async () => {
     setGerando(true);
     try {
-      const r = await cenariosService.exportarPremissas(id, tipo, departamentos);
+      const r = await cenariosService.exportarPremissas(id, tipo, marcados);
       const url = URL.createObjectURL(r.data);
       const a = document.createElement("a");
       a.href = url;
@@ -184,15 +190,20 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
             centros dos departamentos marcados. Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
           </DialogDescription>
         </DialogHeader>
+        {recorte?.porCentro ? (
+          <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
+            Acesso Por Recorte: o arquivo leva os grupos de centros de custo com algum centro seu (os Centros de Custo e o Quadro de Lotação deles).
+          </p>
+        ) : (
         <fieldset className="space-y-2">
           <legend className="mb-2 flex w-full items-center justify-between text-sm leading-none font-medium">
             Departamentos
-            <button type="button" className="text-xs font-normal text-gray-600 underline underline-offset-2 hover:text-gray-900" onClick={() => setDepartamentos(todos ? [] : DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave))}>
+            <button type="button" className="text-xs font-normal text-gray-600 underline underline-offset-2 hover:text-gray-900" onClick={() => setDepartamentos(todos ? [] : disponiveis.map((d) => d.chave))}>
               {todos ? "Desmarcar Todos" : "Marcar Todos"}
             </button>
           </legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {DEPARTAMENTOS_DAS_PREMISSAS.map((d) => (
+            {disponiveis.map((d) => (
               <label key={d.chave} className="flex cursor-pointer items-start gap-2 rounded-sm border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50">
                 <input type="checkbox" className="mt-0.5 accent-black" checked={departamentos.includes(d.chave)} onChange={() => alternar(d.chave)} />
                 <span>
@@ -203,6 +214,7 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
             ))}
           </div>
         </fieldset>
+        )}
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm leading-none font-medium">Tipo da Exportação</legend>
           {TIPOS_DE_EXPORTACAO.map((t) => (
@@ -213,7 +225,7 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" className={botaoPrimario} disabled={!departamentos.length || gerando} onClick={() => void exportar()}>
+          <Button type="button" className={botaoPrimario} disabled={!marcados.length || gerando} onClick={() => void exportar()}>
             {gerando ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             {gerando ? "Gerando…" : "Exportar"}
           </Button>

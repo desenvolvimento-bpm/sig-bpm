@@ -19,13 +19,12 @@ import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/Inve
 import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
 import { BotaoImportarValores, ExportarPremissas } from "../../../components/PlanilhaPremissas";
 import { QuadroDoCenario } from "../../../components/QuadroDoCenario";
-import { ReajustesDoCenario } from "../../../components/ReajustesDoCenario";
 import { TabelaPremissas } from "../../../components/TabelaPremissas";
-import { cenariosService } from "../../../services/cenariosService";
+import { cenariosService, NOME_DO_DEPARTAMENTO } from "../../../services/cenariosService";
 
 /**
  * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os rateios, os investimentos,
- * o extra-operacional, os indicadores manuais e os Reajustes (11/11/2026: os Índices de Reajuste e a Aplicação dos Reajustes).
+ * o extra-operacional e os indicadores manuais (os Reajustes ficam nas Configurações desde 12/11/2026).
  */
 const ABAS = [
   { chave: "1", rotulo: "Matriz" },
@@ -37,10 +36,7 @@ const ABAS = [
   { chave: "investimentos", rotulo: "Investimentos" },
   { chave: "extra", rotulo: "Extra-Operacional" },
   { chave: "manuais", rotulo: "Indicadores Manuais" },
-  { chave: "reajustes", rotulo: "Reajustes" },
 ];
-/** As abas da planilha (Replicar Médias, Apagar Valores e Importar Valores): todas menos os Reajustes, que não têm meses digitados. */
-const ABAS_DA_PLANILHA = ABAS.filter((a) => a.chave !== "reajustes");
 
 /**
  * A tela Premissas de um cenário analítico (13/10/2026): as tabelas de cada unidade (Matriz e Filial, Global e
@@ -53,27 +49,28 @@ export function PremissasContent() {
   const { hasPermission } = usePermissions();
   // As abas que o perfil lê, e a edição de cada uma (14/10/2026).
   const abaDaChave = (c: string) => ({ 1: "matriz", 2: "filial", 3: "servicos" })[c] ?? c;
-  const abas = ABAS.filter((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:ler`));
+  const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
+  // Com o Acesso às Informações Por Recorte (12/11/2026), só as abas do recorte do usuário.
+  const recorte = cenario.data?.recorte ?? null;
+  const abas = ABAS.filter((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:ler`) && (!recorte || recorte.abas.includes(a.chave)));
   const aba = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
   const editaAba = hasPermission(`cenarios_analiticos_premissas.${abaDaChave(aba)}:editar`);
-  const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
   const quadro = aba === "quadro";
   const centros = aba === "centros";
   const rateios = aba === "rateios";
   const investimentos = aba === "investimentos";
   const extra = aba === "extra";
   const manuais = aba === "manuais";
-  const reajustes = aba === "reajustes";
   const deUnidade = ["1", "2", "3"].includes(aba);
   const consulta = useQuery({ queryKey: ["cenarios", id, "premissas", aba], queryFn: () => cenariosService.premissas(id, Number(aba) as 1 | 2 | 3), enabled: deUnidade });
   const travado = !!cenario.data && estaTravado(cenario.data);
-  // Com os reajustes aplicados na DRE (11/11/2026, pedido do Adão), só os Indicadores Manuais e a aba Reajustes se editam.
+  // Com os reajustes aplicados na DRE (11/11/2026, pedido do Adão), só os Indicadores Manuais se editam.
   const comReajustes = !!cenario.data?.reajustesAplicados;
-  const bloqueadaPelosReajustes = comReajustes && !manuais && !reajustes;
+  const bloqueadaPelosReajustes = comReajustes && !manuais;
   const podeEditar = editaAba && !travado && !bloqueadaPelosReajustes && (!deUnidade || !!consulta.data?.editavel);
   // Os botões da planilha (15/10/2026), na altura do título: Importar Valores (alguma aba editável; sai com os reajustes
   // aplicados) e Exportar Premissas. O Replicar Médias e o Apagar Valores ficam em Configurações / Referência (12/11/2026).
-  const editaAlguma = ABAS_DA_PLANILHA.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
+  const editaAlguma = abas.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
   const editaPlanilha = !!cenario.data && !travado && !comReajustes;
   return (
     <div className="space-y-6">
@@ -90,6 +87,12 @@ export function PremissasContent() {
         comoUsar={
           <ul>
             <li>Escolha a unidade nas abas: Matriz e Filial têm uma tabela para a venda Global e outra, embaixo, para a Mercantil; Serviços, só a Global. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>
+              Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só o seu recorte: o Gestor, as abas e
+              as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, os investimentos e os indicadores manuais, só os
+              deles); o Coordenador, só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e nos Rateios. O aviso
+              acima das abas diz o recorte; o Exportar Premissas e o Importar Valores ficam no recorte.
+            </li>
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
               (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
@@ -140,7 +143,7 @@ export function PremissasContent() {
               {podeEditar
                 ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”."
                 : null} Cada investimento
-              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
+              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas e Extra o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco — com o Acesso às Informações Por Recorte, quem tem recorte o escolhe entre os seus), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
               valor pós uso e a vida útil em meses; a lista mostra a depreciação mensal.
             </li>
             <li>
@@ -154,23 +157,9 @@ export function PremissasContent() {
               se digitam: saem do Total de Colaboradores dos grupos de centros de custo.
             </li>
             <li>
-              Na aba Reajustes, dois quadros. Em Índices de Reajuste, cada índice tem a Descrição, a Observação e até quatro reajustes, cada um com o
-              Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro
-              e 2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante).
-              {podeEditar ? " Use “Incluir Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista." : ""}{" "}
-              Em Aplicação dos Reajustes, cada conta da DRE escolhe um índice (Produção e Serviços aparece, recolhida em Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam); o de um total ou de uma atribuição vale
-              para as contas abaixo dele{podeEditar ? ", e “Preencher Selecionados” aplica um índice às contas marcadas; “Gravar Aplicação” grava os índices das contas" : ""}.
-              Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada
-              conta com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; com eles aplicados, o botão vira “Remover Reajustes”,
-              que faz o inverso e volta aos valores das premissas — nunca duas vezes seguidas (grave a aplicação antes, se mudou). O aviso no
-              topo da aba diz se os reajustes estão aplicados. Com eles aplicados, a barra do cenário mostra a etiqueta Reajustes Aplicados, gravar
-              um quadro recalcula a DRE e o “Recalcular” da tela Resultados os mantém; o histórico registra cada aplicação e remoção (tela
-              Histórico). As premissas das outras abas não mudam: o reajuste fica só na DRE.
-            </li>
-            <li>
-              Com os reajustes aplicados, as demais abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição, com o aviso em
-              cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações /
-              Referência) não se carrega. “Remover Reajustes” as deixa editáveis de novo.
+              Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
+              com o aviso em cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações / Referência) não se carrega.
+              “Remover Reajustes” as deixa editáveis de novo.
             </li>
             <li>
               A base das premissas pode vir da referência (Configurações / Referência): o resultado realizado (as Médias de Referência, os centros de
@@ -316,6 +305,15 @@ export function PremissasContent() {
           </>
         }
       />
+      {/* O recorte do usuário (12/11/2026): o Acesso às Informações Por Recorte. */}
+      {recorte ? (
+        <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
+          <span className="font-medium text-gray-900">Acesso Por Recorte.</span>{" "}
+          {recorte.porCentro
+            ? "Você vê só os grupos de centros de custo com algum centro seu: o Quadro de Lotação, os Centros de Custo e os Rateios deles."
+            : `Você vê só as premissas ${recorte.departamentos.length === 1 ? "do departamento" : "dos departamentos"} ${recorte.departamentos.map((d) => NOME_DO_DEPARTAMENTO[d] ?? d).join(", ")}.`}
+        </p>
+      ) : null}
       <Abas rotulo="Unidade das premissas" ativa={aba} onMudar={setAba} abas={abas} />
       {abas.length ? <AvisoRateiosSemBase id={id} /> : null}
       {cenario.data && travado && editaAba ? (
@@ -337,8 +335,6 @@ export function PremissasContent() {
         <ExtraDoCenario id={id} editavel={podeEditar} />
       ) : manuais ? (
         <IndicadoresManuais id={id} podeEditar={podeEditar} comReferencia />
-      ) : reajustes ? (
-        <ReajustesDoCenario id={id} podeEditar={podeEditar} />
       ) : consulta.isError ? (
         <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar as premissas.")} />
       ) : consulta.isPending ? (

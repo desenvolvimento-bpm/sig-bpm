@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BuscaNaLista } from "@/components/shared/BuscaNaLista";
 import { atualizarCompetencia } from "@/lib/atualizarCompetencia";
 import { iniciaisMaiusculas } from "@/lib/texto";
 
@@ -103,6 +104,18 @@ function CampoForm({
       </Label>
       {c.tipo === "formula" ? (
         <EditorFormula id={id} valor={String(valor ?? "")} onMuda={onMuda} opcoes={c.opcoes ?? []} travado={travado} valores={valoresDaMetodologia} />
+      ) : c.tipo === "opcao" && c.busca && !travado ? (
+        // A lista com busca (13/11/2026): digitar filtra pelos termos, sem acento e em qualquer ordem.
+        <BuscaNaLista
+          id={id}
+          opcoes={(opcoes ?? []).map((o) => ({ id: o.valor, codigo: "", nome: o.rotulo }))}
+          valor={(() => {
+            const o = opcoes?.find((x) => x.valor === valor);
+            return o ? { id: o.valor, codigo: "", nome: o.rotulo } : null;
+          })()}
+          onEscolher={(o) => onMuda(o?.id ?? "")}
+          placeholder={`Digite para buscar: ${c.rotulo.toLowerCase()}`}
+        />
       ) : c.tipo === "opcao" && !travado ? (
         // Com a ajuda ao lado (21/10/2026), a lista na metade da linha e a explicação na outra.
         <div className={c.ajudaAoLado ? "grid items-center gap-x-4 gap-y-1.5 sm:grid-cols-2" : undefined}>

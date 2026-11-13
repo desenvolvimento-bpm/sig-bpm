@@ -53,7 +53,7 @@ export const nomeDoGrupo = (c: { nomeControladoria: string | null; nomeRM: strin
 export type GrupoDoCenario = {
   /** O nome do grupo (o nome da Controladoria; sem ele, o nome do centro). */
   grupo: string;
-  centros: Array<{ codigo: string | null; nome: string; balde: string | null }>;
+  centros: Array<{ id: string; codigo: string | null; nome: string; balde: string | null }>;
   /** O balde do grupo: o mais comum entre os centros dele. */
   balde: string | null;
   /** Os baldes diferentes dos centros (mais de um: o aviso na tela). */
@@ -102,7 +102,7 @@ export async function gruposDoCadastro(): Promise<GrupoDoCenario[]> {
     const grupoDRE = maisComum(cs.map((c) => GRUPO_DO_DEPARTAMENTO[(c.departamento ?? "").trim().toUpperCase()] ?? "CPP")) ?? "CPP";
     return {
       grupo,
-      centros: cs.map((c) => ({ codigo: c.codigoRM, nome: c.nomeRM ?? c.nomeControladoria ?? c.codigoRM ?? "Centro", balde: c.balde })),
+      centros: cs.map((c) => ({ id: c.id, codigo: c.codigoRM, nome: c.nomeRM ?? c.nomeControladoria ?? c.codigoRM ?? "Centro", balde: c.balde })),
       balde,
       baldes: [...new Set(cs.map((c) => c.balde ?? "—"))],
       grupoDRE,

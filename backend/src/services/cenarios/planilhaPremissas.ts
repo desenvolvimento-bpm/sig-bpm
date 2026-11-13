@@ -5,6 +5,7 @@ import { coluna, ESTILO, type AbaEscrita, type Celula } from "../../lib/xlsxEscr
 import { juntarOrigem, type OrigensDasContas } from "./consolidadoDosCentros.js";
 import { CONTAS_DEPRECIACAO, depreciacaoMensal } from "./investimentosCenario.js";
 import { salarioTotal, type MesDaLinha } from "./quadroDoCenario.js";
+import type { DepartamentoAcesso } from "../../generated/prisma/enums.js";
 
 /**
  * A planilha das premissas de um cenário analítico (15/10/2026): o Exportar Premissas (só Excel) e o Importar Valores.
@@ -128,6 +129,9 @@ const DO_GRUPO_DO_INDICADOR: Record<string, Departamento> = {
   Administrativo: "ADMINISTRATIVO",
   Geral: "ADMINISTRATIVO",
 };
+
+/** Os departamentos de um grupo de indicadores (o Acesso às Informações Por Recorte, 12/11/2026): o GME com o Comercial; o Geral, com o Administrativo. */
+export const departamentosDoGrupoDoIndicador = (grupo: string): Departamento[] => (DO_GRUPO_DO_INDICADOR[grupo] ? [DO_GRUPO_DO_INDICADOR[grupo]] : []);
 
 /** O departamento de um grupo da DRE (CPP, CSM, DL…): as linhas do Quadro de Lotação, pelo grupo do centro (09/11/2026). */
 export const departamentoDoGrupoDRE = (grupoDRE: string | null | undefined): Departamento | null => DO_GRUPO_DRE[grupoDRE ?? ""] ?? null;
@@ -376,6 +380,8 @@ export type InvestimentoLido = {
   valorTotal: number;
   valorPosUso: number;
   vidaUtil: number;
+  /** O Departamento (12/11/2026): só nos de Despesas e Extra (um dos cinco do patrimônio); sem ele, nulo. */
+  departamento: DepartamentoAcesso | null;
 };
 /** Os campos de uma linha do Quadro de Lotação lida (09/11/2026): os textos dos cadastros, como no Lançamento Inicial. */
 export type CamposDoQuadro = { unidade: string; tipo: string; senioridade: string; funcao: string; centro: string };
@@ -416,10 +422,21 @@ export const ABA_INVESTIMENTOS = "Investimentos";
 const COLUNA_NOME_REFERENCIA = "Nome de Referência";
 /** A Condição de Pagamento (19/10/2026, no lugar do Ganho Previsto, da Receita Bruta Prevista e do ROI): opcional na leitura. */
 const COLUNA_CONDICAO = "Condição de Pagamento";
+/** O Departamento dos investimentos de Despesas e Extra (12/11/2026): opcional na leitura (os arquivos de antes não o têm). */
+const COLUNA_DEPARTAMENTO = "Departamento";
+/** Os departamentos do patrimônio (o Departamento de um investimento de Despesas e Extra), com os nomes da planilha. */
+const DEPARTAMENTOS_DO_INVESTIMENTO: Array<{ chave: DepartamentoAcesso; nome: string }> = [
+  { chave: "LOGISTICA", nome: "Logística" },
+  { chave: "TECNICO", nome: "Técnico" },
+  { chave: "COMERCIAL", nome: "Comercial" },
+  { chave: "ADMINISTRATIVO", nome: "Administrativo" },
+  { chave: "EXTRA_OPERACIONAL", nome: "Extra-Operacional" },
+];
 const COLUNAS_INVESTIMENTOS: Array<[string, number]> = [
   [COLUNA_NOME_REFERENCIA, 30],
   ["Unidade", 18],
   ["Conta", 36],
+  [COLUNA_DEPARTAMENTO, 20],
   ["Descrição", 40],
   [COLUNA_CONDICAO, 30],
   ["Mês de Início (1 a 12)", 12],
@@ -429,7 +446,7 @@ const COLUNAS_INVESTIMENTOS: Array<[string, number]> = [
   ["Depreciação Mensal", 16],
 ];
 /** As colunas dos campos (sem a Depreciação Mensal, uma fórmula). */
-const CAMPOS_INVESTIMENTOS = COLUNAS_INVESTIMENTOS.slice(0, 9).map(([c]) => c);
+const CAMPOS_INVESTIMENTOS = COLUNAS_INVESTIMENTOS.slice(0, 10).map(([c]) => c);
 /** As linhas em branco, com as fórmulas e as listas, para incluir investimentos novos na planilha. */
 const LINHAS_NOVAS = 30;
 
@@ -447,20 +464,21 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
   const nomeDaUnidade = (u: number) => CONTAS_DEPRECIACAO.find((c) => c.unidade === u)?.nomeUnidade ?? "";
   const rotuloDaConta = (u: number) => CONTAS_DEPRECIACAO.find((c) => c.unidade === u)?.rotulo ?? "";
   const formulas = (r: number) => ({
-    depreciacao: `IF(OR(G${r}="",I${r}="",I${r}=0),"",(G${r}-IF(H${r}="",0,H${r}))/I${r})`,
+    depreciacao: `IF(OR(H${r}="",J${r}="",J${r}=0),"",(H${r}-IF(I${r}="",0,I${r}))/J${r})`,
   });
+  const nomeDoDepartamento = (d: DepartamentoAcesso | null) => DEPARTAMENTOS_DO_INVESTIMENTO.find((x) => x.chave === d)?.nome ?? null;
   const linhas: Celula[][] = [
     [{ valor: `Premissas · ${ABA_INVESTIMENTOS}`, estilo: ESTILO.titulo }],
     [{ valor: identificacao, estilo: ESTILO.informacao }],
     [
       {
         valor:
-          "Altere os investimentos ou inclua novos nas linhas em branco e importe o arquivo em Premissas / Importar Valores: com o Nome de Referência de um investimento do cenário, ele é atualizado; com um nome novo, é incluído (o nome não se repete no cenário). A Depreciação Mensal é uma fórmula e não se importa.",
+          "Altere os investimentos ou inclua novos nas linhas em branco e importe o arquivo em Premissas / Importar Valores: com o Nome de Referência de um investimento do cenário, ele é atualizado; com um nome novo, é incluído (o nome não se repete no cenário). O Departamento vale só em Despesas e Extra (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; em branco, é dos cinco). A Depreciação Mensal é uma fórmula e não se importa.",
         estilo: ESTILO.informacao,
       },
     ],
     [],
-    COLUNAS_INVESTIMENTOS.map(([c], k) => cab(c, k >= 5)),
+    COLUNAS_INVESTIMENTOS.map(([c], k) => cab(c, k >= 6)),
   ];
   investimentos.forEach((i, k) => {
     const r = PRIMEIRA_LINHA + k;
@@ -469,6 +487,7 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
       { valor: i.nomeReferencia },
       { valor: nomeDaUnidade(i.unidade) },
       { valor: rotuloDaConta(i.unidade) },
+      { valor: i.unidade === 4 ? nomeDoDepartamento(i.departamento) : null },
       { valor: i.descricao },
       { valor: i.condicaoPagamento },
       { valor: i.inicio },
@@ -482,7 +501,7 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
     const r = PRIMEIRA_LINHA + investimentos.length + k;
     const f = formulas(r);
     linhas.push([
-      ...Array.from({ length: 9 }, (): Celula => ({ valor: null })),
+      ...Array.from({ length: 10 }, (): Celula => ({ valor: null })),
       { valor: null, estilo: ESTILO.itemNumero, formula: f.depreciacao },
     ]);
   }
@@ -495,13 +514,14 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
     linhaCabecalho: 5,
     rodape: `Premissas · ${ABA_INVESTIMENTOS}`,
     paisagem: true,
-    // O Nome de Referência, a Unidade, a Conta e a Descrição presos ao rolar para os lados (11/11/2026, pedido do Adão).
-    congelarColunas: 4,
+    // O Nome de Referência, a Unidade, a Conta, o Departamento e a Descrição presos ao rolar para os lados (11/11/2026, pedido do Adão).
+    congelarColunas: 5,
     validacoes: [
       { celulas: intervalo("B"), lista: CONTAS_DEPRECIACAO.map((c) => c.nomeUnidade) },
       { celulas: intervalo("C"), lista: [...new Set(CONTAS_DEPRECIACAO.map((c) => c.rotulo))] },
-      { celulas: intervalo("F"), inteiro: [1, 12] },
-      { celulas: intervalo("I"), inteiro: [1, 600] },
+      { celulas: intervalo("D"), lista: DEPARTAMENTOS_DO_INVESTIMENTO.map((d) => d.nome) },
+      { celulas: intervalo("G"), inteiro: [1, 12] },
+      { celulas: intervalo("J"), inteiro: [1, 600] },
     ],
   };
 }
@@ -511,12 +531,12 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
   const rotulos = linhas[i].celulas.map((c) => String(c ?? "").trim());
   const col = (rotulo: string) => rotulos.indexOf(rotulo);
   const iCampos = CAMPOS_INVESTIMENTOS.map((c) => col(c));
-  const obrigatorias = CAMPOS_INVESTIMENTOS.filter((c) => c !== COLUNA_CONDICAO);
+  const obrigatorias = CAMPOS_INVESTIMENTOS.filter((c) => c !== COLUNA_CONDICAO && c !== COLUNA_DEPARTAMENTO);
   if (obrigatorias.some((c) => col(c) < 0)) {
     r.erros.push(`A aba ${nome} não tem as colunas do padrão (${obrigatorias.map((c) => `“${c}”`).join(", ")}).`);
     return;
   }
-  const [iNome, iUnidade, iConta, iDescricao, iCondicao, iInicio, iTotal, iPosUso, iVida] = iCampos;
+  const [iNome, iUnidade, iConta, iDepartamento, iDescricao, iCondicao, iInicio, iTotal, iPosUso, iVida] = iCampos;
   const texto = (v: ValorCelula | undefined) => (v === null || v === undefined ? "" : String(v).trim());
   const nomes = new Set<string>();
   r.abas.push(nome);
@@ -542,6 +562,13 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
     const conta = texto(c[iConta]);
     if (conta && conta.toLocaleLowerCase("pt-BR") !== unidade.rotulo.toLocaleLowerCase("pt-BR")) {
       erro(`a Conta de ${unidade.nomeUnidade} é a ${unidade.rotulo} (está “${conta}”).`);
+      continue;
+    }
+    // O Departamento (12/11/2026): só em Despesas e Extra; nas demais unidades, ignorado.
+    const nomeDoDepartamento = iDepartamento < 0 ? "" : texto(c[iDepartamento]);
+    const departamento = nomeDoDepartamento ? DEPARTAMENTOS_DO_INVESTIMENTO.find((d) => d.nome.toLocaleLowerCase("pt-BR") === nomeDoDepartamento.toLocaleLowerCase("pt-BR")) : null;
+    if (nomeDoDepartamento && !departamento && unidade.unidade === 4) {
+      erro(`o Departamento “${nomeDoDepartamento}” não é um dos da lista (${DEPARTAMENTOS_DO_INVESTIMENTO.map((d) => d.nome).join(", ")}).`);
       continue;
     }
     const descricao = texto(c[iDescricao]).slice(0, 200);
@@ -586,6 +613,7 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
       valorTotal: total!,
       valorPosUso: posUso ?? 0,
       vidaUtil: vida!,
+      departamento: unidade.unidade === 4 ? (departamento?.chave ?? null) : null,
     });
   }
 }

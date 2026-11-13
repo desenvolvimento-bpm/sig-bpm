@@ -53,8 +53,16 @@ cadastrosRoutes.get(
 cadastrosRoutes.get(
   "/reclassificacoes",
   autenticacao,
-  verificarPermissao("cadastros_apuracao:ler"),
+  verificarPermissao("cadastro_reclassificacoes.por_conta:ler"),
   asyncHandler(cadastrosController.listarReclassificacoes),
+);
+
+// As reclassificações por fornecedor (13/11/2026): a aba Por Fornecedor da tela Reclassificações.
+cadastrosRoutes.get(
+  "/reclassificacoes-fornecedor",
+  autenticacao,
+  verificarPermissao("cadastro_reclassificacoes.por_fornecedor:ler"),
+  asyncHandler(cadastrosController.listarReclassificacoesFornecedor),
 );
 
 cadastrosRoutes.get(

@@ -28,6 +28,38 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 13/11/2026: as Reclassificações Por Fornecedor e o Acesso às Informações dos cenários analíticos.
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cadastros da Apuração",
+    tela: "Reclassificações",
+    rota: "/cadastros/reclassificacoes",
+    itens: [
+      "A tela Reclassificações de Conta passa a se chamar Reclassificações, com as abas Por Conta (o cadastro de sempre) e Por Fornecedor.",
+      "Na aba Por Fornecedor, cadastre o fornecedor (a lista dos fornecedores com movimentos já importados) e o Centro de Custo Imperativo: no fechamento mensal, todos os movimentos do fornecedor vão para esse centro, seja qual for o centro em que o RM os lançou. Muda só o centro: as reclassificações Por Conta continuam valendo pelo centro do RM, e a contestação validada continua por cima.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Cenário, a opção Acesso às Informações: Geral (todos veem todas as premissas) ou Por Recorte (quem tem recorte no perfil vê só as premissas e o histórico do seu recorte: o Gestor, os seus departamentos; o Coordenador, os grupos de centros com algum centro dele). Quem criou o cenário e os Administradores veem tudo, e só eles mudam a opção.",
+      "A aba Reajustes (Índices de Reajuste e Aplicação dos Reajustes) fica nas Configurações, depois do Comparativo.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Com o Acesso às Informações Por Recorte, as abas, o Exportar Premissas e o Importar Valores ficam no recorte de quem acessa, com um aviso.",
+      "Na aba Investimentos, os de Despesas e Extra têm o campo Departamento: Logística, Técnico, Comercial, Administrativo ou Extra-Operacional.",
+      "A aba Reajustes saiu das Premissas: fica em Configurações / Reajustes.",
+    ],
+  },
   // 12/11/2026, 16:47
   {
     publicada: "2026-11-12T16:47",

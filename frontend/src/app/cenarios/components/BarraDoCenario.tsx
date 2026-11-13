@@ -106,9 +106,9 @@ export function BarraDoCenario({ id, tela }: { id: string; tela: string }) {
         {/* Depois da versão, a etiqueta Vigente e a da marcação, com os símbolos (14/10/2026). */}
         {atual?.vigente ? <EtiquetaVigente classe={ETIQUETA} /> : null}
         <EtiquetaMarcacao marcacao={atual?.marcacao ?? null} classe={ETIQUETA} />
-        {/* Os Reajustes das Premissas aplicados na DRE (11/11/2026): a aba Reajustes das Premissas os aplica e os remove. */}
+        {/* Os Reajustes aplicados na DRE (11/11/2026): a aba Reajustes das Configurações (12/11/2026) os aplica e os remove. */}
         {t.tipo === "ANALITICO" && atual?.reajustesAplicados ? (
-          <span className={ETIQUETA} title="Os Reajustes das Premissas estão aplicados na DRE (Premissas / Reajustes)">
+          <span className={ETIQUETA} title="Os Reajustes estão aplicados na DRE (Configurações / Reajustes)">
             Reajustes Aplicados
           </span>
         ) : null}

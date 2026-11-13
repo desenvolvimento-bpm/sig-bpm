@@ -154,6 +154,59 @@ export const cadastrosService = {
   },
 
   /**
+   * As reclassificações por fornecedor (13/11/2026): o fornecedor, o centro de custo imperativo (com o departamento e a
+   * atribuição) e quantos movimentos do fornecedor há nas competências abertas e nas fechadas.
+   */
+  async listarReclassificacoesFornecedor(input: ListarCadastroInput) {
+    const prisma = getPrismaClient();
+    const busca = input.busca?.trim();
+    const contem = (x: string) => ({ contains: x, mode: "insensitive" as const });
+    const where = busca
+      ? { OR: [{ fornecedor: contem(busca) }, { motivo: contem(busca) }, { centroCusto: { codigoRM: contem(busca) } }, { centroCusto: { nomeRM: contem(busca) } }] }
+      : {};
+    const [itens, total] = await Promise.all([
+      prisma.reclassificacaoFornecedor.findMany({
+        where,
+        orderBy: [{ fornecedor: "asc" }],
+        ...paginacao(input),
+        select: {
+          id: true,
+          fornecedor: true,
+          motivo: true,
+          ativo: true,
+          centroCusto: { select: { codigoRM: true, nomeRM: true, departamento: true, atribuicao: true, ativo: true } },
+        },
+      }),
+      prisma.reclassificacaoFornecedor.count({ where }),
+    ]);
+    // Os movimentos de cada fornecedor, pela situação da competência (o nome comparado sem caixa, como na classificação).
+    const [grupos, fechadas] = await Promise.all([
+      itens.length
+        ? prisma.lancamentoContabil.groupBy({
+            by: ["cliForn", "competenciaId"],
+            where: { OR: itens.map((i) => ({ cliForn: { equals: i.fornecedor, mode: "insensitive" as const } })) },
+            _count: { _all: true },
+          })
+        : [],
+      prisma.competencia.findMany({ where: { status: "FECHADA" }, select: { id: true } }).then((cs) => new Set(cs.map((c) => c.id))),
+    ]);
+    const contagem = new Map<string, { abertas: number; fechadas: number }>();
+    for (const g of grupos) {
+      const chave = (g.cliForn ?? "").trim().toUpperCase();
+      const c = contagem.get(chave) ?? { abertas: 0, fechadas: 0 };
+      if (fechadas.has(g.competenciaId)) c.fechadas += g._count._all;
+      else c.abertas += g._count._all;
+      contagem.set(chave, c);
+    }
+    return {
+      itens: itens.map((i) => ({ ...i, movimentos: contagem.get(i.fornecedor.trim().toUpperCase()) ?? { abertas: 0, fechadas: 0 } })),
+      total,
+      pagina: input.pagina,
+      porPagina: input.porPagina,
+    };
+  },
+
+  /**
    * Preços do contrato, da DRE do Comercial. Com histórico, cada preço
    * substituído aparece logo abaixo do que o substituiu (mesma chave).
    */

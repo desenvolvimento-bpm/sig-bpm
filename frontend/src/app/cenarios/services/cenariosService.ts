@@ -174,13 +174,27 @@ export type InvestimentoDoCenario = {
   valorPosUso: number;
   vidaUtil: number;
   depreciacaoMensal: number;
+  /** O Departamento (12/11/2026): só nos de Despesas e Extra; sem ele, é dos cinco do patrimônio. */
+  departamento: DepartamentoDoInvestimento | null;
 };
-export type DadosDoInvestimento = Pick<InvestimentoDoCenario, "nomeReferencia" | "unidade" | "descricao" | "condicaoPagamento" | "inicio" | "valorTotal" | "valorPosUso" | "vidaUtil">;
+/** O Departamento de um investimento de Despesas e Extra (12/11/2026). */
+export type DepartamentoDoInvestimento = "LOGISTICA" | "TECNICO" | "COMERCIAL" | "ADMINISTRATIVO" | "EXTRA_OPERACIONAL";
+export const NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO: Record<DepartamentoDoInvestimento, string> = {
+  LOGISTICA: "Logística",
+  TECNICO: "Técnico",
+  COMERCIAL: "Comercial",
+  ADMINISTRATIVO: "Administrativo",
+  EXTRA_OPERACIONAL: "Extra-Operacional",
+};
+export type DadosDoInvestimento = Pick<InvestimentoDoCenario, "nomeReferencia" | "unidade" | "descricao" | "condicaoPagamento" | "inicio" | "valorTotal" | "valorPosUso" | "vidaUtil" | "departamento">;
 export type InvestimentosDoCenario = {
   ano: number;
   meses: Array<{ mes: number; rotulo: string }>;
   editavel: boolean;
   contas: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: string; conta: string; rotulo: string }>;
+  /** As opções do Departamento (12/11/2026; as do recorte) e se ele é obrigatório (quem vê por recorte). */
+  departamentos: DepartamentoDoInvestimento[];
+  exigeDepartamento: boolean;
   depreciacao: LinhaDaPremissa[];
   investimentos: InvestimentoDoCenario[];
 };
@@ -204,6 +218,19 @@ export type ParteDaReferencia =
   | { tipo: "REALIZADO"; ano: number; modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; mesDe: number; mesAte: number }
   | { tipo: "CENARIO"; origemId: string; mesDe: number; mesAte: number };
 
+/** O Acesso às Informações de um cenário analítico (12/11/2026). */
+export type AcessoInformacoes = "GERAL" | "POR_RECORTE";
+export type RecorteDoCenario = { departamentos: string[]; porCentro: boolean; abas: string[] };
+/** Os nomes dos departamentos das premissas (as chaves do Exportar Premissas). */
+export const NOME_DO_DEPARTAMENTO: Record<string, string> = {
+  PRODUCAO: "Produção",
+  SERVICOS: "Serviços",
+  LOGISTICA: "Logística",
+  TECNICO: "Técnico",
+  COMERCIAL: "Comercial",
+  ADMINISTRATIVO: "Administrativo",
+  EXTRA: "Extra-Operacional",
+};
 export type Cenario = {
   id: string;
   nome: string;
@@ -239,6 +266,12 @@ export type Cenario = {
    */
   edicaoConfiguracoes: Visualizacao;
   podeEditarConfiguracoes: boolean;
+  /**
+   * O Acesso às Informações dos analíticos (12/11/2026): Geral ou Por Recorte. `recorte`: o do usuário neste cenário (nulo: vê
+   * tudo) — os departamentos (as chaves do Exportar Premissas), se é por centro de custo (o Coordenador) e as abas das Premissas.
+   */
+  acessoInformacoes: AcessoInformacoes;
+  recorte: RecorteDoCenario | null;
   /** As movimentações fora dos padrões da última carga do realizado e as realocações delas (analíticos, 14/10/2026). */
   realocacoes: Realocacoes | null;
   /** Nos analíticos (14/10/2026): os avisos dos rateios no exercício e se as regras mudaram depois do último cálculo. */
@@ -442,7 +475,7 @@ export const cenariosService = {
   listar: async (tipo: TipoCenario = "SINTETICO") => (await api.get<{ data: Cenario[] }>("/proxy/cenarios", { params: { tipo } })).data.data,
   obter: async (id: string) => (await api.get<{ data: Cenario }>(`/proxy/cenarios/${id}`)).data.data,
   criar: async (dados: { nome: string; ano: number; descricao: string | null; copiarDe: string | null; visualizacao: Visualizacao; tipo: TipoCenario }) => (await api.post<{ data: Cenario }>("/proxy/cenarios", dados)).data.data,
-  atualizar: async (id: string, dados: { nome: string; descricao: string | null; visualizacao: Visualizacao; edicaoConfiguracoes?: Visualizacao }) => (await api.patch<{ data: Cenario }>(`/proxy/cenarios/${id}`, dados)).data.data,
+  atualizar: async (id: string, dados: { nome: string; descricao: string | null; visualizacao: Visualizacao; edicaoConfiguracoes?: Visualizacao; acessoInformacoes?: AcessoInformacoes }) => (await api.patch<{ data: Cenario }>(`/proxy/cenarios/${id}`, dados)).data.data,
   excluir: async (id: string) => {
     await api.delete(`/proxy/cenarios/${id}`);
   },
@@ -505,7 +538,8 @@ export const cenariosService = {
   /** O Painel de Bordo do cenário no mês `ate` (1 a 12): o cenário × o comparado. */
   painel: async (id: string, ate: number) =>
     (await api.get<{ data: Painel & { comparado: { nome: string; ano: number } | null } }>(`/proxy/cenarios/${id}/painel`, { params: { ate } })).data.data,
-  indicadores: async (id: string) => (await api.get<{ data: IndicadoresDoCenario }>(`/proxy/cenarios/${id}/indicadores`)).data.data,
+  /** `aba` "manuais" (12/11/2026): a aba Indicadores Manuais das Premissas, no recorte do usuário. */
+  indicadores: async (id: string, aba?: "manuais") => (await api.get<{ data: IndicadoresDoCenario }>(`/proxy/cenarios/${id}/indicadores`, { params: aba ? { aba } : undefined })).data.data,
   /** Congelar Versão: trava o cenário. */
   /** Recalcula a DRE do analítico com as regras de rateio de hoje (14/10/2026), com os reajustes como estão (aplicados ou não). */
   recalcular: async (id: string) => (await api.post<{ data: Cenario }>(`/proxy/cenarios/${id}/recalcular`)).data.data,

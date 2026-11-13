@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { cenariosService, type DadosDoInvestimento, type InvestimentoDoCenario, type InvestimentosDoCenario as Dados } from "../services/cenariosService";
+import { cenariosService, type DadosDoInvestimento, type InvestimentoDoCenario, type InvestimentosDoCenario as Dados, NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO, type DepartamentoDoInvestimento } from "../services/cenariosService";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero } from "./EdicaoDialogs";
 import { TabelaEditavel } from "./TabelaPremissas";
@@ -24,6 +24,10 @@ const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julh
 const reais = (v: number | null) => (v === null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const paraCampo = (v: number | null | undefined) => (v === null || v === undefined ? "" : v.toLocaleString("pt-BR", { maximumFractionDigits: 2 }));
 const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra" };
+
+/** O Departamento de um investimento na lista (12/11/2026): só em Despesas e Extra; sem ele, os cinco. */
+const departamentoDoInvestimento = (i: InvestimentoDoCenario) =>
+  i.unidade !== 4 ? "—" : i.departamento ? NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[i.departamento] : "Todos";
 
 /** A confirmação do Excluir Selecionados (15/10/2026): a lista dos marcados e a soma do valor total; recalcula a DRE. */
 function ExcluirInvestimentosDialog({ id, investimentos, onFechar }: { id: string; investimentos: InvestimentoDoCenario[]; onFechar: (excluiu: boolean) => void }) {
@@ -91,6 +95,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
     { chave: "nome", rotulo: "Nome de Referência", valor: (i) => i.nomeReferencia },
     { chave: "unidade", rotulo: "Unidade", valor: (i) => NOME_DA_UNIDADE[i.unidade] },
     { chave: "conta", rotulo: "Conta", valor: (i) => dados.contas.find((c) => c.unidade === i.unidade)?.rotulo ?? "" },
+    { chave: "departamento", rotulo: "Departamento", valor: (i) => departamentoDoInvestimento(i) },
     { chave: "descricao", rotulo: "Descrição", valor: (i) => i.descricao },
     { chave: "condicao", rotulo: "Condição de Pagamento", valor: (i) => i.condicaoPagamento ?? "—" },
     { chave: "inicio", rotulo: "Início", valor: (i) => MESES[i.inicio - 1] },
@@ -179,8 +184,8 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                     />
                   </th>
                 ) : null}
-                {["Nome de Referência", "Unidade", "Conta", "Descrição", "Condição de Pagamento", "Início", "Valor Total", "Valor Pós Uso", "Vida Útil", "Depreciação Mensal"].map((c, k) => (
-                  <th key={c} className={`px-3 py-2 text-xs font-bold ${k >= 5 ? "text-right" : "text-left"}`}>
+                {["Nome de Referência", "Unidade", "Conta", "Departamento", "Descrição", "Condição de Pagamento", "Início", "Valor Total", "Valor Pós Uso", "Vida Útil", "Depreciação Mensal"].map((c, k) => (
+                  <th key={c} className={`px-3 py-2 text-xs font-bold ${k >= 6 ? "text-right" : "text-left"}`}>
                     {c}
                   </th>
                 ))}
@@ -189,7 +194,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
             <tbody>
               {dados.investimentos.length === 0 ? (
                 <tr>
-                  <td colSpan={pode ? 11 : 10} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={pode ? 12 : 11} className="px-3 py-6 text-center text-gray-500">
                     Nenhum investimento no cenário.
                   </td>
                 </tr>
@@ -210,6 +215,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                     <td className="px-3 py-1.5 font-medium whitespace-nowrap text-gray-900">{i.nomeReferencia}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
                     <td className="px-3 py-1.5 whitespace-nowrap">{dados.contas.find((c) => c.unidade === i.unidade)?.rotulo}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
                     <td className="px-3 py-1.5 text-gray-900">{i.descricao}</td>
                     <td className="px-3 py-1.5 text-gray-600">{i.condicaoPagamento ?? "—"}</td>
                     <td className="px-3 py-1.5 text-right whitespace-nowrap">{MESES[i.inicio - 1]}</td>
@@ -243,7 +249,11 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
 function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string; dados: Dados; investimento: InvestimentoDoCenario | null; onFechar: () => void }) {
   const queryClient = useQueryClient();
   const [nome, setNome] = useState(investimento?.nomeReferencia ?? "");
-  const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? 1);
+  const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? dados.contas[0]?.unidade ?? 1);
+  // O Departamento dos investimentos de Despesas e Extra (12/11/2026): quem vê por recorte o escolhe entre os dele.
+  const [departamento, setDepartamento] = useState<DepartamentoDoInvestimento | "">(
+    investimento?.departamento ?? (dados.exigeDepartamento && dados.departamentos.length === 1 ? dados.departamentos[0] : ""),
+  );
   const [descricao, setDescricao] = useState(investimento?.descricao ?? "");
   const [condicao, setCondicao] = useState(investimento?.condicaoPagamento ?? "");
   const [inicio, setInicio] = useState(investimento?.inicio ?? 1);
@@ -253,7 +263,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
   const [excluir, setExcluir] = useState(false);
   const n = { total: lerNumero(total), posUso: lerNumero(posUso), vida: lerNumero(vida) };
   const valido =
-    !!nome.trim() && !!descricao.trim() && typeof n.total === "number" && n.total > 0 && (n.posUso === null || (typeof n.posUso === "number" && n.posUso >= 0)) && typeof n.vida === "number" && n.vida >= 1 && Number.isInteger(n.vida);
+    !!nome.trim() && !!descricao.trim() && (unidade !== 4 || !dados.exigeDepartamento || !!departamento) && typeof n.total === "number" && n.total > 0 && (n.posUso === null || (typeof n.posUso === "number" && n.posUso >= 0)) && typeof n.vida === "number" && n.vida >= 1 && Number.isInteger(n.vida);
   const mensal = typeof n.total === "number" && typeof n.vida === "number" && n.vida > 0 ? (n.total - (n.posUso ?? 0)) / n.vida : null;
   const gravar = useMutation({
     mutationFn: (apagar: boolean) => {
@@ -267,6 +277,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
         valorTotal: n.total as number,
         valorPosUso: (n.posUso as number | null) ?? 0,
         vidaUtil: n.vida as number,
+        departamento: unidade === 4 && departamento ? departamento : null,
       };
       return investimento ? cenariosService.alterarInvestimento(id, investimento.id, d) : cenariosService.criarInvestimento(id, d);
     },
@@ -323,6 +334,19 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
                 ))}
             </select>
           </div>
+          {unidade === 4 ? (
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="inv-departamento">Departamento</Label>
+              <select id="inv-departamento" value={departamento} onChange={(e) => setDepartamento(e.target.value as DepartamentoDoInvestimento | "")} className={classeSelect}>
+                {dados.exigeDepartamento ? <option value="">Escolha o departamento</option> : <option value="">Todos os Departamentos de Despesas e Extra</option>}
+                {dados.departamentos.map((d) => (
+                  <option key={d} value={d}>
+                    {NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[d]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="sm:col-span-2">{campo("Descrição", "inv-descricao", descricao, setDescricao)}</div>
           <div className="sm:col-span-2">{campo("Condição de Pagamento", "inv-condicao", condicao, setCondicao, { placeholder: "Ex.: entrada de 30% + 10 parcelas mensais" })}</div>
           <div className="space-y-1.5">

@@ -189,29 +189,33 @@ describe("comparativo entre cenários", () => {
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.linhas.map((l) => [l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.justificativa]), [["centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, "Dissídio"]]);
   });
-  it("a aba Investimentos (15/10/2026): a lista volta igual; o Nome de Referência obrigatório e sem repetir; a conta tem de ser a da unidade", () => {
-    const inv = { id: "abc", nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24 };
+  it("a aba Investimentos (15/10/2026): a lista volta igual; o Nome de Referência obrigatório e sem repetir; a conta tem de ser a da unidade; o Departamento só em Despesas e Extra (12/11/2026)", () => {
+    const inv = { id: "abc", nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24, departamento: "COMERCIAL" as const };
     const aba = abaDeInvestimentos([inv], "teste");
-    // A linha nova (a primeira em branco), uma com a conta de outra unidade, uma sem nome e uma com o nome repetido.
-    aba.linhas[6] = [{ valor: "Ponte 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Ponte rolante" }, { valor: null }, { valor: 5 }, { valor: 80000 }, { valor: null }, { valor: 120 }];
-    aba.linhas[7] = [{ valor: "Caminhão" }, { valor: "Serviços" }, { valor: "Depreciação do Patrimônio" }, { valor: "Caminhão" }, { valor: null }, { valor: 1 }, { valor: 300000 }, { valor: 0 }, { valor: 60 }];
-    aba.linhas[8] = [{ valor: null }, { valor: "Matriz" }, { valor: null }, { valor: "Sem nome" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
-    aba.linhas[9] = [{ valor: "notebooks 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Repetido" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    // A linha nova (a primeira em branco, com um Departamento ignorado fora de Despesas e Extra), uma com a conta de outra
+    // unidade, uma sem nome, uma com o nome repetido e uma com um Departamento que não existe.
+    aba.linhas[6] = [{ valor: "Ponte 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Comercial" }, { valor: "Ponte rolante" }, { valor: null }, { valor: 5 }, { valor: 80000 }, { valor: null }, { valor: 120 }];
+    aba.linhas[7] = [{ valor: "Caminhão" }, { valor: "Serviços" }, { valor: "Depreciação do Patrimônio" }, { valor: null }, { valor: "Caminhão" }, { valor: null }, { valor: 1 }, { valor: 300000 }, { valor: 0 }, { valor: 60 }];
+    aba.linhas[8] = [{ valor: null }, { valor: "Matriz" }, { valor: null }, { valor: null }, { valor: "Sem nome" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    aba.linhas[9] = [{ valor: "notebooks 2026" }, { valor: "Matriz" }, { valor: null }, { valor: null }, { valor: "Repetido" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    aba.linhas[10] = [{ valor: "Cadeiras" }, { valor: "Despesas e Extra" }, { valor: null }, { valor: "Vendas" }, { valor: "Cadeiras" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
     const [lido] = lerArquivoDePremissas("i.xlsx", gerarXlsx([aba]));
     assert.deepEqual(
       lido.investimentos.map(({ aba: _a, numero: _n, ...i }) => i),
       [
-        { nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24 },
-        { nomeReferencia: "Ponte 2026", unidade: 1, descricao: "Ponte rolante", condicaoPagamento: null, inicio: 5, valorTotal: 80000, valorPosUso: 0, vidaUtil: 120 },
+        { nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24, departamento: "COMERCIAL" },
+        { nomeReferencia: "Ponte 2026", unidade: 1, descricao: "Ponte rolante", condicaoPagamento: null, inicio: 5, valorTotal: 80000, valorPosUso: 0, vidaUtil: 120, departamento: null },
       ],
     );
-    assert.equal(lido.erros.length, 3);
+    assert.equal(lido.erros.length, 4);
     assert.match(lido.erros[0], /Conta de Serviços é a Depreciação do Maquinário de Serviços/);
     assert.match(lido.erros[1], /dê um Nome de Referência/);
     assert.match(lido.erros[2], /se repete na aba/);
-    // A fórmula da Depreciação Mensal, com o valor calculado (19/10/2026: sem o ROI).
-    assert.equal(aba.linhas[5][9].valor, 416.67);
-    assert.equal(aba.linhas[5][9].formula, 'IF(OR(G6="",I6="",I6=0),"",(G6-IF(H6="",0,H6))/I6)');
+    assert.match(lido.erros[3], /Departamento “Vendas” não é um dos da lista/);
+    // O Departamento na planilha (12/11/2026) e a fórmula da Depreciação Mensal, com o valor calculado (19/10/2026: sem o ROI).
+    assert.equal(aba.linhas[5][3].valor, "Comercial");
+    assert.equal(aba.linhas[5][10].valor, 416.67);
+    assert.equal(aba.linhas[5][10].formula, 'IF(OR(H6="",J6="",J6=0),"",(H6-IF(I6="",0,I6))/J6)');
   });
   it("a média dos centros conta só os meses com movimentação de cada grupo e conta", () => {
     const r = mediaNosMesesComOcorrencia(

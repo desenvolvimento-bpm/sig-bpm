@@ -83,12 +83,12 @@ cenariosRoutes.post("/:id/quadro/excluir", autenticacao, tela("premissas", "edit
 cenariosRoutes.post("/:id/quadro", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.put("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.delete("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), asyncHandler(c.gravarLinhaDoQuadro));
-// A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes.
-cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("premissas", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
-cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("premissas", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));
-cenariosRoutes.put("/:id/premissas/reajustes/aplicacao", autenticacao, tela("premissas", "editar", "reajustes"), express.json(), asyncHandler(c.gravarAplicacaoDosReajustes));
+// A aba Reajustes dos analíticos (11/11/2026; 12/11/2026: nas Configurações): os Índices de Reajuste e a Aplicação dos Reajustes.
+cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("configuracoes", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
+cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));
+cenariosRoutes.put("/:id/premissas/reajustes/aplicacao", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarAplicacaoDosReajustes));
 // Aplicar / Remover Reajustes (o botão do quadro Aplicação dos Reajustes): na DRE, nunca duas vezes seguidas.
-cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("premissas", "editar", "reajustes"), express.json(), asyncHandler(c.aplicarReajustes));
+cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.aplicarReajustes));
 // Os investimentos e o extra-operacional dos cenários analíticos (13/10/2026).
 cenariosRoutes.get("/:id/investimentos", autenticacao, tela("premissas", "ler", "investimentos"), asyncHandler(c.investimentos));
 cenariosRoutes.post("/:id/investimentos/excluir", autenticacao, tela("premissas", "editar", "investimentos"), express.json(), asyncHandler(c.excluirInvestimentos));

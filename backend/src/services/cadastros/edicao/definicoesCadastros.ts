@@ -12,6 +12,7 @@ import { compilarFormula, FormulaInvalidaError, formulaPorExtenso } from "../../
 import { CALCULOS_SISTEMA } from "../../relatorios/indicadores.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
+import { chaveDoFornecedor } from "../../classificacao/regrasClassificacao.js";
 import { DEFINICOES_COLABORADORES } from "./definicoesColaboradores.js";
 import { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
@@ -71,6 +72,8 @@ export type Campo = {
   ajuda?: string;
   /** A ajuda ao lado do campo, e não embaixo (21/10/2026; o Formato do Painel de Bordo). */
   ajudaAoLado?: boolean;
+  /** A lista com busca (13/11/2026: o fornecedor e o centro imperativo das Reclassificações › Por Fornecedor), para as listas longas. */
+  busca?: boolean;
   opcoes?: (db: Db) => Promise<Opcao[]>;
 };
 
@@ -305,11 +308,14 @@ const centros: DefinicaoCadastro = {
     const m = await this.movimentos!(db, id);
     if (m) return `${m} Inative-o em vez de excluir.`;
     // A Gestão de Colaboradores (09/11/2026): o Lançamento Inicial, as movimentações e as linhas do Quadro de Lotação dos cenários.
-    const [c, q, l] = await Promise.all([
+    const [c, q, l, f] = await Promise.all([
       db.colaboradorCargaInicial.count({ where: { centroCustoId: id } }),
       db.colaboradorMovimentacao.count({ where: { centroCustoId: id } }),
       db.cenarioLotacao.count({ where: { centroCustoId: id } }),
+      db.reclassificacaoFornecedor.count({ where: { centroCustoId: id } }),
     ]);
+    // O centro imperativo de reclassificações por fornecedor (13/11/2026).
+    if (f) return `O centro é o imperativo de ${f} ${plural(f, "reclassificação", "reclassificações")} por fornecedor (Reclassificações › Por Fornecedor). Inative-o em vez de excluir.`;
     const usos = [
       c ? `${c} ${plural(c, "colaborador", "colaboradores")} do Lançamento Inicial` : "",
       q ? `${q} ${plural(q, "movimentação", "movimentações")} do Quadro de Lotação` : "",
@@ -476,6 +482,85 @@ async function opcoesContas(db: Db) {
     rotulo: `${c.reduzido} · ${c.descricao}`,
   }));
 }
+
+// ------------------------------------------------- reclassificações por fornecedor
+/** Os fornecedores dos movimentos já importados (o CLI_FORN do balancete, de competências fechadas ou abertas), um por nome. */
+async function opcoesFornecedores(db: Db) {
+  const fs = await db.lancamentoContabil.findMany({ where: { cliForn: { not: null } }, distinct: ["cliForn"], select: { cliForn: true } });
+  const porChave = new Map<string, string>();
+  for (const { cliForn } of fs) {
+    const nome = cliForn!.trim();
+    if (nome && !porChave.has(chaveDoFornecedor(nome))) porChave.set(chaveDoFornecedor(nome), nome);
+  }
+  return [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")).map((f) => ({ valor: f, rotulo: f }));
+}
+
+/**
+ * As reclassificações por fornecedor (13/11/2026, pedido do Adão): o fornecedor e o centro de custo imperativo, para onde
+ * vão todos os movimentos dele na classificação das competências ainda não apuradas. A contestação validada no balancete
+ * continua por cima.
+ */
+const reclassificacoesFornecedor: DefinicaoCadastro = {
+  entidade: "reclassificacoes-fornecedor",
+  titulo: "Reclassificação por Fornecedor",
+  auditoria: "reclassificacao_fornecedor",
+  criar: true,
+  excluir: true,
+  reclassifica: true,
+  campos: [
+    {
+      nome: "fornecedor",
+      rotulo: "Fornecedor",
+      tipo: "opcao",
+      obrigatorio: true,
+      busca: true,
+      larguraInteira: true,
+      ajuda: "Os fornecedores dos movimentos já importados, de competências fechadas ou abertas.",
+      opcoes: opcoesFornecedores,
+    },
+    {
+      nome: "centroCustoId",
+      rotulo: "Centro de Custo Imperativo",
+      tipo: "opcao",
+      obrigatorio: true,
+      busca: true,
+      larguraInteira: true,
+      ajuda: "Todos os movimentos do fornecedor vão para este centro de custo, seja qual for o centro em que o RM os lançou.",
+      opcoes: async (db) =>
+        (await db.centroCusto.findMany({ where: { OR: [{ ativo: true }, { reclassificacoesFornecedor: { some: {} } }] }, orderBy: { codigoRM: "asc" }, select: { id: true, codigoRM: true, nomeRM: true, ativo: true } })).map((c) => ({
+          valor: c.id,
+          rotulo: `${c.codigoRM ?? "sem código"} · ${c.nomeRM}${c.ativo ? "" : " (inativo)"}`,
+        })),
+    },
+    { nome: "motivo", rotulo: "Motivo", tipo: "texto", larguraInteira: true },
+    { nome: "ativo", rotulo: "Ativa", tipo: "booleano" },
+  ],
+  async listar(db, busca) {
+    const rs = await db.reclassificacaoFornecedor.findMany({ orderBy: { fornecedor: "asc" }, include: { centroCusto: { select: { codigoRM: true, nomeRM: true } } } });
+    return rs.filter((r) => contem(busca, r.fornecedor, r.centroCusto.codigoRM, r.centroCusto.nomeRM, r.motivo));
+  },
+  ler: (db, id) => db.reclassificacaoFornecedor.findUnique({ where: { id } }),
+  async preparar(db, v, id) {
+    const fornecedor = exigir(v.fornecedor, "O fornecedor");
+    const centroCustoId = exigir(v.centroCustoId, "O centro de custo imperativo");
+    if (!(await db.centroCusto.findUnique({ where: { id: centroCustoId }, select: { id: true } }))) throw new RegraCadastroError(400, "Centro de custo inexistente.");
+    const chave = chaveDoFornecedor(fornecedor);
+    const doFornecedor = await db.reclassificacaoFornecedor.findMany({ where: { fornecedor: { equals: fornecedor, mode: "insensitive" } }, select: { id: true, fornecedor: true } });
+    if (doFornecedor.some((r) => r.id !== id && chaveDoFornecedor(r.fornecedor) === chave)) throw new RegraCadastroError(409, "Já existe uma reclassificação para este fornecedor.");
+    if (!(await db.lancamentoContabil.findFirst({ where: { cliForn: { equals: fornecedor, mode: "insensitive" } }, select: { id: true } }))) {
+      throw new RegraCadastroError(400, "O fornecedor não tem movimentos importados: escolha um da lista.");
+    }
+    return { fornecedor, centroCustoId, motivo: texto(v.motivo), ativo: v.ativo === undefined ? true : booleano(v.ativo) };
+  },
+  async gravar(db, d, id) {
+    const dados = d as Prisma.ReclassificacaoFornecedorUncheckedCreateInput;
+    return id
+      ? (await db.reclassificacaoFornecedor.update({ where: { id }, data: dados })).id
+      : (await db.reclassificacaoFornecedor.create({ data: { ...dados, ordem: (await db.reclassificacaoFornecedor.count()) + 1 } })).id;
+  },
+  // Como a por conta, não é referenciada: o lançamento guarda o centro que vale, congelado na apuração.
+  remover: async (db, id) => void (await db.reclassificacaoFornecedor.delete({ where: { id } })),
+};
 
 // --------------------------------------------------------- estrutura da DRE
 const estrutura: DefinicaoCadastro = {
@@ -1665,7 +1750,7 @@ const estacas: DefinicaoCadastro = {
 
 export const DEFINICOES: Record<string, DefinicaoCadastro> = Object.fromEntries(
   // Os cadastros da Gestão de Colaboradores (06/11/2026), no arquivo deles.
-  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, departamentosDoCadastro, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
+  [centros, contas, reclassificacoes, reclassificacoesFornecedor, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, departamentosDoCadastro, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
     d.entidade,
     d,
   ]),

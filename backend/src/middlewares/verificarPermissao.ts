@@ -152,7 +152,9 @@ export function verificarPermissaoDoCenario(acao: "ler" | "editar", tela?: strin
  * da Controladoria são abas das telas Contábil, Controladoria e Analítico (17/10/2026).
  */
 export const AREA_DO_CADASTRO: Record<string, string> = {
-  reclassificacoes: "cadastro_reclassificacoes",
+  // As abas Por Conta e Por Fornecedor da tela Reclassificações (13/11/2026).
+  reclassificacoes: "cadastro_reclassificacoes.por_conta",
+  "reclassificacoes-fornecedor": "cadastro_reclassificacoes.por_fornecedor",
   "precos-contrato": "cadastro_precos_contrato",
   "tipos-movimento": "cadastro_tipos_movimento",
   "tabela-estacas": "cadastro_tabela_estacas",
