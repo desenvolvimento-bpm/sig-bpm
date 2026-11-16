@@ -5,6 +5,7 @@ import { coluna, ESTILO, type AbaEscrita, type Celula } from "../../lib/xlsxEscr
 import { juntarOrigem, type OrigensDasContas } from "./consolidadoDosCentros.js";
 import { CONTAS_DEPRECIACAO, depreciacaoMensal } from "./investimentosCenario.js";
 import { salarioTotal, type MesDaLinha } from "./quadroDoCenario.js";
+import { ROTULO_DO_TIPO, tipoDoTexto } from "../colaboradores/tiposDoColaborador.js";
 import type { DepartamentoAcesso } from "../../generated/prisma/enums.js";
 
 /**
@@ -63,10 +64,10 @@ export type LinhaDaPlanilha = {
   und: string;
   /**
    * Nos grupos com linhas no Quadro de Lotação (11/11/2026, pedido do Adão): a soma da aba Quadro de Lotação do arquivo que a
-   * linha é, em fórmula — os centros (os códigos), o Tipo e a senioridade das linhas que entram e o que somar (os
-   * Colaboradores ou os salários, colaboradores × (Salário Bruto + Insalubridade / Periculosidade)).
+   * linha é, em fórmula — os centros (os códigos) e o Tipo das linhas que entram e o que somar (os Colaboradores ou os
+   * salários, colaboradores × (Salário Bruto + Insalubridade / Periculosidade)).
    */
-  doQuadro?: { centros: string[]; tipo?: "CLT" | "PJ"; senioridade?: "APRENDIZ" | "ESTAGIARIO" | "OUTRAS"; soma: "COLABORADORES" | "SALARIOS" };
+  doQuadro?: { centros: string[]; tipo: "CLT" | "PJ" | "APRENDIZ" | "ESTAGIARIO"; soma: "COLABORADORES" | "SALARIOS" };
   /** A conta da DRE (a variação máxima do Comparativo); nula nas linhas sem conta (volumes, dias úteis, quadros). */
   conta: string | null;
   limite: number | null;
@@ -206,27 +207,23 @@ export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroD
 
 /**
  * A fórmula de um mês (k) de uma linha calculada pela aba Quadro de Lotação (11/11/2026): a soma das linhas da aba dos centros
- * dela (o Centro de Custo é o código ou "código - nome", como o Exportar escreve), do Tipo e da senioridade (Aprendiz;
- * Estagiário; ou as outras), dos Colaboradores ou dos salários (colaboradores × (Salário Bruto + Insalubridade /
- * Periculosidade)), como o SIG calcula.
+ * dela (o Centro de Custo é o código ou "código - nome", como o Exportar escreve) e do Tipo (CLT, PJ, Aprendiz ou
+ * Estagiário), dos Colaboradores ou dos salários (colaboradores × (Salário Bruto + Insalubridade / Periculosidade)), como o
+ * SIG calcula.
  */
 export function formulaDoQuadro(d: NonNullable<LinhaDaPlanilha["doQuadro"]>, q: QuadroDoArquivo, k: number): string {
   const aba = `'${q.aba.replace(/'/g, "''")}'`;
   // As linhas fixas ($): a fórmula copiada para outra célula continua na mesma faixa da aba.
   const faixa = (c: string) => `${aba}!${c}$${q.primeira}:${c}$${q.ultima}`;
   const texto = (x: string) => `"${x.replace(/"/g, '""')}"`;
-  // As colunas da aba (a partir de A): Unidade, Tipo, Senioridade, Função e Centro de Custo.
-  const [tipo, senioridade, centro] = [faixa(coluna(1)), faixa(coluna(2)), faixa(coluna(4))];
+  // As colunas da aba (a partir de A): Unidade, Tipo, Função e Centro de Custo.
+  const [tipo, centro] = [faixa(coluna(1)), faixa(coluna(3))];
   const centros = d.centros.length
     ? `((${d.centros.map((c) => `(${centro}=${texto(c)})+(LEFT(${centro},${c.length + 3})=${texto(`${c} - `)})`).join("+")})>0)`
     : "0";
-  const aprendiz = `(${senioridade}="Aprendiz")`;
-  const estagiario = `((${senioridade}="Estagiário")+(${senioridade}="Estagiario"))`;
-  const filtros = [
-    centros,
-    ...(d.tipo ? [`(${tipo}="${d.tipo}")`] : []),
-    ...(d.senioridade === "APRENDIZ" ? [aprendiz] : d.senioridade === "ESTAGIARIO" ? [estagiario] : d.senioridade === "OUTRAS" ? [`(1-${aprendiz})`, `(1-${estagiario})`] : []),
-  ];
+  // O Tipo como o Exportar escreve (o Excel compara sem diferença de maiúsculas; o Estagiário também sem o acento).
+  const doTipo = d.tipo === "ESTAGIARIO" ? `((${tipo}="Estagiário")+(${tipo}="Estagiario"))` : `(${tipo}=${texto(ROTULO_DO_TIPO[d.tipo])})`;
+  const filtros = [centros, doTipo];
   const doMes = (campo: 0 | 1 | 2) => faixa(q.doMes(k, campo));
   const valor = d.soma === "COLABORADORES" ? doMes(0) : `${doMes(0)}*(${doMes(1)}+${doMes(2)})`;
   return `SUMPRODUCT(${filtros.join("*")}*${valor})`;
@@ -384,7 +381,7 @@ export type InvestimentoLido = {
   departamento: DepartamentoAcesso | null;
 };
 /** Os campos de uma linha do Quadro de Lotação lida (09/11/2026): os textos dos cadastros, como no Lançamento Inicial. */
-export type CamposDoQuadro = { unidade: string; tipo: string; senioridade: string; funcao: string; centro: string };
+export type CamposDoQuadro = { unidade: string; tipo: string; funcao: string; centro: string };
 /** Uma linha lida da aba Quadro de Lotação: o Código da Linha (nos arquivos de antes de 11/11/2026; null: nova), os campos e os doze meses. */
 export type LinhaDoQuadroLida = { aba: string; numero: number; id: string | null; campos: CamposDoQuadro; meses: MesDaLinha[] };
 export type ArquivoLido = {
@@ -624,11 +621,15 @@ const COLUNA_CODIGO_DA_LINHA = "Código da Linha (não altere)";
 const DEPARTAMENTOS_DO_ARQUIVO = "Departamentos do arquivo:";
 const CAMPOS_DO_QUADRO: Array<[keyof CamposDoQuadro, string, number]> = [
   ["unidade", "Unidade", 16],
-  ["tipo", "Tipo", 8],
-  ["senioridade", "Senioridade", 14],
+  ["tipo", "Tipo", 11],
   ["funcao", "Função", 30],
   ["centro", "Centro de Custo", 40],
 ];
+/**
+ * Os rótulos da aba Quadro de Lotação sem o Código da Linha: os campos no começo, a partir da Unidade (o arquivo exportado
+ * até 16/11/2026 tem a Senioridade no meio deles).
+ */
+const rotulosDoQuadro = (cs: string[]) => cs[0] === CAMPOS_DO_QUADRO[0][1] && CAMPOS_DO_QUADRO.every(([, c]) => cs.slice(0, CAMPOS_DO_QUADRO.length + 1).includes(c));
 /** As quatro colunas de cada mês (o mês antes: "JAN/26 · Colaboradores"); o Salário Total é uma fórmula. */
 const DO_MES = ["Colaboradores", "Salário Bruto (R$)", "Insalubridade / Periculosidade (R$)", "Salário Total (R$)"] as const;
 const COLUNA_CUSTO_ANUAL = "Custo no Ano (R$)";
@@ -637,7 +638,6 @@ export type LinhaDoQuadroDaPlanilha = {
   id: string;
   unidade: string;
   tipo: string;
-  senioridade: string;
   funcao: string;
   centro: string;
   meses: MesDaLinha[];
@@ -647,7 +647,7 @@ export type LinhaDoQuadroDaPlanilha = {
 
 /**
  * A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores): as linhas da aba do cenário, com a Unidade, o
- * Tipo, a Senioridade, a Função e o Centro de Custo (pelo código, como no Lançamento Inicial) e, em cada mês, os
+ * Tipo, a Função e o Centro de Custo (pelo código, como no Lançamento Inicial) e, em cada mês, os
  * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um e o Salário Total (a soma, em fórmula); no
  * fim, o Custo no Ano (colaboradores × Salário Total nos doze meses, em fórmula). Abaixo, linhas em branco para as linhas
  * novas. Sem o Código da Linha (11/11/2026, pedido do Adão): na importação, as linhas da aba substituem as do cenário nos
@@ -657,7 +657,7 @@ export function abaDoQuadroDeLotacao(
   linhas: LinhaDoQuadroDaPlanilha[],
   meses: string[],
   identificacao: string,
-  listas: { unidades: string[]; senioridades: string[] },
+  listas: { unidades: string[] },
   /** A coluna da referência (11/11/2026), depois do Centro de Custo: o rótulo e a explicação. */
   referencia?: { rotulo: string; explicacao: string },
   /** Os departamentos do arquivo (11/11/2026; os nomes): as linhas do cenário que a aba substitui na importação. */
@@ -682,7 +682,7 @@ export function abaDoQuadroDeLotacao(
     [
       {
         valor:
-          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
+          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
           (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
         estilo: ESTILO.informacao,
       },
@@ -702,7 +702,6 @@ export function abaDoQuadroDeLotacao(
     linhasDaAba.push([
       { valor: l.unidade },
       { valor: l.tipo },
-      { valor: l.senioridade },
       { valor: l.funcao },
       { valor: l.centro },
       ...(referencia ? [{ valor: l.referencia ?? null, estilo: ESTILO.itemNumero }] : []),
@@ -731,7 +730,7 @@ export function abaDoQuadroDeLotacao(
   }
   const ultima = PRIMEIRA_LINHA + linhas.length + LINHAS_NOVAS - 1;
   const intervalo = (c: string) => `${c}${PRIMEIRA_LINHA}:${c}${ultima}`;
-  // As listas suspensas que cabem no limite do Excel (255 caracteres): o Tipo, a Unidade e a Senioridade.
+  // As listas suspensas que cabem no limite do Excel (255 caracteres): o Tipo e a Unidade.
   const cabe = (xs: string[]) => xs.length > 0 && xs.join(",").length <= 250 && !xs.some((x) => x.includes(","));
   return {
     nome: NOME_DA_ABA.quadro,
@@ -743,9 +742,8 @@ export function abaDoQuadroDeLotacao(
     // Os cadastros presos ao rolar para os lados (11/11/2026, pedido do Adão), antes da referência e dos meses.
     congelarColunas: n,
     validacoes: [
-      { celulas: intervalo(coluna(1)), lista: ["CLT", "PJ"] },
+      { celulas: intervalo(coluna(1)), lista: Object.values(ROTULO_DO_TIPO) },
       ...(cabe(listas.unidades) ? [{ celulas: intervalo(coluna(0)), lista: listas.unidades }] : []),
-      ...(cabe(listas.senioridades) ? [{ celulas: intervalo(coluna(2)), lista: listas.senioridades }] : []),
     ],
   };
 }
@@ -768,6 +766,8 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
     r.substituiQuadro = departamentos as Departamento[];
   }
   const iCampos = CAMPOS_DO_QUADRO.map(([, c]) => rotulos.indexOf(c));
+  // O arquivo exportado com a Senioridade (até 16/11/2026): o Aprendiz e o Estagiário dela viram o Tipo da linha.
+  const iSenioridade = rotulos.indexOf("Senioridade");
   // As colunas de cada campo do mês, na ordem dos meses.
   const doMes = (d: string) => rotulos.flatMap((x, k) => (x.endsWith(` · ${d}`) ? [k] : []));
   const [iColaboradores, iBruto, iAdicional] = [doMes(DO_MES[0]), doMes(DO_MES[1]), doMes(DO_MES[2])];
@@ -790,6 +790,8 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
     }
     if (id) ids.add(id);
     const campos = Object.fromEntries(CAMPOS_DO_QUADRO.map(([chave], k) => [chave, texto(c[iCampos[k]]).slice(0, 200)])) as CamposDoQuadro;
+    const senioridade = iSenioridade >= 0 ? tipoDoTexto(texto(c[iSenioridade])) : null;
+    if (senioridade === "APRENDIZ" || senioridade === "ESTAGIARIO") campos.tipo = ROTULO_DO_TIPO[senioridade];
     const faltam = CAMPOS_DO_QUADRO.filter(([chave]) => !campos[chave]).map(([, rotulo]) => rotulo);
     if (faltam.length) {
       erro(`preencha ${faltam.join(", ")}.`);
@@ -840,7 +842,7 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
     const ehRotulo = (cs: string[]) =>
       [COLUNA_CODIGO, COLUNA_NOME_REFERENCIA, COLUNA_CODIGO_DA_LINHA].includes(cs[0]) ||
       (cs.includes("Und.") && cs.includes(COLUNA_MEDIA) && cs.includes(COLUNA_JUSTIFICATIVA)) ||
-      CAMPOS_DO_QUADRO.every(([, c], k) => cs[k] === c);
+      rotulosDoQuadro(cs);
     const i = linhas.findIndex((l) => ehRotulo(l.celulas.map((c) => String(c ?? "").trim())));
     if (i < 0) {
       r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem os rótulos dele) e foi ignorada.`);
@@ -853,7 +855,7 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
       continue;
     }
     // A aba Quadro de Lotação (09/11/2026): pelo Código da Linha na primeira coluna; desde 11/11/2026, sem ele.
-    if (rotulos[0] === COLUNA_CODIGO_DA_LINHA || CAMPOS_DO_QUADRO.every(([, c], k) => rotulos[k] === c)) {
+    if (rotulos[0] === COLUNA_CODIGO_DA_LINHA || rotulosDoQuadro(rotulos)) {
       lerQuadroDeLotacao(nome, linhas, i, r);
       continue;
     }

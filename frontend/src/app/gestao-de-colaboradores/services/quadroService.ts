@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { TipoDoColaborador } from "./tiposDoColaborador";
 
 /** O Quadro de Lotação e o Painel de Bordo da Gestão de Colaboradores (06/11/2026, etapa 2). */
 export type StatusCompetenciaQuadro = "ABERTA" | "FECHADA";
@@ -30,9 +31,8 @@ export type Movimentacao = {
   centroCustoId: string;
   centroCusto: string;
   departamento: string | null;
-  vinculo: "CLT" | "PJ";
+  vinculo: TipoDoColaborador;
   funcao: string;
-  senioridade: string;
   motivo: string | null;
   origem: "INICIATIVA_EMPRESA" | "PEDIDO_COLABORADOR" | null;
   status: StatusMovimentacao;
@@ -49,8 +49,7 @@ export type OpcoesDoQuadro = {
   tipos: Array<{ id: string; nome: string; contagem: Contagem; aprovacao: "AUTOMATICA" | "MANUAL" }>;
   classificacoes: Array<{ id: string; nome: string; tipoMovimentacaoId: string }>;
   centros: Array<{ id: string; nome: string }>;
-  funcoes: Array<{ id: string; nome: string; senioridadeId: string | null }>;
-  senioridades: Array<{ id: string; nome: string }>;
+  funcoes: Array<{ id: string; nome: string }>;
 };
 
 export type NovaMovimentacao = {
@@ -58,8 +57,7 @@ export type NovaMovimentacao = {
   classificacaoId: string | null;
   data: string;
   centroCustoId: string;
-  vinculo: "CLT" | "PJ";
-  /** A senioridade vai com a função (13/11/2026). */
+  vinculo: TipoDoColaborador;
   funcaoId: string;
   motivo: string | null;
   origem: "INICIATIVA_EMPRESA" | "PEDIDO_COLABORADOR" | null;
@@ -78,6 +76,8 @@ export type LinhaDoRealizado = {
   final: number;
   clt: number;
   pj: number;
+  aprendizes: number;
+  estagiarios: number;
   /** Com a Comparação (09/11/2026): os colaboradores do centro no mês, na aba Quadro de Lotação do cenário; null sem ela. */
   cenario: number | null;
 };

@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 
 import type { Indicador, MesRelatorio, Painel, Resultados } from "@/app/relatorios/services/relatoriosService";
+import type { TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 
 export type MarcacaoCenario = "ORCAMENTO_EMPRESARIAL" | "RESULTADOS_ANTERIORES" | "RESULTADOS_VENDIDOS" | "PREVISAO";
 
@@ -129,12 +130,8 @@ export type LinhaDoQuadroDoCenario = {
   id: string;
   unidadeNegocioId: string;
   unidade: string;
-  vinculo: "CLT" | "PJ";
-  senioridadeId: string;
-  senioridade: string;
-  aprendiz: boolean;
-  /** A senioridade Estagiário (11/11/2026): os estagiários e os bolsistas. */
-  estagiario: boolean;
+  /** O Tipo (16/11/2026: CLT, PJ, Aprendiz ou Estagiário). */
+  vinculo: TipoDoColaborador;
   funcaoId: string;
   funcao: string;
   centroCustoId: string;
@@ -149,13 +146,12 @@ export type QuadroDoCenario = {
   linhas: LinhaDoQuadroDoCenario[];
   opcoes: {
     unidades: Array<{ id: string; nome: string }>;
-    senioridades: Array<{ id: string; nome: string }>;
-    funcoes: Array<{ id: string; nome: string; senioridadeId: string | null }>;
+    funcoes: Array<{ id: string; nome: string }>;
     centros: Array<{ id: string; nome: string; grupo: string }>;
   };
 };
 /** Os dados de uma linha: os cadastros e, na nova, os doze meses. */
-export type DadosDaLinhaDoQuadro = Pick<LinhaDoQuadroDoCenario, "unidadeNegocioId" | "vinculo" | "senioridadeId" | "funcaoId" | "centroCustoId"> & { meses?: MesDoQuadro[] };
+export type DadosDaLinhaDoQuadro = Pick<LinhaDoQuadroDoCenario, "unidadeNegocioId" | "vinculo" | "funcaoId" | "centroCustoId"> & { meses?: MesDoQuadro[] };
 export type SerieDoCentro = { referencia: number | null; valores: number[]; gravados: boolean[] };
 export type RateiosDoCenario = {
   ano: number;

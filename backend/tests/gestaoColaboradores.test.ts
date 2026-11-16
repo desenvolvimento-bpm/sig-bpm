@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { gerarXlsx, type AbaEscrita } from "../src/lib/xlsxEscrita.js";
 import { CHAVES_DA_MATRIZ } from "../src/services/acesso/telas.js";
 import { chaveDoNome, ImportacaoColaboradoresError, lerCompetencia, lerPlanilha } from "../src/services/colaboradores/importacaoCadastros.js";
-import { funcaoServeNaSenioridade, recusaDaFuncao, rotuloDaFuncao } from "../src/services/colaboradores/funcaoPorSenioridade.js";
+import { ROTULO_DO_TIPO, tipoDoTexto } from "../src/services/colaboradores/tiposDoColaborador.js";
 import { calcularQuadros, departamentosDoGrupo, indicadoresDoMes } from "../src/services/colaboradores/quadroService.js";
 import { formulaEfetiva, montarIndicador } from "../src/services/relatorios/catalogoIndicadores.js";
 import { lerItem } from "../src/services/relatorios/formulaIndicador.js";
@@ -20,7 +20,6 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
     // Os cadastros no processo Cadastros Auxiliares (12/11/2026, pedido do Adão), com as mesmas chaves.
     assert.deepEqual(CHAVES_DA_MATRIZ.filter((c) => c.recurso === "CADASTROS_AUXILIARES").map((c) => c.chave), [
       "colaboradores_cadastros",
-      "colaboradores_cadastros.senioridades",
       "colaboradores_cadastros.funcoes",
       "colaboradores_cadastros.movimentacoes",
       "colaboradores_cadastros.classificacoes",
@@ -44,33 +43,33 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
       aba("Capa", [["Funções da BPM"]]),
       aba("Funções", [
         ["Lista de funções"],
-        ["FUNCAO", "Descrição", "Nível", "Competências", "Atividades"],
-        ["Analista Contábil", "Fecha o mês", "Pleno", "Contabilidade", "Conciliações"],
-        [null, null, null, null, null],
-        ["Aprendiz Administrativo", null, "Aprendiz", null, null],
+        ["FUNCAO", "Descrição", "Competências", "Atividades"],
+        ["Analista Contábil", "Fecha o mês", "Contabilidade", "Conciliações"],
+        [null, null, null, null],
+        ["Jovem Aprendiz", null, null, null],
       ]),
     ]);
     const { aba: lida, itens } = lerPlanilha(arquivo, "funcoes");
     assert.equal(lida, "Funções");
     assert.deepEqual(
-      itens.map((i) => [i.linha, i.valores.funcao, i.valores.senioridade, i.valores.descricao]),
+      itens.map((i) => [i.linha, i.valores.funcao, i.valores.descricao, i.valores.competencias]),
       [
-        [3, "Analista Contábil", "Pleno", "Fecha o mês"],
-        [5, "Aprendiz Administrativo", "Aprendiz", ""],
+        [3, "Analista Contábil", "Fecha o mês", "Contabilidade"],
+        [5, "Jovem Aprendiz", "", ""],
       ],
     );
   });
 
-  it("a planilha de Funções com a coluna Senioridade (11/11/2026)", () => {
+  it("a planilha de Funções sem a senioridade (16/11/2026): a coluna Senioridade de uma planilha de antes não é lida", () => {
     const arquivo = gerarXlsx([aba("Funções", [["Função", "Descrição", "Senioridade", "Competências", "Atividades"], ["Analista Contábil", null, "Pleno", null, null]])]);
-    assert.equal(lerPlanilha(arquivo, "funcoes").itens[0].valores.senioridade, "Pleno");
+    assert.deepEqual(lerPlanilha(arquivo, "funcoes").itens[0].valores, { funcao: "Analista Contábil", descricao: "", competencias: "", atividades: "" });
   });
 
-  it("o Lançamento Inicial exige as cinco colunas; a competência no formato aaaa-mm", () => {
-    const semCentro = gerarXlsx([aba("QL", [["UNIDADE", "TIPO", "SENIORIDADE", "FUNÇÃO"], ["Matriz", "CLT", "Pleno", "Analista"]])]);
+  it("o Lançamento Inicial exige as quatro colunas; a competência no formato aaaa-mm", () => {
+    const semCentro = gerarXlsx([aba("QL", [["UNIDADE", "TIPO", "FUNÇÃO"], ["Matriz", "CLT", "Analista"]])]);
     assert.throws(() => lerPlanilha(semCentro, "lancamento-inicial"), (e) => e instanceof ImportacaoColaboradoresError && /CENTRO DE CUSTO/.test(e.message));
-    const certo = gerarXlsx([aba("QL", [["Unidade", "Tipo", "Senioridade", "Função", "Centro de Custo"], ["Matriz", "CLT", "Pleno", "Analista", "1.01 - CONTROLADORIA"]])]);
-    assert.equal(lerPlanilha(certo, "lancamento-inicial").itens[0].valores.centro, "1.01 - CONTROLADORIA");
+    const certo = gerarXlsx([aba("QL", [["Unidade", "Tipo", "Função", "Centro de Custo"], ["Matriz", "Aprendiz", "Jovem Aprendiz", "1.01 - CONTROLADORIA"]])]);
+    assert.deepEqual(lerPlanilha(certo, "lancamento-inicial").itens[0].valores, { unidade: "Matriz", tipo: "Aprendiz", funcao: "Jovem Aprendiz", centro: "1.01 - CONTROLADORIA" });
     assert.deepEqual(lerCompetencia("2026-11"), { ano: 2026, mes: 11 });
     assert.throws(() => lerCompetencia("2026-13"), ImportacaoColaboradoresError);
     assert.throws(() => lerCompetencia(undefined), ImportacaoColaboradoresError);
@@ -151,35 +150,45 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
   });
 });
 
-describe("Gestão de Colaboradores: a função por senioridade (11/11/2026)", () => {
+describe("Gestão de Colaboradores: as funções e os tipos (16/11/2026: sem as senioridades)", () => {
   it("a planilha com várias abas: vale a que tem mais das colunas esperadas; as linhas só com 0 ficam de fora", () => {
     const arquivo = gerarXlsx([
-      // A aba dos colaboradores tem Função, Descrição e Senioridade (vazia); a das funções, as cinco colunas.
-      aba("QL (Corrigido)", [["Unidade", "CLT/PJ", "Função", "Descrição", "Senioridade"], ["Filial", "CLT", "Conferente", "Conferente", null], ["Filial", "CLT", "Conferente", "Conferente", null]]),
+      // A aba dos colaboradores tem Função e Descrição; a das funções, as quatro colunas.
+      aba("QL (Corrigido)", [["Unidade", "CLT/PJ", "Função", "Descrição"], ["Filial", "CLT", "Conferente", "Conferente"], ["Filial", "CLT", "Conferente", "Conferente"]]),
       aba("Carga Inicial das Funções", [
-        ["Função", "Descrição", "Senioridade", "Competências", "Atividades"],
-        ["Conferente", "Conferente", "Júnior", "<Descrever>", "<Descrever>"],
-        ["Conferente", "Conferente", "Pleno", "<Descrever>", "<Descrever>"],
-        [0, 0, 0, 0, 0],
+        ["Função", "Descrição", "Competências", "Atividades"],
+        ["Conferente", "Conferente", "<Descrever>", "<Descrever>"],
+        ["Operador de Ponte", "Opera a ponte rolante", "<Descrever>", "<Descrever>"],
+        [0, 0, 0, 0],
       ]),
     ]);
     const { aba: lida, itens } = lerPlanilha(arquivo, "funcoes");
     assert.equal(lida, "Carga Inicial das Funções");
     assert.deepEqual(
-      itens.map((i) => [i.linha, i.valores.funcao, i.valores.senioridade]),
+      itens.map((i) => [i.linha, i.valores.funcao]),
       [
-        [2, "Conferente", "Júnior"],
-        [3, "Conferente", "Pleno"],
+        [2, "Conferente"],
+        [3, "Operador de Ponte"],
       ],
     );
   });
 
-  it("a função serve na senioridade dela; a sem senioridade, em todas", () => {
-    assert.equal(funcaoServeNaSenioridade({ senioridadeId: "pleno" }, "pleno"), true);
-    assert.equal(funcaoServeNaSenioridade({ senioridadeId: "pleno" }, "junior"), false);
-    assert.equal(funcaoServeNaSenioridade({ senioridadeId: null }, "junior"), true);
-    assert.equal(rotuloDaFuncao({ nome: "Conferente", senioridade: { nome: "Pleno" } }), "Conferente · Pleno");
-    assert.equal(recusaDaFuncao({ nome: "Conferente", senioridadeId: "pleno", senioridade: { nome: "Pleno" } }, "pleno"), null);
-    assert.match(recusaDaFuncao({ nome: "Conferente", senioridadeId: "pleno", senioridade: { nome: "Pleno" } }, "junior") ?? "", /Conferente · Pleno é de outra senioridade/);
+  it("o Tipo pelo texto da planilha: CLT, PJ, Aprendiz e Estagiário, sem diferença de maiúsculas e acentos", () => {
+    assert.equal(tipoDoTexto(" clt "), "CLT");
+    assert.equal(tipoDoTexto("pj"), "PJ");
+    assert.equal(tipoDoTexto("APRENDIZ"), "APRENDIZ");
+    assert.equal(tipoDoTexto("Estagiário"), "ESTAGIARIO");
+    assert.equal(tipoDoTexto("estagiario"), "ESTAGIARIO");
+    assert.equal(tipoDoTexto("Júnior"), null);
+    assert.equal(tipoDoTexto(""), null);
+    assert.deepEqual(Object.values(ROTULO_DO_TIPO), ["CLT", "PJ", "Aprendiz", "Estagiário"]);
+  });
+
+  it("o quadro conta os quatro tipos em separado, no mesmo centro", () => {
+    const tipos = ["CLT", "CLT", "APRENDIZ", "ESTAGIARIO", "PJ"] as const;
+    const carga = { ano: 2026, mes: 11, itens: tipos.map((vinculo) => ({ centroCustoId: "A", vinculo })) };
+    const [nov] = calcularQuadros([{ ano: 2026, mes: 11 }], carga, () => [{ centroCustoId: "A", vinculo: "APRENDIZ", contagem: "POSITIVA", status: "APROVADA", tipo: "Admissão" }]);
+    assert.deepEqual(Object.fromEntries(nov.final), { "A|CLT": 2, "A|APRENDIZ": 2, "A|ESTAGIARIO": 1, "A|PJ": 1 });
+    assert.equal(indicadoresDoMes(nov).quadroDeLotacao, 6);
   });
 });

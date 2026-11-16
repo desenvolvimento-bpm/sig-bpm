@@ -28,6 +28,38 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 16/11/2026: sem as senioridades (só as funções contam); o Tipo com Aprendiz e Estagiário.
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: [
+      "Sai a aba Senioridades: só as funções contam. Cada função existe uma vez, pelo nome; as funções de mesmo nome (uma por senioridade) viraram uma só, com os registros delas.",
+      "O Tipo do colaborador passa a ter CLT, PJ, Aprendiz e Estagiário. Os colaboradores que tinham a senioridade Aprendiz ou Estagiário ficaram com o Tipo correspondente.",
+      "A importação das Funções usa as colunas Função, Descrição, Competências e Atividades; a do Lançamento Inicial, Unidade, Tipo, Função e Centro de Custo.",
+    ],
+  },
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "No modal Nova Movimentação, o Tipo tem CLT, PJ, Aprendiz e Estagiário, e a Função aparece sem a senioridade.",
+      "No Realizado, o fim do mês por tipo ganha as colunas Aprendizes e Estagiários, ao lado de CLT e PJ.",
+    ],
+  },
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Quadro de Lotação, sai a coluna Senioridade: o Tipo (CLT, PJ, Aprendiz ou Estagiário) separa os Aprendizes, com o Fundo de Garantia: Aprendiz, e os Estagiários, sem encargos. As linhas que só se diferenciavam pela senioridade viraram uma, com os colaboradores somados e o salário pela média ponderada (o custo não mudou).",
+      "No Exportar Premissas, a aba Quadro de Lotação sai sem a coluna Senioridade, com o Tipo em lista. Um arquivo exportado antes ainda se importa: o Aprendiz e o Estagiário da Senioridade viram o Tipo da linha.",
+    ],
+  },
   // 13/11/2026 (noite): as Redistribuições de Gastos, a Jornada, a Tela Inicial, a largura das colunas e os demais ajustes do dia.
   {
     publicada: "2026-11-13T18:55",
@@ -303,7 +335,7 @@ export const NOVIDADES: Novidade[] = [
     publicada: "2026-11-12T13:25",
     processo: "Cadastros Auxiliares",
     tela: "Gestão de Colaboradores",
-    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
     itens: [
       "O processo novo, abaixo da Gestão de Colaboradores, com os cadastros dos Processos Auxiliares: a tela Gestão de Colaboradores (“Colaboradores” na barra), antes a tela Cadastros da Gestão de Colaboradores, com as mesmas abas e permissões.",
     ],
@@ -352,7 +384,7 @@ export const NOVIDADES: Novidade[] = [
     publicada: "2026-11-12T11:10",
     processo: "Gestão de Colaboradores",
     tela: "Cadastros",
-    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
     itens: ["Nos modais Importar das Funções e do Lançamento Inicial, os filtros nos rótulos da tabela da prévia."],
   },
   {
@@ -457,7 +489,7 @@ export const NOVIDADES: Novidade[] = [
     publicada: "2026-11-12T09:00",
     processo: "Gestão de Colaboradores",
     tela: "Cadastros",
-    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
     itens: [
       "Cada função se cadastra uma vez por senioridade, com a sua descrição, competências e atividades; as listas mostram a função com a senioridade (“Conferente · Pleno”), e escolher a função escolhe a senioridade. O Nível passou a se chamar Senioridade.",
       "O Importar das Funções substitui o cadastro: as funções fora da planilha são excluídas (a prévia diz quais), e o Lançamento Inicial que usa alguma delas é apagado junto; a planilha que exclui uma função das movimentações ou dos cenários é recusada.",
@@ -575,7 +607,7 @@ export const NOVIDADES: Novidade[] = [
     publicada: "2026-11-10T14:43",
     processo: "Gestão de Colaboradores",
     tela: "Cadastros",
-    rota: "/gestao-de-colaboradores/cadastros/senioridades",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
     itens: [
       "O processo entra em uso, com a tela Cadastros: as abas Senioridades, Funções, Movimentações (os tipos de movimentação, com a contagem Positiva, Negativa ou Nula e a aprovação Automática ou Manual), Classificações e Lançamento Inicial (o quadro de lotação do início, um colaborador por linha).",
       "Funções e Lançamento Inicial têm o Importar, com a prévia de cada linha (Nova, Alterada, Igual ou Inválida); com uma linha inválida, a importação é cancelada. O Lançamento Inicial pede a competência.",

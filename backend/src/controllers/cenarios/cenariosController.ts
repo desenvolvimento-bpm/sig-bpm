@@ -37,8 +37,7 @@ const mesDoQuadroSchema = z.object({
 });
 const linhaDoQuadroSchema = z.object({
   unidadeNegocioId: z.string().uuid("Escolha a unidade."),
-  vinculo: z.enum(["CLT", "PJ"], { message: "O tipo é CLT ou PJ." }),
-  senioridadeId: z.string().uuid("Escolha a senioridade."),
+  vinculo: z.enum(["CLT", "PJ", "APRENDIZ", "ESTAGIARIO"], { message: "O tipo é CLT, PJ, Aprendiz ou Estagiário." }),
   funcaoId: z.string().uuid("Escolha a função."),
   centroCustoId: z.string().uuid("Escolha o centro de custo."),
 });

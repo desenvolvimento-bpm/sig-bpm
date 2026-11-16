@@ -97,6 +97,7 @@ async function lotacaoApurada(db: Db, q: QuadroDoMes) {
     const atribuicao = c.atribuicao === "DIRETA" ? "DIRETA" : c.atribuicao === "INDIRETA" ? "INDIRETA" : null;
     const chave = [centroCusto, c.unidadeNegocio?.nome ?? "", c.departamento ?? "", atribuicao ?? ""].join("|");
     const linha = porLinha.get(chave) ?? { centroCusto, unidade: c.unidadeNegocio?.nome ?? null, departamento: c.departamento, atribuicao, clt: 0, pj: 0 };
+    // A lista do Quadro de Lotação tem CLT e PJ: os Aprendizes e os Estagiários entram com os CLT (o total não muda).
     if (vinculo === "PJ") linha.pj += n;
     else linha.clt += n;
     porLinha.set(chave, linha);
@@ -207,7 +208,6 @@ export const apuracaoDoQuadroService = {
         classificacao: { select: { nome: true } },
         centroCusto: { select: { codigoRM: true, nomeRM: true } },
         funcao: { select: { nome: true } },
-        senioridade: { select: { nome: true } },
       },
     });
     return {
@@ -221,7 +221,6 @@ export const apuracaoDoQuadroService = {
         centroCusto: `${m.centroCusto.codigoRM ? `${m.centroCusto.codigoRM} · ` : ""}${m.centroCusto.nomeRM}`,
         vinculo: m.vinculo,
         funcao: m.funcao.nome,
-        senioridade: m.senioridade.nome,
       })),
     };
   },

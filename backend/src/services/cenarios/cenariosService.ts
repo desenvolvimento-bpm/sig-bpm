@@ -98,10 +98,10 @@ import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realo
 import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosReajustes, type IndiceDosReajustes, type ReajusteDoIndice } from "./reajustesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
-import { copiarQuadro, ehAprendiz, ehEstagiario, linhasDoQuadro, mesesDaLinha, quadroDosGrupos, type LinhaDoQuadro, type MesDaLinha, type TipoDeColaborador } from "./quadroDoCenario.js";
+import { copiarQuadro, linhasDoQuadro, mesesDaLinha, quadroDosGrupos, tipoDaLinha, type LinhaDoQuadro, type MesDaLinha, type TipoDeColaborador } from "./quadroDoCenario.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
-import { recusaDaFuncao } from "../colaboradores/funcaoPorSenioridade.js";
+import { ROTULO_DO_TIPO, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "../colaboradores/tiposDoColaborador.js";
 import { assinaturaDasRegras, avisosDosRateios, bloqueioPorRateios, mesesDoAno, percentuaisPelasRegras, regrasDeRateio, type RegraDoMes } from "../volumes/vigenciaDosRateios.js";
 
 /**
@@ -543,13 +543,13 @@ const MESES_1_A_12 = Array.from({ length: 12 }, (_, k) => k + 1);
 /**
  * As linhas dos Salários de um grupo (12/11/2026, pedido do Adão; antes, os Salários dos Aprendizes e dos Estagiários de cada
  * mão de obra): uma por tipo de colaborador, como os Colaboradores — o tipo, o sufixo da chave da planilha (L|grupo|…), o
- * rótulo e as linhas da aba Quadro de Lotação que ela soma no Excel (a senioridade e, nos CLT e nos PJ, o Tipo).
+ * rótulo e o Tipo das linhas da aba Quadro de Lotação que ela soma no Excel.
  */
-const SALARIOS_DO_QUADRO: Array<{ tipo: TipoDeColaborador; sufixo: string; rotulo: string; filtro: { tipo?: "CLT" | "PJ"; senioridade: "APRENDIZ" | "ESTAGIARIO" | "OUTRAS" } }> = [
-  { tipo: "aprendizes", sufixo: "SALARIOS_APRENDIZES", rotulo: "Salários dos Aprendizes", filtro: { senioridade: "APRENDIZ" } },
-  { tipo: "estagiarios", sufixo: "SALARIOS_ESTAGIARIOS", rotulo: "Salários dos Estagiários", filtro: { senioridade: "ESTAGIARIO" } },
-  { tipo: "clt", sufixo: "SALARIOS_CLT", rotulo: "Salários CLT", filtro: { tipo: "CLT", senioridade: "OUTRAS" } },
-  { tipo: "pj", sufixo: "SALARIOS_PJ", rotulo: "Salários PJ", filtro: { tipo: "PJ", senioridade: "OUTRAS" } },
+const SALARIOS_DO_QUADRO: Array<{ tipo: TipoDeColaborador; sufixo: string; rotulo: string; filtro: { tipo: TipoDoColaborador } }> = [
+  { tipo: "aprendizes", sufixo: "SALARIOS_APRENDIZES", rotulo: "Salários dos Aprendizes", filtro: { tipo: "APRENDIZ" } },
+  { tipo: "estagiarios", sufixo: "SALARIOS_ESTAGIARIOS", rotulo: "Salários dos Estagiários", filtro: { tipo: "ESTAGIARIO" } },
+  { tipo: "clt", sufixo: "SALARIOS_CLT", rotulo: "Salários CLT", filtro: { tipo: "CLT" } },
+  { tipo: "pj", sufixo: "SALARIOS_PJ", rotulo: "Salários PJ", filtro: { tipo: "PJ" } },
 ];
 /** As linhas dos Salários de antes (as de cada mão de obra, "Salários dos Aprendizes (CPP.MOD)"): calculadas, a importação as ignora. */
 const SALARIOS_POR_MAO_DE_OBRA = /^Salários dos (Aprendizes|Estagiários) \(.+\)$/;
@@ -573,7 +573,7 @@ type FontesDaReferencia = {
   ind: Map<string, number>;
   linhasDoQuadro: LinhaDoQuadro[] | null;
   /** A coluna da aba Quadro de Lotação: o QL Realizado da competência mais recente ou o último mês do cenário de origem. */
-  colunaDoQuadro: { rotulo: string; daLinha: (l: { unidadeNegocioId: string; vinculo: string; senioridadeId: string; funcaoId: string; centroCustoId: string }) => number } | null;
+  colunaDoQuadro: { rotulo: string; daLinha: (l: { unidadeNegocioId: string; vinculo: string; funcaoId: string; centroCustoId: string }) => number } | null;
 };
 
 /**
@@ -616,8 +616,8 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   if (!detalhe) return null;
   const prisma = getPrismaClient();
   const somar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
-  const chaveDaLinha = (l: { unidadeNegocioId: string; vinculo: string; senioridadeId: string; funcaoId: string; centroCustoId: string }) =>
-    `${l.unidadeNegocioId}|${l.vinculo}|${l.senioridadeId}|${l.funcaoId}|${l.centroCustoId}`;
+  const chaveDaLinha = (l: { unidadeNegocioId: string; vinculo: string; funcaoId: string; centroCustoId: string }) =>
+    `${l.unidadeNegocioId}|${l.vinculo}|${l.funcaoId}|${l.centroCustoId}`;
   if (detalhe.tipo === "CENARIO") {
     const origem = await prisma.cenario.findUnique({ where: { id: detalhe.cenarioId }, select: { id: true, nome: true, versao: true, ano: true, tipo: true } });
     if (!origem || origem.tipo !== "ANALITICO") return null;
@@ -626,7 +626,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
       prisma.cenarioCentro.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
       prisma.cenarioIndicador.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } } }),
       linhasDoQuadro(prisma, origem.id),
-      prisma.cenarioLotacao.findMany({ where: { cenarioId: origem.id }, select: { unidadeNegocioId: true, vinculo: true, senioridadeId: true, funcaoId: true, centroCustoId: true, meses: true } }),
+      prisma.cenarioLotacao.findMany({ where: { cenarioId: origem.id }, select: { unidadeNegocioId: true, vinculo: true, funcaoId: true, centroCustoId: true, meses: true } }),
     ]);
     // Os colaboradores do último mês do Quadro de Lotação de origem, pelos cadastros da linha.
     const doUltimo = new Map<string, number>();
@@ -691,7 +691,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
     colunaDoQuadro: ql
       ? {
           rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`,
-          daLinha: (l) => ql.final.get(chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId, senioridadeId: l.senioridadeId })) ?? 0,
+          daLinha: (l) => ql.final.get(chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId })) ?? 0,
         }
       : null,
   };
@@ -700,8 +700,8 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
 /**
  * Os colaboradores realizados de cada grupo de centros nos meses de um exercício (12/11/2026, pedido do Adão: a Gestão de
  * Colaboradores é a única fonte da contagem dos cenários analíticos): o QL Realizado do fim de cada mês com a competência do
- * Quadro de Lotação, pelos centros dos grupos — os Aprendizes e os Estagiários pela senioridade, os demais pelo tipo (CLT ou
- * PJ), como a aba Quadro de Lotação do cenário. Devolve mês → ("VENDA|grupo" → colaboradores).
+ * Quadro de Lotação, pelos centros dos grupos e pelo Tipo (Aprendizes, Estagiários, CLT e PJ), como a aba Quadro de Lotação
+ * do cenário. Devolve mês → ("VENDA|grupo" → colaboradores).
  */
 async function colaboradoresRealizados(ano: number, meses: number[], grupos: Awaited<ReturnType<typeof gruposDoCadastro>>) {
   const prisma = getPrismaClient();
@@ -709,21 +709,22 @@ async function colaboradoresRealizados(ano: number, meses: number[], grupos: Awa
   const doPeriodo = quadros.filter((q) => q.ano === ano && meses.includes(q.mes));
   const r = new Map<number, Map<string, number>>();
   if (!doPeriodo.length) return r;
-  const [centros, senioridades] = await Promise.all([
-    prisma.centroCusto.findMany({ select: { id: true, codigoRM: true } }),
-    prisma.colaboradorSenioridade.findMany({ select: { id: true, nome: true } }),
-  ]);
+  const centros = await prisma.centroCusto.findMany({ select: { id: true, codigoRM: true } });
   const codigoDe = new Map(centros.map((x) => [x.id, x.codigoRM]));
   const grupoDoCodigo = new Map(grupos.flatMap((g) => g.centros.filter((x) => x.codigo).map((x) => [x.codigo!, g.grupo] as const)));
-  const nomeDa = new Map(senioridades.map((x) => [x.id, x.nome]));
+  const vendaDo: Record<TipoDeColaborador, string> = {
+    aprendizes: VENDA_LOTACAO_APRENDIZ,
+    estagiarios: VENDA_LOTACAO_ESTAGIARIO,
+    clt: VENDA_LOTACAO_CLT,
+    pj: VENDA_LOTACAO_PJ,
+  };
   for (const q of doPeriodo) {
     const doMes = new Map<string, number>();
     for (const [k, n] of q.final) {
-      const [centroId, vinculo, , senioridadeId] = k.split("|");
+      const [centroId, vinculo] = k.split("|");
       const grupo = grupoDoCodigo.get(codigoDe.get(centroId) ?? "");
-      if (!n || !grupo) continue;
-      const s = nomeDa.get(senioridadeId) ?? "";
-      const venda = ehAprendiz(s) ? VENDA_LOTACAO_APRENDIZ : ehEstagiario(s) ? VENDA_LOTACAO_ESTAGIARIO : vinculo === "CLT" ? VENDA_LOTACAO_CLT : VENDA_LOTACAO_PJ;
+      if (!n || !grupo || !TIPOS_DO_COLABORADOR.includes(vinculo as TipoDoColaborador)) continue;
+      const venda = vendaDo[tipoDaLinha({ vinculo: vinculo as TipoDoColaborador })];
       doMes.set(`${venda}|${grupo}`, (doMes.get(`${venda}|${grupo}`) ?? 0) + n);
     }
     r.set(q.mes, doMes);
@@ -796,12 +797,11 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     const maosDoGrupo = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
     // Os colaboradores de todos os grupos (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é
     // a única fonte da contagem; antes, nos grupos sem linhas, digitados): em fórmula sobre a aba do arquivo, que não se importa.
-    const doQuadroDa = (sufixo: string): LinhaDaPlanilha["doQuadro"] =>
-      sufixo === "APRENDIZES"
-          ? { centros: codigos, senioridade: "APRENDIZ", soma: "COLABORADORES" }
-          : sufixo === "ESTAGIARIOS"
-            ? { centros: codigos, senioridade: "ESTAGIARIO", soma: "COLABORADORES" }
-            : { centros: codigos, tipo: sufixo === "CLT" ? "CLT" : "PJ", senioridade: "OUTRAS", soma: "COLABORADORES" };
+    const doQuadroDa = (sufixo: string): LinhaDaPlanilha["doQuadro"] => ({
+      centros: codigos,
+      tipo: sufixo === "APRENDIZES" ? "APRENDIZ" : sufixo === "ESTAGIARIOS" ? "ESTAGIARIO" : sufixo === "CLT" ? "CLT" : "PJ",
+      soma: "COLABORADORES",
+    });
     const lotacoes = [
       [VENDA_LOTACAO_APRENDIZ, "APRENDIZES", "Colaboradores Aprendizes"],
       [VENDA_LOTACAO_ESTAGIARIO, "ESTAGIARIOS", "Colaboradores Estagiários"],
@@ -959,10 +959,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
 }
 
 /** Os dados de uma linha do Quadro de Lotação do cenário (09/11/2026): os cadastros e os doze meses. */
-export type DadosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: "CLT" | "PJ"; senioridadeId: string; funcaoId: string; centroCustoId: string; meses: MesDaLinha[] };
+export type DadosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: TipoDoColaborador; funcaoId: string; centroCustoId: string; meses: MesDaLinha[] };
 const INCLUIR_DO_QUADRO = {
   unidadeNegocio: { select: { nome: true } },
-  senioridade: { select: { nome: true } },
   funcao: { select: { nome: true } },
   centroCusto: { select: { codigoRM: true, nomeRM: true } },
   meses: true,
@@ -970,17 +969,16 @@ const INCLUIR_DO_QUADRO = {
 const rotuloDoCentro = (c: { codigoRM: string | null; nomeRM: string }) => `${c.codigoRM ? `${c.codigoRM} - ` : ""}${c.nomeRM}`;
 
 /**
- * Os cadastros que as linhas do Quadro de Lotação do cenário aceitam (09/11/2026): as unidades, as senioridades e as
- * funções ativas da Gestão de Colaboradores e os centros ativos, com código, dos grupos do cenário (os de estoque e de
+ * Os cadastros que as linhas do Quadro de Lotação do cenário aceitam (09/11/2026): as unidades e as funções ativas da
+ * Gestão de Colaboradores e os centros ativos, com código, dos grupos do cenário (os de estoque e de
  * investimento ficam de fora, como nos Centros de Custo).
  */
 async function cadastrosDoQuadro() {
   const prisma = getPrismaClient();
-  const [grupos, unidades, senioridades, funcoes] = await Promise.all([
+  const [grupos, unidades, funcoes] = await Promise.all([
     gruposDoCadastro(),
     prisma.unidadeNegocio.findMany({ where: { ativo: true }, orderBy: [{ ordem: "asc" }, { codigo: "asc" }], select: { id: true, nome: true } }),
-    prisma.colaboradorSenioridade.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
-    prisma.colaboradorFuncao.findMany({ where: { ativo: true }, orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], select: { id: true, nome: true, senioridadeId: true } }),
+    prisma.colaboradorFuncao.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
   ]);
   const grupoDoCodigo = new Map(grupos.flatMap((g) => g.centros.filter((x) => x.codigo).map((x) => [x.codigo!, g] as const)));
   const centros = await prisma.centroCusto.findMany({
@@ -992,7 +990,6 @@ async function cadastrosDoQuadro() {
     grupos,
     grupoDoCodigo,
     unidades,
-    senioridades,
     funcoes,
     centros: centros.map((x) => ({ id: x.id, nome: rotuloDoCentro(x), grupo: grupoDoCodigo.get(x.codigoRM!)!.grupo })),
   };
@@ -1000,11 +997,11 @@ async function cadastrosDoQuadro() {
 
 /**
  * O Quadro de Lotação Vigente (12/11/2026, pedido do Adão: a caixa “Importar Quadro de Lotação Vigente” da referência
- * realizada): as linhas do QL Realizado da competência mais recente da Gestão de Colaboradores — uma por centro, tipo, função
- * e senioridade, com os colaboradores do fim do mês nos doze meses —, nos centros ativos, com código, dos grupos do cenário
+ * realizada): as linhas do QL Realizado da competência mais recente da Gestão de Colaboradores — uma por centro, tipo e
+ * função, com os colaboradores do fim do mês nos doze meses —, nos centros ativos, com código, dos grupos do cenário
  * (os demais vão em `fora`, com os colaboradores). A unidade é a dos colaboradores do Lançamento Inicial com a mesma linha
  * (sem ela, a dedicada do centro; sem ela, a da filial do grupo); os salários de cada mês, os da linha que o cenário já tinha
- * com o mesmo centro, tipo, função e senioridade (sem ela, zero).
+ * com o mesmo centro, tipo e função (sem ela, zero).
  */
 async function quadroVigente(cenarioId: string) {
   const prisma = getPrismaClient();
@@ -1015,7 +1012,7 @@ async function quadroVigente(cenarioId: string) {
     prisma.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, unidadeNegocioId: true } }),
     prisma.unidadeNegocio.findMany({ select: { id: true, codigo: true } }),
     prisma.colaboradorFuncao.findMany({ select: { id: true, nome: true } }),
-    prisma.cenarioLotacao.findMany({ where: { cenarioId }, select: { vinculo: true, senioridadeId: true, funcaoId: true, centroCustoId: true, meses: true } }),
+    prisma.cenarioLotacao.findMany({ where: { cenarioId }, select: { vinculo: true, funcaoId: true, centroCustoId: true, meses: true } }),
   ]);
   const centroDe = new Map(centros.map((x) => [x.id, x]));
   const ativos = new Set(cad.centros.map((x) => x.id));
@@ -1027,10 +1024,10 @@ async function quadroVigente(cenarioId: string) {
   let total = 0;
   for (const [k, n] of ql.final) {
     if (n <= 0) continue;
-    const [centroCustoId, vinculo, funcaoId, senioridadeId] = k.split("|");
+    const [centroCustoId, vinculo, funcaoId] = k.split("|");
     const c = centroDe.get(centroCustoId);
     const g = c?.codigoRM && ativos.has(c.id) ? cad.grupoDoCodigo.get(c.codigoRM) : undefined;
-    if (!c || !g || !funcaoId || !senioridadeId || (vinculo !== "CLT" && vinculo !== "PJ")) {
+    if (!c || !g || !funcaoId || !TIPOS_DO_COLABORADOR.includes(vinculo as TipoDoColaborador)) {
       const nome = c ? rotuloDoCentro(c) : "centro de custo excluído";
       fora.set(nome, (fora.get(nome) ?? 0) + n);
       continue;
@@ -1038,8 +1035,7 @@ async function quadroVigente(cenarioId: string) {
     const s = salarios.get(k);
     linhas.push({
       unidadeNegocioId: ql.unidadeDaChave.get(k) ?? c.unidadeNegocioId ?? unidadeDoCodigo.get(g.unidade) ?? unidades[0].id,
-      vinculo,
-      senioridadeId,
+      vinculo: vinculo as TipoDoColaborador,
       funcaoId,
       centroCustoId,
       meses: Array.from({ length: 12 }, (_, m) => ({ colaboradores: n, salarioBruto: s?.[m].salarioBruto ?? 0, adicional: s?.[m].adicional ?? 0 })),
@@ -1053,18 +1049,11 @@ async function quadroVigente(cenarioId: string) {
 }
 
 /** O motivo de recusar uma linha do Quadro de Lotação; null, certa. Os cadastros da linha que já existia valem, mesmo inativos. */
-function recusaDaLinha(d: DadosDaLinhaDoQuadro, cad: Awaited<ReturnType<typeof cadastrosDoQuadro>>, atual?: { senioridadeId: string; funcaoId: string; centroCustoId: string; unidadeNegocioId: string } | null) {
-  const mantido = (campo: "senioridadeId" | "funcaoId" | "centroCustoId" | "unidadeNegocioId") => atual?.[campo] === d[campo];
+function recusaDaLinha(d: DadosDaLinhaDoQuadro, cad: Awaited<ReturnType<typeof cadastrosDoQuadro>>, atual?: { funcaoId: string; centroCustoId: string; unidadeNegocioId: string } | null) {
+  const mantido = (campo: "funcaoId" | "centroCustoId" | "unidadeNegocioId") => atual?.[campo] === d[campo];
   if (!mantido("unidadeNegocioId") && !cad.unidades.some((u) => u.id === d.unidadeNegocioId)) return "Escolha a unidade.";
-  if (d.vinculo !== "CLT" && d.vinculo !== "PJ") return "O tipo é CLT ou PJ.";
-  if (!mantido("senioridadeId") && !cad.senioridades.some((x) => x.id === d.senioridadeId)) return "Escolha uma senioridade ativa da Gestão de Colaboradores.";
+  if (!TIPOS_DO_COLABORADOR.includes(d.vinculo)) return "O tipo é CLT, PJ, Aprendiz ou Estagiário.";
   if (!mantido("funcaoId") && !cad.funcoes.some((x) => x.id === d.funcaoId)) return "Escolha uma função ativa da Gestão de Colaboradores.";
-  // A função da senioridade (11/11/2026: a mesma função tem uma por senioridade).
-  const f = cad.funcoes.find((x) => x.id === d.funcaoId);
-  if (f && (!mantido("funcaoId") || !mantido("senioridadeId"))) {
-    const recusa = recusaDaFuncao(f, d.senioridadeId);
-    if (recusa) return recusa;
-  }
   if (!mantido("centroCustoId") && !cad.centros.some((x) => x.id === d.centroCustoId)) return "Escolha um centro de custo ativo, com código, de um grupo do cenário.";
   if (d.meses.length !== 12 || d.meses.some((m) => [m.colaboradores, m.salarioBruto, m.adicional].some((v) => !Number.isFinite(v) || v < 0 || v > 1e9)))
     return "Os colaboradores e os salários de cada mês são números de zero para cima.";
@@ -2792,7 +2781,7 @@ export const cenariosService = {
   /**
    * A aba Quadro de Lotação de um cenário analítico (09/11/2026, etapa 4 da Gestão de Colaboradores; quadroDoCenario.ts): as
    * linhas, como as do Lançamento Inicial, com os colaboradores e os salários de cada mês e o grupo do centro, e as opções:
-   * as unidades, as senioridades e as funções ativas e os centros dos grupos do cenário.
+   * as unidades e as funções ativas e os centros dos grupos do cenário.
    */
   async quadro(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
@@ -2814,10 +2803,6 @@ export const cenariosService = {
         unidadeNegocioId: l.unidadeNegocioId,
         unidade: l.unidadeNegocio.nome,
         vinculo: l.vinculo,
-        senioridadeId: l.senioridadeId,
-        senioridade: l.senioridade.nome,
-        aprendiz: ehAprendiz(l.senioridade.nome),
-        estagiario: ehEstagiario(l.senioridade.nome),
         funcaoId: l.funcaoId,
         funcao: l.funcao.nome,
         centroCustoId: l.centroCustoId,
@@ -2826,7 +2811,7 @@ export const cenariosService = {
         grupo: cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupo ?? null,
         meses: mesesDaLinha(l.meses),
       })),
-      opcoes: { unidades: cad.unidades, senioridades: cad.senioridades, funcoes: cad.funcoes, centros: cad.centros.filter((x) => q.ve(x.id)) },
+      opcoes: { unidades: cad.unidades, funcoes: cad.funcoes, centros: cad.centros.filter((x) => q.ve(x.id)) },
     };
   },
 
@@ -2853,7 +2838,7 @@ export const cenariosService = {
       async (tx) => {
         if (!dados) await tx.cenarioLotacao.delete({ where: { id: linhaId! } });
         else {
-          const campos = { unidadeNegocioId: dados.unidadeNegocioId, vinculo: dados.vinculo, senioridadeId: dados.senioridadeId, funcaoId: dados.funcaoId, centroCustoId: dados.centroCustoId };
+          const campos = { unidadeNegocioId: dados.unidadeNegocioId, vinculo: dados.vinculo, funcaoId: dados.funcaoId, centroCustoId: dados.centroCustoId };
           const l = atual
             ? await tx.cenarioLotacao.update({ where: { id: atual.id }, data: campos, include: INCLUIR_DO_QUADRO })
             : await tx.cenarioLotacao.create({ data: { ...campos, cenarioId: id, ordem: await tx.cenarioLotacao.count({ where: { cenarioId: id } }) }, include: INCLUIR_DO_QUADRO });
@@ -3146,7 +3131,7 @@ export const cenariosService = {
           const cad = await cadastrosDoQuadro();
           const ls = await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO });
           return {
-            listas: { unidades: cad.unidades.map((u) => u.nome), senioridades: cad.senioridades.map((x) => x.nome) },
+            listas: { unidades: cad.unidades.map((u) => u.nome) },
             linhas: ls
               .filter((l) => {
                 const d = departamentoDoGrupoDRE(cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupoDRE);
@@ -3155,8 +3140,7 @@ export const cenariosService = {
               .map((l) => ({
                 id: l.id,
                 unidade: l.unidadeNegocio.nome,
-                tipo: l.vinculo,
-                senioridade: l.senioridade.nome,
+                tipo: ROTULO_DO_TIPO[l.vinculo],
                 funcao: l.funcao.nome,
                 centro: rotuloDoCentro(l.centroCusto),
                 meses: mesesDaLinha(l.meses),
@@ -3192,7 +3176,7 @@ export const cenariosService = {
                       rotulo: fonte.colunaDoQuadro.rotulo,
                       explicacao:
                         fonte.rotulo === "Realizado"
-                          ? "traz os colaboradores da linha (o centro de custo, o tipo, a função e a senioridade) no Quadro de Lotação realizado da competência mais recente da Gestão de Colaboradores"
+                          ? "traz os colaboradores da linha (o centro de custo, o tipo e a função) no Quadro de Lotação realizado da competência mais recente da Gestão de Colaboradores"
                           : `traz os colaboradores da linha no último mês do Quadro de Lotação de ${fonte.descricao}`,
                     }
                   : undefined,
@@ -3342,7 +3326,7 @@ export const cenariosService = {
         }
         const antes = mesesDaLinha(atual.meses);
         const mudou =
-          (["unidadeNegocioId", "vinculo", "senioridadeId", "funcaoId", "centroCustoId"] as const).some((k) => atual[k] !== dados[k]) ||
+          (["unidadeNegocioId", "vinculo", "funcaoId", "centroCustoId"] as const).some((k) => atual[k] !== dados[k]) ||
           antes.some((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).some((x) => !iguais(m[x], dados.meses[k][x])));
         if (mudou) alteradasDoQuadro.push({ ...dados, id: l.id });
       }
@@ -3351,8 +3335,8 @@ export const cenariosService = {
       // cadastros e outros meses é alterada (na ordem); as da aba sem par entram, e as do cenário sem par saem.
       if (r.substituiQuadro && !r.erros.length) {
         const deps = r.substituiQuadro;
-        const cadastrosDe = (x: Pick<DadosDaLinhaDoQuadro, "unidadeNegocioId" | "vinculo" | "senioridadeId" | "funcaoId" | "centroCustoId">) =>
-          [x.unidadeNegocioId, x.vinculo, x.senioridadeId, x.funcaoId, x.centroCustoId].join("|");
+        const cadastrosDe = (x: Pick<DadosDaLinhaDoQuadro, "unidadeNegocioId" | "vinculo" | "funcaoId" | "centroCustoId">) =>
+          [x.unidadeNegocioId, x.vinculo, x.funcaoId, x.centroCustoId].join("|");
         const mesesIguais = (a: MesDaLinha[], b: MesDaLinha[]) => a.every((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).every((f) => iguais(m[f], b[k][f])));
         const doEscopo = linhasDoCenario
           .filter((x) => {
@@ -3583,7 +3567,7 @@ export const cenariosService = {
         for (const i of alterados.values()) await tx.cenarioInvestimento.update({ where: { id: i.id }, data: camposDoInvestimento(i) });
         const ordem = await tx.cenarioInvestimento.count({ where: { cenarioId: id } });
         for (const [k, i] of novos.entries()) await tx.cenarioInvestimento.create({ data: { ...camposDoInvestimento(i), cenarioId: id, ordem: ordem + k } });
-        const camposDaLinha = (l: DadosDaLinhaDoQuadro) => ({ unidadeNegocioId: l.unidadeNegocioId, vinculo: l.vinculo, senioridadeId: l.senioridadeId, funcaoId: l.funcaoId, centroCustoId: l.centroCustoId });
+        const camposDaLinha = (l: DadosDaLinhaDoQuadro) => ({ unidadeNegocioId: l.unidadeNegocioId, vinculo: l.vinculo, funcaoId: l.funcaoId, centroCustoId: l.centroCustoId });
         // As linhas que saem (11/11/2026: a aba que substitui; os meses vão junto).
         if (excluidasDoQuadro.size) await tx.cenarioLotacao.deleteMany({ where: { cenarioId: id, id: { in: [...excluidasDoQuadro] } } });
         for (const l of alteradasDoQuadro.values()) {

@@ -10,6 +10,8 @@ node_modules/
 .env.production
 # O teste (21/10/2026), como os outros ambientes.
 .env.teste
+# A base teste Pré-Contestações (16/11/2026), como o teste.
+.env.pre-contestacoes
 !.env.example
 
 # Build
@@ -17,6 +19,9 @@ dist/
 build/
 .next/
 out/
+# A compilação da base teste Pré-Contestações (16/11/2026).
+dist-pre-contestacoes/
+.next-pre-contestacoes/
 
 # Debug
 npm-debug.log*

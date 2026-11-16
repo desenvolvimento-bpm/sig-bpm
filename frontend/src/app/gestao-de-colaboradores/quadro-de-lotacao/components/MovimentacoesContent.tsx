@@ -59,8 +59,7 @@ export function MovimentacoesContent() {
           <ul>
             <li>
               Use Novo, à direita do título, para registrar uma movimentação: o tipo de movimentação e a classificação (a lista traz só as do tipo), a data
-              (hoje, por padrão), o centro de custo, o tipo (CLT ou PJ), a função (com a senioridade ao lado: a movimentação leva a senioridade da função) e o
-              motivo.
+              (hoje, por padrão), o centro de custo, o tipo (CLT, PJ, Aprendiz ou Estagiário), a função e o motivo.
             </li>
             <li>
               Num desligamento, escolha a Origem (Iniciativa da Empresa ou Pedido do Colaborador). Com Gerar Vaga em Aberto, ao lado dela e marcada por padrão,

@@ -95,16 +95,15 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
-              (CLT ou PJ), a Senioridade, a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
+              (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
               (colaboradores × Salário Total nos doze meses) e, no rodapé, os colaboradores e a folha de cada mês. No destaque acima da tabela, busque as linhas pela
-              função, pelo centro, pela unidade ou pela senioridade, e mostre todos os meses ou um só.
+              função, pelo centro, pela unidade ou pelo tipo, e mostre todos os meses ou um só.
               {podeEditar
                 ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, digite os valores de cada mês e clique em “Gravar” (ou “Descartar”). O menu Ações de cada linha edita os cadastros ou a exclui; para excluir várias, marque as caixas e clique em “Excluir Selecionadas”."
                 : null}{" "}
-              O grupo de centros com linhas conta por elas, na aba Centros de Custo, os Colaboradores Aprendizes (a senioridade Aprendiz: o Jovem
-              Aprendiz), os Colaboradores Estagiários (a senioridade Estagiário: os estagiários e os bolsistas), os Colaboradores CLT e os PJ (as demais
-              senioridades, pelo Tipo), os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
+              O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
+              Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
               todos vão para a mão de obra da atribuição do grupo (Direta, a MOD; Indireta ou sem atribuição, a MOI), com as Remunerações CLT = Salários
               dos Aprendizes + Salários dos Estagiários + Salários CLT e as Remunerações PJ = Salários PJ; a outra mão de obra fica sem remunerações
               daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
@@ -207,7 +206,8 @@ export function PremissasContent() {
               Nome de Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro
               de Lotação, as linhas da planilha substituem as do cenário nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com
               outros valores são alteradas, as novas entram e as que não estão na planilha saem (a prévia mostra quantas; os cadastros conferidos
-              como no Lançamento Inicial: uma unidade, senioridade, função ou centro de custo que não existe recusa o arquivo). “Importar” grava os
+              como no Lançamento Inicial: uma unidade, função ou centro de custo que não existe, ou um tipo fora de CLT, PJ, Aprendiz e Estagiário,
+              recusa o arquivo). “Importar” grava os
               meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, recalcula a DRE
               e registra no histórico (tela Histórico, aba Alterações).
             </li>
@@ -297,8 +297,8 @@ export function PremissasContent() {
               as férias e o décimo terceiro: base × [INSS + FGTS CLT + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo
               Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + Benefícios Adicionais, com a base =
               Remunerações CLT + Horas Extras − Salários dos Estagiários (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador
-              sobre os seus salários, os aprendizes (a senioridade Aprendiz, na aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as Férias e o
-              Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (a senioridade Estagiário; Lei 11.788/2008) não têm INSS,
+              sobre os seus salários, os aprendizes (o Tipo Aprendiz, na aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as Férias e o
+              Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (o Tipo Estagiário; Lei 11.788/2008) não têm INSS,
               FGTS, férias com o terço nem décimo terceiro: os salários deles nas Remunerações CLT saem da base. Os Salários dos Aprendizes e dos
               Estagiários entram só na mão de obra da atribuição do grupo, a que recebe as remunerações do Quadro de Lotação; na outra, a base é
               Remunerações CLT + Horas Extras. Os percentuais têm o mesmo padrão

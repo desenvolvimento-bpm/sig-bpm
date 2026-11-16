@@ -5,7 +5,7 @@ import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
 import type { GrupoDoCenario } from "../src/services/cenarios/centrosCenario.js";
 import { encargosDaBase, encargosDoGrupo, FATOR_PADRAO, itemDosEncargos, maosDeObraDoGrupo, type ItemDosEncargos } from "../src/services/cenarios/encargosCenario.js";
 import { abaDoQuadroDeLotacao, formulaDoQuadro, lerArquivoDePremissas, quadroDoArquivo } from "../src/services/cenarios/planilhaPremissas.js";
-import { ehAprendiz, ehEstagiario, quadroDosGrupos, remuneracoesDoQuadro, type LinhaDoQuadro } from "../src/services/cenarios/quadroDoCenario.js";
+import { quadroDosGrupos, remuneracoesDoQuadro, tipoDaLinha, type LinhaDoQuadro } from "../src/services/cenarios/quadroDoCenario.js";
 
 const padrao = (item: ItemDosEncargos) => itemDosEncargos(item)!.padrao ?? 0;
 const doze = (colaboradores: number, salarioBruto: number, adicional = 0) => Array.from({ length: 12 }, () => ({ colaboradores, salarioBruto, adicional }));
@@ -43,11 +43,11 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
   it("os grupos com linhas: os colaboradores e os Salários de cada tipo, todos na mão de obra da atribuição do grupo (12/11/2026)", () => {
     const grupos = [grupo("Montagem de Formas", "1.01", "INDIRETA"), grupo("Sem Linhas", "1.02", "DIRETA")];
     const linhas: LinhaDoQuadro[] = [
-      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "1.01", meses: doze(2, 1_500) },
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.01", meses: doze(3, 4_000, 400) },
-      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "1.01", meses: doze(1, 8_000) },
+      { vinculo: "APRENDIZ", codigo: "1.01", meses: doze(2, 1_500) },
+      { vinculo: "CLT", codigo: "1.01", meses: doze(3, 4_000, 400) },
+      { vinculo: "PJ", codigo: "1.01", meses: doze(1, 8_000) },
       // Um centro fora dos grupos do cenário não conta.
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "1.96", meses: doze(9, 9_000) },
+      { vinculo: "CLT", codigo: "1.96", meses: doze(9, 9_000) },
     ];
     const q = quadroDosGrupos(linhas, grupos);
     assert.deepEqual([...q.keys()], ["Montagem de Formas"]);
@@ -61,19 +61,18 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.deepEqual(remuneracoesDoQuadro(g.salarios, 0), { clt: 16_200, pj: 8_000 });
     assert.deepEqual(maosDeObraDoGrupo(CONTAS, "INDIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", false], ["CPP.MOI", true]]);
     assert.deepEqual(maosDeObraDoGrupo(CONTAS, "DIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", true], ["CPP.MOI", false]]);
-    assert.ok(ehAprendiz(" aprendiz ") && ehAprendiz("APRENDIZ") && !ehAprendiz("Júnior"));
+    assert.deepEqual((["APRENDIZ", "ESTAGIARIO", "CLT", "PJ"] as const).map((vinculo) => tipoDaLinha({ vinculo })), ["aprendizes", "estagiarios", "clt", "pj"]);
   });
 
-  it("Aprendizes, Estagiários, CLT e PJ (11/11/2026): a contagem pela senioridade e os estagiários fora da base dos encargos", () => {
+  it("Aprendizes, Estagiários, CLT e PJ (16/11/2026: pelo Tipo da linha) e os estagiários fora da base dos encargos", () => {
     const grupos = [grupo("Administrativo", "2.01", "INDIRETA")];
     const linhas: LinhaDoQuadro[] = [
-      { vinculo: "CLT", aprendiz: true, estagiario: false, codigo: "2.01", meses: doze(2, 1_500) },
-      { vinculo: "CLT", aprendiz: false, estagiario: true, codigo: "2.01", meses: doze(3, 1_200) },
-      { vinculo: "CLT", aprendiz: false, estagiario: false, codigo: "2.01", meses: doze(4, 5_000) },
-      { vinculo: "PJ", aprendiz: false, estagiario: false, codigo: "2.01", meses: doze(1, 9_000) },
-      // Um estagiário cadastrado como PJ conta nos Estagiários e, desde 12/11/2026, o salário dele também (nas Remunerações CLT,
-      // fora da base dos encargos: o mesmo valor de encargos).
-      { vinculo: "PJ", aprendiz: false, estagiario: true, codigo: "2.01", meses: doze(1, 1_000) },
+      { vinculo: "APRENDIZ", codigo: "2.01", meses: doze(2, 1_500) },
+      { vinculo: "ESTAGIARIO", codigo: "2.01", meses: doze(3, 1_200) },
+      { vinculo: "CLT", codigo: "2.01", meses: doze(4, 5_000) },
+      { vinculo: "PJ", codigo: "2.01", meses: doze(1, 9_000) },
+      // Os salários dos estagiários vão nas Remunerações CLT, fora da base dos encargos.
+      { vinculo: "ESTAGIARIO", codigo: "2.01", meses: doze(1, 1_000) },
     ];
     const g = quadroDosGrupos(linhas, grupos).get("Administrativo")!;
     assert.deepEqual([g.aprendizes[0], g.estagiarios[0], g.clt[0], g.pj[0]], [2, 4, 4, 1]);
@@ -98,22 +97,23 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     const provisoes = 1 / 9 + 1 / 12;
     const cadaUm = 20_000 * FATOR_PADRAO + 3_000 * (0.29 + 0.02 + provisoes + (0.29 + 0.02) * provisoes);
     assert.ok(Math.abs(esperado - cadaUm) < 1e-9);
-    assert.ok(ehEstagiario("Estagiário") && ehEstagiario("ESTAGIARIO") && !ehEstagiario("Aprendiz"));
   });
 
   it("a aba Quadro de Lotação da planilha: o que sai, volta igual na importação, com os departamentos do arquivo (11/11/2026: sem o Código da Linha)", () => {
     const meses = ["JAN/26", "FEV/26", "MAR/26", "ABR/26", "MAI/26", "JUN/26", "JUL/26", "AGO/26", "SET/26", "OUT/26", "NOV/26", "DEZ/26"];
     const linhas = [
-      { id: "6f1c3f5e-0000-4000-8000-000000000001", unidade: "Matriz", tipo: "CLT", senioridade: "Aprendiz", funcao: "Aprendiz Administrativo", centro: "1.01 - BPM", meses: doze(2, 1_500) },
-      { id: "6f1c3f5e-0000-4000-8000-000000000002", unidade: "Filial", tipo: "PJ", senioridade: "Sênior", funcao: "Analista", centro: "1.02 - OUTRO", meses: doze(1, 8_000, 250.5) },
+      { id: "6f1c3f5e-0000-4000-8000-000000000001", unidade: "Matriz", tipo: "Aprendiz", funcao: "Jovem Aprendiz", centro: "1.01 - BPM", meses: doze(2, 1_500) },
+      { id: "6f1c3f5e-0000-4000-8000-000000000002", unidade: "Filial", tipo: "PJ", funcao: "Analista", centro: "1.02 - OUTRO", meses: doze(1, 8_000, 250.5) },
     ];
-    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz", "Filial"], senioridades: ["Aprendiz", "Sênior"] }, undefined, ["Produção", "Serviços"]);
+    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz", "Filial"] }, undefined, ["Produção", "Serviços"]);
     assert.equal(aba.linhas[3][0].valor, "Departamentos do arquivo: Produção, Serviços");
+    assert.deepEqual(aba.linhas[4].slice(0, 4).map((c) => c.valor), ["Unidade", "Tipo", "Função", "Centro de Custo"]);
+    assert.deepEqual(aba.validacoes?.[0].lista, ["CLT", "PJ", "Aprendiz", "Estagiário"]);
     // Uma linha nova, preenchida na primeira linha em branco: só março.
     const nova = aba.linhas[5 + linhas.length];
-    ["Matriz", "CLT", "Pleno", "Analista", "1.01"].forEach((v, k) => (nova[k] = { valor: v }));
-    nova[5 + 2 * 4] = { valor: 1 };
-    nova[5 + 2 * 4 + 1] = { valor: "4.000,00" };
+    ["Matriz", "CLT", "Analista", "1.01"].forEach((v, k) => (nova[k] = { valor: v }));
+    nova[4 + 2 * 4] = { valor: 1 };
+    nova[4 + 2 * 4 + 1] = { valor: "4.000,00" };
     const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.abas, ["Quadro de Lotação"]);
@@ -128,25 +128,55 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.equal(lido.quadro[2].meses[3].colaboradores, 0);
   });
 
-  it("as linhas dos centros em fórmula sobre a aba Quadro de Lotação do arquivo (11/11/2026): os centros, o Tipo, a senioridade e o mês", () => {
-    // 3 linhas do cenário (as 30 em branco depois): da linha 6 à 38; com a referência, os meses começam na coluna G.
+  it("as linhas dos centros em fórmula sobre a aba Quadro de Lotação do arquivo (11/11/2026): os centros, o Tipo e o mês", () => {
+    // 3 linhas do cenário (as 30 em branco depois): da linha 6 à 38; com a referência, os meses começam na coluna F.
     const q = quadroDoArquivo(3, true);
-    assert.deepEqual([q.primeira, q.ultima, q.doMes(0, 0), q.doMes(0, 1), q.doMes(1, 0)], [6, 38, "G", "H", "K"]);
+    assert.deepEqual([q.primeira, q.ultima, q.doMes(0, 0), q.doMes(0, 1), q.doMes(1, 0)], [6, 38, "F", "G", "J"]);
     const rem = formulaDoQuadro({ centros: ["1.01"], tipo: "CLT", soma: "SALARIOS" }, q, 0);
     assert.equal(
       rem,
-      "SUMPRODUCT(((('Quadro de Lotação'!E$6:E$38=\"1.01\")+(LEFT('Quadro de Lotação'!E$6:E$38,7)=\"1.01 - \"))>0)*('Quadro de Lotação'!B$6:B$38=\"CLT\")*'Quadro de Lotação'!G$6:G$38*('Quadro de Lotação'!H$6:H$38+'Quadro de Lotação'!I$6:I$38))",
+      "SUMPRODUCT(((('Quadro de Lotação'!D$6:D$38=\"1.01\")+(LEFT('Quadro de Lotação'!D$6:D$38,7)=\"1.01 - \"))>0)*('Quadro de Lotação'!B$6:B$38=\"CLT\")*'Quadro de Lotação'!F$6:F$38*('Quadro de Lotação'!G$6:G$38+'Quadro de Lotação'!H$6:H$38))",
     );
-    // Os CLT sem os aprendizes e os estagiários; os aprendizes de qualquer Tipo.
-    assert.ok(formulaDoQuadro({ centros: ["1.01"], tipo: "CLT", senioridade: "OUTRAS", soma: "COLABORADORES" }, q, 0).includes("(1-('Quadro de Lotação'!C$6:C$38=\"Aprendiz\"))"));
-    assert.ok(!formulaDoQuadro({ centros: ["1.01"], senioridade: "APRENDIZ", soma: "COLABORADORES" }, q, 0).includes("!B$6"));
+    // Os aprendizes e os estagiários pelo Tipo (o Estagiário também sem o acento).
+    assert.ok(formulaDoQuadro({ centros: ["1.01"], tipo: "APRENDIZ", soma: "COLABORADORES" }, q, 0).includes("('Quadro de Lotação'!B$6:B$38=\"Aprendiz\")"));
+    assert.ok(
+      formulaDoQuadro({ centros: ["1.01"], tipo: "ESTAGIARIO", soma: "COLABORADORES" }, q, 0).includes(
+        "(('Quadro de Lotação'!B$6:B$38=\"Estagiário\")+('Quadro de Lotação'!B$6:B$38=\"Estagiario\"))",
+      ),
+    );
+  });
+
+  it("o arquivo exportado com a Senioridade (até 16/11/2026): o Aprendiz e o Estagiário dela viram o Tipo da linha", () => {
+    const meses = ["JAN/26", "FEV/26", "MAR/26", "ABR/26", "MAI/26", "JUN/26", "JUL/26", "AGO/26", "SET/26", "OUT/26", "NOV/26", "DEZ/26"];
+    const linhas = [
+      { id: "1", unidade: "Matriz", tipo: "CLT", funcao: "Jovem Aprendiz", centro: "1.01 - BPM", meses: doze(2, 1_500) },
+      { id: "2", unidade: "Matriz", tipo: "CLT", funcao: "Bolsista", centro: "1.01 - BPM", meses: doze(1, 1_200) },
+      { id: "3", unidade: "Matriz", tipo: "PJ", funcao: "Analista", centro: "1.01 - BPM", meses: doze(1, 8_000) },
+    ];
+    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz"] });
+    // A coluna Senioridade depois do Tipo, como nos arquivos de antes.
+    const senioridades = ["Aprendiz", "Estagiário", "Pleno"];
+    aba.linhas.forEach((l, k) => {
+      if (k === 4) l.splice(2, 0, { valor: "Senioridade" });
+      else if (k > 4) l.splice(2, 0, { valor: senioridades[k - 5] ?? null });
+    });
+    const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
+    assert.deepEqual(lido.erros, []);
+    assert.deepEqual(
+      lido.quadro.map((l) => [l.campos.funcao, l.campos.tipo]),
+      [
+        ["Jovem Aprendiz", "Aprendiz"],
+        ["Bolsista", "Estagiário"],
+        ["Analista", "PJ"],
+      ],
+    );
   });
 
   it("a coluna da referência na aba Quadro de Lotação (11/11/2026): depois do Centro de Custo, não se importa", () => {
     const meses = ["JAN/26", "FEV/26", "MAR/26", "ABR/26", "MAI/26", "JUN/26", "JUL/26", "AGO/26", "SET/26", "OUT/26", "NOV/26", "DEZ/26"];
-    const linhas = [{ id: "6f1c3f5e-0000-4000-8000-000000000001", unidade: "Matriz", tipo: "CLT", senioridade: "Pleno", funcao: "Analista", centro: "1.01 - BPM", meses: doze(2, 1_500), referencia: 3 }];
-    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz"], senioridades: ["Pleno"] }, { rotulo: "QL Realizado (11/2026)", explicacao: "traz o realizado" });
-    assert.deepEqual([aba.linhas[4][5].valor, aba.linhas[5][5].valor, aba.linhas[4][6].valor], ["QL Realizado (11/2026)", 3, "JAN/26 · Colaboradores"]);
+    const linhas = [{ id: "6f1c3f5e-0000-4000-8000-000000000001", unidade: "Matriz", tipo: "CLT", funcao: "Analista", centro: "1.01 - BPM", meses: doze(2, 1_500), referencia: 3 }];
+    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz"] }, { rotulo: "QL Realizado (11/2026)", explicacao: "traz o realizado" });
+    assert.deepEqual([aba.linhas[4][4].valor, aba.linhas[5][4].valor, aba.linhas[4][5].valor], ["QL Realizado (11/2026)", 3, "JAN/26 · Colaboradores"]);
     const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.quadro[0].meses, doze(2, 1_500));

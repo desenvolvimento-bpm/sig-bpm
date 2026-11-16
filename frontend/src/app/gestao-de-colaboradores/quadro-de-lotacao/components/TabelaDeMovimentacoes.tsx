@@ -8,6 +8,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { dataHora } from "@/app/competencias/[anoMes]/utils/formatacao";
 
 import { ROTULO_ORIGEM, ROTULO_STATUS, type Movimentacao, type StatusMovimentacao } from "../../services/quadroService";
+import { rotuloDoTipo } from "../../services/tiposDoColaborador";
 
 const dia = (iso: string) => iso.split("-").reverse().join("/");
 const ESTILO_STATUS: Record<StatusMovimentacao, string> = {
@@ -43,9 +44,8 @@ export function colunasDasMovimentacoes(): Coluna<Movimentacao>[] {
     { chave: "tipo", rotulo: "Movimentação", valor: (m) => m.tipo },
     { chave: "classificacao", rotulo: "Classificação", valor: (m) => m.classificacao },
     { chave: "centro", rotulo: "Centro de Custo", valor: (m) => m.centroCusto },
-    { chave: "vinculo", rotulo: "Tipo", valor: (m) => m.vinculo },
+    { chave: "vinculo", rotulo: "Tipo", valor: (m) => rotuloDoTipo(m.vinculo) },
     { chave: "funcao", rotulo: "Função", valor: (m) => m.funcao },
-    { chave: "senioridade", rotulo: "Senioridade", valor: (m) => m.senioridade },
     { chave: "motivo", rotulo: "Motivo", valor: (m) => m.motivo },
     { chave: "situacao", rotulo: "Situação", valor: (m) => ROTULO_STATUS[m.status] },
   ];
@@ -93,9 +93,8 @@ export function TabelaDeMovimentacoes({
           </td>
           <td className="px-4 py-2 text-sm">{m.classificacao ?? <span className="text-gray-400">—</span>}</td>
           <td className="px-4 py-2 text-sm">{m.centroCusto}</td>
-          <td className="px-4 py-2 text-sm">{m.vinculo}</td>
+          <td className="px-4 py-2 text-sm">{rotuloDoTipo(m.vinculo)}</td>
           <td className="px-4 py-2 text-sm">{m.funcao}</td>
-          <td className="px-4 py-2 text-sm">{m.senioridade}</td>
           <td className="min-w-36 px-4 py-2 text-sm" title={m.motivo ?? undefined}>
             {m.motivo ? <span className="line-clamp-2">{m.motivo}</span> : <span className="text-gray-400">—</span>}
           </td>

@@ -86,6 +86,39 @@ entra nos back-ups do TI.
   etiqueta pela compilação (`NEXT_PUBLIC_AMBIENTE=teste`).
 - A compilação do teste fica em `frontend/.next` (a do desenvolvimento, em `frontend/.next/dev`): as duas convivem.
 
+### A base teste Pré-Contestações (desde 16/11/2026)
+
+Um segundo teste (pedido do Adão), com os dados da produção de antes de processar as contestações: o back-up de
+10/11/2026 22:08 (`Backups/2026-11-10 back-up da produção (antes de processar as contestações)`, commit a3434c7), com
+01 a 09/2026 fechadas, 10/2026 aberta e as 84 contestações (63 acatadas, 1 pendente, 20 recusadas) ainda sem processar.
+Roda com o mesmo código do teste, ao lado dele, sem mexer no teste, no desenvolvimento nem na produção.
+
+| | Pré-Contestações |
+|---|---|
+| Endereço | http://localhost:3300 |
+| Backend | porta 3301 (`backend/dist-pre-contestacoes`) |
+| Banco | `sig_bpm_dev` (no notebook), esquema `pre_contestacoes` |
+| Iniciar | `npm run pre-contestacoes:construir` (gera) e `npm run pre-contestacoes` |
+| Marca | borda e etiqueta violeta (Pré-Contestações) |
+| Cookie da sessão | `bpm_token_pre_contestacoes` |
+
+- O backend lê o `backend/.env.pre-contestacoes` (fora do git): o mesmo do teste, com `PORT=3301`,
+  `DATABASE_URL=…/sig_bpm_dev?schema=pre_contestacoes`, `CORS_ORIGIN=http://localhost:3300` e
+  `UPLOAD_DIR=./uploads-pre-contestacoes` (uma cópia da `backend/uploads-teste`, os arquivos da produção de 13/11/2026: o
+  back-up de 10/11 só tem o banco).
+- A compilação é própria: o backend em `backend/dist-pre-contestacoes` e as telas em `frontend/.next-pre-contestacoes` (o
+  `NEXT_DIST_DIR` do `next.config.mjs`), com `NEXT_PUBLIC_AMBIENTE=pre-contestacoes`. Gerar o teste não muda a
+  Pré-Contestações, e vice-versa. O `scripts/teste.mjs` devolve o `frontend/tsconfig.json` e o `next-env.d.ts` como
+  estavam depois de gerar (o `next build` acrescenta a pasta da compilação a eles).
+- A carga (16/11/2026): o esquema criado pelo `prisma migrate deploy` com as migrações do commit a3434c7
+  (`backend/tmp-teste/prisma-pre-contestacoes`); as 5 linhas que as migrações põem em `colaboradores_tipos_movimentacao`
+  apagadas; o back-up carregado pelo `backend/tmp-teste/carregar-esquema.mjs` (o carregador do teste, com o esquema do
+  `DATABASE_URL` e sem as tabelas `sig_*` da integração do RM, que não são do SIG): 88 tabelas, 325.217 linhas, todas
+  iguais ao back-up; depois, as migrações do código de agora.
+- Levar ao código novo: as migrações no esquema `pre_contestacoes` (`DATABASE_URL="$(node tmp-teste/url-pre-contestacoes.mjs)"
+  npx prisma migrate deploy`, na pasta backend), parar, `npm run pre-contestacoes:construir` e `npm run pre-contestacoes`.
+- Voltar aos dados de antes das contestações: apagar o esquema (`DROP SCHEMA pre_contestacoes CASCADE`) e repetir a carga.
+
 De 15 a 20/10/2026 a ferramenta rodou no notebook em dois ambientes separados, com bancos separados.
 
 | | Produção | Desenvolvimento |

@@ -33,12 +33,12 @@ const TEXTOS: Record<TipoImportacaoColaboradores, { titulo: string; descricao: s
   funcoes: {
     titulo: "Importar Funções",
     descricao:
-      "Escolha a planilha (.xlsx) com as colunas Função, Descrição, Senioridade, Competências e Atividades. Cada linha é uma função numa senioridade (a mesma função pode vir em várias linhas, uma por senioridade). A importação substitui o cadastro inteiro: as funções que não estão na planilha são excluídas, e as da planilha são cadastradas de novo (a já cadastrada com o mesmo nome e a mesma senioridade fica com os dados da planilha e com os vínculos dela). A Senioridade precisa estar cadastrada na aba Senioridades. Na planilha com várias abas, vale a que tem mais dessas colunas. Nada é importado antes de você confirmar, e uma linha inválida cancela a importação.",
+      "Escolha a planilha (.xlsx) com as colunas Função, Descrição, Competências e Atividades, uma função por linha (a mesma função não se repete). A importação substitui o cadastro inteiro: as funções que não estão na planilha são excluídas, e as da planilha são cadastradas de novo (a já cadastrada com o mesmo nome fica com os dados da planilha e com os vínculos dela). Na planilha com várias abas, vale a que tem mais dessas colunas. Nada é importado antes de você confirmar, e uma linha inválida cancela a importação.",
   },
   "lancamento-inicial": {
     titulo: "Importar Lançamento Inicial",
     descricao:
-      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT ou PJ), Senioridade, Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. Nada é importado antes de você confirmar, e uma linha inválida (uma senioridade, uma função ou um centro de custo não cadastrado) cancela a importação.",
+      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT, PJ, Aprendiz ou Estagiário), Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. Nada é importado antes de você confirmar, e uma linha inválida (um tipo, uma função ou um centro de custo não cadastrado) cancela a importação.",
   },
 };
 

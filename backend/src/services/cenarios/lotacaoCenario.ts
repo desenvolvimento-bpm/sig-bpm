@@ -26,7 +26,7 @@ export const VENDA_LOTACAO_CLT = "LOTACAO_CLT";
 export const VENDA_LOTACAO_PJ = "LOTACAO_PJ";
 /**
  * Os Colaboradores Aprendizes e Estagiários (11/11/2026, pedido do Adão): só nos grupos com linhas na aba Quadro de
- * Lotação do cenário (calculados pela senioridade; os CLT e os PJ ficam sem eles). O Total de Colaboradores soma os quatro.
+ * Lotação do cenário (calculados pelo Tipo das linhas; os CLT e os PJ ficam sem eles). O Total de Colaboradores soma os quatro.
  */
 export const VENDA_LOTACAO_APRENDIZ = "LOTACAO_APRENDIZ";
 export const VENDA_LOTACAO_ESTAGIARIO = "LOTACAO_ESTAGIARIO";

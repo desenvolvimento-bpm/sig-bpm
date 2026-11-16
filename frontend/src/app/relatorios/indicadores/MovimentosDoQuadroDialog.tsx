@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { plural } from "@/lib/texto";
+import { rotuloDoTipo } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 
 type Movimento = {
   id: string;
@@ -13,9 +14,8 @@ type Movimento = {
   contagem: "POSITIVA" | "NEGATIVA" | "NULA";
   classificacao: string | null;
   centroCusto: string;
-  vinculo: "CLT" | "PJ";
+  vinculo: string;
   funcao: string;
-  senioridade: string;
 };
 const CONTAGEM: Record<Movimento["contagem"], string> = { POSITIVA: "+1", NEGATIVA: "−1", NULA: "0" };
 
@@ -61,7 +61,6 @@ export function MovimentosDoQuadroDialog({ ano, mes, indicador, onFechar }: { an
                     <th className="px-3 py-2">Centro de Custo</th>
                     <th className="px-3 py-2">Tipo</th>
                     <th className="px-3 py-2">Função</th>
-                    <th className="px-3 py-2">Nível</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -74,9 +73,8 @@ export function MovimentosDoQuadroDialog({ ano, mes, indicador, onFechar }: { an
                       </td>
                       <td className="px-3 py-1.5 text-right font-medium">{CONTAGEM[m.contagem]}</td>
                       <td className="px-3 py-1.5">{m.centroCusto}</td>
-                      <td className="px-3 py-1.5">{m.vinculo}</td>
+                      <td className="px-3 py-1.5">{rotuloDoTipo(m.vinculo)}</td>
                       <td className="px-3 py-1.5">{m.funcao}</td>
-                      <td className="px-3 py-1.5">{m.senioridade}</td>
                     </tr>
                   ))}
                 </tbody>

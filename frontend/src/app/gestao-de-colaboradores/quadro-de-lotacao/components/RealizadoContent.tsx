@@ -32,6 +32,8 @@ const COLUNAS: Coluna<LinhaDoRealizado>[] = [
   numero("final", "Fim do Mês"),
   numero("clt", "CLT"),
   numero("pj", "PJ"),
+  numero("aprendizes", "Aprendizes"),
+  numero("estagiarios", "Estagiários"),
 ];
 /** As colunas da Comparação (09/11/2026): os colaboradores do centro na aba Quadro de Lotação do cenário e a diferença. */
 const DA_COMPARACAO: Coluna<LinhaDoRealizado>[] = [
@@ -42,7 +44,7 @@ const sinal = (v: number) => (v > 0 ? `+${v.toLocaleString("pt-BR")}` : v < 0 ? 
 
 /**
  * A aba Realizado de uma competência do Quadro de Lotação (06/11/2026): o quadro do mês por centro de custo — o do início,
- * as entradas e as saídas aprovadas, o do fim (CLT e PJ). Com a Comparação (09/11/2026), por centro, os colaboradores da aba
+ * as entradas e as saídas aprovadas, o do fim (CLT, PJ, Aprendizes e Estagiários). Com a Comparação (09/11/2026), por centro, os colaboradores da aba
  * Quadro de Lotação do cenário escolhido (nos analíticos que a têm) e a diferença. Desde 12/11/2026 (pedido do Adão), sem os
  * cards dos indicadores (ficam no Painel de Bordo) e sem o aviso do cenário sem a aba Quadro de Lotação.
  */
@@ -59,7 +61,7 @@ export function RealizadoContent() {
   const colunas = porCentro ? [...COLUNAS, ...DA_COMPARACAO] : COLUNAS;
   const linhas = r.data?.linhas;
   const tabela = useTabelaFiltravel(linhas, colunas, { porPaginaInicial: 50 });
-  const soma = (k: "inicial" | "entradas" | "saidas" | "final" | "clt" | "pj") => tabela.filtradas.reduce((a, l) => a + l[k], 0);
+  const soma = (k: "inicial" | "entradas" | "saidas" | "final" | "clt" | "pj" | "aprendizes" | "estagiarios") => tabela.filtradas.reduce((a, l) => a + l[k], 0);
   const somaCenario = tabela.filtradas.reduce((a, l) => a + (l.cenario ?? 0), 0);
 
   return (
@@ -70,7 +72,8 @@ export function RealizadoContent() {
         sobre={
           <p>
             O Quadro de Lotação Realizado do mês, por departamento e centro de custo: os colaboradores do início do mês (o Lançamento Inicial, no mês dele, ou o fim da
-            competência anterior), as entradas (as movimentações aprovadas de contagem Positiva), as saídas (as de Negativa) e os do fim do mês, CLT e PJ.
+            competência anterior), as entradas (as movimentações aprovadas de contagem Positiva), as saídas (as de Negativa) e os do fim do mês, com os de cada
+            tipo (CLT, PJ, Aprendizes e Estagiários).
             Com a Comparação, por centro, os colaboradores do mês na aba Quadro de Lotação do cenário escolhido (nos cenários analíticos que a têm) e a
             diferença. Os indicadores do mês (Quadro de Lotação, Turnover e Abertura de Vagas x Contratações) ficam no Painel de Bordo.
           </p>
@@ -112,6 +115,8 @@ export function RealizadoContent() {
               <td className="px-4 py-2 text-right text-sm font-medium">{l.final}</td>
               <td className="px-4 py-2 text-right text-sm">{l.clt}</td>
               <td className="px-4 py-2 text-right text-sm">{l.pj}</td>
+              <td className="px-4 py-2 text-right text-sm">{l.aprendizes}</td>
+              <td className="px-4 py-2 text-right text-sm">{l.estagiarios}</td>
               {porCentro ? (
                 <>
                   <td className="px-4 py-2 text-right text-sm">{(l.cenario ?? 0).toLocaleString("pt-BR")}</td>
@@ -132,6 +137,8 @@ export function RealizadoContent() {
                 <td className="px-4 py-2 text-right">{soma("final")}</td>
                 <td className="px-4 py-2 text-right">{soma("clt")}</td>
                 <td className="px-4 py-2 text-right">{soma("pj")}</td>
+                <td className="px-4 py-2 text-right">{soma("aprendizes")}</td>
+                <td className="px-4 py-2 text-right">{soma("estagiarios")}</td>
                 {porCentro ? (
                   <>
                     <td className="px-4 py-2 text-right">{somaCenario.toLocaleString("pt-BR")}</td>

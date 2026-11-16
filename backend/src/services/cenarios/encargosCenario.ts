@@ -20,7 +20,7 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  * terceiros) foram adotados pelo usuário em 20/10/2026, a confirmar com a contabilidade.
  *
  * O FGTS em duas linhas (09/11/2026, etapa 4 da Gestão de Colaboradores): Fundo de Garantia: Aprendiz (2%) sobre os
- * salários dos aprendizes (a senioridade Aprendiz, nas linhas CLT da aba Quadro de Lotação do cenário) e Fundo de
+ * salários dos aprendizes (as linhas do Tipo Aprendiz na aba Quadro de Lotação do cenário) e Fundo de
  * Garantia: CLT (8%, a venda ENCARGOS_FGTS de antes) sobre o resto da base. Com a diferença, o cálculo fica
  *
  *   base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)]
@@ -28,7 +28,7 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  *
  * — o mesmo que o FGTS de cada um sobre os seus salários; sem aprendizes, o de antes.
  *
- * Os estagiários e os bolsistas (11/11/2026, pedido do Adão; a senioridade Estagiário, Lei 11.788/2008) não têm INSS, FGTS,
+ * Os estagiários e os bolsistas (11/11/2026, pedido do Adão; o Tipo Estagiário, Lei 11.788/2008) não têm INSS, FGTS,
  * férias com o terço nem 13º: os salários deles nas Remunerações CLT saem da base,
  *
  *   base = Remunerações CLT + Horas Extras − Salários dos Estagiários.

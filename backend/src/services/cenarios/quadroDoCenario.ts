@@ -1,21 +1,20 @@
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "../../generated/prisma/client.js";
-import { chaveDoNome } from "../colaboradores/importacaoCadastros.js";
+import type { VinculoColaborador } from "../../generated/prisma/enums.js";
 import type { GrupoDoCenario } from "./centrosCenario.js";
 
 /**
  * A aba Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores; decisões do Adão):
  *
- * - cada linha é como a do Lançamento Inicial — a Unidade, o Tipo (CLT ou PJ), a Senioridade, a Função e o Centro de
- *   Custo (um dos centros dos grupos do cenário) — e tem, em cada mês, os Colaboradores e o Salário Bruto e a
+ * - cada linha é como a do Lançamento Inicial — a Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro
+ *   de Custo (um dos centros dos grupos do cenário) — e tem, em cada mês, os Colaboradores e o Salário Bruto e a
  *   Insalubridade / Periculosidade de cada um (o Salário Total é a soma; a linha vale colaboradores × Salário Total);
  * - o grupo de centros com alguma linha conta por elas: os Colaboradores (a soma das linhas dos centros dele) e as
  *   Remunerações CLT e PJ, que não se digitam;
- * - Aprendizes, Estagiários, CLT e PJ (11/11/2026, pedido do Adão): os colaboradores se contam em quatro, pela senioridade
- *   e pelo tipo — os Aprendizes (a senioridade Aprendiz: o Jovem Aprendiz), os Estagiários (a senioridade Estagiário: os
- *   estagiários e os bolsistas, da Lei 11.788/2008), os CLT e os PJ (as demais senioridades, pelo tipo); o Total de
- *   Colaboradores é a soma dos quatro;
+ * - Aprendizes, Estagiários, CLT e PJ (11/11/2026, pedido do Adão): os colaboradores se contam em quatro, pelo Tipo da
+ *   linha — os Aprendizes (o Jovem Aprendiz), os Estagiários (os estagiários e os bolsistas, da Lei 11.788/2008), os CLT e
+ *   os PJ; o Total de Colaboradores é a soma dos quatro;
  * - os Salários dos mesmos quatro (12/11/2026, pedido do Adão; antes, os dos aprendizes e os dos estagiários de cada mão de
  *   obra, pela atribuição do centro de cada linha): colaboradores × Salário Total das linhas de cada um. Todos vão para a mão
  *   de obra da atribuição do grupo (Direta: a MOD; Indireta ou sem atribuição: a MOI; a outra, quando o grupo da DRE só tem
@@ -30,11 +29,9 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  */
 
 export type MesDaLinha = { colaboradores: number; salarioBruto: number; adicional: number };
-/** Uma linha para o cálculo: o tipo, se é de aprendiz ou de estagiário, o código do centro e os doze meses. */
+/** Uma linha para o cálculo: o tipo, o código do centro e os doze meses. */
 export type LinhaDoQuadro = {
-  vinculo: "CLT" | "PJ";
-  aprendiz: boolean;
-  estagiario: boolean;
+  vinculo: VinculoColaborador;
   codigo: string | null;
   meses: MesDaLinha[];
 };
@@ -48,19 +45,15 @@ export type SalariosDoGrupo = Record<TipoDeColaborador, number[]>;
  * aprendizes e os estagiários) —, os salários dos mesmos quatro e quantas linhas ele tem.
  */
 export type QuadroDoGrupo = Record<TipoDeColaborador, number[]> & { salarios: SalariosDoGrupo; linhas: number };
-/** O tipo de uma linha: a senioridade (Aprendiz, Estagiário) e, nas demais, o vínculo. */
-export const tipoDaLinha = (l: Pick<LinhaDoQuadro, "vinculo" | "aprendiz" | "estagiario">): TipoDeColaborador =>
-  l.aprendiz ? "aprendizes" : l.estagiario ? "estagiarios" : l.vinculo === "CLT" ? "clt" : "pj";
+/** Os colaboradores de cada Tipo da linha. */
+const TIPO_DO_VINCULO: Record<VinculoColaborador, TipoDeColaborador> = { APRENDIZ: "aprendizes", ESTAGIARIO: "estagiarios", CLT: "clt", PJ: "pj" };
+export const tipoDaLinha = (l: Pick<LinhaDoQuadro, "vinculo">): TipoDeColaborador => TIPO_DO_VINCULO[l.vinculo];
 /**
  * As Remunerações do Quadro de Lotação num mês (k: 0 a 11), as da mão de obra do grupo: CLT, os Salários dos Aprendizes, dos
  * Estagiários e CLT; PJ, os Salários PJ (12/11/2026).
  */
 export const remuneracoesDoQuadro = (s: SalariosDoGrupo, k: number) => ({ clt: s.aprendizes[k] + s.estagiarios[k] + s.clt[k], pj: s.pj[k] });
 
-/** A senioridade dos aprendizes (sem diferença de maiúsculas e acentos). */
-export const ehAprendiz = (senioridade: string) => chaveDoNome(senioridade) === chaveDoNome("Aprendiz");
-/** A senioridade dos estagiários e dos bolsistas (11/11/2026; sem diferença de maiúsculas e acentos). */
-export const ehEstagiario = (senioridade: string) => chaveDoNome(senioridade) === chaveDoNome("Estagiário");
 export const salarioTotal = (m: MesDaLinha) => m.salarioBruto + m.adicional;
 const doze = () => Array<number>(12).fill(0);
 
@@ -80,7 +73,7 @@ export function quadroDosGrupos(linhas: LinhaDoQuadro[], grupos: GrupoDoCenario[
       r.set(g.grupo, q);
     }
     q.linhas++;
-    // Os colaboradores e os salários pela senioridade (Aprendiz, Estagiário) e, nas demais, pelo vínculo.
+    // Os colaboradores e os salários pelo Tipo da linha.
     const tipo = tipoDaLinha(l);
     l.meses.forEach((m, k) => {
       q.salarios[tipo][k] += m.colaboradores * salarioTotal(m);
@@ -96,12 +89,10 @@ type Db = Pick<Prisma.TransactionClient, "cenarioLotacao">;
 export async function linhasDoQuadro(db: Db, cenarioId: string): Promise<LinhaDoQuadro[]> {
   const ls = await db.cenarioLotacao.findMany({
     where: { cenarioId },
-    select: { vinculo: true, senioridade: { select: { nome: true } }, centroCusto: { select: { codigoRM: true } }, meses: true },
+    select: { vinculo: true, centroCusto: { select: { codigoRM: true } }, meses: true },
   });
   return ls.map((l) => ({
     vinculo: l.vinculo,
-    aprendiz: ehAprendiz(l.senioridade.nome),
-    estagiario: ehEstagiario(l.senioridade.nome),
     codigo: l.centroCusto.codigoRM,
     meses: mesesDaLinha(l.meses),
   }));

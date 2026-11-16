@@ -3,7 +3,7 @@ import type { MarcacaoCenario, OrigemDesligamento, VinculoColaborador } from "..
 import { auditar } from "../auditoriaService.js";
 import { plural } from "../../utils/plural.js";
 import { chaveDoNome } from "./importacaoCadastros.js";
-import { recusaDaFuncao } from "./funcaoPorSenioridade.js";
+import { TIPOS_DO_COLABORADOR } from "./tiposDoColaborador.js";
 import { gruposDoCadastro, type GrupoDoCenario } from "../cenarios/centrosCenario.js";
 import type { Acesso } from "../acesso/acesso.js";
 import { podeVerCentro } from "../acesso/recorteDepartamento.js";
@@ -27,7 +27,7 @@ const doRecorte = (acesso: Acesso | undefined, centro: { id: string; departament
  *   dados (sem a Origem e a Classificação), já aprovada.
  * - **O quadro:** o saldo inicial é o Lançamento Inicial, no mês dele, ou o saldo final da competência anterior; o final
  *   soma as movimentações aprovadas de contagem Positiva e subtrai as de Negativa (as Nulas, as vagas, não mudam o quadro).
- *   Por centro de custo e vínculo (CLT ou PJ).
+ *   Por centro de custo e tipo (CLT, PJ, Aprendiz ou Estagiário).
  * - **Indicadores (Painel de Bordo):** Quadro de Lotação = o saldo final; Turnover = (Positivas + Negativas) ÷ 2 ÷ Quadro de
  *   Lotação; Abertura de Vagas x Contratações = as contratações (as Positivas aprovadas).
  */
@@ -77,8 +77,8 @@ export type Contagem = Map<string, number>;
 const somar = (q: Contagem, chave: string, n: number) => q.set(chave, (q.get(chave) ?? 0) + n);
 const total = (q: Contagem) => [...q.values()].reduce((a, b) => a + b, 0);
 
-/** Quem entra na contagem: o centro e o vínculo (e, para o QL Realizado por linha, a função e a senioridade). */
-type ItemDoQuadro = { centroCustoId: string; vinculo: VinculoColaborador; funcaoId?: string; senioridadeId?: string };
+/** Quem entra na contagem: o centro e o tipo (e, para o QL Realizado por linha, a função). */
+type ItemDoQuadro = { centroCustoId: string; vinculo: VinculoColaborador; funcaoId?: string };
 export type MovimentoDoQuadro = ItemDoQuadro & { contagem: "POSITIVA" | "NEGATIVA" | "NULA"; status: string; tipo: string };
 /** A chave da contagem: o centro e o vínculo ("centroId|CLT"). */
 const porCentroEVinculo = (i: ItemDoQuadro) => `${i.centroCustoId}|${i.vinculo}`;
@@ -97,7 +97,7 @@ export type QuadroDoMes = {
  * O quadro de cada competência, em ordem: o inicial (o Lançamento Inicial no mês dele, senão o final da anterior) e o final,
  * com as movimentações aprovadas. Uma função pura, para os testes: `carga` é o Lançamento Inicial (o mês e os
  * colaboradores), `movimentos`, as movimentações de cada competência. `chave` agrupa a contagem (o centro e o vínculo;
- * 11/11/2026: com a função e a senioridade, o QL Realizado das linhas dos cenários).
+ * com a função, o QL Realizado das linhas dos cenários).
  */
 export function calcularQuadros(
   competencias: Array<{ ano: number; mes: number }>,
@@ -172,16 +172,16 @@ async function quadrosDoBanco(db: Db) {
 
 /**
  * O QL Realizado de cada competência do Quadro de Lotação, por linha (12/11/2026: a fonte dos colaboradores dos cenários
- * analíticos): os colaboradores do fim de cada mês por centro de custo, vínculo, função e senioridade
- * ("centroId|CLT|funcaoId|senioridadeId"), em ordem, e a unidade de cada linha (a mais comum dos colaboradores do Lançamento
+ * analíticos): os colaboradores do fim de cada mês por centro de custo, tipo e função ("centroId|CLT|funcaoId"), em ordem,
+ * e a unidade de cada linha (a mais comum dos colaboradores do Lançamento
  * Inicial com a mesma chave; as linhas que só as movimentações trazem ficam sem ela).
  */
 export async function quadrosRealizadosPorLinha(db: Db) {
   const [competencias, cargaItens, movs] = await Promise.all([
     db.colaboradorCompetencia.findMany({ select: { id: true, ano: true, mes: true } }),
-    db.colaboradorCargaInicial.findMany({ select: { ano: true, mes: true, centroCustoId: true, vinculo: true, funcaoId: true, senioridadeId: true, unidadeNegocioId: true } }),
+    db.colaboradorCargaInicial.findMany({ select: { ano: true, mes: true, centroCustoId: true, vinculo: true, funcaoId: true, unidadeNegocioId: true } }),
     db.colaboradorMovimentacao.findMany({
-      select: { competenciaId: true, centroCustoId: true, vinculo: true, funcaoId: true, senioridadeId: true, status: true, tipoMovimentacao: { select: { contagem: true, nome: true } } },
+      select: { competenciaId: true, centroCustoId: true, vinculo: true, funcaoId: true, status: true, tipoMovimentacao: { select: { contagem: true, nome: true } } },
     }),
   ]);
   const unidades = new Map<string, Map<string, number>>();
@@ -203,16 +203,15 @@ export async function quadrosRealizadosPorLinha(db: Db) {
 /**
  * O QL Realizado da competência mais recente do Quadro de Lotação (11/11/2026, o Exportar Premissas dos cenários com a
  * referência realizada; 12/11/2026, também o Importar Quadro de Lotação Vigente da referência): os colaboradores do fim do
- * mês por centro de custo, vínculo, função e senioridade ("centroId|CLT|funcaoId|senioridadeId"); nulo sem competência.
+ * mês por centro de custo, tipo e função ("centroId|CLT|funcaoId"); nulo sem competência.
  */
 export async function quadroRealizadoMaisRecente(db: Db) {
   const { quadros, unidadeDaChave } = await quadrosRealizadosPorLinha(db);
   const ultimo = quadros.at(-1);
   return ultimo ? { ano: ultimo.ano, mes: ultimo.mes, final: ultimo.final, unidadeDaChave } : null;
 }
-/** A chave do QL Realizado por linha: o centro, o vínculo, a função e a senioridade. */
-export const chaveDaLinhaDoQuadro = (i: { centroCustoId: string; vinculo: string; funcaoId?: string; senioridadeId?: string }) =>
-  `${i.centroCustoId}|${i.vinculo}|${i.funcaoId ?? ""}|${i.senioridadeId ?? ""}`;
+/** A chave do QL Realizado por linha: o centro, o tipo e a função. */
+export const chaveDaLinhaDoQuadro = (i: { centroCustoId: string; vinculo: string; funcaoId?: string }) => `${i.centroCustoId}|${i.vinculo}|${i.funcaoId ?? ""}`;
 
 /** Os quadros guardados por 10 segundos: os indicadores do ano pedem um mês de cada vez. */
 let guardados: { em: number; quadros: Promise<QuadroDoMes[]> } | null = null;
@@ -291,7 +290,6 @@ const INCLUIR = {
   classificacao: { select: { nome: true } },
   centroCusto: { select: { codigoRM: true, nomeRM: true, departamento: true } },
   funcao: { select: { nome: true } },
-  senioridade: { select: { nome: true } },
   geradaPor: { select: { id: true } },
   vagasGeradas: { select: { id: true } },
 } as const;
@@ -300,7 +298,6 @@ type MovimentacaoLida = Awaited<ReturnType<Db["colaboradorMovimentacao"]["findMa
   classificacao: { nome: string } | null;
   centroCusto: { codigoRM: string | null; nomeRM: string; departamento: string | null };
   funcao: { nome: string };
-  senioridade: { nome: string };
   geradaPor: { id: string } | null;
   vagasGeradas: Array<{ id: string }>;
 };
@@ -318,7 +315,6 @@ function apresentar(m: MovimentacaoLida) {
     departamento: m.centroCusto.departamento,
     vinculo: m.vinculo,
     funcao: m.funcao.nome,
-    senioridade: m.senioridade.nome,
     motivo: m.motivo,
     origem: m.origem,
     status: m.status,
@@ -339,8 +335,6 @@ export type NovaMovimentacao = {
   centroCustoId: string;
   vinculo: VinculoColaborador;
   funcaoId: string;
-  /** Opcional (13/11/2026): sem ela, a da função (a Nova Movimentação não tem mais o campo). */
-  senioridadeId?: string | null;
   motivo?: string | null;
   origem?: OrigemDesligamento | null;
   gerarVaga?: boolean;
@@ -425,14 +419,13 @@ export const quadroService = {
   /** As listas do modal Nova Movimentação: só os cadastros ativos. */
   async opcoes() {
     const db = getPrismaClient();
-    const [tipos, classificacoes, centros, funcoes, senioridades] = await Promise.all([
+    const [tipos, classificacoes, centros, funcoes] = await Promise.all([
       db.colaboradorTipoMovimentacao.findMany({ where: { ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { id: true, nome: true, contagem: true, aprovacao: true } }),
       db.colaboradorClassificacao.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true, tipoMovimentacaoId: true } }),
       db.centroCusto.findMany({ where: { ativo: true }, orderBy: [{ codigoRM: "asc" }, { nomeRM: "asc" }], select: { id: true, codigoRM: true, nomeRM: true } }),
-      db.colaboradorFuncao.findMany({ where: { ativo: true }, orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], select: { id: true, nome: true, senioridadeId: true } }),
-      db.colaboradorSenioridade.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+      db.colaboradorFuncao.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     ]);
-    return { tipos, classificacoes, centros: centros.map((c) => ({ id: c.id, nome: centroRotulo(c) })), funcoes, senioridades };
+    return { tipos, classificacoes, centros: centros.map((c) => ({ id: c.id, nome: centroRotulo(c) })), funcoes };
   },
 
   /** Todas as movimentações do mês, sem o recorte (13/11/2026). */
@@ -458,22 +451,13 @@ export const quadroService = {
       db.colaboradorTipoMovimentacao.findUnique({ where: { id: v.tipoMovimentacaoId } }),
       v.classificacaoId ? db.colaboradorClassificacao.findUnique({ where: { id: v.classificacaoId } }) : null,
       db.centroCusto.findUnique({ where: { id: v.centroCustoId }, select: { id: true, ativo: true } }),
-      db.colaboradorFuncao.findUnique({ where: { id: v.funcaoId }, select: { id: true, ativo: true, nome: true, senioridadeId: true, senioridade: { select: { nome: true } } } }),
+      db.colaboradorFuncao.findUnique({ where: { id: v.funcaoId }, select: { id: true, ativo: true, nome: true } }),
     ]);
     if (!tipo?.ativo) throw new QuadroError(400, "Escolha um tipo de movimentação ativo.");
     if (v.classificacaoId && (!classificacao?.ativo || classificacao.tipoMovimentacaoId !== tipo.id)) throw new QuadroError(400, `A classificação não é de ${tipo.nome}.`);
     if (!centro?.ativo) throw new QuadroError(400, "Escolha um centro de custo ativo.");
     if (!funcao?.ativo) throw new QuadroError(400, "Escolha uma função ativa.");
-    // A senioridade da função (13/11/2026, pedido do Adão: a Nova Movimentação não tem mais o campo); a informada só serve
-    // à função sem senioridade.
-    const senioridadeId = funcao.senioridadeId ?? v.senioridadeId ?? null;
-    if (!senioridadeId) throw new QuadroError(400, `A função ${funcao.nome} não tem senioridade no cadastro: cadastre-a com a senioridade em Cadastros › Funções.`);
-    const senioridade = await db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { id: true, ativo: true, nome: true } });
-    if (!senioridade?.ativo) throw new QuadroError(400, senioridade ? `A senioridade ${senioridade.nome}, da função ${funcao.nome}, está inativa.` : "Escolha uma senioridade ativa.");
-    // A função da senioridade (11/11/2026: a mesma função tem uma por senioridade).
-    const recusaDaSenioridade = recusaDaFuncao(funcao, senioridade.id);
-    if (recusaDaSenioridade) throw new QuadroError(400, recusaDaSenioridade);
-    if (v.vinculo !== "CLT" && v.vinculo !== "PJ") throw new QuadroError(400, "O tipo é CLT ou PJ.");
+    if (!TIPOS_DO_COLABORADOR.includes(v.vinculo)) throw new QuadroError(400, "O tipo é CLT, PJ, Aprendiz ou Estagiário.");
     const desligamento = tipo.contagem === "NEGATIVA";
     if (desligamento && !v.origem) throw new QuadroError(400, "Escolha a origem do desligamento.");
     // A vaga em aberto: o tipo Abertura de Vaga do cadastro.
@@ -489,7 +473,6 @@ export const quadroService = {
       centroCustoId: centro.id,
       vinculo: v.vinculo,
       funcaoId: funcao.id,
-      senioridadeId: senioridade.id,
       motivo: v.motivo?.trim() || null,
       registradaPor: quem.id,
       registradaPorNome: quem.nome,
@@ -575,9 +558,9 @@ export const quadroService = {
   },
 
   // ------------------------------------------------------------------------------------------------------ o realizado
-  /** O quadro realizado da competência, por centro de custo: o inicial, as entradas, as saídas e o final (CLT e PJ). */
   /**
-   * A aba Realizado. Com a Comparação (09/11/2026, `marcacao`: o cenário marcado), cada centro traz os colaboradores do mês na
+   * A aba Realizado: o quadro realizado da competência, por centro de custo — o inicial, as entradas, as saídas e o final,
+   * com o final por tipo (CLT, PJ, Aprendizes e Estagiários). Com a Comparação (09/11/2026, `marcacao`: o cenário marcado), cada centro traz os colaboradores do mês na
    * aba Quadro de Lotação do cenário (nos analíticos com linhas; os centros só do cenário entram, com o realizado zero).
    */
   async realizado(anoMes: string, marcacao?: MarcacaoCenario) {
@@ -612,6 +595,8 @@ export const quadroService = {
         final: contar(q?.final, ct.id),
         clt: contar(q?.final, ct.id, "CLT"),
         pj: contar(q?.final, ct.id, "PJ"),
+        aprendizes: contar(q?.final, ct.id, "APRENDIZ"),
+        estagiarios: contar(q?.final, ct.id, "ESTAGIARIO"),
         cenario: doCenario ? (doCenario.get(ct.id)?.[c.mes - 1] ?? 0) : null,
       }))
       .filter((l) => l.inicial || l.entradas || l.saidas || l.final || l.cenario)
@@ -628,8 +613,8 @@ export const quadroService = {
 
   // ------------------------------------------------------------------------------------------------------- a jornada
   /**
-   * A aba Jornada (13/11/2026, pedido do Adão): as linhas do quadro realizado do fim do mês — o centro de custo e a função,
-   * que traz a senioridade (os vínculos CLT e PJ juntos) —, com as horas extras realizadas (em minutos; a tela mostra HH:MM)
+   * A aba Jornada (13/11/2026, pedido do Adão): as linhas do quadro realizado do fim do mês — o centro de custo e a função
+   * (os tipos juntos) —, com as horas extras realizadas (em minutos; a tela mostra HH:MM)
    * e as faltas aferidas (em dias) digitadas; a linha que tem a jornada e saiu do quadro continua. Sem o recorte (só a aba
    * Aprovações tem).
    */
@@ -649,7 +634,7 @@ export const quadroService = {
     const chaves = [...new Set([...colaboradores.keys(), ...daJornada.keys()])];
     const [centros, funcoes] = await Promise.all([
       db.centroCusto.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[0]))] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true } }),
-      db.colaboradorFuncao.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[1]))] } }, select: { id: true, nome: true, senioridade: { select: { nome: true } } } }),
+      db.colaboradorFuncao.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[1]))] } }, select: { id: true, nome: true } }),
     ]);
     const centroDe = new Map(centros.map((x) => [x.id, x]));
     const funcaoDe = new Map(funcoes.map((x) => [x.id, x]));
@@ -665,7 +650,7 @@ export const quadroService = {
           funcaoId,
           departamento: ct.departamento,
           centroCusto: centroRotulo(ct),
-          funcao: f.senioridade ? `${f.nome} · ${f.senioridade.nome}` : f.nome,
+          funcao: f.nome,
           colaboradores: colaboradores.get(k) ?? 0,
           horasExtrasMinutos: j?.horasExtrasMinutos ?? 0,
           faltasDias: j ? Number(j.faltasDias) : 0,

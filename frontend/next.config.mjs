@@ -9,6 +9,9 @@ const nextConfig = {
   // Acesso pela rede local (11/10/2026): no modo de desenvolvimento, o Next bloqueia os arquivos da tela para quem
   // não entra por localhost — a tela de login abre, mas não funciona. Liberados os endereços das redes internas.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.16.*.*"],
+  // A pasta da compilação: a .next de sempre, ou outra para a base teste Pré-Contestações (16/11/2026, o
+  // scripts/teste.mjs passa NEXT_DIST_DIR=.next-pre-contestacoes), que convive com a do teste.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactCompiler: true,
   cacheComponents: true,
   // O build sem a verificação de tipos (22/10/2026, combinado com o TI): no servidor, ela levou a memória ao limite e o

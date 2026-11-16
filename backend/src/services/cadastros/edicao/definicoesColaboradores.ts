@@ -1,13 +1,13 @@
 import type { Prisma } from "../../../generated/prisma/client.js";
 import { plural } from "../../../utils/plural.js";
-import { recusaDaFuncao, rotuloDaFuncao } from "../../colaboradores/funcaoPorSenioridade.js";
+import { ROTULO_DO_TIPO } from "../../colaboradores/tiposDoColaborador.js";
 import { travaDoLancamentoInicial } from "../../colaboradores/travaDoLancamentoInicial.js";
 import type { DefinicaoCadastro, Opcao, Valores } from "./definicoesCadastros.js";
 import { RegraCadastroError } from "./erroCadastro.js";
 
 /**
  * Os cadastros da Gestão de Colaboradores (06/11/2026, pedido do Adão; a tela Cadastros dos Processos Administrativos), na
- * edição genérica dos cadastros: Senioridades, Funções, Movimentações (os tipos de movimentação do Quadro de Lotação),
+ * edição genérica dos cadastros: Funções, Movimentações (os tipos de movimentação do Quadro de Lotação),
  * Classificações (as de cada tipo) e o Lançamento Inicial (o quadro de lotação do início de um mês, um registro por
  * colaborador). A lista leva `emUso` em cada registro — o motivo de não poder ser excluído, ou nulo —, para a tela deixar o
  * Excluir do menu Ações só nos que não têm registros em outras telas; esses se inativam.
@@ -51,14 +51,8 @@ export const ROTULO_CONTAGEM: Record<string, string> = { POSITIVA: "Positiva", N
 export const ROTULO_APROVACAO: Record<string, string> = { AUTOMATICA: "Automática", MANUAL: "Manual" };
 const opcoesDe = (rotulos: Record<string, string>): Opcao[] => Object.entries(rotulos).map(([valor, rotulo]) => ({ valor, rotulo }));
 
-const opcoesSenioridades = async (db: Db) =>
-  (await db.colaboradorSenioridade.findMany({ orderBy: { nome: "asc" } })).map((s) => ({ valor: s.id, rotulo: `${s.nome}${inativo(s.ativo)}` }));
-// A função com a senioridade (11/11/2026: a mesma função tem uma por senioridade).
 const opcoesFuncoes = async (db: Db) =>
-  (await db.colaboradorFuncao.findMany({ orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], include: { senioridade: { select: { nome: true } } } })).map((f) => ({
-    valor: f.id,
-    rotulo: `${rotuloDaFuncao(f)}${inativo(f.ativo)}`,
-  }));
+  (await db.colaboradorFuncao.findMany({ orderBy: { nome: "asc" } })).map((f) => ({ valor: f.id, rotulo: `${f.nome}${inativo(f.ativo)}` }));
 const opcoesTipos = async (db: Db) =>
   (await db.colaboradorTipoMovimentacao.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }] })).map((t) => ({ valor: t.id, rotulo: `${t.nome}${inativo(t.ativo)}` }));
 const opcoesUnidades = async (db: Db) => (await db.unidadeNegocio.findMany({ orderBy: { codigo: "asc" } })).map((u) => ({ valor: u.id, rotulo: u.nome }));
@@ -67,46 +61,6 @@ const opcoesCentros = async (db: Db) =>
     valor: c.id,
     rotulo: `${c.codigoRM ? `${c.codigoRM} · ` : ""}${c.nomeRM}${c.ativo ? "" : " (inativo)"}`,
   }));
-
-// ------------------------------------------------------------------------------------------------------- senioridades
-const senioridades: DefinicaoCadastro = {
-  entidade: "colaboradores-senioridades",
-  titulo: "Senioridade",
-  auditoria: "colaborador_senioridade",
-  criar: true,
-  excluir: true,
-  campos: [
-    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, ajuda: "Ex.: Aprendiz, Júnior, Pleno, Sênior." },
-    { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true },
-    { nome: "ativo", rotulo: "Ativa", tipo: "booleano" },
-  ],
-  listar: async (db, busca) =>
-    comUso(
-      (await db.colaboradorSenioridade.findMany({ orderBy: { nome: "asc" } })).filter((s) => contem(busca, s.nome, s.descricao)),
-      (id) => senioridades.impedimentoExclusao!(db, id),
-    ),
-  ler: (db, id) => db.colaboradorSenioridade.findUnique({ where: { id } }),
-  async preparar(db, v, id) {
-    const nome = exigir(v.nome, "O nome");
-    await nomeLivre(() => db.colaboradorSenioridade.findFirst({ where: { nome: { equals: nome, mode: "insensitive" } }, select: { id: true, nome: true } }), id, (n) => `Já existe a senioridade ${n}.`);
-    return { nome, descricao: texto(v.descricao), ativo: ativoDe(v) };
-  },
-  async gravar(db, d, id) {
-    const dados = d as Prisma.ColaboradorSenioridadeCreateInput;
-    return id ? (await db.colaboradorSenioridade.update({ where: { id }, data: dados })).id : (await db.colaboradorSenioridade.create({ data: dados })).id;
-  },
-  async impedimentoExclusao(db, id) {
-    const [f, c, m, l] = await Promise.all([
-      db.colaboradorFuncao.count({ where: { senioridadeId: id } }),
-      db.colaboradorCargaInicial.count({ where: { senioridadeId: id } }),
-      db.colaboradorMovimentacao.count({ where: { senioridadeId: id } }),
-      db.cenarioLotacao.count({ where: { senioridadeId: id } }),
-    ]);
-    const usos = [f ? `${f} ${plural(f, "função", "funções")}` : "", ...usosNoQuadro(c, m, l)].filter(Boolean);
-    return usos.length ? `A senioridade está em ${emLista(usos)}: inative-a em vez de excluir.` : null;
-  },
-  remover: async (db, id) => void (await db.colaboradorSenioridade.delete({ where: { id } })),
-};
 
 // ------------------------------------------------------------------------------------------------------------ funções
 const funcoes: DefinicaoCadastro = {
@@ -117,7 +71,6 @@ const funcoes: DefinicaoCadastro = {
   excluir: true,
   campos: [
     { nome: "nome", rotulo: "Função", tipo: "texto", obrigatorio: true },
-    { nome: "senioridadeId", rotulo: "Senioridade", tipo: "opcao", opcoes: opcoesSenioridades, ajuda: "A senioridade da função (aba Senioridades)." },
     { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true },
     { nome: "competencias", rotulo: "Competências", tipo: "texto", multilinha: true, larguraInteira: true, naTabela: false },
     { nome: "atividades", rotulo: "Atividades", tipo: "texto", multilinha: true, larguraInteira: true, naTabela: false },
@@ -125,24 +78,14 @@ const funcoes: DefinicaoCadastro = {
   ],
   listar: async (db, busca) =>
     comUso(
-      (await db.colaboradorFuncao.findMany({ orderBy: [{ nome: "asc" }, { senioridade: { nome: "asc" } }], include: { senioridade: { select: { nome: true } } } }))
-        .filter((f) => contem(busca, f.nome, f.descricao, f.senioridade?.nome))
-        .map(({ senioridade: _s, ...f }) => f),
+      (await db.colaboradorFuncao.findMany({ orderBy: { nome: "asc" } })).filter((f) => contem(busca, f.nome, f.descricao)),
       (id) => funcoes.impedimentoExclusao!(db, id),
     ),
   ler: (db, id) => db.colaboradorFuncao.findUnique({ where: { id } }),
   async preparar(db, v, id) {
     const nome = exigir(v.nome, "A função");
-    const senioridadeId = texto(v.senioridadeId);
-    const senioridade = senioridadeId ? await db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { nome: true } }) : null;
-    if (senioridadeId && !senioridade) throw new RegraCadastroError(400, "Senioridade inexistente.");
-    // A função por senioridade (11/11/2026): o par nome + senioridade não se repete.
-    await nomeLivre(
-      () => db.colaboradorFuncao.findFirst({ where: { nome: { equals: nome, mode: "insensitive" }, senioridadeId }, select: { id: true, nome: true } }),
-      id,
-      (n) => (senioridade ? `Já existe a função ${n} com a senioridade ${senioridade.nome}.` : `Já existe a função ${n} sem senioridade.`),
-    );
-    return { nome, descricao: texto(v.descricao), senioridadeId, competencias: texto(v.competencias), atividades: texto(v.atividades), ativo: ativoDe(v) };
+    await nomeLivre(() => db.colaboradorFuncao.findFirst({ where: { nome: { equals: nome, mode: "insensitive" } }, select: { id: true, nome: true } }), id, (n) => `Já existe a função ${n}.`);
+    return { nome, descricao: texto(v.descricao), competencias: texto(v.competencias), atividades: texto(v.atividades), ativo: ativoDe(v) };
   },
   async gravar(db, d, id) {
     const dados = d as Prisma.ColaboradorFuncaoUncheckedCreateInput;
@@ -251,7 +194,8 @@ const classificacoes: DefinicaoCadastro = {
 };
 
 // ------------------------------------------------------------------------------------------------- lançamento inicial
-export const ROTULO_VINCULO: Record<string, string> = { CLT: "CLT", PJ: "PJ" };
+/** O Tipo do colaborador (16/11/2026: com o Aprendiz e o Estagiário; tiposDoColaborador.ts). */
+export const ROTULO_VINCULO: Record<string, string> = ROTULO_DO_TIPO;
 const mesAno = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 
 /** A competência do Lançamento Inicial em vigor (todos os registros são do mesmo mês), ou nula sem nenhum. */
@@ -273,18 +217,17 @@ const lancamentoInicial: DefinicaoCadastro = {
     { nome: "competencia", rotulo: "Competência", tipo: "texto", derivado: true, noFormulario: false, estreita: true },
     { nome: "unidadeNegocioId", rotulo: "Unidade", tipo: "opcao", obrigatorio: true, opcoes: opcoesUnidades },
     { nome: "vinculo", rotulo: "Tipo", tipo: "opcao", obrigatorio: true, opcoes: async () => opcoesDe(ROTULO_VINCULO) },
-    { nome: "senioridadeId", rotulo: "Senioridade", tipo: "opcao", obrigatorio: true, opcoes: opcoesSenioridades },
     { nome: "funcaoId", rotulo: "Função", tipo: "opcao", obrigatorio: true, opcoes: opcoesFuncoes },
     { nome: "centroCustoId", rotulo: "Centro de Custo", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesCentros },
   ],
   async listar(db, busca) {
     const itens = await db.colaboradorCargaInicial.findMany({
       orderBy: [{ centroCusto: { codigoRM: "asc" } }, { funcao: { nome: "asc" } }, { linhaArquivo: "asc" }],
-      include: { funcao: { select: { nome: true } }, centroCusto: { select: { codigoRM: true, nomeRM: true } }, senioridade: { select: { nome: true } } },
+      include: { funcao: { select: { nome: true } }, centroCusto: { select: { codigoRM: true, nomeRM: true } } },
     });
     return itens
-      .filter((i) => contem(busca, i.funcao.nome, i.centroCusto.nomeRM, i.centroCusto.codigoRM, i.senioridade.nome))
-      .map(({ funcao: _f, centroCusto: _c, senioridade: _s, ...i }) => ({ ...i, competencia: mesAno(i.ano, i.mes), emUso: null }));
+      .filter((i) => contem(busca, i.funcao.nome, i.centroCusto.nomeRM, i.centroCusto.codigoRM, ROTULO_VINCULO[i.vinculo]))
+      .map(({ funcao: _f, centroCusto: _c, ...i }) => ({ ...i, competencia: mesAno(i.ano, i.mes), emUso: null }));
   },
   ler: async (db, id) => {
     const i = await db.colaboradorCargaInicial.findUnique({ where: { id } });
@@ -294,21 +237,17 @@ const lancamentoInicial: DefinicaoCadastro = {
     const atual = id ? await db.colaboradorCargaInicial.findUnique({ where: { id }, select: { ano: true, mes: true } }) : await competenciaDaCarga(db);
     if (!atual) throw new RegraCadastroError(409, "Importe primeiro o Lançamento Inicial: a importação pede a competência do quadro.");
     const vinculo = exigir(v.vinculo, "O tipo");
-    if (!(vinculo in ROTULO_VINCULO)) throw new RegraCadastroError(400, "Tipo inválido: CLT ou PJ.");
+    if (!(vinculo in ROTULO_VINCULO)) throw new RegraCadastroError(400, "Tipo inválido: CLT, PJ, Aprendiz ou Estagiário.");
     const unidadeNegocioId = exigir(v.unidadeNegocioId, "A unidade");
-    const senioridadeId = exigir(v.senioridadeId, "A senioridade");
     const funcaoId = exigir(v.funcaoId, "A função");
     const centroCustoId = exigir(v.centroCustoId, "O centro de custo");
-    const [u, s, f, c] = await Promise.all([
+    const [u, f, c] = await Promise.all([
       db.unidadeNegocio.findUnique({ where: { id: unidadeNegocioId }, select: { id: true } }),
-      db.colaboradorSenioridade.findUnique({ where: { id: senioridadeId }, select: { id: true } }),
-      db.colaboradorFuncao.findUnique({ where: { id: funcaoId }, select: { id: true, nome: true, senioridadeId: true, senioridade: { select: { nome: true } } } }),
+      db.colaboradorFuncao.findUnique({ where: { id: funcaoId }, select: { id: true } }),
       db.centroCusto.findUnique({ where: { id: centroCustoId }, select: { id: true } }),
     ]);
-    if (!u || !s || !f || !c) throw new RegraCadastroError(400, "Unidade, senioridade, função ou centro de custo inexistente.");
-    const recusa = recusaDaFuncao(f, senioridadeId);
-    if (recusa) throw new RegraCadastroError(400, recusa);
-    return { ano: atual.ano, mes: atual.mes, unidadeNegocioId, vinculo, senioridadeId, funcaoId, centroCustoId };
+    if (!u || !f || !c) throw new RegraCadastroError(400, "Unidade, função ou centro de custo inexistente.");
+    return { ano: atual.ano, mes: atual.mes, unidadeNegocioId, vinculo, funcaoId, centroCustoId };
   },
   async gravar(db, d, id) {
     const dados = d as Prisma.ColaboradorCargaInicialUncheckedCreateInput;
@@ -317,4 +256,4 @@ const lancamentoInicial: DefinicaoCadastro = {
   remover: async (db, id) => void (await db.colaboradorCargaInicial.delete({ where: { id } })),
 };
 
-export const DEFINICOES_COLABORADORES: DefinicaoCadastro[] = [senioridades, funcoes, movimentacoes, classificacoes, lancamentoInicial];
+export const DEFINICOES_COLABORADORES: DefinicaoCadastro[] = [funcoes, movimentacoes, classificacoes, lancamentoInicial];

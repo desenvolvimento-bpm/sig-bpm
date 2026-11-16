@@ -89,7 +89,7 @@ function EditarJornadaDialog({ anoMes, linha, onFechar }: { anoMes: string; linh
 
 /**
  * A aba Jornada de uma competência do Quadro de Lotação (13/11/2026, pedido do Adão): as linhas do quadro realizado do fim do
- * mês (o Departamento, o Centro de Custo e a Função, com a senioridade dela), com as Horas Extras (HH:MM) e as Faltas (dias)
+ * mês (o Departamento, o Centro de Custo e a Função), com as Horas Extras (HH:MM) e as Faltas (dias)
  * digitadas no Editar de cada linha. Sem o recorte (só a aba Aprovações tem).
  */
 export function JornadaContent() {
@@ -112,8 +112,8 @@ export function JornadaContent() {
         aba="jornada"
         sobre={
           <p>
-            A jornada do mês no quadro de lotação realizado: cada linha do quadro do fim do mês (o centro de custo e a função, com a senioridade dela; CLT e
-            PJ juntos), com as horas extras realizadas e as faltas aferidas. Todas as linhas aparecem, com qualquer recorte.
+            A jornada do mês no quadro de lotação realizado: cada linha do quadro do fim do mês (o centro de custo e a função; os tipos CLT, PJ, Aprendiz e
+            Estagiário juntos), com as horas extras realizadas e as faltas aferidas. Todas as linhas aparecem, com qualquer recorte.
           </p>
         }
         comoUsar={

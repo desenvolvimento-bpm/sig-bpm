@@ -12,7 +12,7 @@ import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
 import { mensagemDeErro } from "@/app/cadastros/services/edicaoService";
 
 import { quadroService, ROTULO_ORIGEM, type NovaMovimentacao } from "../../services/quadroService";
-import { opcoesDeFuncao } from "../../services/funcaoPorSenioridade";
+import { ROTULO_DO_TIPO, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "../../services/tiposDoColaborador";
 import { rotuloDoMes } from "./CabecalhoDoQuadro";
 
 const classeSelect = "h-9 w-full rounded-sm border border-gray-300 bg-white px-3 text-sm";
@@ -38,10 +38,9 @@ function Campo({ id, rotulo, obrigatorio, children, largo }: { id: string; rotul
 
 /**
  * O modal Nova Movimentação (06/11/2026): o Tipo de Movimentação e a Classificação (13/11/2026, pedido do Adão: o tipo
- * primeiro, e a lista da Classificação só com as do tipo), a data (hoje, por padrão), o centro de custo, o tipo (CLT ou PJ), a
- * função (com a senioridade ao lado: a mesma função tem uma por senioridade; 13/11/2026: sem o campo Senioridade, a
- * movimentação leva a da função), o motivo e, num desligamento (contagem Negativa), a Origem e, ao lado dela, a caixa "Gerar
- * Vaga em Aberto", marcada.
+ * primeiro, e a lista da Classificação só com as do tipo), a data (hoje, por padrão), o centro de custo, o tipo (CLT, PJ,
+ * Aprendiz ou Estagiário), a função, o motivo e, num desligamento (contagem Negativa), a Origem e, ao lado dela, a caixa
+ * "Gerar Vaga em Aberto", marcada.
  */
 export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; onFechar: () => void }) {
   const queryClient = useQueryClient();
@@ -76,10 +75,7 @@ export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; o
       onFechar();
     },
   });
-  // A senioridade é a da função: a função sem senioridade no cadastro não serve.
-  const funcao = o?.funcoes.find((f) => f.id === v.funcaoId);
-  const funcaoSemSenioridade = !!funcao && !funcao.senioridadeId;
-  const completo = v.tipoMovimentacaoId && v.data && v.centroCustoId && v.funcaoId && !funcaoSemSenioridade && (!desligamento || v.origem);
+  const completo = v.tipoMovimentacaoId && v.data && v.centroCustoId && v.funcaoId && (!desligamento || v.origem);
 
   return (
     <Dialog open onOpenChange={(aberto) => (!aberto ? onFechar() : undefined)}>
@@ -134,9 +130,12 @@ export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; o
               <Input id="mov-data" type="date" value={v.data} min={`${anoMes}-01`} max={`${anoMes}-31`} onChange={(e) => muda({ data: e.target.value })} className="rounded-sm" />
             </Campo>
             <Campo id="mov-vinculo" rotulo="Tipo" obrigatorio>
-              <select id="mov-vinculo" value={v.vinculo} onChange={(e) => muda({ vinculo: e.target.value as "CLT" | "PJ" })} className={classeSelect}>
-                <option value="CLT">CLT</option>
-                <option value="PJ">PJ</option>
+              <select id="mov-vinculo" value={v.vinculo} onChange={(e) => muda({ vinculo: e.target.value as TipoDoColaborador })} className={classeSelect}>
+                {TIPOS_DO_COLABORADOR.map((t) => (
+                  <option key={t} value={t}>
+                    {ROTULO_DO_TIPO[t]}
+                  </option>
+                ))}
               </select>
             </Campo>
             <Campo id="mov-centro" rotulo="Centro de Custo" obrigatorio largo>
@@ -152,16 +151,12 @@ export function NovaMovimentacaoDialog({ anoMes, onFechar }: { anoMes: string; o
             <Campo id="mov-funcao" rotulo="Função" obrigatorio largo>
               <select id="mov-funcao" value={v.funcaoId} onChange={(e) => muda({ funcaoId: e.target.value })} className={classeSelect}>
                 <option value="">Escolha…</option>
-                {/* A função com a senioridade ao lado ("Conferente · Pleno"): a movimentação leva a senioridade da função. */}
-                {opcoesDeFuncao(o?.funcoes ?? [], o?.senioridades ?? [], "").map((f) => (
+                {o?.funcoes.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.nome}
                   </option>
                 ))}
               </select>
-              {funcaoSemSenioridade ? (
-                <p className="text-xs text-red-700">A função não tem senioridade no cadastro: cadastre-a com a senioridade em Cadastros › Funções.</p>
-              ) : null}
             </Campo>
             <Campo id="mov-motivo" rotulo="Motivo da Movimentação" largo>
               <textarea

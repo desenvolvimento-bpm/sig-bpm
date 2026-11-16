@@ -2500,14 +2500,13 @@ model CenarioInvestimento {
 }
 
 /// A aba Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores): cada linha, como as do
-/// Lançamento Inicial (a unidade, o tipo, a senioridade, a função e o centro de custo), com os colaboradores e os salários
+/// Lançamento Inicial (a unidade, o tipo, a função e o centro de custo), com os colaboradores e os salários
 /// de cada mês (CenarioLotacaoMes). Os grupos de centros com linhas contam os colaboradores e as remunerações por elas.
 model CenarioLotacao {
   id               String             @id @default(uuid())
   cenarioId        String             @map("cenario_id")
   unidadeNegocioId String             @map("unidade_negocio_id")
   vinculo          VinculoColaborador
-  senioridadeId    String             @map("senioridade_id")
   funcaoId         String             @map("funcao_id")
   centroCustoId    String             @map("centro_custo_id")
   ordem            Int                @default(0)
@@ -2516,7 +2515,6 @@ model CenarioLotacao {
 
   cenario        Cenario                @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
   unidadeNegocio UnidadeNegocio         @relation(fields: [unidadeNegocioId], references: [id])
-  senioridade    ColaboradorSenioridade @relation(fields: [senioridadeId], references: [id])
   funcao         ColaboradorFuncao      @relation(fields: [funcaoId], references: [id])
   centroCusto    CentroCusto            @relation(fields: [centroCustoId], references: [id])
   meses          CenarioLotacaoMes[]
@@ -3113,46 +3111,25 @@ model ArquivoGeral {
 
 // --------------------------------------------------------------------------------------------------------------------
 // Gestão de Colaboradores (06/11/2026, pedido do Adão; grupo Processos Administrativos do menu): os cadastros do Quadro
-// de Lotação — senioridades, funções, tipos de movimentação e as classificações deles — e o Lançamento Inicial.
+// de Lotação — funções, tipos de movimentação e as classificações deles — e o Lançamento Inicial.
 
-/// As senioridades (os níveis) das funções permitidas no Quadro de Lotação: Aprendiz, Júnior, Pleno, Sênior…
-model ColaboradorSenioridade {
-  id           String   @id @default(uuid())
-  nome         String   @unique
-  descricao    String?
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
-
-  funcoes       ColaboradorFuncao[]
-  cargaInicial  ColaboradorCargaInicial[]
-  movimentacoes ColaboradorMovimentacao[]
-  cenarios      CenarioLotacao[]
-
-  @@map("colaboradores_senioridades")
-}
-
-/// As funções dos colaboradores permitidas no Quadro de Lotação, com a senioridade, as competências e as atividades. Desde
-/// 11/11/2026 (pedido do Adão), a função é cadastrada por senioridade: a mesma função (o nome) pode ter várias, cada uma com a
-/// sua descrição, competências e atividades; o par nome + senioridade não se repete (sem senioridade, a função vale para todas).
+/// As funções dos colaboradores permitidas no Quadro de Lotação, com as competências e as atividades. O nome não se repete
+/// (16/11/2026, pedido do Adão: sem as senioridades, só as funções contam).
 model ColaboradorFuncao {
   id            String   @id @default(uuid())
-  nome          String
+  nome          String   @unique
   descricao     String?
-  senioridadeId String?  @map("senioridade_id")
   competencias  String?
   atividades    String?
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
   atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
-  senioridade   ColaboradorSenioridade?   @relation(fields: [senioridadeId], references: [id])
   cargaInicial  ColaboradorCargaInicial[]
   movimentacoes ColaboradorMovimentacao[]
   cenarios      CenarioLotacao[]
   jornadas      ColaboradorJornada[]
 
-  @@unique([nome, senioridadeId])
   @@map("colaboradores_funcoes")
 }
 
@@ -3204,10 +3181,13 @@ model ColaboradorClassificacao {
   @@map("colaboradores_classificacoes")
 }
 
-/// O vínculo do colaborador.
+/// O tipo do colaborador (16/11/2026, pedido do Adão: com o Aprendiz e o Estagiário, que eram senioridades). O Aprendiz é o
+/// Jovem Aprendiz (FGTS de 2% nos cenários); o Estagiário, os estagiários e os bolsistas da Lei 11.788/2008 (sem encargos).
 enum VinculoColaborador {
   CLT
   PJ
+  APRENDIZ
+  ESTAGIARIO
 }
 
 /// O Lançamento Inicial: o quadro de lotação do início de um mês (ano e mês, escolhidos na importação), um registro por
@@ -3218,7 +3198,6 @@ model ColaboradorCargaInicial {
   mes              Int
   unidadeNegocioId String             @map("unidade_negocio_id")
   vinculo          VinculoColaborador
-  senioridadeId    String             @map("senioridade_id")
   funcaoId         String             @map("funcao_id")
   centroCustoId    String             @map("centro_custo_id")
   /// A linha da planilha importada (nulo nos registros incluídos pela tela).
@@ -3227,7 +3206,6 @@ model ColaboradorCargaInicial {
   atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
 
   unidadeNegocio UnidadeNegocio         @relation(fields: [unidadeNegocioId], references: [id])
-  senioridade    ColaboradorSenioridade @relation(fields: [senioridadeId], references: [id])
   funcao         ColaboradorFuncao      @relation(fields: [funcaoId], references: [id])
   centroCusto    CentroCusto            @relation(fields: [centroCustoId], references: [id])
 
@@ -3261,7 +3239,7 @@ model ColaboradorCompetencia {
 }
 
 /// A Jornada do Quadro de Lotação (13/11/2026, pedido do Adão): as horas extras realizadas e as faltas aferidas de cada linha
-/// do quadro realizado da competência (o centro de custo e a função, que traz a senioridade), digitadas na aba Jornada.
+/// do quadro realizado da competência (o centro de custo e a função), digitadas na aba Jornada.
 model ColaboradorJornada {
   id                 String   @id @default(uuid())
   competenciaId      String   @map("competencia_id")
@@ -3306,7 +3284,6 @@ model ColaboradorMovimentacao {
   centroCustoId      String                   @map("centro_custo_id")
   vinculo            VinculoColaborador
   funcaoId           String                   @map("funcao_id")
-  senioridadeId      String                   @map("senioridade_id")
   motivo             String?
   /// Só nos desligamentos (as movimentações de contagem negativa).
   origem             OrigemDesligamento?
@@ -3327,7 +3304,6 @@ model ColaboradorMovimentacao {
   classificacao    ColaboradorClassificacao?   @relation(fields: [classificacaoId], references: [id])
   centroCusto      CentroCusto                 @relation(fields: [centroCustoId], references: [id])
   funcao           ColaboradorFuncao           @relation(fields: [funcaoId], references: [id])
-  senioridade      ColaboradorSenioridade      @relation(fields: [senioridadeId], references: [id])
   geradaPor        ColaboradorMovimentacao?    @relation("VagaDoDesligamento", fields: [geradaPorId], references: [id], onDelete: Cascade)
   vagasGeradas     ColaboradorMovimentacao[]   @relation("VagaDoDesligamento")
 

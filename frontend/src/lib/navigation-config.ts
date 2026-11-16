@@ -243,18 +243,17 @@ export const navGrupos: NavGrupo[] = [
       // por cadastro. Os endereços continuam os mesmos.
       {
         title: "Cadastros Auxiliares",
-        href: "/gestao-de-colaboradores/cadastros/senioridades",
+        href: "/gestao-de-colaboradores/cadastros/funcoes",
         icon: ClipboardList,
         recurso: "CADASTROS_AUXILIARES",
         telas: [
           {
             title: "Gestão de Colaboradores",
             curto: "Colaboradores",
-            href: "/gestao-de-colaboradores/cadastros/senioridades",
+            href: "/gestao-de-colaboradores/cadastros/funcoes",
             icon: UsersRound,
             permission: "colaboradores_cadastros:ler",
             abas: [
-              { title: "Senioridades", href: "/gestao-de-colaboradores/cadastros/senioridades", icon: ClipboardList, permission: "colaboradores_cadastros.senioridades:ler" },
               { title: "Funções", href: "/gestao-de-colaboradores/cadastros/funcoes", icon: ClipboardList, permission: "colaboradores_cadastros.funcoes:ler" },
               { title: "Movimentações", href: "/gestao-de-colaboradores/cadastros/movimentacoes", icon: ClipboardList, permission: "colaboradores_cadastros.movimentacoes:ler" },
               { title: "Classificações", href: "/gestao-de-colaboradores/cadastros/classificacoes", icon: ClipboardList, permission: "colaboradores_cadastros.classificacoes:ler" },
@@ -458,7 +457,6 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   // A Gestão de Colaboradores (06/11/2026): a lista das competências (12/11/2026, o início do processo) e as abas da tela
   // Gestão de Colaboradores dos Cadastros Auxiliares (antes, a tela Cadastros).
   [/^\/gestao-de-colaboradores$/, "colaboradores_quadro:ler"],
-  [/^\/gestao-de-colaboradores\/cadastros\/senioridades(\/|$)/, "colaboradores_cadastros.senioridades:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/funcoes(\/|$)/, "colaboradores_cadastros.funcoes:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/movimentacoes(\/|$)/, "colaboradores_cadastros.movimentacoes:ler"],
   [/^\/gestao-de-colaboradores\/cadastros\/classificacoes(\/|$)/, "colaboradores_cadastros.classificacoes:ler"],

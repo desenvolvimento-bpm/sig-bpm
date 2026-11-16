@@ -22,25 +22,28 @@ import { EditarRegistroDialog } from "@/app/cadastros/components/EditarRegistroD
 import { colunaDoCampo, ehNumero, formatar, textoDoCampo } from "@/app/cadastros/components/ListaCadastroContent";
 import { edicaoService, mensagemDeErro, type Registro } from "@/app/cadastros/services/edicaoService";
 
+import { emLista, ROTULO_DO_TIPO, ROTULO_DO_TIPO_PLURAL, TIPOS_DO_COLABORADOR } from "../../services/tiposDoColaborador";
 import type { TipoImportacaoColaboradores } from "../services/colaboradoresService";
 import { ImportarColaboradoresDialog } from "./ImportarColaboradoresDialog";
 
 const ACOES: Coluna<Registro> = { chave: "acoes", rotulo: "Ações", semFiltro: true, classe: "w-20" };
 
-/** A competência e os totais do Lançamento Inicial, no destaque amarelo-ouro acima da tabela. */
+/** A competência e os totais do Lançamento Inicial (o de cada Tipo que tem colaboradores), no destaque acima da tabela. */
 function ResumoDaCarga({ lista }: { lista: Registro[] }) {
-  const clt = lista.filter((r) => r.vinculo === "CLT").length;
-  const pj = lista.length - clt;
+  const porTipo = TIPOS_DO_COLABORADOR.map((t) => [t, lista.filter((r) => r.vinculo === t).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([t, n]) => `${n} ${plural(n, ROTULO_DO_TIPO[t], ROTULO_DO_TIPO_PLURAL[t])}`);
   return (
     <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
       Quadro do início de <span className="font-medium text-gray-900">{String(lista[0].competencia ?? "")}</span>: {lista.length}{" "}
-      {plural(lista.length, "colaborador", "colaboradores")} ({clt} CLT e {pj} PJ).
+      {plural(lista.length, "colaborador", "colaboradores")}
+      {porTipo.length ? ` (${emLista(porTipo)})` : ""}.
     </p>
   );
 }
 
 type Props = {
-  /** A entidade da edição genérica (colaboradores-senioridades…). */
+  /** A entidade da edição genérica (colaboradores-funcoes…). */
   entidade: string;
   /** A aba na matriz dos perfis (colaboradores_cadastros.<aba>). */
   aba: string;
@@ -48,7 +51,7 @@ type Props = {
   titulo: string;
   descricao: string;
   comoUsar: ReactNode;
-  /** O registro, com o artigo, nas confirmações: "a senioridade", "o colaborador". */
+  /** O registro, com o artigo, nas confirmações: "a função", "o colaborador". */
   oRegistro: string;
   /** A aba que importa planilha (Funções e Lançamento Inicial). */
   importar?: TipoImportacaoColaboradores;

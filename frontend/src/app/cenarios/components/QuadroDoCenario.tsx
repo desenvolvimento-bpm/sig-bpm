@@ -18,7 +18,7 @@ import { plural } from "@/lib/texto";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type CampoDoMes, type LinhaDoQuadroDoCenario, type MesDoQuadro, type QuadroDoCenario as Dados } from "../services/cenariosService";
-import { funcaoNaSenioridade, opcoesDeFuncao } from "@/app/gestao-de-colaboradores/services/funcaoPorSenioridade";
+import { ROTULO_DO_TIPO, rotuloDoTipo, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero } from "./EdicaoDialogs";
 
@@ -35,8 +35,7 @@ const ALTURA_DOS_MESES = 36;
 /** As colunas dos cadastros (fixas à esquerda ao correr a tabela). */
 const DESCRICAO: Array<{ chave: keyof LinhaDoQuadroDoCenario; rotulo: string; largura: number }> = [
   { chave: "unidade", rotulo: "Unidade", largura: 104 },
-  { chave: "vinculo", rotulo: "Tipo", largura: 52 },
-  { chave: "senioridade", rotulo: "Senioridade", largura: 100 },
+  { chave: "vinculo", rotulo: "Tipo", largura: 84 },
   { chave: "funcao", rotulo: "Função", largura: 180 },
   { chave: "centro", rotulo: "Centro de Custo", largura: 220 },
 ];
@@ -47,10 +46,10 @@ const chaveDe = (linha: string, mes: number, campo: CampoDoMes) => `${linha}|${m
 
 /**
  * A aba Quadro de Lotação das premissas de um cenário analítico (09/11/2026, etapa 4 da Gestão de Colaboradores): as
- * linhas como as do Lançamento Inicial (Unidade, Tipo, Senioridade, Função e Centro de Custo) e, em cada mês, quatro
- * colunas — os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um (digitados na tabela) e o
- * Salário Total (a soma). O grupo de centros com linhas conta os colaboradores e as remunerações por elas (aba Centros de
- * Custo); os aprendizes (a senioridade Aprendiz) têm o FGTS Aprendiz.
+ * linhas como as do Lançamento Inicial (Unidade, Tipo, Função e Centro de Custo) e, em cada mês, quatro colunas — os
+ * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um (digitados na tabela) e o Salário Total (a
+ * soma). O grupo de centros com linhas conta os colaboradores e as remunerações por elas (aba Centros de Custo); o Tipo
+ * Aprendiz tem o FGTS Aprendiz, e o Estagiário não tem encargos.
  */
 export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const queryClient = useQueryClient();
@@ -103,7 +102,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
     return m;
   };
   const t = busca.trim().toLowerCase();
-  const linhas = dados.linhas.filter((l) => !t || [l.unidade, l.vinculo, l.senioridade, l.funcao, l.centro, l.grupo ?? ""].join(" ").toLowerCase().includes(t));
+  const linhas = dados.linhas.filter((l) => !t || [l.unidade, rotuloDoTipo(l.vinculo), l.funcao, l.centro, l.grupo ?? ""].join(" ").toLowerCase().includes(t));
   const meses = dados.meses.filter((m) => mesVisivel === null || m.mes === mesVisivel);
   const custoNoAno = (l: LinhaDoQuadroDoCenario) => l.meses.reduce((s, _, k) => s + efetivo(l, k).colaboradores * total(efetivo(l, k)), 0);
   const foraDosGrupos = dados.linhas.filter((l) => !l.grupo).length;
@@ -117,7 +116,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   const largura = acumulado + meses.length * (CAMPOS.reduce((s, c) => s + c.largura, 0) + LARGURA_TOTAL) + LARGURA_CUSTO + (pode ? 56 : 0);
   const todasMarcadas = linhas.length > 0 && linhas.every((l) => marcadas.has(l.id));
   const classeFixa = "sticky z-10 bg-white";
-  const explicacao = `${dados.linhas.length} ${plural(dados.linhas.length, "linha", "linhas")} · os grupos de centros com linhas contam por elas os Colaboradores CLT e PJ e as Remunerações CLT e PJ (aba Centros de Custo); a senioridade Aprendiz tem o Fundo de Garantia: Aprendiz.`;
+  const explicacao = `${dados.linhas.length} ${plural(dados.linhas.length, "linha", "linhas")} · os grupos de centros com linhas contam por elas os Colaboradores de cada Tipo (CLT, PJ, Aprendizes e Estagiários) e as Remunerações CLT e PJ (aba Centros de Custo); o Aprendiz tem o Fundo de Garantia: Aprendiz, e o Estagiário não tem encargos.`;
 
   return (
     <section className="space-y-3">
@@ -134,7 +133,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
           {explicacao}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <CampoBusca rotulo="Buscar linha" valor={busca} onMudar={setBusca} placeholder="Função, centro, unidade, senioridade…" largura="sm:w-48" />
+          <CampoBusca rotulo="Buscar linha" valor={busca} onMudar={setBusca} placeholder="Função, centro, unidade, tipo…" largura="sm:w-48" />
           <select aria-label="Meses da tabela" value={mesVisivel ?? ""} onChange={(e) => setMesVisivel(e.target.value ? Number(e.target.value) : null)} className={`${classeSelect} sm:w-40`}>
             <option value="">Todos os Meses</option>
             {dados.meses.map((m) => (
@@ -229,8 +228,8 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   </td>
                 ) : null}
                 {DESCRICAO.map((d, i) => (
-                  <td key={d.chave} className={`${classeFixa} truncate px-3 py-1`} style={{ left: esquerdas[i] }} title={d.chave === "centro" ? `${l.centro}${l.grupo ? ` · grupo ${l.grupo}` : " · fora dos grupos do cenário"}` : String(l[d.chave])}>
-                    {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{l.centro}</span> : String(l[d.chave])}
+                  <td key={d.chave} className={`${classeFixa} truncate px-3 py-1`} style={{ left: esquerdas[i] }} title={d.chave === "centro" ? `${l.centro}${l.grupo ? ` · grupo ${l.grupo}` : " · fora dos grupos do cenário"}` : d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave])}>
+                    {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{l.centro}</span> : d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave])}
                   </td>
                 ))}
                 {meses.map((m) => {
@@ -391,15 +390,14 @@ function CelulasDoMes({
 }
 
 /**
- * A Nova Entrada e o Editar Linha do Quadro de Lotação: a Unidade, o Tipo, a Senioridade, a Função e o Centro de Custo (dos
+ * A Nova Entrada e o Editar Linha do Quadro de Lotação: a Unidade, o Tipo, a Função e o Centro de Custo (dos
  * grupos do cenário); na nova, os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um, a partir
  * do mês escolhido (os meses se editam depois na tabela).
  */
 function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados: Dados; linha: LinhaDoQuadroDoCenario | null; onFechar: () => void }) {
   const queryClient = useQueryClient();
   const [unidade, setUnidade] = useState(linha?.unidadeNegocioId ?? dados.opcoes.unidades[0]?.id ?? "");
-  const [vinculo, setVinculo] = useState<"CLT" | "PJ">(linha?.vinculo ?? "CLT");
-  const [senioridade, setSenioridade] = useState(linha?.senioridadeId ?? "");
+  const [vinculo, setVinculo] = useState<TipoDoColaborador>(linha?.vinculo ?? "CLT");
   const [funcao, setFuncao] = useState(linha?.funcaoId ?? "");
   const [centro, setCentro] = useState(linha?.centroCustoId ?? "");
   const [colaboradores, setColaboradores] = useState("1");
@@ -408,14 +406,14 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
   const [inicio, setInicio] = useState(1);
   const n = { colaboradores: lerNumero(colaboradores), bruto: lerNumero(bruto), adicional: lerNumero(adicional) };
   const numeroValido = (v: number | null | undefined) => v === null || (typeof v === "number" && v >= 0);
-  const valido = !!unidade && !!senioridade && !!funcao && !!centro && (linha !== null || (numeroValido(n.colaboradores) && numeroValido(n.bruto) && numeroValido(n.adicional)));
+  const valido = !!unidade && !!funcao && !!centro && (linha !== null || (numeroValido(n.colaboradores) && numeroValido(n.bruto) && numeroValido(n.adicional)));
   // As opções: as ativas e, na edição, a que a linha já tem (mesmo inativa).
   const comAtual = <T extends { id: string; nome: string }>(xs: T[], atualId: string | undefined, atualNome: string | undefined) =>
     atualId && !xs.some((x) => x.id === atualId) ? [...xs, { id: atualId, nome: `${atualNome} (inativo)` } as T] : xs;
   const centros = [...comAtual(dados.opcoes.centros, linha?.centroCustoId, linha?.centro)].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   const gravar = useMutation({
     mutationFn: () => {
-      const base = { unidadeNegocioId: unidade, vinculo, senioridadeId: senioridade, funcaoId: funcao, centroCustoId: centro };
+      const base = { unidadeNegocioId: unidade, vinculo, funcaoId: funcao, centroCustoId: centro };
       if (linha) return cenariosService.alterarLinhaDoQuadro(id, linha.id, base);
       const valores = { colaboradores: (n.colaboradores as number | null) ?? 0, salarioBruto: (n.bruto as number | null) ?? 0, adicional: (n.adicional as number | null) ?? 0 };
       return cenariosService.criarLinhaDoQuadro(id, { ...base, meses: dados.meses.map((m) => (m.mes >= inicio ? valores : { colaboradores: 0, salarioBruto: 0, adicional: 0 })) });
@@ -455,42 +453,22 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
           <DialogDescription>
             {linha
               ? "Os cadastros da linha; os colaboradores e os salários de cada mês se editam na tabela."
-              : "Como no Lançamento Inicial: a unidade, o tipo, a senioridade, a função e o centro de custo; e os colaboradores e os salários de cada um a partir do mês escolhido (os meses se editam depois na tabela)."}
+              : "Como no Lançamento Inicial: a unidade, o tipo, a função e o centro de custo; e os colaboradores e os salários de cada um a partir do mês escolhido (os meses se editam depois na tabela)."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
           {select("Unidade", "ql-unidade", unidade, setUnidade, comAtual(dados.opcoes.unidades, linha?.unidadeNegocioId, linha?.unidade), false)}
           <div className="space-y-1.5">
             <Label htmlFor="ql-tipo">Tipo</Label>
-            <select id="ql-tipo" value={vinculo} onChange={(e) => setVinculo(e.target.value as "CLT" | "PJ")} className={classeSelect}>
-              <option value="CLT">CLT</option>
-              <option value="PJ">PJ</option>
+            <select id="ql-tipo" value={vinculo} onChange={(e) => setVinculo(e.target.value as TipoDoColaborador)} className={classeSelect}>
+              {TIPOS_DO_COLABORADOR.map((x) => (
+                <option key={x} value={x}>
+                  {ROTULO_DO_TIPO[x]}
+                </option>
+              ))}
             </select>
           </div>
-          {select(
-            "Senioridade",
-            "ql-senioridade",
-            senioridade,
-            (s) => {
-              setSenioridade(s);
-              // A função acompanha a senioridade: a do mesmo nome na nova (ou nenhuma).
-              setFuncao(funcaoNaSenioridade(dados.opcoes.funcoes, funcao, s));
-            },
-            comAtual(dados.opcoes.senioridades, linha?.senioridadeId, linha?.senioridade),
-          )}
-          {select(
-            "Função",
-            "ql-funcao",
-            funcao,
-            (f) => {
-              setFuncao(f);
-              // A senioridade da função (11/11/2026: a mesma função tem uma por senioridade).
-              const daFuncao = dados.opcoes.funcoes.find((x) => x.id === f)?.senioridadeId;
-              if (daFuncao) setSenioridade(daFuncao);
-            },
-            // A função com a senioridade ao lado; com a senioridade escolhida, só as dela.
-            comAtual(opcoesDeFuncao(dados.opcoes.funcoes, dados.opcoes.senioridades, senioridade), linha?.funcaoId, linha?.funcao),
-          )}
+          <div className="sm:col-span-2">{select("Função", "ql-funcao", funcao, setFuncao, comAtual(dados.opcoes.funcoes, linha?.funcaoId, linha?.funcao))}</div>
           <div className="sm:col-span-2">
             {select(
               "Centro de Custo",
@@ -559,7 +537,7 @@ function ExcluirLinhasDialog({ id, linhas, onFechar }: { id: string; linhas: Lin
       <ul className="max-h-48 list-disc overflow-y-auto pl-5 text-sm text-gray-700">
         {linhas.map((l) => (
           <li key={l.id}>
-            {l.funcao} · {l.centro} ({l.vinculo}, {l.senioridade})
+            {l.funcao} · {l.centro} ({rotuloDoTipo(l.vinculo)})
           </li>
         ))}
       </ul>

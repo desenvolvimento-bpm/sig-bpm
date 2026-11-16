@@ -3,19 +3,20 @@ import { ArquivoInvalidoError, lerAba, listarAbas, type LinhaPlanilha, type Valo
 import { auditar } from "../auditoriaService.js";
 import { localizarCabecalho } from "../importacoes/listas/leituraListas.js";
 import { plural } from "../../utils/plural.js";
+import { tipoDoTexto, type TipoDoColaborador } from "./tiposDoColaborador.js";
 import { travaDoLancamentoInicial } from "./travaDoLancamentoInicial.js";
 
 /**
  * As importações da tela Cadastros da Gestão de Colaboradores (06/11/2026, pedido do Adão): a planilha de Funções (as colunas
- * Função, Descrição, Senioridade, Competências e Atividades) e a do Lançamento Inicial (Unidade, Tipo, Senioridade, Função e Centro
- * de Custo, um colaborador por linha). Primeiro a prévia, linha a linha; com uma linha inválida (uma senioridade, uma função ou um
- * centro de custo não cadastrado…), a importação é cancelada: nada se grava até a planilha vir certa. Gravar relê o arquivo
- * e confere tudo de novo.
+ * Função, Descrição, Competências e Atividades) e a do Lançamento Inicial (Unidade, Tipo, Função e Centro de Custo, um
+ * colaborador por linha). Primeiro a prévia, linha a linha; com uma linha inválida (um tipo, uma função ou um centro de custo
+ * não cadastrado…), a importação é cancelada: nada se grava até a planilha vir certa. Gravar relê o arquivo e confere tudo
+ * de novo.
  *
  * As duas importações substituem o cadastro inteiro (11/11/2026, pedido do Adão; antes, nas funções, as que não estavam
  * na planilha ficavam): o Lançamento Inicial anterior sai todo e entram as linhas da planilha, na competência escolhida (o
- * quadro do início do mês); nas funções, as da planilha são cadastradas de novo — a do mesmo nome e senioridade (sem
- * diferença de maiúsculas e acentos) fica com os dados da planilha e com os vínculos dela — e as que não estão na planilha
+ * quadro do início do mês); nas funções, as da planilha são cadastradas de novo — a do mesmo nome (sem diferença de
+ * maiúsculas e acentos) fica com os dados da planilha e com os vínculos dela — e as que não estão na planilha
  * são excluídas. Uma função excluída que o Lançamento Inicial usa apaga o Lançamento Inicial junto (importe-o de novo em
  * seguida); uma que as movimentações do Quadro de Lotação ou os cenários usam cancela a importação (é histórico).
  */
@@ -43,7 +44,7 @@ export type PreviaColaboradores = {
   /** O Lançamento Inicial: a competência escolhida e o que ele substitui. */
   competencia?: string;
   substitui?: { competencia: string; colaboradores: number } | null;
-  /** As funções (11/11/2026): as que saem do cadastro (não estão na planilha; até 200 nomes, "Função · Senioridade"). */
+  /** As funções (11/11/2026): as que saem do cadastro (não estão na planilha; até 200 nomes). */
   excluidas?: { total: number; nomes: string[] };
   /** As funções que saem e estão em movimentações do Quadro de Lotação ou nos cenários: a importação é recusada. */
   bloqueio?: string | null;
@@ -67,15 +68,12 @@ const COLUNAS: Record<TipoImportacaoColaboradores, Coluna[]> = {
   funcoes: [
     { chave: "funcao", rotulo: "Função", cabecalhos: ["FUNÇÃO", "FUNCAO"], obrigatoria: true },
     { chave: "descricao", rotulo: "Descrição", cabecalhos: ["DESCRIÇÃO", "DESCRICAO"], obrigatoria: false },
-    // A Senioridade: a planilha com o cabeçalho Nível também vale.
-    { chave: "senioridade", rotulo: "Senioridade", cabecalhos: ["SENIORIDADE", "NÍVEL", "NIVEL"], obrigatoria: false },
     { chave: "competencias", rotulo: "Competências", cabecalhos: ["COMPETÊNCIAS", "COMPETENCIAS"], obrigatoria: false },
     { chave: "atividades", rotulo: "Atividades", cabecalhos: ["ATIVIDADES"], obrigatoria: false },
   ],
   "lancamento-inicial": [
     { chave: "unidade", rotulo: "Unidade", cabecalhos: ["UNIDADE"], obrigatoria: true },
     { chave: "tipo", rotulo: "Tipo", cabecalhos: ["TIPO"], obrigatoria: true },
-    { chave: "senioridade", rotulo: "Senioridade", cabecalhos: ["SENIORIDADE", "NÍVEL", "NIVEL"], obrigatoria: true },
     { chave: "funcao", rotulo: "Função", cabecalhos: ["FUNÇÃO", "FUNCAO"], obrigatoria: true },
     { chave: "centro", rotulo: "Centro de Custo", cabecalhos: ["CENTRO DE CUSTO", "CENTRO"], obrigatoria: true },
   ],
@@ -144,45 +142,33 @@ const resumoDe = (linhas: LinhaDaPrevia[]) =>
 
 // ------------------------------------------------------------------------------------------------------------ funções
 async function previaFuncoes(db: Db, itens: Array<{ linha: number; valores: Record<string, string> }>) {
-  const [funcoes, senioridades] = await Promise.all([
-    db.colaboradorFuncao.findMany({ include: { senioridade: { select: { nome: true } }, _count: { select: { cargaInicial: true, movimentacoes: true, cenarios: true } } } }),
-    db.colaboradorSenioridade.findMany(),
-  ]);
-  // A função por senioridade (11/11/2026, pedido do Adão): a chave é o nome com a senioridade; só o par se repete.
-  const par = (nome: string, senioridadeId: string | null) => `${chaveDoNome(nome)}|${senioridadeId ?? ""}`;
-  const funcaoPorPar = new Map(funcoes.map((f) => [par(f.nome, f.senioridadeId), f]));
-  // O nome com a grafia da planilha (a da primeira linha da função), igual em todas as senioridades.
-  const grafia = new Map<string, string>();
-  const senioridadePorNome = new Map(senioridades.map((s) => [chaveDoNome(s.nome), s]));
+  const funcoes = await db.colaboradorFuncao.findMany({ include: { _count: { select: { cargaInicial: true, movimentacoes: true, cenarios: true } } } });
+  // A função pelo nome (sem diferença de maiúsculas e acentos): o nome não se repete.
+  const funcaoPorNome = new Map(funcoes.map((f) => [chaveDoNome(f.nome), f]));
   const vistas = new Map<string, number>();
   // As funções do cadastro que a planilha traz (ficam, com os dados dela); as demais saem.
   const ficam = new Set<string>();
-  const gravar: Array<{ id: string | null; dados: { nome: string; descricao: string | null; senioridadeId: string | null; competencias: string | null; atividades: string | null; ativo: boolean } }> = [];
+  const gravar: Array<{ id: string | null; dados: { nome: string; descricao: string | null; competencias: string | null; atividades: string | null; ativo: boolean } }> = [];
   const linhas: LinhaDaPrevia[] = itens.map(({ linha, valores }) => {
     const invalida = (motivo: string): LinhaDaPrevia => ({ linha, valores, situacao: "INVALIDA", motivo });
     if (!valores.funcao) return invalida("Sem a função.");
-    const senioridade = valores.senioridade ? senioridadePorNome.get(chaveDoNome(valores.senioridade)) : null;
-    if (valores.senioridade && !senioridade) return invalida(`A senioridade ${valores.senioridade} não está cadastrada (aba Senioridades).`);
-    const chave = par(valores.funcao, senioridade?.id ?? null);
-    if (vistas.has(chave)) return invalida(`Função e senioridade repetidas na planilha (linha ${vistas.get(chave)}).`);
+    const chave = chaveDoNome(valores.funcao);
+    if (vistas.has(chave)) return invalida(`Função repetida na planilha (linha ${vistas.get(chave)}).`);
     vistas.set(chave, linha);
-    const nome = grafia.get(chaveDoNome(valores.funcao)) ?? valores.funcao;
-    grafia.set(chaveDoNome(valores.funcao), nome);
     // Cadastrada de novo: os dados da planilha, ativa.
     const dados = {
-      nome,
+      nome: valores.funcao,
       descricao: valores.descricao || null,
-      senioridadeId: senioridade?.id ?? null,
       competencias: valores.competencias || null,
       atividades: valores.atividades || null,
       ativo: true,
     };
-    const existente = funcaoPorPar.get(chave);
+    const existente = funcaoPorNome.get(chave);
     if (!existente) {
       gravar.push({ id: null, dados });
       return { linha, valores, situacao: "NOVA" };
     }
-    // A do mesmo nome e senioridade fica (com os vínculos dela: o Lançamento Inicial, as movimentações, os cenários).
+    // A do mesmo nome fica (com os vínculos dela: o Lançamento Inicial, as movimentações, os cenários).
     ficam.add(existente.id);
     const igual =
       existente.nome === dados.nome &&
@@ -197,7 +183,7 @@ async function previaFuncoes(db: Db, itens: Array<{ linha: number; valores: Reco
   // As que não estão na planilha saem. As das movimentações do Quadro de Lotação e dos cenários não se excluem (é o
   // histórico): a importação é recusada; as do Lançamento Inicial apagam o Lançamento Inicial junto.
   const saem = funcoes.filter((f) => !ficam.has(f.id));
-  const rotulo = (f: (typeof funcoes)[number]) => `${f.nome} · ${f.senioridade?.nome ?? "sem senioridade"}`;
+  const rotulo = (f: (typeof funcoes)[number]) => f.nome;
   const emUso = saem.filter((f) => f._count.movimentacoes || f._count.cenarios);
   const bloqueio = emUso.length
     ? `${emUso.length} ${plural(emUso.length, "função que não está", "funções que não estão")} na planilha ${emUso.length === 1 ? "está" : "estão"} em movimentações do Quadro de Lotação ou nos cenários e não ${emUso.length === 1 ? "pode ser excluída" : "podem ser excluídas"}: ${emUso
@@ -210,27 +196,23 @@ async function previaFuncoes(db: Db, itens: Array<{ linha: number; valores: Reco
 
 // ------------------------------------------------------------------------------------------------- lançamento inicial
 /** Os campos de uma linha como a do Lançamento Inicial: os textos da planilha. */
-export type CamposDoColaborador = { unidade: string; tipo: string; senioridade: string; funcao: string; centro: string };
-export type ColaboradorResolvido = { unidadeNegocioId: string; vinculo: "CLT" | "PJ"; senioridadeId: string; funcaoId: string; centroCustoId: string };
+export type CamposDoColaborador = { unidade: string; tipo: string; funcao: string; centro: string };
+export type ColaboradorResolvido = { unidadeNegocioId: string; vinculo: TipoDoColaborador; funcaoId: string; centroCustoId: string };
 
 /**
  * Os cadastros de uma linha como a do Lançamento Inicial pelos textos da planilha (09/11/2026: também a aba Quadro de
- * Lotação dos cenários analíticos): a unidade pelo nome ou pelo código, o tipo (CLT ou PJ), a senioridade pelo nome, a função
- * pelo nome e pela senioridade (11/11/2026: a função é cadastrada por senioridade; a sem senioridade vale para todas), as duas
- * ativas, e o centro de custo pelo código, pelo "código - nome" ou pelo nome (ativo). Devolve os motivos de recusa
+ * Lotação dos cenários analíticos): a unidade pelo nome ou pelo código, o tipo (CLT, PJ, Aprendiz ou Estagiário), a função
+ * pelo nome (ativa) e o centro de custo pelo código, pelo "código - nome" ou pelo nome (ativo). Devolve os motivos de recusa
  * ou os cadastros.
  */
 export async function resolvedorDeColaboradores(db: Db) {
-  const [unidades, senioridades, funcoes, centros] = await Promise.all([
+  const [unidades, funcoes, centros] = await Promise.all([
     db.unidadeNegocio.findMany(),
-    db.colaboradorSenioridade.findMany(),
     db.colaboradorFuncao.findMany(),
     db.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, ativo: true } }),
   ]);
   const unidadePorNome = new Map(unidades.flatMap((u) => [[chaveDoNome(u.nome), u] as const, [String(u.codigo), u] as const]));
-  const senioridadePorNome = new Map(senioridades.map((s) => [chaveDoNome(s.nome), s]));
-  const funcoesPorNome = new Map<string, typeof funcoes>();
-  for (const f of funcoes) funcoesPorNome.set(chaveDoNome(f.nome), [...(funcoesPorNome.get(chaveDoNome(f.nome)) ?? []), f]);
+  const funcaoPorNome = new Map(funcoes.map((f) => [chaveDoNome(f.nome), f]));
   const centroPorCodigo = new Map(centros.filter((c) => c.codigoRM).map((c) => [chaveDoNome(c.codigoRM!), c]));
   // Pelo nome, só os que não se repetem no cadastro.
   const porNome = new Map<string, typeof centros>();
@@ -249,26 +231,19 @@ export async function resolvedorDeColaboradores(db: Db) {
     const unidade = unidadePorNome.get(chaveDoNome(valores.unidade));
     if (!valores.unidade) motivos.push("Sem a unidade.");
     else if (!unidade) motivos.push(`A unidade ${valores.unidade} não está cadastrada.`);
-    const vinculo = chaveDoNome(valores.tipo);
-    if (vinculo !== "CLT" && vinculo !== "PJ") motivos.push(valores.tipo ? `O tipo ${valores.tipo} não é CLT nem PJ.` : "Sem o tipo (CLT ou PJ).");
-    const senioridade = senioridadePorNome.get(chaveDoNome(valores.senioridade));
-    if (!valores.senioridade) motivos.push("Sem a senioridade.");
-    else if (!senioridade) motivos.push(`A senioridade ${valores.senioridade} não está cadastrada.`);
-    else if (!senioridade.ativo) motivos.push(`A senioridade ${senioridade.nome} está inativa.`);
-    // A função da senioridade da linha; sem ela, a função sem senioridade (a que vale para todas).
-    const daFuncao = funcoesPorNome.get(chaveDoNome(valores.funcao)) ?? [];
-    const funcao = senioridade ? (daFuncao.find((f) => f.senioridadeId === senioridade.id) ?? daFuncao.find((f) => !f.senioridadeId)) : undefined;
+    const vinculo = tipoDoTexto(valores.tipo);
+    if (!vinculo) motivos.push(valores.tipo ? `O tipo ${valores.tipo} não é CLT, PJ, Aprendiz nem Estagiário.` : "Sem o tipo (CLT, PJ, Aprendiz ou Estagiário).");
+    const funcao = funcaoPorNome.get(chaveDoNome(valores.funcao));
     if (!valores.funcao) motivos.push("Sem a função.");
-    else if (!daFuncao.length) motivos.push(`A função ${valores.funcao} não está cadastrada.`);
-    else if (senioridade && !funcao) motivos.push(`A função ${daFuncao[0].nome} não está cadastrada com a senioridade ${senioridade.nome} (Cadastros › Funções).`);
-    else if (funcao && !funcao.ativo) motivos.push(`A função ${funcao.nome}${senioridade ? ` (${senioridade.nome})` : ""} está inativa.`);
+    else if (!funcao) motivos.push(`A função ${valores.funcao} não está cadastrada.`);
+    else if (!funcao.ativo) motivos.push(`A função ${funcao.nome} está inativa.`);
     const centro = valores.centro ? centroDe(valores.centro) : null;
     if (!valores.centro) motivos.push("Sem o centro de custo.");
     else if (centro === "REPETIDO") motivos.push(`Há mais de um centro de custo com o nome ${valores.centro}: use o código.`);
     else if (!centro) motivos.push(`O centro de custo ${valores.centro} não está cadastrado.`);
     else if (!centro.ativo) motivos.push(`O centro de custo ${centro.codigoRM ?? centro.nomeRM} está inativo.`);
-    if (motivos.length || !unidade || !senioridade || !funcao || !centro || centro === "REPETIDO") return { motivos, cadastros: null };
-    return { motivos, cadastros: { unidadeNegocioId: unidade.id, vinculo: vinculo as "CLT" | "PJ", senioridadeId: senioridade.id, funcaoId: funcao.id, centroCustoId: centro.id } };
+    if (motivos.length || !unidade || !vinculo || !funcao || !centro || centro === "REPETIDO") return { motivos, cadastros: null };
+    return { motivos, cadastros: { unidadeNegocioId: unidade.id, vinculo, funcaoId: funcao.id, centroCustoId: centro.id } };
   };
 }
 
@@ -345,8 +320,8 @@ export const importacaoColaboradoresService = {
     if (funcoes) {
       if (funcoes.bloqueio) throw new ImportacaoColaboradoresError(409, `A importação foi cancelada: ${funcoes.bloqueio}`);
       // A substituição (11/11/2026): primeiro saem as que não estão na planilha (e, se ele usa alguma, o Lançamento Inicial);
-      // depois, as novas de uma vez e as alteradas uma a uma (com uma linha por senioridade, a planilha passa de 300 funções;
-      // uma a uma, a transação passava dos 5 s e era desfeita).
+      // depois, as novas de uma vez e as alteradas uma a uma (com centenas de funções, uma a uma, a transação passava dos 5 s
+      // e era desfeita).
       const apagado = previa.apagaLancamentoInicial ?? null;
       await db.$transaction(
         async (tx) => {

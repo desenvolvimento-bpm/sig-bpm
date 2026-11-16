@@ -40,10 +40,8 @@ const novaMovimentacao = z.object({
   classificacaoId: z.string().nullish(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   centroCustoId: z.string().min(1),
-  vinculo: z.enum(["CLT", "PJ"]),
+  vinculo: z.enum(["CLT", "PJ", "APRENDIZ", "ESTAGIARIO"]),
   funcaoId: z.string().min(1),
-  // Opcional (13/11/2026): sem ela, a da função.
-  senioridadeId: z.string().min(1).nullish(),
   motivo: z.string().max(1000).nullish(),
   origem: z.enum(["INICIATIVA_EMPRESA", "PEDIDO_COLABORADOR"]).nullish(),
   gerarVaga: z.boolean().optional(),

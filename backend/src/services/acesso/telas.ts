@@ -265,7 +265,6 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
         codigo: "colaboradores_cadastros",
         nome: "Gestão de Colaboradores",
         abas: [
-          { codigo: "senioridades", nome: "Senioridades" },
           { codigo: "funcoes", nome: "Funções" },
           { codigo: "movimentacoes", nome: "Movimentações" },
           { codigo: "classificacoes", nome: "Classificações" },
