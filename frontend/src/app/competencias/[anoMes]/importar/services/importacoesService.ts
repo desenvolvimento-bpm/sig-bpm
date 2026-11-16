@@ -155,6 +155,9 @@ export type ImportacoesDaCompetencia = {
   primeira: boolean;
 };
 
+/** Resposta de erro do backend: mensagem pronta e, às vezes, um código. */
+export type ErroImportacao = { error?: string; codigo?: string };
+
 export const importacoesService = {
   listar: async (anoMes: string): Promise<ImportacoesDaCompetencia> => {
     const { data } = await api.get<{ data: ImportacoesDaCompetencia }>(

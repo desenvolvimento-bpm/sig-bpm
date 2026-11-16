@@ -43,6 +43,17 @@ const envSchema = z
     /** Onde os arquivos importados ficam guardados, nomeados pelo hash. */
     UPLOAD_DIR: z.string().default("./uploads"),
     UPLOAD_MAX_MB: z.coerce.number().positive().default(50),
+    /** Sincronização dos fornecedores (FCFO) pelo wsConsultaSQL do TOTVS RM — somente leitura. */
+    TOTVS_CONSULTA_SQL_URL: z.string().optional(),
+    TOTVS_CODCOLIGADA: z.coerce.number().int().default(1),
+    TOTVS_CODSISTEMA: z.string().default("T"),
+    FORNECEDOR_SYNC_ATIVO: z.stringbool().default(true),
+    CENTRO_CUSTO_SYNC_ATIVO: z.stringbool().default(true),
+    CONTA_CONTABIL_SYNC_ATIVO: z.stringbool().default(true),
+    PRODUTO_SYNC_ATIVO: z.stringbool().default(true),
+    TIPO_MOVIMENTO_SYNC_ATIVO: z.stringbool().default(true),
+    /** Intervalo do ciclo de cadastros do TOTVS: 2 horas (7.200.000 ms). */
+    FORNECEDOR_SYNC_INTERVAL_MS: z.coerce.number().int().positive().default(7_200_000),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV !== "production") return;
@@ -68,4 +79,6 @@ export const env = {
   enableAudit: parsed.ENABLE_AUDIT ?? true,
   apiExterna: parsed.API_EXTERNA ?? (parsed.NODE_ENV === "production" ? "desligada" : "http"),
   totvsConfigured: Boolean(parsed.TOTVS_WSDL_URL),
+  /** A sincronização de fornecedores só roda com URL, usuário e senha do TOTVS. */
+  fornecedorSyncConfigurada: Boolean(parsed.TOTVS_CONSULTA_SQL_URL && parsed.TOTVS_USER && parsed.TOTVS_PASSWORD),
 };

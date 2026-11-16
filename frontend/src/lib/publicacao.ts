@@ -32,6 +32,25 @@ async function consultar() {
   }
 }
 
+// Um único timer para a página inteira, não um por componente que usa o hook (antes, cada tela consultava por conta própria).
+let referencias = 0;
+let timer: ReturnType<typeof setInterval> | undefined;
+let intervaloMs = 0;
+const aoVoltar = () => void consultar();
+
+function agendar(ms: number) {
+  if (timer !== undefined && intervaloMs === ms) return;
+  if (timer !== undefined) clearInterval(timer);
+  intervaloMs = ms;
+  timer = setInterval(() => void consultar(), ms);
+}
+
+function pararVigia() {
+  if (timer !== undefined) clearInterval(timer);
+  timer = undefined;
+  intervaloMs = 0;
+}
+
 export function usePublicacao(): Estado {
   const atual = useSyncExternalStore(
     (o) => {
@@ -41,15 +60,24 @@ export function usePublicacao(): Estado {
     () => estado,
     () => estado,
   );
+  // Quem monta o primeiro componente liga a vigia; o último que sai a desliga.
   useEffect(() => {
-    void consultar();
-    const t = setInterval(() => void consultar(), atual.publicacao ? 10_000 : 60_000);
-    const aoVoltar = () => void consultar();
-    window.addEventListener("focus", aoVoltar);
+    referencias++;
+    if (referencias === 1) {
+      window.addEventListener("focus", aoVoltar);
+      void consultar();
+    }
     return () => {
-      clearInterval(t);
-      window.removeEventListener("focus", aoVoltar);
+      referencias--;
+      if (referencias === 0) {
+        pararVigia();
+        window.removeEventListener("focus", aoVoltar);
+      }
     };
+  }, []);
+  // Com a publicação, a faixa pergunta a cada 10 s; sem ela, a cada 60 s.
+  useEffect(() => {
+    if (referencias > 0) agendar(atual.publicacao ? 10_000 : 60_000);
   }, [atual.publicacao]);
   return atual;
 }

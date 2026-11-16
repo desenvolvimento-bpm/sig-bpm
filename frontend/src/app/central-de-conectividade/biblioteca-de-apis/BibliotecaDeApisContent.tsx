@@ -17,6 +17,7 @@ import { botaoPrimario, Erro } from "@/app/cenarios/components/CenarioDialog";
 import { conectividadeService, copiarTexto, enderecoDaApi, type ApiDoCatalogo, type Catalogo } from "../services/conectividadeService";
 import { Deslizante } from "./components/Deslizante";
 import { PreviaDaApi } from "./components/PreviaDaApi";
+import { BotaoTestarToken } from "./components/TestarToken";
 
 function BotaoCopiar({ texto, rotulo }: { texto: string; rotulo: string }) {
   return (
@@ -33,12 +34,15 @@ function BotaoCopiar({ texto, rotulo }: { texto: string; rotulo: string }) {
 }
 
 /** Um exemplo de código, com o botão de copiar. */
-function Codigo({ titulo, texto }: { titulo: string; texto: string }) {
+function Codigo({ titulo, texto, acao }: { titulo: string; texto: string; acao?: ReactNode }) {
   return (
     <div className="space-y-1">
       <p className="flex items-center justify-between text-xs font-semibold text-gray-700">
         {titulo}
-        <BotaoCopiar texto={texto} rotulo={`o exemplo ${titulo}`} />
+        <span className="flex items-center gap-1">
+          {acao}
+          <BotaoCopiar texto={texto} rotulo={`o exemplo ${titulo}`} />
+        </span>
       </p>
       <pre className="overflow-x-auto rounded-sm border border-gray-200 bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-800">{texto}</pre>
     </div>
@@ -139,7 +143,7 @@ in
         <li>Cada login lê só o que lê no SIG (as mesmas permissões e os mesmos recortes). Não compartilhe a sua senha: cada aplicativo deve usar o login de quem responde por ele.</li>
       </ol>
       <div className="space-y-3">
-        <Codigo titulo="curl" texto={curl} />
+        <Codigo titulo="curl" texto={curl} acao={<BotaoTestarToken />} />
         <Codigo titulo="Power Query (Excel e Power BI)" texto={powerQuery} />
       </div>
     </section>

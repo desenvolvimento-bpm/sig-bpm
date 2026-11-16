@@ -17,6 +17,7 @@ datasource db {
   // PostgreSQL (23/10/2026). As migrações do SQLite ficam em prisma/migrations-sqlite (histórico); a inicial do
   // PostgreSQL é a prisma/migrations/0_init. Os campos Json são @db.Json (o json do PostgreSQL, que guarda o texto como
   // veio), não jsonb: o jsonb reordena as chaves dos objetos, e a Auditoria e outras telas mostram a ordem gravada.
+  // PostgreSQL (branch feature/api-lancamentos-contabeis). A URL vem do DATABASE_URL (prisma.config.ts).
   provider = "postgresql"
 }
 
@@ -3108,206 +3109,130 @@ model ArquivoGeral {
   @@index([categoria, enviadoEm])
   @@map("arquivos_gerais")
 }
+// -----------------------------------------------------------------------------
+// Fornecedores (FCFO) do TOTVS RM — espelho somente leitura, atualizado pela
+// sincronização (services/totvs/fornecedoresSync.ts). Não tem relação com as
+// demais tabelas: o SIG só guarda o cadastro para consulta.
+// -----------------------------------------------------------------------------
 
-// --------------------------------------------------------------------------------------------------------------------
-// Gestão de Colaboradores (06/11/2026, pedido do Adão; grupo Processos Administrativos do menu): os cadastros do Quadro
-// de Lotação — funções, tipos de movimentação e as classificações deles — e o Lançamento Inicial.
+/// Espelho do FCFO do TOTVS RM (sentença de consulta: fornecedores). Chave: coligada + código.
+model SigFornecedor {
+  codcoligada   Int      @map("codcoligada")
+  codcfo        String   @map("codcfo")
+  nomeFantasia  String?  @map("nome_fantasia")
+  /// PAGREC do RM: tipo do cadastro (pagamento/recebimento).
+  pagrec        Int?     @map("pagrec")
+  /// ATIVO do RM: 1 ativo, 0 inativo.
+  ativo         Int      @map("ativo")
+  idcfo         Int?     @map("idcfo")
+  cgccfo        String?  @map("cgccfo")
+  sincronizadoEm DateTime @map("sincronizado_em")
 
-/// As funções dos colaboradores permitidas no Quadro de Lotação, com as competências e as atividades. O nome não se repete
-/// (16/11/2026, pedido do Adão: sem as senioridades, só as funções contam).
-model ColaboradorFuncao {
-  id            String   @id @default(uuid())
-  nome          String   @unique
-  descricao     String?
-  competencias  String?
-  atividades    String?
-  ativo         Boolean  @default(true)
-  criadoEm      DateTime @default(now()) @map("criado_em")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
-
-  cargaInicial  ColaboradorCargaInicial[]
-  movimentacoes ColaboradorMovimentacao[]
-  cenarios      CenarioLotacao[]
-  jornadas      ColaboradorJornada[]
-
-  @@map("colaboradores_funcoes")
+  @@id([codcoligada, codcfo])
+  @@index([nomeFantasia])
+  @@map("sig_fornecedor")
 }
 
-/// Como a movimentação conta no Quadro de Lotação: soma (Admissão), subtrai (Desligamento) ou não muda (as vagas).
-enum ContagemMovimentacao {
-  POSITIVA
-  NEGATIVA
-  NULA
+/// Espelho do centro de custo (GCCUSTO) do TOTVS RM, com o responsável (PPESSOA). Chave: coligada + código.
+/// Contém nome e e-mail de pessoa física (o responsável): acesso restrito, LGPD.
+model SigCentroCusto {
+  codcoligada      Int       @map("codcoligada")
+  codccusto        String    @map("codccusto")
+  nome             String?   @map("nome")
+  ativo            Int       @map("ativo")
+  reccreatedon     DateTime? @map("reccreatedon")
+  recmodifiedon    DateTime? @map("recmodifiedon")
+  responsavel      String?   @map("responsavel")
+  nomeResponsavel  String?   @map("nome_responsavel")
+  emailResponsavel String?   @map("email_responsavel")
+  sincronizadoEm   DateTime  @map("sincronizado_em")
+
+  @@id([codcoligada, codccusto])
+  @@index([nome])
+  @@map("sig_centro_custo")
 }
 
-/// A aprovação da movimentação: automática ao registrar, ou manual, pelo gestor do centro de custo (Controle das Movimentações).
-enum AprovacaoMovimentacao {
-  AUTOMATICA
-  MANUAL
+/// Espelho do plano de contas (CCONTA) do TOTVS RM (sentença de consulta: contas contábeis). Chave: coligada + código.
+model SigContaContabil {
+  codcoligada    Int      @map("codcoligada")
+  codconta       String   @map("codconta")
+  reduzido       String?  @map("reduzido")
+  descricao      String?  @map("descricao")
+  sincronizadoEm DateTime @map("sincronizado_em")
+
+  @@id([codcoligada, codconta])
+  @@index([descricao])
+  @@map("sig_conta_contabil")
 }
 
-/// Os tipos de movimentação do Quadro de Lotação (a aba Movimentações dos Cadastros): Admissão, Reposição, Desligamento…
-model ColaboradorTipoMovimentacao {
-  id           String                @id @default(uuid())
-  nome         String                @unique
-  descricao    String?
-  contagem     ContagemMovimentacao
-  aprovacao    AprovacaoMovimentacao
-  ordem        Int                   @default(0)
-  ativo        Boolean               @default(true)
-  criadoEm     DateTime              @default(now()) @map("criado_em")
-  atualizadoEm DateTime              @updatedAt @map("atualizado_em")
+/// Espelho dos produtos do TOTVS RM (sentença BPM.TI.RetPRD: TPRODUTO + TPRODUTODEF + TPRDCOMPL + GIMAGEM, só os últimos
+/// níveis). Chave: coligada + IDPRD. Atualizado pela sincronização (services/totvs/produtosSync.ts).
+model SigProduto {
+  codcoligada              Int       @map("codcoligada")
+  idprd                    Int       @map("idprd")
+  codcolprd                Int?      @map("codcolprd")
+  nomeFantasia             String?   @map("nome_fantasia")
+  codigoprd                String    @map("codigoprd")
+  inativo                  Int       @map("inativo")
+  codigoreduzido           String?   @map("codigoreduzido")
+  ultimonivel              Int       @map("ultimonivel")
+  tipo                     String?   @map("tipo") @db.Char(1)
+  codigoauxiliar           String?   @map("codigoauxiliar")
+  idclassifbensservico     String?   @map("idclassifbensservico")
+  codundcontrole           String?   @map("codundcontrole")
+  codundcompra             String?   @map("codundcompra")
+  codundvenda              String?   @map("codundvenda")
+  codtb1fat                String?   @map("codtb1fat")
+  codtborcamento           String?   @map("codtborcamento")
+  codcoltborcamento        String?   @map("codcoltborcamento")
+  codtborcamentoreceita    String?   @map("codtborcamentoreceita")
+  codcoltborcamentoreceita String?   @map("codcoltborcamentoreceita")
+  integraManutencao        Int?      @map("integra_manutencao")
+  codtrf                   String?   @map("codtrf")
+  volume                   String?   @map("volume")
+  imagem                   String?   @map("imagem")
+  usuarioCriacaoTotvs      String?   @map("usuario_criacao_totvs")
+  dtcadastramento          DateTime? @map("dtcadastramento")
+  sincronizadoEm           DateTime  @map("sincronizado_em")
 
-  classificacoes ColaboradorClassificacao[]
-  movimentacoes  ColaboradorMovimentacao[]
-
-  @@map("colaboradores_tipos_movimentacao")
+  @@id([codcoligada, idprd])
+  @@index([codcoligada, codigoprd])
+  @@index([codcoligada, codigoreduzido])
+  @@index([codcoligada, nomeFantasia])
+  @@map("sig_produto")
 }
 
-/// As classificações de cada tipo de movimentação (os motivos padronizados de uma admissão, de um desligamento…).
-model ColaboradorClassificacao {
-  id                 String   @id @default(uuid())
-  tipoMovimentacaoId String   @map("tipo_movimentacao_id")
-  nome               String
-  descricao          String?
-  ativo              Boolean  @default(true)
-  criadoEm           DateTime @default(now()) @map("criado_em")
-  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+/// Espelho dos tipos de movimento do TOTVS RM (sentença BPM.TI.TMOV: TTMV). Chave: coligada + código do tipo.
+model SigTipoMovimento {
+  codcoligada    Int      @map("codcoligada")
+  codtmv         String   @map("codtmv")
+  nome           String?  @map("nome")
+  classificacao  String?  @map("classificacao")
+  sincronizadoEm DateTime @map("sincronizado_em")
 
-  tipoMovimentacao ColaboradorTipoMovimentacao @relation(fields: [tipoMovimentacaoId], references: [id])
-  movimentacoes    ColaboradorMovimentacao[]
-
-  @@unique([tipoMovimentacaoId, nome])
-  @@map("colaboradores_classificacoes")
+  @@id([codcoligada, codtmv])
+  @@map("sig_tipo_movimento")
 }
 
-/// O tipo do colaborador (16/11/2026, pedido do Adão: com o Aprendiz e o Estagiário, que eram senioridades). O Aprendiz é o
-/// Jovem Aprendiz (FGTS de 2% nos cenários); o Estagiário, os estagiários e os bolsistas da Lei 11.788/2008 (sem encargos).
-enum VinculoColaborador {
-  CLT
-  PJ
-  APRENDIZ
-  ESTAGIARIO
-}
+/// Lançamentos contábeis do TOTVS RM Saldus (sentença BPM.CONTR.002, módulo C), importados por mês. Sem chave natural:
+/// a importação do mês substitui as linhas daquela competência (não é upsert).
+model SigLancamentoContabilRm {
+  id              Int      @id @default(autoincrement())
+  /// Competência no formato aaaa-mm.
+  competencia     String   @db.Char(7)
+  idmov           Int?     @map("idmov")
+  idprd           Int?     @map("idprd")
+  filial          Int?     @map("filial")
+  codCusto        String?  @map("cod_custo")
+  subCodConta4    String?  @map("sub_cod_conta_4")
+  reduzidoConta   String?  @map("reduzido_conta")
+  codCliFornecedor String? @map("cod_cli_forn")
+  emissao         DateTime? @map("emissao") @db.Date
+  historico       String?  @map("historico")
+  /// VALOR da BPM.CONTR.002: a movimentação do lançamento (positiva ou negativa), com 2 casas.
+  valor           Decimal? @map("valor") @db.Decimal(18, 2)
+  sincronizadoEm  DateTime @map("sincronizado_em")
 
-/// O Lançamento Inicial: o quadro de lotação do início de um mês (ano e mês, escolhidos na importação), um registro por
-/// colaborador. É o saldo inicial do indicador Quadro de Lotação; as movimentações contam a partir dele.
-model ColaboradorCargaInicial {
-  id               String             @id @default(uuid())
-  ano              Int
-  mes              Int
-  unidadeNegocioId String             @map("unidade_negocio_id")
-  vinculo          VinculoColaborador
-  funcaoId         String             @map("funcao_id")
-  centroCustoId    String             @map("centro_custo_id")
-  /// A linha da planilha importada (nulo nos registros incluídos pela tela).
-  linhaArquivo     Int?               @map("linha_arquivo")
-  criadoEm         DateTime           @default(now()) @map("criado_em")
-  atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
-
-  unidadeNegocio UnidadeNegocio         @relation(fields: [unidadeNegocioId], references: [id])
-  funcao         ColaboradorFuncao      @relation(fields: [funcaoId], references: [id])
-  centroCusto    CentroCusto            @relation(fields: [centroCustoId], references: [id])
-
-  @@index([ano, mes])
-  @@map("colaboradores_carga_inicial")
-}
-
-/// O estado de uma competência do Quadro de Lotação: aberta recebe movimentações; fechada fica como está, até ser reaberta.
-enum StatusCompetenciaQuadro {
-  ABERTA
-  FECHADA
-}
-
-/// As competências do Quadro de Lotação (06/11/2026, etapa 2): próprias, abertas e fechadas fora do Fechamento Mensal.
-model ColaboradorCompetencia {
-  id            String                  @id @default(uuid())
-  ano           Int
-  mes           Int
-  status        StatusCompetenciaQuadro @default(ABERTA)
-  abertaEm      DateTime                @default(now()) @map("aberta_em")
-  abertaPorNome String?                 @map("aberta_por_nome")
-  fechadaEm     DateTime?               @map("fechada_em")
-  fechadaPorNome String?                @map("fechada_por_nome")
-  atualizadoEm  DateTime                @updatedAt @map("atualizado_em")
-
-  movimentacoes ColaboradorMovimentacao[]
-  jornadas      ColaboradorJornada[]
-
-  @@unique([ano, mes])
-  @@map("colaboradores_competencias")
-}
-
-/// A Jornada do Quadro de Lotação (13/11/2026, pedido do Adão): as horas extras realizadas e as faltas aferidas de cada linha
-/// do quadro realizado da competência (o centro de custo e a função), digitadas na aba Jornada.
-model ColaboradorJornada {
-  id                 String   @id @default(uuid())
-  competenciaId      String   @map("competencia_id")
-  centroCustoId      String   @map("centro_custo_id")
-  funcaoId           String   @map("funcao_id")
-  /// As horas extras em minutos (a tela mostra HH:MM).
-  horasExtrasMinutos Int      @default(0) @map("horas_extras_minutos")
-  /// As faltas em dias (com até duas casas: meio dia = 0,5).
-  faltasDias         Decimal  @default(0) @map("faltas_dias") @db.Decimal(8, 2)
-  atualizadoPorNome  String?  @map("atualizado_por_nome")
-  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
-
-  competencia ColaboradorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
-  centroCusto CentroCusto            @relation(fields: [centroCustoId], references: [id], onDelete: Cascade)
-  funcao      ColaboradorFuncao      @relation(fields: [funcaoId], references: [id], onDelete: Cascade)
-
-  @@unique([competenciaId, centroCustoId, funcaoId])
-  @@map("colaboradores_jornada")
-}
-
-/// A situação da movimentação: as de aprovação manual nascem Pendentes; as automáticas, Aprovadas. Só as aprovadas contam.
-enum StatusMovimentacaoQuadro {
-  PENDENTE
-  APROVADA
-  REPROVADA
-}
-
-/// A origem de um desligamento.
-enum OrigemDesligamento {
-  INICIATIVA_EMPRESA
-  PEDIDO_COLABORADOR
-}
-
-/// As movimentações do Quadro de Lotação (06/11/2026, etapa 2): admissões, desligamentos, aberturas de vaga…, uma por
-/// colaborador ou vaga, na competência do mês da data.
-model ColaboradorMovimentacao {
-  id                 String                   @id @default(uuid())
-  competenciaId      String                   @map("competencia_id")
-  tipoMovimentacaoId String                   @map("tipo_movimentacao_id")
-  classificacaoId    String?                  @map("classificacao_id")
-  data               DateTime                 @db.Date
-  centroCustoId      String                   @map("centro_custo_id")
-  vinculo            VinculoColaborador
-  funcaoId           String                   @map("funcao_id")
-  motivo             String?
-  /// Só nos desligamentos (as movimentações de contagem negativa).
-  origem             OrigemDesligamento?
-  status             StatusMovimentacaoQuadro
-  /// A Abertura de Vaga gerada por um desligamento ("Gerar Vaga em Aberto"): o desligamento que a gerou.
-  geradaPorId        String?                  @map("gerada_por_id")
-  registradaPor      String?                  @map("registrada_por")
-  registradaPorNome  String?                  @map("registrada_por_nome")
-  registradaEm       DateTime                 @default(now()) @map("registrada_em")
-  decididaPorNome    String?                  @map("decidida_por_nome")
-  decididaEm         DateTime?                @map("decidida_em")
-  /// O motivo de uma reprovação.
-  justificativa      String?
-  atualizadoEm       DateTime                 @updatedAt @map("atualizado_em")
-
-  competencia      ColaboradorCompetencia      @relation(fields: [competenciaId], references: [id])
-  tipoMovimentacao ColaboradorTipoMovimentacao @relation(fields: [tipoMovimentacaoId], references: [id])
-  classificacao    ColaboradorClassificacao?   @relation(fields: [classificacaoId], references: [id])
-  centroCusto      CentroCusto                 @relation(fields: [centroCustoId], references: [id])
-  funcao           ColaboradorFuncao           @relation(fields: [funcaoId], references: [id])
-  geradaPor        ColaboradorMovimentacao?    @relation("VagaDoDesligamento", fields: [geradaPorId], references: [id], onDelete: Cascade)
-  vagasGeradas     ColaboradorMovimentacao[]   @relation("VagaDoDesligamento")
-
-  @@index([competenciaId])
-  @@index([status])
-  @@map("colaboradores_movimentacoes")
+  @@index([competencia])
+  @@map("sig_lancamentos_contabeis_rm")
 }
