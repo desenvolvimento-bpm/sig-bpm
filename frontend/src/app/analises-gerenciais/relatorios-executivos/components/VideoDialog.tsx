@@ -122,3 +122,68 @@ export function VideoDialog({ titulo = "Adicionar Vídeo", onEscolher, onFechar 
     </Dialog>
   );
 }
+
+/**
+ * O modal Configurações do Vídeo (13/11/2026, pedido do Adão; o Configurar da barra da edição, com o vídeo escolhido): a
+ * Reprodução Automática (o vídeo começa a tocar sozinho na leitura e na apresentação, quando o slide aparece; sem o clique
+ * na página, o navegador pode exigir que comece sem som) e o Recomeçar ao Terminar. Valem no vídeo do computador e no do
+ * YouTube; no Facebook, só a Reprodução Automática; no Instagram e no LinkedIn, o player da plataforma não aceita.
+ */
+export function ConfiguracoesDoVideoDialog({
+  inicial,
+  origem,
+  url,
+  onAplicar,
+  onFechar,
+}: {
+  inicial: { reproducaoAutomatica: boolean; recomecarAoTerminar: boolean };
+  origem: "ARQUIVO" | "LINK";
+  url: string;
+  onAplicar: (o: { reproducaoAutomatica: boolean; recomecarAoTerminar: boolean }) => void;
+  onFechar: () => void;
+}) {
+  const [o, setO] = useState(inicial);
+  const plataforma = origem === "LINK" ? videoDoLink(url)?.plataforma : null;
+  const aviso =
+    plataforma === "facebook"
+      ? "No Facebook, só a Reprodução Automática vale: o player dele não recomeça sozinho."
+      : plataforma === "instagram" || plataforma === "linkedin"
+        ? `No ${NOME_DA_PLATAFORMA[plataforma]}, o player da plataforma não aceita estas opções.`
+        : null;
+  const caixa = (chave: keyof typeof o, rotulo: string, detalhe: string) => (
+    <label className="flex cursor-pointer items-start gap-2 text-sm text-gray-900">
+      <input type="checkbox" checked={o[chave]} onChange={(e) => setO((x) => ({ ...x, [chave]: e.target.checked }))} className="mt-0.5 size-4 shrink-0 accent-black" />
+      <span>
+        {rotulo}
+        <span className="block text-xs text-gray-500">{detalhe}</span>
+      </span>
+    </label>
+  );
+  return (
+    <Dialog open onOpenChange={(a) => (!a ? onFechar() : undefined)}>
+      <DialogContent avisoAoSair className="rounded-sm sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Configurações do Vídeo</DialogTitle>
+          <DialogDescription>Como o vídeo toca na leitura e na apresentação.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {caixa(
+            "reproducaoAutomatica",
+            "Reprodução Automática",
+            "Começa a tocar sozinho quando o slide aparece (na edição, não). Sem um clique na página antes, o navegador pode exigir que comece sem som.",
+          )}
+          {caixa("recomecarAoTerminar", "Recomeçar ao Terminar", "Ao chegar ao fim, o vídeo volta ao início e toca de novo.")}
+          {aviso ? <p className="text-xs text-gray-500">{aviso}</p> : null}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button type="button" className={botaoPrimario} onClick={() => onAplicar(o)}>
+            Aplicar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

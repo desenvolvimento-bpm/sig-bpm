@@ -4,12 +4,12 @@ import type { MarcacaoComparavel } from "../services/relatoriosService";
 
 /**
  * Os cenários dos objetos PROVA (31/10/2026, pedido do Adão), na ordem deles: o rótulo e a cor, nas variáveis do tema
- * (globals.css) — a Previsão em cinza forte (fraco no Escuro), o Orçado no preto do orçado (claro no Escuro), o Vendido em
+ * (globals.css) — o Forecast em cinza forte (fraco no Escuro), o Orçado no preto do orçado (claro no Escuro), o Vendido em
  * ouro forte e o Anterior em ouro fraco. O Realizado continua no amarelo-ouro da BPM. Os mesmos nos Relatórios Executivos
  * e em Resultados Empresariais (a Comparação PROVA).
  */
 export const CENARIOS_DO_PROVA: Array<{ marcacao: MarcacaoComparavel; rotulo: string; cor: string }> = [
-  { marcacao: "PREVISAO", rotulo: "Previsão", cor: "var(--cor-grafico-previsao)" },
+  { marcacao: "PREVISAO", rotulo: "Forecast", cor: "var(--cor-grafico-previsao)" },
   { marcacao: "ORCAMENTO_EMPRESARIAL", rotulo: "Orçado", cor: "var(--cor-grafico-orcado)" },
   { marcacao: "RESULTADOS_VENDIDOS", rotulo: "Vendido", cor: "var(--cor-grafico-vendido)" },
   { marcacao: "RESULTADOS_ANTERIORES", rotulo: "Anterior", cor: "var(--cor-grafico-anterior)" },
@@ -63,7 +63,7 @@ export const ESTILOS_NOS_INDICADORES: Record<MarcacaoComparavel, EstiloNosIndica
   RESULTADOS_ANTERIORES: { rotulo: ROTULO.ANTERIOR, faixa: "celula-orcado bg-[var(--cor-tabela-anterior-resultado)]", par: "bg-[var(--cor-indicadores-anterior-par)]" },
 };
 
-/** O texto dos cenários da Comparação PROVA: “Previsão, Orçado e Anterior”. */
+/** O texto dos cenários da Comparação PROVA: “Forecast, Orçado e Anterior”. */
 export function listaDosCenarios(marcados: Array<{ rotulo: string }>) {
   const r = marcados.map((c) => c.rotulo);
   return r.length > 1 ? `${r.slice(0, -1).join(", ")} e ${r[r.length - 1]}` : (r[0] ?? "");

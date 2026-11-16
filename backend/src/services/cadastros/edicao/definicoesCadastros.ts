@@ -6,11 +6,15 @@ import { chaveDaLinha } from "../../../lib/linhas.js";
 import { LINHAS_TOTAIS } from "../../volumes/totaisOperacao.js";
 import { NOME_DA_CHAVE } from "../../volumes/rateiosService.js";
 import { conflitoDeVigencia } from "../../volumes/vigenciasRateio.js";
-import { formulasPorExtenso, INDICADORES_DAS_LISTAS, TOTALIZADORES_DAS_LISTAS } from "../../relatorios/catalogoIndicadores.js";
+import { formulasPorExtenso, INDICADORES_DAS_LISTAS, ROTULO_DO_REGISTRADO, rotuloDoMovimento, rotuloDoQuadro, TOTALIZADORES_DAS_LISTAS } from "../../relatorios/catalogoIndicadores.js";
+import { DEPARTAMENTOS_DO_QUADRO } from "../../relatorios/formulaIndicador.js";
 import { compilarFormula, FormulaInvalidaError, formulaPorExtenso } from "../../relatorios/formulaIndicador.js";
 import { CALCULOS_SISTEMA } from "../../relatorios/indicadores.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
+import { chaveDoFornecedor } from "../../classificacao/regrasClassificacao.js";
+import { DEFINICOES_COLABORADORES } from "./definicoesColaboradores.js";
+import { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
 /**
  * Cadastros editáveis pela tela (Passo 25, RF002 e RF003). Cada cadastro
@@ -23,18 +27,8 @@ const Decimal = Prisma.Decimal;
 type Db = ReturnType<typeof getPrismaClient>;
 export type Valores = Record<string, unknown>;
 
-/** Uma correção que o formulário aplica com um clique (24/10/2026: as combinações de linha e rateio de uma conta). */
-export type Sugestao = { rotulo: string; detalhe?: string; valores: Valores };
-
-export class RegraCadastroError extends Error {
-  constructor(
-    readonly status: 400 | 404 | 409,
-    message: string,
-    readonly sugestoes?: Sugestao[],
-  ) {
-    super(message);
-  }
-}
+// O erro de regra e a sugestão ficam em erroCadastro.ts (06/11/2026); daqui, os de sempre os importam.
+export { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
 /**
  * Uma opção de lista; `grupos`: os valores do campo `filtradoPor` em que ela aparece. `chave`: liga as opções
@@ -62,6 +56,8 @@ export type Campo = {
   filtradoPor?: string;
   /** Ocupa as duas colunas do formulário de edição. */
   larguraInteira?: boolean;
+  /** Um texto longo, em várias linhas (06/11/2026: as Competências e as Atividades das funções). */
+  multilinha?: boolean;
   /** Uma coluna estreita na tabela (a ordem e o código, 12/10/2026): o nome fica com o resto. */
   estreita?: boolean;
   /** Um valor em reais: a tabela mostra "R$" e duas casas, e o formulário, duas casas (12/10/2026). */
@@ -76,6 +72,8 @@ export type Campo = {
   ajuda?: string;
   /** A ajuda ao lado do campo, e não embaixo (21/10/2026; o Formato do Painel de Bordo). */
   ajudaAoLado?: boolean;
+  /** A lista com busca (13/11/2026: o fornecedor e o centro imperativo das Reclassificações › Por Fornecedor), para as listas longas. */
+  busca?: boolean;
   opcoes?: (db: Db) => Promise<Opcao[]>;
 };
 
@@ -99,6 +97,11 @@ export type DefinicaoCadastro = {
   gravar: (db: Db, dados: Record<string, unknown>, id: string | null) => Promise<string>;
   /** Por que não pode ser excluído (nulo se pode). */
   impedimentoExclusao?: (db: Db, id: string) => Promise<string | null>;
+  /**
+   * Por que o cadastro inteiro não se edita agora (13/11/2026: o Lançamento Inicial com competências fechadas na Gestão de
+   * Colaboradores), ou nulo: com o motivo, o servidor recusa o Novo, a edição e a exclusão, e a tela esconde os botões.
+   */
+  trava?: (db: Db) => Promise<string | null>;
   /**
    * Os movimentos do registro (lançamentos, valores apurados, registros das listas…), em texto, ou nulo sem nenhum.
    * Com movimentos, os campos travaComMovimento não mudam e a exclusão é recusada.
@@ -188,7 +191,7 @@ async function departamentos(db: Db) {
 
 async function linhaPorId(db: Db, id: string) {
   const l = await db.linhaDRE.findUnique({ where: { id }, select: { id: true, tipo: true, grupo: true, atribuicao: true, ativo: true } });
-  if (!l) throw new RegraCadastroError(400, "Linha da DRE inexistente.");
+  if (!l) throw new RegraCadastroError(400, "Linha do DRE inexistente.");
   return l;
 }
 
@@ -228,7 +231,7 @@ async function exigirAbaQueLeia(db: Db, linhaId: string, balde: string | null) {
   }));
   throw new RegraCadastroError(
     400,
-    `Nenhuma aba de resultado lê a linha “${escolhida.descricao}” (${escolhida.grupoSigla}) com o rateio ${balde ?? "vazio"}: os lançamentos que seguem o rateio da conta (de obras, de centros fora do cadastro e sem centro) ficariam fora do resultado, com a pendência Sem Aba de Resultado. ${sugestoes.length ? "Escolha uma das combinações que alguma aba lê:" : "Nenhum rateio faz uma aba ler esta linha: escolha outra Linha da DRE."}`,
+    `Nenhuma aba de resultado lê a linha “${escolhida.descricao}” (${escolhida.grupoSigla}) com o rateio ${balde ?? "vazio"}: os lançamentos que seguem o rateio da conta (de obras, de centros fora do cadastro e sem centro) ficariam fora do resultado, com a pendência Sem Aba de Resultado. ${sugestoes.length ? "Escolha uma das combinações que alguma aba lê:" : "Nenhum rateio faz uma aba ler esta linha: escolha outra Linha do DRE."}`,
     sugestoes,
   );
 }
@@ -308,12 +311,34 @@ const centros: DefinicaoCadastro = {
   async impedimentoExclusao(db, id) {
     if ((await db.regraRateio.findUnique({ where: { id }, select: { percentualFixo: true } }))?.percentualFixo != null) return "Esta regra é de percentual fixo: exclua-a em “Percentuais Fixos”, com os outros destinos da chave.";
     const m = await this.movimentos!(db, id);
-    return m ? `${m} Inative-o em vez de excluir.` : null;
+    if (m) return `${m} Inative-o em vez de excluir.`;
+    // A Gestão de Colaboradores (09/11/2026): o Lançamento Inicial, as movimentações e as linhas do Quadro de Lotação dos cenários.
+    const [c, q, l, f] = await Promise.all([
+      db.colaboradorCargaInicial.count({ where: { centroCustoId: id } }),
+      db.colaboradorMovimentacao.count({ where: { centroCustoId: id } }),
+      db.cenarioLotacao.count({ where: { centroCustoId: id } }),
+      db.reclassificacaoFornecedor.count({ where: { centroCustoId: id } }),
+    ]);
+    // O centro imperativo de reclassificações por fornecedor (13/11/2026).
+    if (f) return `O centro é o imperativo de ${f} ${plural(f, "reclassificação", "reclassificações")} por fornecedor (Reclassificações › Por Fornecedor). Inative-o em vez de excluir.`;
+    const usos = [
+      c ? `${c} ${plural(c, "colaborador", "colaboradores")} do Lançamento Inicial` : "",
+      q ? `${q} ${plural(q, "movimentação", "movimentações")} do Quadro de Lotação` : "",
+      l ? `${l} ${plural(l, "linha", "linhas")} do Quadro de Lotação dos cenários analíticos` : "",
+    ].filter(Boolean);
+    return usos.length ? `O centro está em ${usos.join(", ")} (Gestão de Colaboradores). Inative-o em vez de excluir.` : null;
   },
   remover: async (db, id) => void (await db.centroCusto.delete({ where: { id } })),
 };
 
 // --------------------------------------------------------- contas de resultado
+/**
+ * A opção Sem Resultado da Linha do DRE (13/11/2026, pedido do Adão): sem grupo, aparece com qualquer departamento (e sem
+ * ele); grava a conta sem linha e com `semResultado`, e os movimentos dela não viram pendência na classificação. Na lista
+ * do cadastro, a conta aparece com o traço das sintéticas. O rótulo do campo é "Linha do DRE" (13/11/2026, pedido do Adão).
+ */
+export const SEM_RESULTADO = "SEM_RESULTADO";
+
 const contas: DefinicaoCadastro = {
   entidade: "contas-resultado",
   titulo: "Conta de resultado",
@@ -332,23 +357,26 @@ const contas: DefinicaoCadastro = {
       rotulo: "Departamento",
       tipo: "opcao",
       larguraInteira: true,
-      ajuda: "O grupo da DRE. A Linha da DRE mostra só as linhas dele.",
+      ajuda: "O grupo da DRE. A Linha do DRE mostra só as linhas dele.",
       opcoes: async (db) => [...new Set((await linhasDasContas(db)).map((l) => l.grupo))].map((g) => ({ valor: g, rotulo: g })),
     },
     {
       nome: "linhaDREId",
-      rotulo: "Linha da DRE",
+      rotulo: "Linha do DRE",
       tipo: "opcao",
       filtradoPor: "departamento",
       larguraInteira: true,
-      ajuda: "O destino na DRE. Ao trocar o departamento, fica a linha de mesma atribuição e descrição, quando ele tem uma. A atribuição sai da linha.",
-      opcoes: async (db) =>
-        (await linhasDasContas(db)).map((l) => ({
+      ajuda:
+        "O destino na DRE. Ao trocar o departamento, fica a linha de mesma atribuição e descrição, quando ele tem uma. A atribuição sai da linha. Sem Resultado (com qualquer departamento, ou sem ele; o traço das contas sintéticas na lista): a conta não vai à DRE, e os movimentos dela não viram pendência no fechamento.",
+      opcoes: async (db) => [
+        { valor: SEM_RESULTADO, rotulo: "Sem Resultado" },
+        ...(await linhasDasContas(db)).map((l) => ({
           valor: l.id,
           rotulo: `${l.grupoSigla} › ${l.atribuicao ?? "—"} › ${l.descricao}`,
           grupos: [l.grupo],
           chave: `${l.atribuicao ?? ""}|${l.descricao}`.toUpperCase(),
         })),
+      ],
     },
     { nome: "atribuicao", rotulo: "Atribuição", tipo: "texto", derivado: true },
     { nome: "balde", rotulo: "Rateio", tipo: "opcao", opcoes: opcoesFixas(BALDES) },
@@ -356,14 +384,15 @@ const contas: DefinicaoCadastro = {
   ],
   async listar(db, busca) {
     const cs = await db.contaResultado.findMany({ orderBy: [{ conta: "asc" }, { ordem: "asc" }] });
-    return cs.filter((c) => contem(busca, c.reduzido, c.conta, c.descricao));
+    // Sem Resultado aparece na coluna Linha do DRE.
+    return cs.filter((c) => contem(busca, c.reduzido, c.conta, c.descricao)).map(({ semResultado, ...c }) => ({ ...c, linhaDREId: semResultado ? SEM_RESULTADO : c.linhaDREId }));
   },
   // Com linha, o departamento é sempre o grupo dela (a lista da linha é filtrada por ele).
   async ler(db, id) {
     const c = await db.contaResultado.findUnique({ where: { id }, include: { linhaDRE: { select: { grupo: true } } } });
     if (!c) return null;
-    const { linhaDRE, ...conta } = c;
-    return { ...conta, departamento: linhaDRE?.grupo ?? conta.departamento };
+    const { linhaDRE, semResultado, ...conta } = c;
+    return { ...conta, linhaDREId: semResultado ? SEM_RESULTADO : conta.linhaDREId, departamento: linhaDRE?.grupo ?? conta.departamento };
   },
   async preparar(db, v, id) {
     const reduzido = exigir(v.reduzido, "O reduzido");
@@ -372,11 +401,13 @@ const contas: DefinicaoCadastro = {
     const tipoConta = exigir(v.tipoConta, "O tipo");
     if (!["ANALITICA", "SINTETICA"].includes(tipoConta)) throw new RegraCadastroError(400, "Tipo deve ser analítica ou sintética.");
     const departamento = texto(v.departamento);
-    const linhaDREId = texto(v.linhaDREId);
+    // Sem Resultado (13/11/2026): sem linha, com o departamento escolhido (ou nenhum).
+    const semResultado = texto(v.linhaDREId) === SEM_RESULTADO;
+    const linhaDREId = semResultado ? null : texto(v.linhaDREId);
     const linha = linhaDREId ? await linhaPorId(db, linhaDREId) : null;
     if (linha && linha.tipo !== "ITEM" && linha.tipo !== "TOTAL") throw new RegraCadastroError(400, "A conta só aponta para linha de item (ou para os impostos operacionais).");
-    if ((linha || departamento) && tipoConta === "SINTETICA") throw new RegraCadastroError(400, "Conta sintética não classifica: deixe o Departamento e a Linha da DRE vazios.");
-    if (linha && departamento && departamento !== linha.grupo) throw new RegraCadastroError(400, `A Linha da DRE escolhida é do departamento ${linha.grupo}, e não de ${departamento}.`);
+    if ((linha || departamento) && tipoConta === "SINTETICA") throw new RegraCadastroError(400, "Conta sintética não classifica: deixe o Departamento vazio e a Linha do DRE vazia ou em Sem Resultado.");
+    if (linha && departamento && departamento !== linha.grupo) throw new RegraCadastroError(400, `A Linha do DRE escolhida é do departamento ${linha.grupo}, e não de ${departamento}.`);
     const balde = opcaoBalde(v.balde);
     if (linha?.tipo === "ITEM" && tipoConta === "ANALITICA") await exigirAbaQueLeia(db, linha.id, balde);
     return {
@@ -385,6 +416,7 @@ const contas: DefinicaoCadastro = {
       descricao: exigir(v.descricao, "A descrição"),
       tipoConta,
       linhaDREId,
+      semResultado,
       departamento: linha?.grupo ?? departamento,
       atribuicao: linha?.atribuicao ?? null,
       balde,
@@ -469,6 +501,85 @@ async function opcoesContas(db: Db) {
     rotulo: `${c.reduzido} · ${c.descricao}`,
   }));
 }
+
+// ------------------------------------------------- reclassificações por fornecedor
+/** Os fornecedores dos movimentos já importados (o CLI_FORN do balancete, de competências fechadas ou abertas), um por nome. */
+async function opcoesFornecedores(db: Db) {
+  const fs = await db.lancamentoContabil.findMany({ where: { cliForn: { not: null } }, distinct: ["cliForn"], select: { cliForn: true } });
+  const porChave = new Map<string, string>();
+  for (const { cliForn } of fs) {
+    const nome = cliForn!.trim();
+    if (nome && !porChave.has(chaveDoFornecedor(nome))) porChave.set(chaveDoFornecedor(nome), nome);
+  }
+  return [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")).map((f) => ({ valor: f, rotulo: f }));
+}
+
+/**
+ * As reclassificações por fornecedor (13/11/2026, pedido do Adão): o fornecedor e o centro de custo imperativo, para onde
+ * vão todos os movimentos dele na classificação das competências ainda não apuradas. A contestação validada no balancete
+ * continua por cima.
+ */
+const reclassificacoesFornecedor: DefinicaoCadastro = {
+  entidade: "reclassificacoes-fornecedor",
+  titulo: "Reclassificação por Fornecedor",
+  auditoria: "reclassificacao_fornecedor",
+  criar: true,
+  excluir: true,
+  reclassifica: true,
+  campos: [
+    {
+      nome: "fornecedor",
+      rotulo: "Fornecedor",
+      tipo: "opcao",
+      obrigatorio: true,
+      busca: true,
+      larguraInteira: true,
+      ajuda: "Os fornecedores dos movimentos já importados, de competências fechadas ou abertas.",
+      opcoes: opcoesFornecedores,
+    },
+    {
+      nome: "centroCustoId",
+      rotulo: "Centro de Custo Imperativo",
+      tipo: "opcao",
+      obrigatorio: true,
+      busca: true,
+      larguraInteira: true,
+      ajuda: "Todos os movimentos do fornecedor vão para este centro de custo, seja qual for o centro em que o RM os lançou.",
+      opcoes: async (db) =>
+        (await db.centroCusto.findMany({ where: { OR: [{ ativo: true }, { reclassificacoesFornecedor: { some: {} } }] }, orderBy: { codigoRM: "asc" }, select: { id: true, codigoRM: true, nomeRM: true, ativo: true } })).map((c) => ({
+          valor: c.id,
+          rotulo: `${c.codigoRM ?? "sem código"} · ${c.nomeRM}${c.ativo ? "" : " (inativo)"}`,
+        })),
+    },
+    { nome: "motivo", rotulo: "Motivo", tipo: "texto", larguraInteira: true },
+    { nome: "ativo", rotulo: "Ativa", tipo: "booleano" },
+  ],
+  async listar(db, busca) {
+    const rs = await db.reclassificacaoFornecedor.findMany({ orderBy: { fornecedor: "asc" }, include: { centroCusto: { select: { codigoRM: true, nomeRM: true } } } });
+    return rs.filter((r) => contem(busca, r.fornecedor, r.centroCusto.codigoRM, r.centroCusto.nomeRM, r.motivo));
+  },
+  ler: (db, id) => db.reclassificacaoFornecedor.findUnique({ where: { id } }),
+  async preparar(db, v, id) {
+    const fornecedor = exigir(v.fornecedor, "O fornecedor");
+    const centroCustoId = exigir(v.centroCustoId, "O centro de custo imperativo");
+    if (!(await db.centroCusto.findUnique({ where: { id: centroCustoId }, select: { id: true } }))) throw new RegraCadastroError(400, "Centro de custo inexistente.");
+    const chave = chaveDoFornecedor(fornecedor);
+    const doFornecedor = await db.reclassificacaoFornecedor.findMany({ where: { fornecedor: { equals: fornecedor, mode: "insensitive" } }, select: { id: true, fornecedor: true } });
+    if (doFornecedor.some((r) => r.id !== id && chaveDoFornecedor(r.fornecedor) === chave)) throw new RegraCadastroError(409, "Já existe uma reclassificação para este fornecedor.");
+    if (!(await db.lancamentoContabil.findFirst({ where: { cliForn: { equals: fornecedor, mode: "insensitive" } }, select: { id: true } }))) {
+      throw new RegraCadastroError(400, "O fornecedor não tem movimentos importados: escolha um da lista.");
+    }
+    return { fornecedor, centroCustoId, motivo: texto(v.motivo), ativo: v.ativo === undefined ? true : booleano(v.ativo) };
+  },
+  async gravar(db, d, id) {
+    const dados = d as Prisma.ReclassificacaoFornecedorUncheckedCreateInput;
+    return id
+      ? (await db.reclassificacaoFornecedor.update({ where: { id }, data: dados })).id
+      : (await db.reclassificacaoFornecedor.create({ data: { ...dados, ordem: (await db.reclassificacaoFornecedor.count()) + 1 } })).id;
+  },
+  // Como a por conta, não é referenciada: o lançamento guarda o centro que vale, congelado na apuração.
+  remover: async (db, id) => void (await db.reclassificacaoFornecedor.delete({ where: { id } })),
+};
 
 // --------------------------------------------------------- estrutura da DRE
 const estrutura: DefinicaoCadastro = {
@@ -818,19 +929,36 @@ const MODOS_DO_ACUMULADO: Array<[string, string]> = [
   ["SISTEMA", "Cálculo do sistema"],
 ];
 
+/** Os centros de custo do item Quadro de Lotação (09/11/2026): os ativos com o código RM, pelo código. */
+const centrosDoQuadro = (db: Db) =>
+  db.centroCusto.findMany({ where: { ativo: true, codigoRM: { not: null } }, orderBy: { codigoRM: "asc" }, select: { codigoRM: true, nomeRM: true } });
+
 /** Os itens que a fórmula pode usar (as opções do montador): valor "TIPO|chave", grupo pelo tipo do item. */
 async function itensDaFormula(db: Db): Promise<Opcao[]> {
   const linhas = await db.linhaDRE.findMany({ where: { tipo: { not: "SECAO" }, ativo: true }, orderBy: { ordem: "asc" }, select: { codigo: true, descricao: true, grupoSigla: true, tipo: true } });
   const indicadores = await db.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" }, select: { nome: true, grupo: true, ativo: true } });
   const nomes = indicadores.map((i) => i.nome);
+  const centros = await centrosDoQuadro(db);
+  const tiposDeMovimentacao = await db.colaboradorTipoMovimentacao.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }], select: { nome: true } });
   return [
     ...linhas.map((l) => ({ valor: `DRE|${l.codigo}`, rotulo: `${l.grupoSigla} › ${l.descricao}${l.tipo === "ITEM" ? "" : " (total)"}`, grupos: ["DRE"] })),
     ...TOTALIZADORES_DAS_LISTAS.map((t) => ({ valor: `LISTA|${t.codigo}`, rotulo: t.rotulo, grupos: ["LISTA"] })),
+    // O "Comercial e Administrativo" saiu do montador em 06/11/2026: as opções ficam só para mostrar os itens já gravados.
     ...INDICADORES_DAS_LISTAS.map((n) => ({ valor: `IND|${n}`, rotulo: n, grupos: ["IND"] })),
     // A marca ACUMULAVEL (23/10/2026): o montador oferece o Período (No Mês ou Acumulado no Ano) nas metas e nos indicadores.
     ...nomes.map((n) => ({ valor: `META|${n}`, rotulo: n, grupos: ["META", "ACUMULAVEL"] })),
     // Os outros indicadores do cadastro (23/10/2026), com o grupo antes, como no Painel de Bordo; o próprio, o cadastro recusa.
     ...indicadores.filter((i) => i.ativo).map((i) => ({ valor: `INDICADOR|${i.nome}`, rotulo: `${i.grupo} › ${i.nome}`, grupos: ["INDICADOR", "ACUMULAVEL"] })),
+    // O Quadro de Lotação (09/11/2026): por Departamento (com a Atribuição no montador: Geral, Direto ou Indireto) ou por
+    // Centro de Custo. O valor do departamento é "QL|DEP|<código>"; o montador acrescenta a atribuição ao inserir.
+    ...DEPARTAMENTOS_DO_QUADRO.map(([codigo, nome]) => ({ valor: `QL|DEP|${codigo}`, rotulo: nome, grupos: ["QL", "QL_DEP"] })),
+    ...centros.map((c) => ({ valor: `QL|CC|${c.codigoRM}`, rotulo: `${c.codigoRM} · ${c.nomeRM}`, grupos: ["QL", "QL_CC"] })),
+    // Os Movimentos do QL (06/11/2026): as movimentações aprovadas do mês de cada tipo e, desde 09/11/2026, todas as de uma contagem.
+    { valor: "MQL|#POSITIVA", rotulo: rotuloDoMovimento("#POSITIVA"), grupos: ["MQL"] },
+    { valor: "MQL|#NEGATIVA", rotulo: rotuloDoMovimento("#NEGATIVA"), grupos: ["MQL"] },
+    ...tiposDeMovimentacao.map((t) => ({ valor: `MQL|${t.nome}`, rotulo: t.nome, grupos: ["MQL"] })),
+    // O Valor Registrado (09/11/2026): o valor do mês com o nome do próprio indicador (importado, digitado ou apurado).
+    { valor: "REGISTRADO|", rotulo: ROTULO_DO_REGISTRADO, grupos: ["REGISTRADO"] },
   ];
 }
 
@@ -869,6 +997,9 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
   const listas = new Set(TOTALIZADORES_DAS_LISTAS.map((t) => t.codigo));
   const indicadores = new Set(INDICADORES_DAS_LISTAS);
   const metas = new Set(nomesDoCatalogo);
+  // O Quadro de Lotação e os Movimentos do QL: os centros (pelo código RM) e os tipos de movimentação (ou uma contagem).
+  const centros = new Set((await centrosDoQuadro(db)).map((c) => c.codigoRM!));
+  const movimentos = new Set([...(await db.colaboradorTipoMovimentacao.findMany({ select: { nome: true } })).map((t) => t.nome), "#POSITIVA", "#NEGATIVA"]);
   for (const i of compilada.itens.values()) {
     const ok =
       i.tipo === "DRE"
@@ -877,8 +1008,15 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
           ? listas.has(i.codigo)
           : i.tipo === "IND"
             ? indicadores.has(i.nome)
-            : (i.tipo === "META" || i.tipo === "INDICADOR") && metas.has(i.nome);
-    if (!ok) throw new RegraCadastroError(400, `${rotulo}: o item ${i.tipo === "DRE" ? i.codigo : i.tipo === "LISTA" ? i.codigo : i.nome} não existe.`);
+            : i.tipo === "QL"
+              ? i.chave.startsWith("DEP|") || centros.has(i.chave.slice(3))
+              : i.tipo === "MQL"
+                ? movimentos.has(i.nome)
+                : i.tipo === "REGISTRADO" || ((i.tipo === "META" || i.tipo === "INDICADOR") && metas.has(i.nome));
+    if (!ok) {
+      const nome = i.tipo === "DRE" || i.tipo === "LISTA" ? i.codigo : i.tipo === "QL" ? rotuloDoQuadro(i.chave) : i.tipo === "REGISTRADO" ? ROTULO_DO_REGISTRADO : i.nome;
+      throw new RegraCadastroError(400, `${rotulo}: o item ${nome} não existe.`);
+    }
   }
 }
 
@@ -888,7 +1026,12 @@ async function validarFormula(db: Db, formula: string, rotulo: string, nomesDoCa
  */
 function paraATela<T extends { modo: string; peso: string | null }>(i: T, texto: string | null) {
   const porFormula = i.modo === "FORMULA";
-  return { ...i, peso: porFormula ? null : i.peso, formulaAcumulado: porFormula ? i.peso : null, metodologiaTexto: i.modo === "SISTEMA" ? "Cálculo do sistema" : texto };
+  return {
+    ...i,
+    peso: porFormula ? null : i.peso,
+    formulaAcumulado: porFormula ? i.peso : null,
+    metodologiaTexto: i.modo === "SISTEMA" ? "Cálculo do sistema" : (texto ?? ROTULO_DO_REGISTRADO),
+  };
 }
 
 const estruturaIndicadores: DefinicaoCadastro = {
@@ -905,7 +1048,15 @@ const estruturaIndicadores: DefinicaoCadastro = {
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS) },
     { nome: "unidade", rotulo: "Unidade de Medida", rotuloColuna: "Und.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(UNIDADES_DE_INDICADOR) },
     { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true, naTabela: false, ajuda: "O texto que a aba Indicadores do Painel de Bordo mostra sob o nome." },
-    { nome: "formula", rotulo: "Metodologia", tipo: "formula", larguraInteira: true, naTabela: false, opcoes: itensDaFormula },
+    {
+      nome: "formula",
+      rotulo: "Metodologia",
+      tipo: "formula",
+      larguraInteira: true,
+      naTabela: false,
+      opcoes: itensDaFormula,
+      ajuda: "O item Valor Registrado é o valor do mês com o nome do indicador: importado (Indicadores do Administrativo e do Comercial), digitado nas Listas ou apurado no Quadro de Lotação.",
+    },
     { nome: "metodologiaTexto", rotulo: "Metodologia", tipo: "texto", derivado: true, noFormulario: false },
     { nome: "modo", rotulo: "Acumulado", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(MODOS_DO_ACUMULADO) },
     { nome: "peso", rotulo: "Peso da Média", tipo: "formula", larguraInteira: true, naTabela: false, visivelSe: { campo: "modo", valores: ["MEDIA_PONDERADA"] }, opcoes: itensDaFormula },
@@ -953,7 +1104,8 @@ const estruturaIndicadores: DefinicaoCadastro = {
       formula = null;
       peso = null;
     } else {
-      if (!formula) throw new RegraCadastroError(400, "Monte a Metodologia (a fórmula do indicador).");
+      // Para o valor registrado no mês com o nome do indicador, o item Valor Registrado (09/11/2026).
+      if (!formula) throw new RegraCadastroError(400, "Monte a Metodologia; para o valor registrado no mês com o nome do indicador, use o item Valor Registrado.");
       await validarFormula(db, formula, "Metodologia", nomes);
       if (modo === "MEDIA_PONDERADA") {
         if (!peso) throw new RegraCadastroError(400, "Na média ponderada, monte o Peso da Média.");
@@ -1330,7 +1482,7 @@ async function validarFormulaDoPainel(db: Db, formula: string, rotulo: string) {
   }
   const nomes = new Set((await db.indicadorEstrutura.findMany({ select: { nome: true } })).map((i) => i.nome));
   for (const i of compilada.itens.values()) {
-    if (i.tipo !== "INDICADOR") throw new RegraCadastroError(400, `${rotulo}: use só os indicadores do cadastro Indicadores (Cadastros da Controladoria / Analítico).`);
+    if (i.tipo !== "INDICADOR") throw new RegraCadastroError(400, `${rotulo}: use só os indicadores do cadastro Indicadores (Cadastros Gerais / Analítico).`);
     // O Acumulado no Ano (23/10/2026) é dos indicadores; o painel já tem o Atual e o Acumulado.
     if (i.acumulado) throw new RegraCadastroError(400, `${rotulo}: o Acumulado no Ano vale só na Metodologia dos Indicadores.`);
     if (!nomes.has(i.nome)) throw new RegraCadastroError(400, `${rotulo}: o indicador “${i.nome}” não está no cadastro Indicadores.`);
@@ -1341,7 +1493,7 @@ async function validarFormulaDoPainel(db: Db, formula: string, rotulo: string) {
 function porExtensoNoPainel(formula: string | null) {
   if (!formula) return null;
   try {
-    return formulaPorExtenso(formula, (i) => ("nome" in i ? i.nome : i.codigo));
+    return formulaPorExtenso(formula, (i) => ("nome" in i ? i.nome : "chave" in i ? rotuloDoQuadro(i.chave) : i.tipo === "REGISTRADO" ? ROTULO_DO_REGISTRADO : i.codigo));
   } catch {
     return formula;
   }
@@ -1354,7 +1506,7 @@ const comTextos = <T extends { formula: string; casasPercentual: number }>(i: T)
  * indicadores, montada como a dos Indicadores; antes, um modelo de apuração fixo), com o formato, o percentual sob o
  * valor e o espaço antes. Os Painéis de Bordo (Resultados Empresariais, cenários e os cards dos Relatórios Executivos)
  * leem os itens ativos daqui, na ordem; os quadros seguem a ordem do primeiro item de cada um. Mudar o cadastro com uma
- * competência apurada e ainda aberta pede reapurar, como todos os Cadastros da Controladoria (assinaturaCadastros.ts).
+ * competência apurada e ainda aberta pede reapurar, como todos os Cadastros Gerais (assinaturaCadastros.ts).
  */
 const painelBordo: DefinicaoCadastro = {
   entidade: "painel-bordo",
@@ -1482,6 +1634,103 @@ const tipos: DefinicaoCadastro = {
   remover: async (db, id) => void (await db.tipoMovimento.delete({ where: { id } })),
 };
 
+// ---------------------------------------------------------------- departamentos
+/**
+ * Os grupos da DRE que um departamento pode ter (os Departamentos da DRE, 12/11/2026): os grupos com sigla e linhas de
+ * item ativas (os do Departamento das Contas de Resultado, sem os volumes de Produção e Serviços, P e S), com as unidades em
+ * que as linhas aparecem.
+ */
+const GRUPOS_DE_VOLUME = new Set(["P", "S"]);
+async function gruposDaDRE(db: Db) {
+  const ls = await db.linhaDRE.findMany({
+    where: { tipo: "ITEM", ativo: true },
+    orderBy: { ordem: "asc" },
+    select: { grupo: true, grupoSigla: true, unidades: { select: { unidadeNegocio: { select: { id: true } } } } },
+  });
+  const grupos = new Map<string, { sigla: string; nome: string; unidades: Set<string> }>();
+  for (const l of ls) {
+    if (!l.grupoSigla || !/\(/.test(l.grupo) || GRUPOS_DE_VOLUME.has(l.grupoSigla)) continue;
+    const g = grupos.get(l.grupoSigla) ?? { sigla: l.grupoSigla, nome: l.grupo, unidades: new Set<string>() };
+    for (const u of l.unidades) g.unidades.add(u.unidadeNegocio.id);
+    grupos.set(l.grupoSigla, g);
+  }
+  return grupos;
+}
+
+/**
+ * Os Departamentos (11/11/2026, pedido do Adão; Cadastros Gerais / Controladoria): a ordem, a unidade de negócio
+ * (a lista do cadastro Unidades), o nome do departamento, único na unidade, e os Departamentos da DRE (12/11/2026: os grupos
+ * da DRE do departamento, pela sigla; só os que têm linhas na unidade, e cada grupo num departamento só da unidade). Inativo,
+ * o departamento sai das listas.
+ */
+const departamentosDoCadastro: DefinicaoCadastro = {
+  entidade: "departamentos",
+  titulo: "Departamento",
+  auditoria: "departamento",
+  criar: true,
+  excluir: true,
+  campos: [
+    { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
+    {
+      nome: "unidadeNegocioId",
+      rotulo: "Unidade",
+      tipo: "opcao",
+      obrigatorio: true,
+      opcoes: async (db) => (await db.unidadeNegocio.findMany({ orderBy: { codigo: "asc" } })).map((u) => ({ valor: u.id, rotulo: u.nome })),
+      ajuda: "A unidade de negócio (cadastro Unidades).",
+    },
+    { nome: "nome", rotulo: "Departamento", tipo: "texto", obrigatorio: true },
+    {
+      nome: "gruposDRE",
+      rotulo: "Departamentos da DRE",
+      tipo: "multipla",
+      naTabela: true,
+      opcoes: async (db) => [...(await gruposDaDRE(db)).values()].map((g) => ({ valor: g.sigla, rotulo: g.nome })),
+      ajuda: "Os grupos da DRE do departamento, entre os que têm linhas na unidade dele; cada grupo fica num departamento só da unidade.",
+    },
+    { nome: "ativo", rotulo: "Ativo", tipo: "booleano" },
+  ],
+  async listar(db, busca) {
+    const ds = await db.departamento.findMany({ orderBy: [{ ordem: "asc" }, { nome: "asc" }], include: { unidadeNegocio: { select: { nome: true } } } });
+    return ds.filter((d) => contem(busca, d.nome, d.unidadeNegocio.nome, ...d.gruposDRE)).map(({ unidadeNegocio: _u, ...d }) => d);
+  },
+  ler: (db, id) => db.departamento.findUnique({ where: { id } }),
+  async preparar(db, v, id) {
+    const nome = exigir(v.nome, "O departamento");
+    const unidadeNegocioId = exigir(v.unidadeNegocioId, "A unidade");
+    const unidade = await db.unidadeNegocio.findUnique({ where: { id: unidadeNegocioId }, select: { nome: true } });
+    if (!unidade) throw new RegraCadastroError(400, "Unidade inválida.");
+    const outro = await db.departamento.findUnique({ where: { unidadeNegocioId_nome: { unidadeNegocioId, nome } }, select: { id: true } });
+    if (outro && outro.id !== id) throw new RegraCadastroError(409, `Já existe o departamento ${nome} na unidade ${unidade.nome}.`);
+    // Os Departamentos da DRE (12/11/2026): grupos que existem, com linhas na unidade, e fora dos outros departamentos ativos dela.
+    const gruposDRE = [...new Set(Array.isArray(v.gruposDRE) ? v.gruposDRE.map(String) : [])];
+    const grupos = await gruposDaDRE(db);
+    for (const s of gruposDRE) {
+      const g = grupos.get(s);
+      if (!g) throw new RegraCadastroError(400, `O grupo ${s} não está na Estrutura da DRE.`);
+      if (!g.unidades.has(unidadeNegocioId)) throw new RegraCadastroError(400, `O grupo ${g.nome} não tem linhas na unidade ${unidade.nome}.`);
+    }
+    const ativo = v.ativo === undefined ? true : booleano(v.ativo);
+    if (ativo && gruposDRE.length) {
+      const outros = await db.departamento.findMany({ where: { unidadeNegocioId, ativo: true, ...(id ? { id: { not: id } } : {}) }, select: { nome: true, gruposDRE: true } });
+      for (const o of outros) {
+        const repetido = gruposDRE.find((s) => o.gruposDRE.includes(s));
+        if (repetido) throw new RegraCadastroError(409, `O grupo ${grupos.get(repetido)!.nome} já é do departamento ${o.nome} da unidade ${unidade.nome}.`);
+      }
+    }
+    // Na ordem da DRE.
+    const ordemDaDRE = [...grupos.keys()];
+    gruposDRE.sort((a, b) => ordemDaDRE.indexOf(a) - ordemDaDRE.indexOf(b));
+    return { ordem: inteiro(v.ordem, "A ordem") ?? undefined, unidadeNegocioId, nome, gruposDRE, ativo };
+  },
+  async gravar(db, d, id) {
+    const dados = d as Prisma.DepartamentoUncheckedCreateInput;
+    if (id) return (await db.departamento.update({ where: { id }, data: dados })).id;
+    return (await db.departamento.create({ data: { ...dados, ordem: dados.ordem ?? (await db.departamento.count()) + 1 } })).id;
+  },
+  remover: async (db, id) => void (await db.departamento.delete({ where: { id } })),
+};
+
 // ---------------------------------------------------------- tabela de estacas
 const estacas: DefinicaoCadastro = {
   entidade: "tabela-estacas",
@@ -1519,7 +1768,11 @@ const estacas: DefinicaoCadastro = {
 };
 
 export const DEFINICOES: Record<string, DefinicaoCadastro> = Object.fromEntries(
-  [centros, contas, reclassificacoes, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, tipos, estacas].map((d) => [d.entidade, d]),
+  // Os cadastros da Gestão de Colaboradores (06/11/2026), no arquivo deles.
+  [centros, contas, reclassificacoes, reclassificacoesFornecedor, estrutura, unidades, linhas, estruturaIndicadores, painelBordo, regras, alocacaoLinhas, departamentosDoCadastro, tipos, estacas, ...DEFINICOES_COLABORADORES].map((d) => [
+    d.entidade,
+    d,
+  ]),
 );
 
 /** Para a tela e para o log: Decimal e Date viram texto. */

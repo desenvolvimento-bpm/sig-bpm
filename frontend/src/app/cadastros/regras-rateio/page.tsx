@@ -42,7 +42,7 @@ export default function RegrasRateioPage() {
               </li>
               <li>O quadro vermelho acima da tabela avisa as chaves com meses sem regra (até dezembro do ano que vem): nesses meses, os lançamentos de rateio da chave não vão para nenhuma unidade. Sem regra no mês, a competência não se abre nem se fecha (Fechamento Mensal), e um cenário analítico do exercício não se abre nem se fecha. Avisa também os conjuntos fixos em vigor ainda sem os percentuais por linha: até serem editados, essa parte vai às linhas pela Alocação nas Linhas.</li>
               <li>Com um cenário analítico em aberto, editar uma regra pede o “Recalcular” na tela Resultados do cenário: os rateios dele seguem as regras de cada mês.</li>
-              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
             </ul>
           }
           descricao="As chaves de rateio: por volume — o volume do destino sobre o da chave, nas listas do mês — ou por percentuais fixos digitados, que somam 100% na chave (com os percentuais por linha de cada destino, que levam a parte do rateio às linhas). A chave e o destino são fixos depois de criada a regra; as vigências dizem de que mês a que mês cada regra vale. O volume continua apurado também nas regras fixas (os indicadores de volume leem dele)."

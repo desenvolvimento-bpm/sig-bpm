@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { getPrismaClient } from "../../config/prisma.js";
 
 /**
- * A assinatura dos Cadastros da Controladoria (17/10/2026; antes, só a do Painel de Bordo): uma por cadastro, guardada
+ * A assinatura dos Cadastros Gerais (17/10/2026; antes, só a do Painel de Bordo): uma por cadastro, guardada
  * na apuração da competência (Competencia.cadastrosAssinatura). Se algum cadastro muda com a competência apurada e
  * ainda aberta, a situação pede reapurar e o fechamento fica bloqueado até lá. As datas de criação e de alteração ficam
  * de fora: gravar sem mudar nada não pede reapurar.
@@ -88,5 +88,5 @@ export function cadastrosMudados(naApuracao: string | null, atual: AssinaturaCad
 /** A frase da situação da competência com os cadastros que mudaram. */
 export function fraseDosCadastros(nomes: string[]): string {
   const lista = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
-  return `${nomes.length === 1 ? "O cadastro" : "Os cadastros"} ${lista} (Cadastros da Controladoria) ${nomes.length === 1 ? "mudou" : "mudaram"} depois da apuração.`;
+  return `${nomes.length === 1 ? "O cadastro" : "Os cadastros"} ${lista} (Cadastros Gerais) ${nomes.length === 1 ? "mudou" : "mudaram"} depois da apuração.`;
 }

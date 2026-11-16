@@ -4,7 +4,7 @@ import { SemLeitura } from "@/components/shared/SemLeitura";
 
 import { ListaCadastroContent } from "../components/ListaCadastroContent";
 
-/** O cadastro do Painel de Bordo (17/10/2026; Cadastros da Controladoria / Analítico): os itens das abas Resultados e Performance. */
+/** O cadastro do Painel de Bordo (17/10/2026; Cadastros Gerais / Analítico): os itens das abas Resultados e Performance. */
 export default function PainelBordoPage() {
   return (
     <ProtectedLayout>
@@ -31,13 +31,18 @@ export default function PainelBordoPage() {
                 indicadores, a fórmula dá o realizado; com as metas do orçamento, o orçado; com os acumulados, o acumulado.
               </li>
               <li>
+                Na lista de indicadores da Metodologia, ao lado de cada um, o valor acumulado de janeiro até a competência fechada mais recente em
+                Resultados Empresariais (#.##0,00, ou 0,00% nos indicadores em %). “Testar”, antes de “Gravar”, mostra o Realizado (Atual) do card
+                nessa competência, no Formato escolhido (e o Percentual sob o Valor, quando há), com a fórmula do formulário, sem gravar.
+              </li>
+              <li>
                 O Formato diz a unidade do Atual e do Acumulado (R$ em milhões ou milhares, m³, pistas, percentual, R$/m³), que aparece no rótulo
                 deles, e não nos valores; é o mesmo no Atual e no Acumulado. O Percentual sob o Valor é opcional: uma segunda fórmula, mostrada sob o realizado com o rótulo (/RL), com uma ou duas casas.
                 Espaço Antes começa um novo bloco no quadro.
               </li>
               <li>Use “Novo” para incluir um item; o lápis edita, e a exclusão fica dentro da edição. Inativo, o item sai do Painel de Bordo.</li>
               <li>
-                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá,
+                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá,
                 ela não fecha, e a tela Resultados do mês mostra o aviso. Os cards dos
                 Relatórios Executivos acham o item pelo quadro, pelo nome e pela abreviação: mudá-los tira o card do relatório.
               </li>

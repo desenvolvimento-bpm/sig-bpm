@@ -1,4 +1,4 @@
-import { Router, type NextFunction, type Request, type Response } from "express";
+import express, { Router, type NextFunction, type Request, type Response } from "express";
 
 import { arquivosGeraisController as c } from "../../controllers/arquivosGerais/arquivosGeraisController.js";
 import { autenticacao } from "../../middlewares/autenticacao.js";
@@ -22,3 +22,5 @@ arquivosGeraisRoutes.get("/:tela", autenticacao, permissao("ler"), asyncHandler(
 arquivosGeraisRoutes.post("/:tela", autenticacao, permissao("editar"), asyncHandler(c.adicionar));
 arquivosGeraisRoutes.get("/:tela/:id/conteudo", autenticacao, permissao("ler"), asyncHandler(c.conteudo));
 arquivosGeraisRoutes.delete("/:tela/:id", autenticacao, permissao("editar"), asyncHandler(c.excluir));
+// O Editar (11/11/2026): a descrição e o processo.
+arquivosGeraisRoutes.put("/:tela/:id", autenticacao, permissao("editar"), express.json(), asyncHandler(c.editar));

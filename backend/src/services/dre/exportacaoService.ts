@@ -41,7 +41,8 @@ export type VisaoExportacao =
   | { tipo: "todosSemCentros" };
 export type Formato = "xlsx" | "pdf";
 
-type LinhaTela = { codigo: string; tipo: string; grupo: string; descricao: string; valor: string | null };
+/** `pct` e `unitario` (13/11/2026): o % e o R$/m³ da tela (participacoesDoMes), em branco quando nulos ou ausentes. */
+type LinhaTela = { codigo: string; tipo: string; grupo: string; descricao: string; valor: string | null; pct?: number | null; unitario?: number | null };
 type Bloco = { nome: string; titulo: string; complemento?: string; linhas: LinhaTela[]; departamento?: string };
 
 const ROTULO_STATUS: Record<string, string> = { ABERTA: "Aberta", EM_CONFERENCIA: "Em conferência", FECHADA: "Fechada" };
@@ -52,6 +53,11 @@ const ehVolume = (l: LinhaTela) => GRUPOS_DE_VOLUME.has(l.grupo);
 // Os mesmos formatos da tela (frontend: utils/formatacao.ts e DREContent.tsx).
 const fmtMoeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmtVolume = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 });
+const fmtPct = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtUnitario = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** O % e o R$/m³ como a tela mostra (em branco sem a coluna ou sem a base). */
+const pctTela = (l: LinhaTela) => (l.pct === null || l.pct === undefined ? "" : `${fmtPct.format(l.pct * 100)}%`);
+const unitarioTela = (l: LinhaTela) => (l.unitario === null || l.unitario === undefined ? "" : fmtUnitario.format(l.unitario));
 /** O valor como a tela mostra. */
 const valorTela = (l: LinhaTela) => (l.valor === null ? "—" : ehVolume(l) ? fmtVolume.format(Number(l.valor)) : fmtMoeda.format(Number(l.valor)));
 const dataHora = (d: Date) =>
@@ -138,6 +144,8 @@ function abaExcel(b: Bloco, id: Identificacao): AbaEscrita {
   linhas.push([
     { valor: "Linha", estilo: ESTILO.cabecalho },
     { valor: "Valor", estilo: ESTILO.cabecalhoDireita },
+    { valor: "%", estilo: ESTILO.cabecalhoDireita },
+    { valor: "R$/m³", estilo: ESTILO.cabecalhoDireita },
   ]);
   const cabecalho = linhas.length;
   // Sem o primeiro total da ROL e com os fundos das telas (22/10/2026): os totais em amarelo claro, os resultados mais forte.
@@ -149,9 +157,13 @@ function abaExcel(b: Bloco, id: Identificacao): AbaEscrita {
       l.valor === null
         ? { valor: "—", estilo: destaque ? total("destaqueDireita") : ESTILO.itemDireita }
         : { valor: Number(l.valor), estilo: ehVolume(l) ? (destaque ? total("destaqueVolume") : ESTILO.itemVolume) : destaque ? total("destaqueMoeda") : ESTILO.itemMoeda };
-    linhas.push([{ valor: l.descricao, estilo: destaque ? total("destaque") : ESTILO.item }, valor]);
+    // O % e o R$/m³ (13/11/2026), como na tela: em branco sem a coluna ou sem a base.
+    const vazio: Celula = { valor: "", estilo: destaque ? total("destaqueDireita") : ESTILO.itemDireita };
+    const pct: Celula = l.pct === null || l.pct === undefined ? vazio : { valor: l.pct, estilo: destaque ? total("destaquePercentual") : ESTILO.itemPercentual };
+    const unitario: Celula = l.unitario === null || l.unitario === undefined ? vazio : { valor: l.unitario, estilo: destaque ? total("destaqueNumero") : ESTILO.itemNumero };
+    linhas.push([{ valor: l.descricao, estilo: destaque ? total("destaque") : ESTILO.item }, valor, pct, unitario]);
   }
-  return { nome: b.nome, larguras: [72, 20], linhas, linhaCabecalho: cabecalho, rodape: `DRE ${id.competencia} · ${b.titulo} · ${id.estado}` };
+  return { nome: b.nome, larguras: [72, 20, 10, 12], linhas, linhaCabecalho: cabecalho, rodape: `DRE ${id.competencia} · ${b.titulo} · ${id.estado}` };
 }
 
 const CINZA: Cor = [75, 85, 99];
@@ -167,11 +179,17 @@ const CORPO = 8.5;
 
 function paginasPdf(doc: DocumentoPDF, b: Bloco, id: Identificacao) {
   const direita = A4.largura - M;
+  // As colunas dos números, da direita: o R$/m³, o % e o Valor (13/11/2026: o % e o R$/m³).
+  const xUnitario = direita - 4;
+  const xPct = xUnitario - 64;
+  const xValor = xPct - 54;
   let y = 0;
   const cabecalhoTabela = () => {
     doc.retangulo(M, y - 4, direita - M, ALTURA_LINHA + 2, FUNDO);
     doc.texto(M + 4, y, "Linha", { fonte: "negrito", tamanho: CORPO });
-    doc.texto(direita - 4, y, "Valor", { fonte: "negrito", tamanho: CORPO, alinhar: "direita" });
+    doc.texto(xValor, y, "Valor", { fonte: "negrito", tamanho: CORPO, alinhar: "direita" });
+    doc.texto(xPct, y, "%", { fonte: "negrito", tamanho: CORPO, alinhar: "direita" });
+    doc.texto(xUnitario, y, "R$/m³", { fonte: "negrito", tamanho: CORPO, alinhar: "direita" });
     doc.linha(M, y - 4, direita, y - 4, TRACO);
     y -= ALTURA_LINHA + 2;
   };
@@ -208,8 +226,10 @@ function paginasPdf(doc: DocumentoPDF, b: Bloco, id: Identificacao) {
     if (destaque) doc.retangulo(M, y - 3.5, direita - M, ALTURA_LINHA, fundo === "resultado" ? FUNDO_DO_RESULTADO : FUNDO_DO_TOTAL);
     const valor = valorTela(l);
     const xTexto = destaque ? M + 4 : M + 16;
-    doc.texto(xTexto, y, caber(l.descricao, fonte, CORPO, direita - 4 - 90 - xTexto), { fonte, tamanho: CORPO });
-    doc.texto(direita - 4, y, valor, { fonte, tamanho: CORPO, alinhar: "direita" });
+    doc.texto(xTexto, y, caber(l.descricao, fonte, CORPO, xValor - 90 - xTexto), { fonte, tamanho: CORPO });
+    doc.texto(xValor, y, valor, { fonte, tamanho: CORPO, alinhar: "direita" });
+    doc.texto(xPct, y, pctTela(l), { fonte, tamanho: CORPO, alinhar: "direita", cor: CINZA });
+    doc.texto(xUnitario, y, unitarioTela(l), { fonte, tamanho: CORPO, alinhar: "direita", cor: CINZA });
     y -= ALTURA_LINHA;
   }
 }

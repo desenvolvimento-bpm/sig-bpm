@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, CloudOff, Crop, FilePlus2, FileX2, Image as Imagem, ImageOff, ImagePlus, ImageUp, LayoutGrid, LayoutList, ListOrdered, LoaderCircle, LockOpen, Pencil, Plus, Presentation, Settings, StickyNote, Table2, TableProperties, Trash2, Type, Video } from "lucide-react";
+import { Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CloudAlert, CloudCheck, CloudOff, CopyPlus, Crop, EyeOff, FilePlus2, FileX2, Image as Imagem, ImageOff, ImagePlus, ImageUp, LayoutGrid, LayoutList, ListOrdered, LoaderCircle, LockOpen, Pencil, Plus, Presentation, Settings, StickyNote, Table2, TableProperties, Trash2, Type, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { EtiquetasDaBarra } from "@/components/layout/EtiquetasDaBarra";
@@ -51,6 +51,8 @@ function conflitoDe(e: unknown): Conflito | null {
 
 /** O nome da página: o escolhido ou, sem ele, "Página N". */
 const nomeDaPagina = (p: Pagina, k: number) => p.nome?.trim() || `Página ${k + 1}`;
+/** As páginas de uma aba: no máximo 30 (o limite da gravação). */
+const MAXIMO_DE_PAGINAS = 30;
 
 /** A aba e a página abertas. */
 type Aberta = { chave: string; pagina: string | null };
@@ -231,6 +233,19 @@ function Editor({
   // A página aberta: a escolhida, se ainda existe; senão, a primeira da aba.
   const pagina = daAba.find((p) => p.id === aberta.pagina) ?? daAba[0];
   const nPagina = pagina ? daAba.indexOf(pagina) : -1;
+  // As abas das páginas sem a barra de rolagem (12/11/2026, pedido do Adão): a lista rola sozinha até a aba da página aberta
+  // quando ela muda (Página Anterior, Próxima Página, uma página nova ou duplicada), para ela ficar à vista.
+  const listaDasPaginas = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const lista = listaDasPaginas.current;
+    const atual = lista?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!lista || !atual) return;
+    const [l, a] = [lista.getBoundingClientRect(), atual.getBoundingClientRect()];
+    // Uma folga, para a vizinha aparecer um pouco e se ver que há mais abas.
+    const folga = 32;
+    if (a.left < l.left) lista.scrollBy({ left: a.left - l.left - folga, behavior: "smooth" });
+    else if (a.right > l.right) lista.scrollBy({ left: a.right - l.right + folga, behavior: "smooth" });
+  }, [chave, pagina?.id, daAba.length]);
   const mudadas = relatorio.abas.filter((a) => a.podeEditar && JSON.stringify(paginas[a.chave] ?? []) !== JSON.stringify(gravadas[a.chave] ?? []));
   const mudouAba = mudadas.some((a) => a.chave === chave);
   // Os grupos que o salvamento automático grava: os alterados, menos o em conflito (espera a escolha do usuário).
@@ -418,11 +433,30 @@ function Editor({
   };
   const mudarAjuste = (m: MudancaDoSlide, aoGrupo: boolean) =>
     mudarPaginas(daAba.map((p) => (aoGrupo || p.id === pagina?.id ? { ...p, [m.campo]: m.valor } : p)));
+  // Recomeçar ao Terminar (11/11/2026, só nos painéis): o painel inteiro (marcado em todas as páginas).
+  const recomecarAoTerminar = daAba.length > 0 && daAba.every((p) => p.recomecarAoTerminar);
+  const mudarRecomecar = (marcado: boolean) => mudarPaginas(daAba.map((p) => ({ ...p, recomecarAoTerminar: marcado || undefined })));
   const novaPagina = () => {
-    const nova: Pagina = { id: novoId(), blocos: [], ...ajusteDaPagina };
+    const nova: Pagina = { id: novoId(), blocos: [], ...ajusteDaPagina, ...(recomecarAoTerminar ? { recomecarAoTerminar: true } : {}) };
     mudarPaginas([...daAba.slice(0, nPagina + 1), nova, ...daAba.slice(nPagina + 1)]);
     setAberta({ chave, pagina: nova.id });
   };
+  // Duplicar Página (12/11/2026, pedido do Adão): a cópia inteira da aberta (os blocos, a Imagem de Fundo, a transição, o
+  // Avançar Após e o Ocultar), logo depois dela; o nome escolhido ganha "(Cópia)" (sem ele, a cópia fica "Página N").
+  const duplicarPagina = () => {
+    if (!pagina) return;
+    const copia: Pagina = {
+      ...structuredClone(pagina),
+      id: novoId(),
+      nome: pagina.nome?.trim() ? `${pagina.nome.trim().slice(0, 52)} (Cópia)` : undefined,
+      blocos: pagina.blocos.map((b) => ({ ...structuredClone(b), id: novoId() })),
+    };
+    mudarPaginas([...daAba.slice(0, nPagina + 1), copia, ...daAba.slice(nPagina + 1)]);
+    setAberta({ chave, pagina: copia.id });
+  };
+  const cheia = daAba.length >= MAXIMO_DE_PAGINAS;
+  // Ocultar Página (12/11/2026, pedido do Adão): a página oculta fica fora dos slides — o Apresentar pula para a próxima.
+  const ocultarPagina = () => mudarPaginas(daAba.map((p) => (p.id === pagina?.id ? { ...p, oculta: p.oculta ? undefined : true } : p)));
   const excluirPagina = () => {
     const resto = daAba.filter((p) => p.id !== pagina?.id);
     mudarPaginas(resto);
@@ -437,11 +471,11 @@ function Editor({
     if (s) setAberta(s);
   };
   // Os slides da apresentação: as páginas com algum bloco ou com a Imagem de Fundo (20/10/2026) das abas que o usuário vê
-  // (o que está na tela, gravado ou não). A contagem (o contador do topo dos slides e os números do Sumário) começa na
-  // Introdução: os slides da Capa e do Encerramento (20/10/2026) não contam.
+  // (o que está na tela, gravado ou não), menos as ocultas (12/11/2026). A contagem (o contador do topo dos slides e os
+  // números do Sumário) começa na Introdução: os slides da Capa e do Encerramento (20/10/2026) não contam.
   const comConteudo = relatorio.abas.flatMap((a) => {
     const ps = a.visivel ? (paginas[a.chave] ?? []) : [];
-    return ps.flatMap((p, k) => (p.blocos.length || p.fundo ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos }] : []));
+    return ps.flatMap((p, k) => (!p.oculta && (p.blocos.length || p.fundo) ? [{ aba: a.chave, chave: `${a.chave}|${p.id}`, nome: a.titulo, pagina: nomeDaPagina(p, k), blocos: p.blocos, fundo: p.fundo, transicao: p.transicao, avancarApos: p.avancarApos, recomecarAoTerminar: p.recomecarAoTerminar }] : []));
   });
   const contados = comConteudo.filter((x) => !ABAS_SEM_NUMERO.has(x.aba)).length;
   let contagem = 0;
@@ -450,9 +484,12 @@ function Editor({
   const sumario: TelaDoSumario[] = relatorio.abas
     .filter((a) => !ABAS_SEM_NUMERO.has(a.chave))
     .map((a) => ({ chave: a.chave, titulo: a.titulo, slides: slides.filter((x) => x.aba === a.chave).map((x) => ({ nome: x.pagina, numero: x.numero ?? 0 })) }));
+  // A apresentação começa na página aberta; se ela não é slide (oculta ou vazia), na próxima que é (sem nenhuma depois, na primeira).
   const apresentar = () => {
     entrarEmTelaInteira();
-    setApresentando(Math.max(0, slides.findIndex((s) => s.chave === `${chave}|${pagina?.id}`)));
+    const ordem = relatorio.abas.flatMap((a) => (a.visivel ? (paginas[a.chave] ?? []).map((p) => `${a.chave}|${p.id}`) : []));
+    const daAberta = ordem.indexOf(`${chave}|${pagina?.id}`);
+    setApresentando(Math.max(0, slides.findIndex((s) => ordem.indexOf(s.chave) >= daAberta)));
   };
   const atualizar = (r: Relatorio) => {
     queryClient.setQueryData([rota, "relatorio", relatorio.id], r);
@@ -770,7 +807,13 @@ function Editor({
                 Reabrir
               </Button>
             ) : null}
-            <Button type="button" className={botaoPrimario} disabled={!slides.length} title={slides.length ? "Apresentar as páginas em tela inteira" : "Nenhuma página com blocos para apresentar"} onClick={apresentar}>
+            <Button
+              type="button"
+              className={botaoPrimario}
+              disabled={!slides.length}
+              title={slides.length ? "Apresentar as páginas em tela inteira" : "Nenhuma página com blocos (e não oculta) para apresentar"}
+              onClick={apresentar}
+            >
               <Presentation className="size-4" />
               Apresentar
             </Button>
@@ -833,7 +876,13 @@ function Editor({
       {configuracoes ? conteudoDasConfiguracoes(relatorio, botaoExcluir) : null}
       {!configuracoes && aba?.visivel ? (
         <div className="flex items-end">
-          <div role="tablist" aria-label={`Páginas de ${aba.nome}`} data-tour="abas" className="flex min-w-0 flex-1 gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-200">
+          <div
+            ref={listaDasPaginas}
+            role="tablist"
+            aria-label={`Páginas de ${aba.nome}`}
+            data-tour="abas"
+            className="flex min-w-0 flex-1 gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
             {daAba.map((p, k) => {
               const atual = p.id === pagina?.id;
               const classe = `-mb-px inline-flex shrink-0 items-center border-b-2 px-3 py-2 text-sm whitespace-nowrap ${atual ? "border-black font-bold text-gray-900" : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900"}`;
@@ -868,7 +917,10 @@ function Editor({
                   aria-selected={atual}
                   onClick={() => setAberta({ chave, pagina: p.id })}
                   onDoubleClick={() => (editavel ? setRenomeando(p.id) : undefined)}
-                  title={editavel ? "Dois cliques para mudar o nome (o do slide); arraste para trocar de lugar" : undefined}
+                  title={
+                    [p.oculta ? "Página oculta: fora da apresentação" : "", editavel ? "Dois cliques para mudar o nome (o do slide); arraste para trocar de lugar" : ""].filter(Boolean).join(". ") ||
+                    undefined
+                  }
                   // Arrastar a aba para trocar a página de lugar (17/10/2026), na aba que se edita.
                   draggable={editavel}
                   onDragStart={(e) => {
@@ -895,6 +947,8 @@ function Editor({
                   }}
                   className={`${classe} ${editavel ? "cursor-grab active:cursor-grabbing" : ""} ${sobre === p.id ? "rounded-t-sm bg-gray-100" : ""} ${arrastando === p.id ? "opacity-50" : ""}`}
                 >
+                  {/* A página oculta (12/11/2026): o olho cortado antes do nome. */}
+                  {p.oculta ? <EyeOff className="mr-1.5 size-3.5 text-gray-400" aria-label="Oculta na apresentação" /> : null}
                   {nomeDaPagina(p, k)}
                 </button>
               );
@@ -906,8 +960,26 @@ function Editor({
                 <button type="button" className={botaoIcone} disabled={!pagina} onClick={() => pagina && setRenomeando(pagina.id)} title="Mudar o nome da página (o do slide)" aria-label="Mudar o nome da página">
                   <Pencil className="size-4" />
                 </button>
-                <button type="button" className={botaoIcone} onClick={novaPagina} title="Nova página (depois da aberta)" aria-label="Nova página">
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={cheia}
+                  onClick={novaPagina}
+                  title={cheia ? `A aba já tem ${MAXIMO_DE_PAGINAS} páginas (o máximo)` : "Nova Página (depois da aberta)"}
+                  aria-label="Nova Página"
+                >
                   <FilePlus2 className="size-4" />
+                </button>
+                {/* Duplicar Página (12/11/2026, pedido do Adão): a cópia inteira da aberta, logo depois dela. */}
+                <button
+                  type="button"
+                  className={botaoIcone}
+                  disabled={!pagina || cheia}
+                  onClick={duplicarPagina}
+                  title={cheia ? `A aba já tem ${MAXIMO_DE_PAGINAS} páginas (o máximo)` : "Duplicar Página (a cópia da aberta entra depois dela)"}
+                  aria-label="Duplicar Página"
+                >
+                  <CopyPlus className="size-4" />
                 </button>
                 <button
                   type="button"
@@ -918,6 +990,18 @@ function Editor({
                   aria-label="Excluir a página"
                 >
                   <FileX2 className="size-4" />
+                </button>
+                {/* Ocultar Página (12/11/2026, pedido do Adão): ativo, o Apresentar pula a página (e ela fica fora do PDF). */}
+                <button
+                  type="button"
+                  className={`${botaoIcone} ${pagina?.oculta ? "bg-gray-200 text-gray-900 hover:bg-gray-300" : ""}`}
+                  disabled={!pagina}
+                  aria-pressed={!!pagina?.oculta}
+                  onClick={ocultarPagina}
+                  title={pagina?.oculta ? "Página oculta: o Apresentar a pula (clique para mostrá-la de novo)" : "Ocultar Página (o Apresentar a pula e passa à próxima)"}
+                  aria-label="Ocultar Página"
+                >
+                  <EyeOff className="size-4" />
                 </button>
                 {/* A Imagem de Fundo da página (20/10/2026): sem ela, o ícone que a envia (30/10/2026, pedido do Adão; antes, no
                     Adicionar); com ela, no lugar dele, os de ajustar e remover. */}
@@ -952,6 +1036,7 @@ function Editor({
                     nomeDoSlide={nomeDaPagina(pagina, nPagina)}
                     uniformes={uniformes}
                     onMudar={mudarAjuste}
+                    recomecar={processo.rota === "paineis-de-bordo" ? { marcado: recomecarAoTerminar, onMudar: mudarRecomecar } : undefined}
                   />
                 ) : null}
                 <span className="mx-1 h-5 w-px bg-gray-200" />
@@ -1213,7 +1298,7 @@ function ComoUsarDoRelatorio() {
         cenários com marcação, de qualquer exercício, com o ano, o tipo (Sintético ou Analítico) e a marcação em etiquetas — para o relatório ficar com
         ele enquanto ele tiver a marcação (se a marcação passar para outro cenário, o relatório volta ao marcado como Orçamento; num cenário de outro
         exercício, valem os mesmos meses dele). A Comparação PROVA são os cenários dos
-        Cards PROVA e das Tabelas PROVA: marque dois ou mais dos cenários marcados (Previsão, Orçado, Vendido e Anterior, cada um com o quadradinho da cor
+        Cards PROVA e das Tabelas PROVA: marque dois ou mais dos cenários marcados (Forecast, Orçado, Vendido e Anterior, cada um com o quadradinho da cor
         dele; de início, todos); com dois marcados, eles não se desmarcam antes de se marcar outro. Ela acompanha as marcações: se uma marcação passar para
         outro cenário, os objetos PROVA comparam com ele. Quem edita a tela escolhe, e as escolhas se salvam na hora (“Salvo às…”, embaixo das listas); os
         demais só veem. Embaixo, “Excluir Relatório” (de quem o criou ou do Administrador, enquanto nenhum grupo está finalizado) exclui o relatório, com
@@ -1245,15 +1330,20 @@ export function ItensDoComoUsar() {
         {g ? (
           <>
             Cada aba tem uma ou mais páginas, logo abaixo do título. O nome da página é o do slide na apresentação (de início, “Página 1”): na sua aba,
-            dois cliques nele (ou o lápis) o editam, e arrastar a aba de uma página para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões ao lado delas incluem uma página nova (depois da aberta), excluem a página aberta (com
-            blocos, pede confirmação; a única página não se exclui) e recuam ou avançam pelas páginas, passando de uma aba para a outra.
+            dois cliques nele (ou o lápis) o editam, e arrastar a aba de uma página para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões ao lado delas incluem uma página nova (depois da aberta), duplicam a página aberta (a
+            cópia inteira, com os blocos, a Imagem de Fundo e as transições, entra logo depois dela; o nome escolhido ganha “(Cópia)”), excluem a página aberta (com
+            blocos, pede confirmação; a única página não se exclui), ocultam a página aberta (ativo, o olho cortado aparece antes do nome da página, e a
+            apresentação a pula e passa à próxima; ela também fica fora do PDF, do contador dos slides e do Sumário; outro clique a mostra de novo) e recuam ou
+            avançam pelas páginas, passando de uma aba para a outra. Cada aba tem até 30 páginas.
           </>
         ) : (
           <>
             A tela tem uma ou mais abas (as páginas do painel), logo abaixo do título. O nome da aba é o do slide na apresentação (de início, “Página 1”):
             dois cliques nele (ou o lápis) o editam, e arrastar uma aba para outra posição a troca de lugar (a ordem dos slides acompanha). Os outros botões
-            ao lado delas incluem uma aba nova (depois da aberta), excluem a aba aberta (com blocos, pede confirmação; a única não se exclui) e recuam ou
-            avançam pelas abas.
+            ao lado delas incluem uma aba nova (depois da aberta), duplicam a aba aberta (a cópia inteira, com os blocos, a Imagem de Fundo e as transições,
+            entra logo depois dela; o nome escolhido ganha “(Cópia)”), excluem a aba aberta (com blocos, pede confirmação; a única não se exclui), ocultam a
+            aba aberta (ativo, o olho cortado aparece antes do nome da aba, e a apresentação a pula e passa à próxima; ela também fica fora do PDF, do contador
+            dos slides e do Sumário; outro clique a mostra de novo) e recuam ou avançam pelas abas. O painel tem até 30 abas.
           </>
         )}{" "}
         A página tem o tamanho da tela padrão, 1920 × 1080 (o contorno tracejado): os blocos não passam dele. Na apresentação e no PDF, o slide se
@@ -1270,9 +1360,9 @@ export function ItensDoComoUsar() {
         lista; ela vale para todos os objetos PROVA do {d}. No
         card PROVA, embaixo do valor do mês e do acumulado, cada cenário vem numa linha: “vs.” e o cenário, com o quadradinho da cor dele, o orçado, a
         variação e a faixa de melhor ou pior à direita (a dica traz o nome do cenário). O gráfico traz uma série por cenário: nas barras, uma coluna para
-        cada um; na área, o realizado em área e os cenários em linhas. As cores: a Previsão em cinza forte (cinza fraco no tema Escuro), o Orçado em
+        cada um; na área, o realizado em área e os cenários em linhas. As cores: o Forecast em cinza forte (cinza fraco no tema Escuro), o Orçado em
         preto (claro no Escuro), o Vendido em ouro forte e o Anterior em ouro fraco; o realizado continua no amarelo-ouro. Num slide com cards ou
-        tabelas PROVA, os cards e as tabelas padrão ficam na cor do cenário de comparação do {d} (comparado com a Previsão, em cinza forte, como
+        tabelas PROVA, os cards e as tabelas padrão ficam na cor do cenário de comparação do {d} (comparado com o Forecast, em cinza forte, como
         no PROVA).
       </li>
       <li>
@@ -1287,7 +1377,12 @@ export function ItensDoComoUsar() {
       <li>
         Texto Livre inclui um texto com a formatação das anotações, com a fonte e o espaçamento entre as linhas (no menu da edição; o tamanho até 144 e o
         branco servem aos textos sobre a Imagem de Fundo), mas sem o destaque lateral, o título, o ícone e o fundo: na edição, o contorno tracejado aparece com o mouse
-        sobre ele. Como a anotação, ele cresce sozinho enquanto você escreve. Na apresentação, ele não se destaca nem se amplia.
+        sobre ele. No Texto Livre, o menu da edição tem também o Alinhamento, logo antes do espaçamento (Esquerda, Justificado, Centralizado ou
+        Direita: nos parágrafos selecionados; sem seleção, em todo o texto; o ícone do botão mostra o do parágrafo onde está o cursor), e as Bordas,
+        depois do espaçamento: o modal com as posições (Em Cima, Embaixo, Esquerda, Direita ou Todas), o tipo (Contínua, Tracejada, Pontilhada, Dupla
+        ou Sulcada), a espessura (de 1/4 a 8 px e os tamanhos dos textos, de 10 a 60) e a cor (as dos textos; Padrão é a cor do texto do tema), com a
+        prévia; Aplicar sem nenhuma posição marcada, ou Remover Bordas, tira as bordas, e o botão fica destacado no bloco com bordas. Como a anotação,
+        ele cresce sozinho enquanto você escreve. Na apresentação, ele não se destaca nem se amplia.
       </li>
       <li>
         {g ? (
@@ -1349,6 +1444,11 @@ export function ItensDoComoUsar() {
         e na leitura, o vídeo tem os controles do player.
       </li>
       <li>
+        Com o vídeo escolhido, o Configurar (a engrenagem do menu da edição) abre as Configurações do Vídeo: Reprodução Automática (começa a tocar sozinho
+        na leitura e na apresentação, quando o slide aparece; sem um clique na página antes, o navegador pode exigir que comece sem som) e Recomeçar ao
+        Terminar (volta ao início e toca de novo). Valem no vídeo do computador e no do YouTube; no Facebook, só a Reprodução Automática.
+      </li>
+      <li>
         A Imagem de Fundo fica nos botões ao lado das páginas: o ícone de imagem envia uma (reduzida a até 2560 px) e abre o modal Imagem de Fundo,
         com a miniatura da tela inteira: arraste a imagem
         para posicioná-la e use o Tamanho (ou a roda do mouse sobre ela) para aumentá-la; “Restaurar Ajustes” a centraliza a 100% (o tamanho que
@@ -1365,6 +1465,9 @@ export function ItensDoComoUsar() {
         sozinho ao próximo depois desse tempo (em branco ou zero, só pelas setas). A Animação e o Cronômetro têm cada um o seu “Aplicar ao {p.grupo}”:
         marcado, a mudança vale para todos os slides do {p.grupo.toLowerCase()} (marcar a caixa já leva a transição, ou o avanço, do slide aberto a todos; ela abre
         marcada quando todos já são iguais); desmarcado, só para o slide aberto. A página nova entra com a transição e o avanço da aberta.
+        {p.rota === "paineis-de-bordo"
+          ? " No Cronômetro do painel, “Recomeçar ao Terminar” (vale para o painel inteiro) faz a apresentação voltar à primeira página depois do Avançar Após da última: o painel fica passando em ciclo."
+          : ""}
       </li>
       <li>
         Como no Canva: clique num bloco para escolhê-lo (o contorno tracejado, com o mouse sobre um bloco, mostra qual o clique escolhe). O escolhido fica destacado
@@ -1389,17 +1492,20 @@ export function ItensDoComoUsar() {
         nos mesmos lugares; as que não valem para o bloco escolhido ficam quase apagadas (o nome do bloco aparece na dica da borda dele). Da esquerda para a
         direita: Desfazer e Refazer (Ctrl+Z e Ctrl+Y, ou Ctrl+Shift+Z: as alterações desta sessão, {g ? "em todas as abas" : "em todas as páginas"}, até 100 passos; a digitação seguida
         conta como um passo, e o Desfazer abre {g ? "a aba e a página" : "a página"} da alteração; dentro de um texto em edição, o Ctrl+Z desfaz a digitação, como no
-        navegador), Copiar e Colar (o bloco; veja acima), o gráfico dos cards do Painel e dos Indicadores (em
+        navegador), Copiar e Colar (o bloco; veja acima), os dados dos cards do Painel e dos Indicadores, padrão e PROVA (em ciclo: o Atual e o
+        Acumulado → apenas o Atual, com o calendário no ícone → apenas o Acumulado, com o Σ; com um só, ele fica antes do gráfico, o nome em cima da
+        Metodologia, e o card muda de largura na proporção), o gráfico dos cards do Painel e dos Indicadores (em
         ciclo: os meses e o acumulado → só o acumulado, com o “A” no ícone → sem gráfico; o card muda de largura na proporção), o Zoom do card (100%,
         125%, 150%, 200%, 250% ou 300%: o conteúdo inteiro — os textos, os valores e o gráfico — maior, no mesmo bloco; o que não couber, aumente o
         bloco), Configurar (as opções do
         gráfico — os rótulos e o tipo, neste card ou em todos os cards da aba; as cores seguem a Acessibilidade —, do Sumário ou da Tabela), os ajustes da
-        imagem, o Cortar e Posicionar, as notas das anotações, a formatação do texto (nas anotações, no Texto Livre, nas legendas e, a do Sumário, por nível) e excluir.
+        imagem, o Cortar e Posicionar, as notas das anotações, a formatação do texto (nas anotações, no Texto Livre — com o Alinhamento e as Bordas —, nas legendas e, a do Sumário, por nível) e excluir.
       </li>
       <li>
         {g ? (
           <>
-            “Apresentar” mostra as páginas com blocos como slides, em tela inteira e sem o menu lateral, a partir da página aberta, com o grupo (o título da aba:
+            “Apresentar” mostra as páginas com blocos (menos as ocultas) como slides, em tela inteira e sem o menu lateral, a partir da página aberta (oculta ou
+            vazia, a partir da próxima), com o grupo (o título da aba:
             Introdução, Performance da Produção…), em cinza, a seta e o nome do slide (o da página), em preto, à esquerda do topo, e “Relatório Executivo”, em
             cinza, a seta, o período, em preto, e a logo da BPM à direita; embaixo, o rodapé, com o separador igual ao do cabeçalho (atrás da Imagem de Fundo, como o do cabeçalho): à esquerda, a legenda dos cards (nos slides
             com cards do Painel ou dos Indicadores; com cards PROVA, os cenários do slide, cada um na cor dele), e, à direita, o contador dos slides (“1/10”: o slide em preto e negrito e o total, contados da
@@ -1408,7 +1514,8 @@ export function ItensDoComoUsar() {
           </>
         ) : (
           <>
-            “Apresentar” mostra as páginas com blocos como slides, em tela inteira e sem o menu lateral, a partir da página aberta, com o nome do painel, em
+            “Apresentar” mostra as abas com blocos (menos as ocultas) como slides, em tela inteira e sem o menu lateral, a partir da aba aberta (oculta ou vazia,
+            a partir da próxima), com o nome do painel, em
             cinza, a seta e o nome do slide (o da página), em preto, à esquerda do topo, e “Painel de Bordo”, em cinza, a seta, a competência, em preto, e a
             logo da BPM à direita; embaixo, o rodapé, com o separador igual ao do cabeçalho (atrás da Imagem de Fundo, como o do cabeçalho): à esquerda, a
             legenda dos cards (nos slides com cards do Painel ou dos Indicadores; com cards PROVA, os cenários do slide, cada um na cor dele), e, à direita, o
@@ -1425,7 +1532,7 @@ export function ItensDoComoUsar() {
         não se selecionam.
       </li>
       <li>
-        “Exportar” baixa os slides em PDF, como na apresentação (um slide por página, na tela padrão, 1920 × 1080):{" "}
+        “Exportar” baixa os slides em PDF, como na apresentação (um slide por página, na tela padrão, 1920 × 1080; sem as páginas ocultas):{" "}
         {g
           ? "Toda a Apresentação, o Grupo Atual (a aba do relatório aberta: Capa, Introdução, Administrativo…) ou a Aba Atual (a página aberta)"
           : "Toda a Apresentação ou a Aba Atual (a página aberta)"}

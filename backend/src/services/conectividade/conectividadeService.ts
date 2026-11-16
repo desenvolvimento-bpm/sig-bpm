@@ -158,7 +158,8 @@ export const conectividadeService = {
    * edita a tela vê os de todos, com os bloqueios; quem só lê, os próprios.
    */
   async acessos(dias: number, u: UsuarioAutenticado) {
-    const todos = u.permissions.includes("biblioteca_apis:editar");
+    // Quem edita a tela Acessos (13/11/2026; antes, a tela APIs) vê os de todos.
+    const todos = u.permissions.includes("conectividade_acessos.apis:editar");
     const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
     const prisma = getPrismaClient();
     const registros = await prisma.auditLog.findMany({

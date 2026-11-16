@@ -152,7 +152,9 @@ export function verificarPermissaoDoCenario(acao: "ler" | "editar", tela?: strin
  * da Controladoria são abas das telas Contábil, Controladoria e Analítico (17/10/2026).
  */
 export const AREA_DO_CADASTRO: Record<string, string> = {
-  reclassificacoes: "cadastro_reclassificacoes",
+  // As abas Por Conta e Por Fornecedor da tela Reclassificações (13/11/2026).
+  reclassificacoes: "cadastro_reclassificacoes.por_conta",
+  "reclassificacoes-fornecedor": "cadastro_reclassificacoes.por_fornecedor",
   "precos-contrato": "cadastro_precos_contrato",
   "tipos-movimento": "cadastro_tipos_movimento",
   "tabela-estacas": "cadastro_tabela_estacas",
@@ -163,8 +165,15 @@ export const AREA_DO_CADASTRO: Record<string, string> = {
   "estrutura-dre": "cadastro_controladoria.estrutura_dre",
   "regras-rateio": "cadastro_controladoria.regras_rateio",
   "alocacao-linhas": "cadastro_controladoria.alocacao_linhas",
+  // Os Departamentos (11/11/2026).
+  departamentos: "cadastro_controladoria.departamentos",
   "estrutura-indicadores": "cadastro_analitico.estrutura_indicadores",
   "painel-bordo": "cadastro_analitico.painel_bordo",
+  // A tela Cadastros da Gestão de Colaboradores (06/11/2026).
+  "colaboradores-funcoes": "colaboradores_cadastros.funcoes",
+  "colaboradores-movimentacoes": "colaboradores_cadastros.movimentacoes",
+  "colaboradores-classificacoes": "colaboradores_cadastros.classificacoes",
+  "colaboradores-lancamento-inicial": "colaboradores_cadastros.lancamento_inicial",
 };
 
 /** A permissão da tela do cadastro da rota (:entidade); entidade desconhecida segue adiante (a rota responde 404). */
@@ -186,20 +195,20 @@ export async function verificarIndicadoresDoCenario(request: Request, response: 
     if (!base) return next();
     response.locals.areaDoCenario = base;
     // Os Indicadores são uma aba do Painel de Bordo (19/10/2026): a tela dele (o controlador deixa só as abas permitidas).
-    // Os Indicadores Manuais também: nos sintéticos, na tela Configurações; nos analíticos, nas Premissas (19/10/2026).
-    if (temPermissao(request, `${base}_painel:ler`) || temPermissao(request, `${base}_${base === "cenarios_analiticos" ? "premissas" : "configuracoes"}.manuais:ler`)) return next();
+    // Os Indicadores Manuais também: nos sintéticos, uma aba da tela Resultados (12/11/2026); nos analíticos, das Premissas.
+    if (temPermissao(request, `${base}_painel:ler`) || temPermissao(request, `${base}_${base === "cenarios_analiticos" ? "premissas" : "resultados"}.manuais:ler`)) return next();
     return response.status(403).json(SEM_PERMISSAO);
   } catch (error) {
     return next(error);
   }
 }
 
-/** A gravação dos Indicadores Manuais: no sintético, a aba da tela Configurações (19/10/2026); no analítico, a das Premissas. */
+/** A gravação dos Indicadores Manuais: no sintético, a aba da tela Resultados (12/11/2026); no analítico, a das Premissas. */
 export async function verificarManuaisDoCenario(request: Request, response: Response, next: NextFunction) {
   try {
     const base = await areaDoCenario(request);
     if (!base) return next();
-    const area = base === "cenarios_analiticos" ? `${base}_premissas.manuais` : `${base}_configuracoes.manuais`;
+    const area = base === "cenarios_analiticos" ? `${base}_premissas.manuais` : `${base}_resultados.manuais`;
     return verificarPermissao(`${area}:editar`)(request, response, next);
   } catch (error) {
     return next(error);

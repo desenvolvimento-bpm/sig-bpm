@@ -1,3 +1,4 @@
+import type { RedistribuicaoDoMovimento } from "@/components/shared/EtiquetaRedistribuicao";
 import { api } from "@/lib/api";
 
 export type MesRelatorio = { mes: number; rotulo: string; apurado: boolean };
@@ -64,6 +65,8 @@ export type Indicador = {
   metodologia: string;
   acumulado: "ACUM" | "ATUAL";
   meses: Array<number | null>;
+  /** Os meses com o valor apurado no Quadro de Lotação (06/11/2026): a lupa com as movimentações. */
+  apurados?: boolean[];
   total: number | null;
   /** O orçado de cada mês e o acumulado do orçado: o cenário Orçamento Empresarial do exercício (zero sem ele). */
   orcado: Array<number | null>;
@@ -147,7 +150,53 @@ const comparado = (comparaCom?: MarcacaoComparavel) => (comparaCom && comparaCom
 /** A Comparação PROVA (31/10/2026): as marcações dos cenários, separadas por vírgula; sem elas, a Comparação Padrão. */
 const comProva = (prova?: MarcacaoComparavel[]) => (prova?.length ? { prova: prova.join(",") } : {});
 
+/**
+ * Uma ocorrência do Pesquisar de Resultados Empresariais (11/11/2026): um movimento do balancete, com o centro de custo, a
+ * atribuição, a linha da DRE, a conta (a do balancete e a que vale na DRE), o fornecedor ou cliente e o que o Balancete
+ * mostra para contestar.
+ */
+export type OcorrenciaDaPesquisa = {
+  id: string;
+  anoMes: string;
+  filial: number;
+  codigoCentroCusto: string | null;
+  nomeCentroCusto: string | null;
+  atribuicao: string | null;
+  linha: { codigo: string; rotulo: string; grupo: string };
+  contaDoBalancete: { reduzido: string; descricao: string };
+  contaNaDRE: { reduzido: string; descricao: string };
+  adotada: string | null;
+  cliForn: string | null;
+  emissao: string | null;
+  historico: string | null;
+  idMovimento: string | null;
+  itens: number;
+  valor: string;
+  centroOriginal: { codigoRM: string | null; nome: string | null } | null;
+  contestacaoAplicada: { numero: number; centro: boolean; conta: boolean } | null;
+  contestacao: { numero: number; situacao: "PENDENTE" | "ACATADA" | "RECUSADA" | "VALIDADA"; deItens: boolean; comItensContestados: boolean } | null;
+  /** A redistribuição de gastos (13/11/2026): os destinos; o movimento redistribuído não se contesta. */
+  redistribuicao?: RedistribuicaoDoMovimento | null;
+};
+export type TipoDaPesquisa = "fornecedor" | "conta";
+export type ResultadoDaPesquisa = {
+  ano: number;
+  ate: number;
+  tipo: TipoDaPesquisa;
+  termo: string;
+  conta: { reduzido: string; descricao: string } | null;
+  total: number;
+  /** A soma de todas as ocorrências (também das que passam do limite). */
+  soma: string;
+  limite: number;
+  ocorrencias: OcorrenciaDaPesquisa[];
+};
+
 export const relatoriosService = {
+  /** O Pesquisar (11/11/2026): os movimentos de um fornecedor ou cliente, ou de uma conta, no período e no recorte do usuário. */
+  pesquisar: async (ano: number, ate: number | undefined, tipo: TipoDaPesquisa, termo: string) =>
+    (await api.get<{ data: ResultadoDaPesquisa }>("/proxy/relatorios/resultados/pesquisa", { params: { ...periodo(ano, ate), tipo, termo } })).data.data,
+  contasDaPesquisa: async () => (await api.get<{ data: Array<{ reduzido: string; descricao: string }> }>("/proxy/relatorios/resultados/pesquisa/contas")).data.data,
   resultados: async (ano: number, ate: number | undefined, visao: number, comparaCom?: MarcacaoComparavel, prova?: MarcacaoComparavel[]) =>
     (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao, ...comparado(comparaCom), ...comProva(prova) } })).data.data,
   /** Os cenários marcados do exercício (21/10/2026): as opções do Compara Com. */

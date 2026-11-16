@@ -68,4 +68,14 @@ describe("Contestações de Gastos: os lançamentos das anteriores e posteriores
       ],
     );
   });
+
+  it("na contestação de itens (10/11/2026), soma os itens: o valor deles e quantos (a descrição dos lançamentos)", () => {
+    const grupos = agruparParaLancamentos([{ ...m(1, "c1", "k1", "7.51", 2026, 9), itens: 2 }]);
+    assert.deepEqual(
+      grupos.map((g) => [g.competencia.id, g.valor.toFixed(2), g.movimentos, g.itens]),
+      [["2026-9", "7.51", 1, 2]],
+    );
+    // A do movimento inteiro: sem itens.
+    assert.equal(agruparParaLancamentos([m(1, "c1", "k1", "512.82", 2026, 9)])[0].itens, 0);
+  });
 });

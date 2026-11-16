@@ -8,7 +8,7 @@ import {
   tokenPorEndereco,
 } from "../../controllers/conectividade/conectividadeController.js";
 import { autenticacao } from "../../middlewares/autenticacao.js";
-import { verificarPermissao } from "../../middlewares/verificarPermissao.js";
+import { verificarAlgumaPermissao, verificarPermissao } from "../../middlewares/verificarPermissao.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 
 /**
@@ -21,10 +21,14 @@ apiExternaRoutes.post("/token", tokenPorEndereco, tokenPorEmail, asyncHandler(c.
 apiExternaRoutes.get("/apis", asyncHandler(autenticacaoDaApi), pedidosPorUsuario, asyncHandler(c.catalogoDaApi));
 apiExternaRoutes.get("/apis/:codigo", asyncHandler(autenticacaoDaApi), pedidosPorUsuario, asyncHandler(c.executar));
 
-/** A tela APIs (Central de Conectividade), montada em /conectividade: Ler vê o catálogo, a prévia e os próprios acessos; Editar, os de todos e os bloqueios. */
+/**
+ * A Central de Conectividade, montada em /conectividade: a tela APIs (Ler vê o catálogo e a prévia; Editar bloqueia as APIs)
+ * e, desde 13/11/2026, a tela Acessos, aba APIs (Ler vê os próprios acessos; Editar, os de todos e os bloqueios de
+ * usuários e endereços; o controlador confere a permissão de cada tipo de bloqueio).
+ */
 export const conectividadeRoutes = Router();
 const ler = verificarPermissao("biblioteca_apis:ler");
 conectividadeRoutes.get("/catalogo", autenticacao, ler, asyncHandler(c.catalogo));
 conectividadeRoutes.get("/previa/:codigo", autenticacao, ler, asyncHandler(c.previa));
-conectividadeRoutes.get("/acessos", autenticacao, ler, asyncHandler(c.acessos));
-conectividadeRoutes.put("/bloqueios", autenticacao, verificarPermissao("biblioteca_apis:editar"), asyncHandler(c.bloquear));
+conectividadeRoutes.get("/acessos", autenticacao, verificarPermissao("conectividade_acessos.apis:ler"), asyncHandler(c.acessos));
+conectividadeRoutes.put("/bloqueios", autenticacao, verificarAlgumaPermissao("biblioteca_apis:editar", "conectividade_acessos.apis:editar"), asyncHandler(c.bloquear));

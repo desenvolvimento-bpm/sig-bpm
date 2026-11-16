@@ -65,7 +65,7 @@ export function CentrosCustoContent() {
           </li>
           <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os registros inativos.</li>
           <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Código RM e o Centro de Custo (Controladoria) e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
-          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
         </ul>
       }
       descricao="Os centros de custo, editáveis aqui. O departamento é o do cadastro; a sigla vem dele."

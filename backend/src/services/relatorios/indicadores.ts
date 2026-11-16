@@ -36,6 +36,10 @@ export type DadosDoMes = {
    * cenários, os importados vêm das metas); undefined: vale a conta do indicador.
    */
   indicador?: (nome: string) => number | null | undefined;
+  /** O Quadro de Lotação do fim do mês (o item [QL], 06/11/2026): "TOTAL" ou "departamento|GERAL…"; null sem a competência. */
+  quadro?: (chave: string) => number | null;
+  /** As movimentações aprovadas do mês de um tipo (o item [MQL], 06/11/2026); null sem a competência. */
+  movimentosQL?: (tipo: string) => number | null;
 };
 /** O valor do mês e o peso dele no acumulado; `componentes`, quando o acumulado pondera partes (Matriz e Filial) em vez do total. */
 export type Parte = {

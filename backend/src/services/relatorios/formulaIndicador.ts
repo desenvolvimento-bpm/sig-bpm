@@ -12,6 +12,19 @@
  *   (17/10/2026), onde o realizado usa o valor do indicador e o orçado, a meta dele; e, desde 23/10/2026, na dos
  *   próprios indicadores, com o valor do mês do outro indicador (sem ciclos: o cadastro os recusa).
  *
+ * - [QL|DEP|departamento|GERAL, DIRETA ou INDIRETA] e [QL|CC|centro] (09/11/2026): o Quadro de Lotação da Gestão de
+ *   Colaboradores no fim do mês (a competência do Quadro de Lotação do mesmo mês) — o de um departamento (Total, Produção:
+ *   Matriz, Produção: Filial, Produção: Geral, Serviços, Logística, Técnico, Comercial ou Administrativo; Geral = Direto +
+ *   Indireto, menos no Total, que conta todos) ou o de um centro de custo (pelo código RM). [QL|TOTAL] é o Total Geral;
+ * - [MQL|movimentação] (06/11/2026): as movimentações aprovadas do mês de um tipo (Admissão, Desligamento…), os Movimentos
+ *   do QL; [MQL|#POSITIVA] e [MQL|#NEGATIVA] (09/11/2026), todas as de contagem positiva ou negativa;
+ * - [REGISTRADO] (09/11/2026): o valor registrado no mês com o nome do próprio indicador (importado, digitado nas Listas ou
+ *   apurado), o item dos indicadores que ainda não têm o processo de coleta.
+ *
+ * Desde 06/11/2026 o montador não oferece mais o [IND|nome] ("Comercial e Administrativo"): o indicador sem Metodologia vale
+ * o valor registrado no mês com o nome dele (importado, digitado ou apurado) — o mesmo [IND|nome] do próprio nome — e os
+ * demais usam o indicador ([INDICADOR|nome]). O [IND|nome] gravado continua valendo.
+ *
  * Acumulado no Ano (23/10/2026): [INDICADOR|nome|ACUM] é o acumulado do indicador de janeiro até o mês (o da coluna
  * Acumulado da tela, pelo modo dele; sem o valor do mês, sem valor) e [META|nome|ACUM], o orçado acumulado do mesmo
  * período — os SUM(JAN:mês) da aba Realizado do INDICADORES DE RESULTADO (os GME 8). Só nos indicadores.
@@ -25,7 +38,28 @@ export type Item =
   | { tipo: "LISTA"; codigo: string }
   | { tipo: "IND"; nome: string }
   | { tipo: "META"; nome: string; acumulado?: true }
-  | { tipo: "INDICADOR"; nome: string; acumulado?: true };
+  | { tipo: "INDICADOR"; nome: string; acumulado?: true }
+  /** O Quadro de Lotação (09/11/2026): `chave` é "DEP|departamento|GERAL" (DIRETA, INDIRETA) ou "CC|centro". */
+  | { tipo: "QL"; chave: string }
+  /** Os Movimentos do QL (06/11/2026): as aprovadas do tipo de movimentação (ou #POSITIVA, #NEGATIVA). */
+  | { tipo: "MQL"; nome: string }
+  /** O valor registrado no mês com o nome do próprio indicador (09/11/2026). */
+  | { tipo: "REGISTRADO" };
+
+/** Os departamentos do item [QL|DEP|…] (09/11/2026), na ordem do montador, com o nome. */
+export const DEPARTAMENTOS_DO_QUADRO: Array<[string, string]> = [
+  ["TOTAL", "Total"],
+  ["PRODUCAO_MATRIZ", "Produção: Matriz"],
+  ["PRODUCAO_FILIAL", "Produção: Filial"],
+  ["PRODUCAO_GERAL", "Produção: Geral"],
+  ["SERVICOS", "Serviços"],
+  ["LOGISTICA", "Logística"],
+  ["TECNICO", "Técnico"],
+  ["COMERCIAL", "Comercial"],
+  ["ADMINISTRATIVO", "Administrativo"],
+];
+/** As partes de um departamento no item [QL|DEP|departamento|…]. */
+export const PARTES_DO_DEPARTAMENTO = ["GERAL", "DIRETA", "INDIRETA"] as const;
 
 type Token = { t: "num"; v: number } | { t: "item"; chave: string; item: Item } | { t: "op"; v: "+" | "-" | "*" | "/" } | { t: "(" } | { t: ")" };
 
@@ -42,6 +76,21 @@ export function lerItem(texto: string): Item {
   }
   // O Acumulado no Ano (23/10/2026), só no indicador e na meta.
   if ((tipo === "META" || tipo === "INDICADOR") && resto.length === 2 && resto[0] && resto[1] === "ACUM") return { tipo, nome: resto[0], acumulado: true };
+  // O Quadro de Lotação e os Movimentos do QL (06/11/2026).
+  if (tipo === "QL" && resto.length === 1 && resto[0] === "TOTAL") return { tipo, chave: "DEP|TOTAL|GERAL" };
+  if (
+    tipo === "QL" &&
+    resto.length === 3 &&
+    resto[0] === "DEP" &&
+    DEPARTAMENTOS_DO_QUADRO.some(([d]) => d === resto[1]) &&
+    (PARTES_DO_DEPARTAMENTO as readonly string[]).includes(resto[2])
+  ) {
+    return { tipo, chave: `DEP|${resto[1]}|${resto[2]}` };
+  }
+  if (tipo === "QL" && resto.length === 2 && resto[0] === "CC" && resto[1]) return { tipo, chave: `CC|${resto[1]}` };
+  if (tipo === "MQL" && resto.length === 1 && resto[0]) return { tipo, nome: resto[0] };
+  // O valor registrado no mês com o nome do indicador (09/11/2026).
+  if (tipo === "REGISTRADO" && resto.length === 0) return { tipo };
   throw new FormulaInvalidaError(`Item inválido na fórmula: [${texto}].`);
 }
 
@@ -50,7 +99,11 @@ export const chaveDoItem = (i: Item) =>
     ? `DRE|${i.unidade}|${i.codigo}`
     : i.tipo === "LISTA"
       ? `LISTA|${i.codigo}`
-      : `${i.tipo}|${i.nome}${(i.tipo === "META" || i.tipo === "INDICADOR") && i.acumulado ? "|ACUM" : ""}`;
+      : i.tipo === "QL"
+        ? `QL|${i.chave}`
+        : i.tipo === "REGISTRADO"
+          ? "REGISTRADO"
+        : `${i.tipo}|${i.nome}${(i.tipo === "META" || i.tipo === "INDICADOR") && i.acumulado ? "|ACUM" : ""}`;
 
 function tokens(formula: string): Token[] {
   const r: Token[] = [];

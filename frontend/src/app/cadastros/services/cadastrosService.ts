@@ -35,6 +35,8 @@ export type ContaResultado = {
   atribuicao: string | null;
   balde: string | null;
   ativo: boolean;
+  /** Sem Resultado na Linha do DRE (13/11/2026): fora da DRE, sem pendência. */
+  semResultado: boolean;
   linhaDRE: { codigo: string; descricao: string } | null;
 };
 
@@ -75,6 +77,22 @@ export type Reclassificacao = {
     departamento: string | null;
     atribuicao: "DIRETA" | "INDIRETA" | null;
   } | null;
+};
+
+/** A reclassificação por fornecedor (13/11/2026): o fornecedor, o centro imperativo e os movimentos dele, abertos e fechados. */
+export type ReclassificacaoFornecedor = {
+  id: string;
+  fornecedor: string;
+  motivo: string | null;
+  ativo: boolean;
+  centroCusto: {
+    codigoRM: string | null;
+    nomeRM: string;
+    departamento: string | null;
+    atribuicao: "DIRETA" | "INDIRETA" | null;
+    ativo: boolean;
+  };
+  movimentos: { abertas: number; fechadas: number };
 };
 
 export type PrecoContrato = {
@@ -188,4 +206,6 @@ export const cadastrosService = {
   },
   reclassificacoes: (p: ParametrosListagem) =>
     listar<Reclassificacao>("reclassificacoes", p),
+  reclassificacoesFornecedor: (p: ParametrosListagem) =>
+    listar<ReclassificacaoFornecedor>("reclassificacoes-fornecedor", p),
 };

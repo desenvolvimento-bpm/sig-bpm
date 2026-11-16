@@ -1,6 +1,6 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
-import { INDICADORES_DAS_LISTAS, montarCatalogo } from "../relatorios/catalogoIndicadores.js";
+import { INDICADORES_DAS_LISTAS, montarCatalogo, formulaEfetiva } from "../relatorios/catalogoIndicadores.js";
 import { compilarFormula } from "../relatorios/formulaIndicador.js";
 import { acumular, type DadosDoMes, type Indicador, type Parte } from "../relatorios/indicadores.js";
 import { acumularMeta } from "../relatorios/metasOrcamento.js";
@@ -35,13 +35,16 @@ type Linha = { nome: string; formula: string | null; peso: string | null; modo: 
 export function classificar(r: Linha, analitico = false): ClasseIndicador {
   if (analitico && QUADROS_DE_LOTACAO.has(r.nome)) return "CALCULADO";
   if (MANUAIS.has(r.nome)) return "MANUAL";
+  // Sem itens na Metodologia (06/11/2026), a mesma do [IND|nome] do próprio nome.
+  const formula = formulaEfetiva(r);
   // Do sistema, só a eficiência da operação total se calcula (a DRE e os quadros); os GME, não.
-  if (r.modo === "SISTEMA" || !r.formula) return r.nome.startsWith("Eficiência") ? "CALCULADO" : "IMPORTADO";
+  if (r.modo === "SISTEMA" || !formula) return r.nome.startsWith("Eficiência") ? "CALCULADO" : "IMPORTADO";
   // O peso da média e a Fórmula do Acumulado (o modo FORMULA, 23/10/2026) também contam.
-  const itens = [...compilarFormula(r.formula).itens.values(), ...((r.modo === "MEDIA_PONDERADA" || r.modo === "FORMULA") && r.peso ? compilarFormula(r.peso).itens.values() : [])];
+  const itens = [...compilarFormula(formula).itens.values(), ...((r.modo === "MEDIA_PONDERADA" || r.modo === "FORMULA") && r.peso ? compilarFormula(r.peso).itens.values() : [])];
   const tipos = new Set(itens.map((i) => i.tipo));
   if (tipos.has("LISTA") || tipos.has("META")) return "IMPORTADO";
-  if (tipos.has("IND") || tipos.has("INDICADOR")) return "CALCULADO";
+  // O Quadro de Lotação e os Movimentos do QL (06/11/2026) contam como os indicadores; nos cenários, sem valor por ora.
+  if (tipos.has("IND") || tipos.has("INDICADOR") || tipos.has("QL") || tipos.has("MQL") || tipos.has("REGISTRADO")) return "CALCULADO";
   return "RESULTADO";
 }
 
@@ -85,7 +88,7 @@ export async function calcularCenario(cenarioId: string): Promise<CalculoDoCenar
     for (const p of lotacao) {
       if (p.mes < 1 || p.mes > 12) continue;
       const lista = porGrupo.get(p.chave) ?? Array<number>(12).fill(0);
-      // O Total de Colaboradores: CLT + PJ (19/10/2026).
+      // O Total de Colaboradores: CLT + PJ (19/10/2026; 11/11/2026: também os Aprendizes e os Estagiários).
       lista[p.mes - 1] += Number(p.valor);
       porGrupo.set(p.chave, lista);
     }
@@ -189,14 +192,14 @@ export const ROTULO_DA_MARCACAO: Record<MarcacaoCenario, string> = {
   ORCAMENTO_EMPRESARIAL: "Orçamento",
   RESULTADOS_ANTERIORES: "Anterior",
   RESULTADOS_VENDIDOS: "Vendido",
-  PREVISAO: "Previsão",
+  PREVISAO: "Forecast",
 };
 
 /** Os cenários marcados do exercício (21/10/2026): as opções do Compara Com de Resultados Empresariais. */
 export async function cenariosMarcados() {
   // De qualquer exercício (22/10/2026), com o ano dele.
   const cs = await getPrismaClient().cenario.findMany({ where: { marcacao: { not: null } }, select: { id: true, nome: true, ano: true, marcacao: true } });
-  // Na ordem do padrão da Comparação (23/10/2026): Previsão, Orçamento, Anterior e Vendido.
+  // Na ordem do padrão da Comparação (23/10/2026): Forecast, Orçamento, Anterior e Vendido.
   const ordem: MarcacaoCenario[] = ["PREVISAO", "ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS"];
   return cs
     .map((c) => ({ marcacao: c.marcacao!, rotulo: ROTULO_DA_MARCACAO[c.marcacao!], cenario: { id: c.id, nome: c.nome, ano: c.ano } }))

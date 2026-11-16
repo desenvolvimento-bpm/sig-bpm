@@ -68,7 +68,8 @@ const COLUNAS: Coluna<LancamentoClassificado>[] = [
     rotulo: "Classificação na DRE",
     classe: "w-[32%]",
     valor: (l) => l.linhaDRE?.descricao,
-    texto: (l) => (l.linhaDRE ? [adotada(l).departamento, adotada(l).atribuicao, l.linhaDRE.descricao].filter(Boolean).join(" · ") : "sem destino"),
+    texto: (l) =>
+      l.linhaDRE ? [adotada(l).departamento, adotada(l).atribuicao, l.linhaDRE.descricao].filter(Boolean).join(" · ") : adotada(l).semResultado ? "Sem Resultado" : "sem destino",
   },
   { chave: "validacao", rotulo: "Verificação", classe: "w-px", valor: (l) => textoValidacao(l.validacao) },
   { chave: "balde", rotulo: "Rateio", classe: "w-px", valor: (l) => l.balde },
@@ -131,6 +132,8 @@ function CelulaConta({ l }: { l: LancamentoClassificado }) {
 
 /** Para onde a conta leva o lançamento: departamento, atribuição e conta da DRE, uma em cada linha. */
 function CelulaClassificacao({ l }: { l: LancamentoClassificado }) {
+  // A conta Sem Resultado (13/11/2026) fica fora da DRE sem ser pendência.
+  if (!l.linhaDRE && adotada(l).semResultado) return <span className="text-gray-500">Sem Resultado</span>;
   if (!l.linhaDRE) return <span className="text-red-700">sem destino</span>;
   const conta = adotada(l);
   return (

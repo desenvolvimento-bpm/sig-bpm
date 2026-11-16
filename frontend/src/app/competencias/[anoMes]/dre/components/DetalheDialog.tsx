@@ -138,7 +138,7 @@ function TabelaLancamentos({ lancamentos, multiplica, onDocumentos }: { lancamen
                           campo="centro"
                           original={`${l.centroOriginal.codigoRM ?? "sem código"} · ${l.centroOriginal.nome ?? ""}`}
                           atual={`${l.centro.codigoRM ?? "sem código"} · ${l.centro.nome ?? ""}`}
-                          origem={l.contestacao ? { tipo: "contestacao", numero: l.contestacao.numero } : { tipo: "reclassificacao" }}
+                          origem={l.redistribuido ? { tipo: "redistribuicao" } : l.contestacao ? { tipo: "contestacao", numero: l.contestacao.numero } : { tipo: "reclassificacao" }}
                         />
                       ) : null}
                     </>

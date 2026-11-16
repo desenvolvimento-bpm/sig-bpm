@@ -10,7 +10,7 @@ type Decimal = Prisma.Decimal;
  *
  * A aba é uma tabela dinâmica do exercício inteiro, em forma tabular:
  *
- *   FILIAL | COD_CUSTO | C_CUSTO | SUB_COD_CONTA_4 | REDUZIDO_CONTA | CONTA | [CLI_FORN | EMISSAO | HISTORICO] | <mês> … | Total Geral
+ *   FILIAL | [ID] | COD_CUSTO | C_CUSTO | SUB_COD_CONTA_4 | REDUZIDO_CONTA | CONTA | [CLI_FORN | EMISSAO | HISTORICO] | <mês> … | Total Geral
  *
  * Cada mês ocupa três colunas com a mesma data no cabeçalho — as duas parciais
  * (crédito e débito) e a movimentação do mês, que é a soma delas — ou, desde
@@ -20,7 +20,9 @@ type Decimal = Prisma.Decimal;
  * O balancete detalhado (15/10/2026): com as colunas CLI_FORN, EMISSAO e
  * HISTORICO, cada linha é um movimento (o cliente ou fornecedor, a data de
  * emissão e o histórico), e a mesma filial, centro e conta se repetem — não é
- * duplicidade. Sem elas, uma linha por filial, centro e conta, como antes. As linhas de subtotal
+ * duplicidade. Sem elas, uma linha por filial, centro e conta, como antes. A coluna ID (10/11/2026) é o ID do
+ * movimento no RM — o IDENTIFICADOR das abas Requisições (Lista) e Notas Fiscais (Lista) —, que abre os itens do
+ * movimento nos extratos; as colunas são lidas pelo nome, e o arquivo sem ela vale como antes. As linhas de subtotal
  * da tabela dinâmica ("3.01 Total", "1 Total", "Total Geral") não são
  * lançamento; a Total Geral serve para conferir o arquivo. A aba pode ter mais
  * de uma tabela dinâmica, uma embaixo da outra (22/10/2026: janeiro a agosto
@@ -64,6 +66,8 @@ export type LinhaBalancete = {
   cliForn: string | null;
   emissao: Date | null;
   historico: string | null;
+  /** O ID do movimento no RM (10/11/2026, a coluna ID), quando o arquivo o traz. */
+  idMovimento: string | null;
 };
 
 export type LeituraBalancete =
@@ -202,6 +206,8 @@ export function interpretarBalancete(
   // As colunas do detalhe (15/10/2026); com alguma delas, o balancete é detalhado.
   const colDetalhe = { cliForn: nomes.indexOf("CLI_FORN"), emissao: nomes.indexOf("EMISSAO"), historico: nomes.indexOf("HISTORICO") };
   const detalhado = Object.values(colDetalhe).some((i) => i >= 0);
+  // O ID do movimento no RM (10/11/2026): opcional, como o detalhe.
+  const colId = nomes.indexOf("ID");
 
   // Colunas do mês da competência, e o inventário dos meses para a mensagem.
   const doMes: number[] = [];
@@ -373,6 +379,7 @@ export function interpretarBalancete(
       cliForn: colDetalhe.cliForn >= 0 ? texto(celula(colDetalhe.cliForn)) : null,
       emissao: colDetalhe.emissao >= 0 ? dataDaCelula(celula(colDetalhe.emissao)) : null,
       historico: colDetalhe.historico >= 0 ? texto(celula(colDetalhe.historico)) : null,
+      idMovimento: colId >= 0 ? texto(celula(colId)) : null,
     });
   }
 

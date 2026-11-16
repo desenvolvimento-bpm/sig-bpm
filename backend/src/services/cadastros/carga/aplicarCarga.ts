@@ -126,7 +126,7 @@ export async function compararComBanco(p: CadastrosPreparados) {
   const contasDif = comparar(
     new Map(p.contas.alvos.map((c) => [c.reduzido, { rotulo: c.dados.descricao, valores: { ...c.dados, linha: p.vinculos.get(c.reduzido) ?? null } }])),
     new Map(contas.map((c) => [c.reduzido, { rotulo: c.descricao, valores: { ...c, linha: c.linhaDRE?.codigo ?? null } }])),
-    [["conta", "Conta"], ["descricao", "Descrição"], ["tipoConta", "Tipo"], ["departamento", "Departamento"], ["atribuicao", "Atribuição"], ["balde", "Rateio"], ["linha", "Linha da DRE"]],
+    [["conta", "Conta"], ["descricao", "Descrição"], ["tipoConta", "Tipo"], ["departamento", "Departamento"], ["atribuicao", "Atribuição"], ["balde", "Rateio"], ["linha", "Linha do DRE"]],
     false,
   );
 
@@ -281,7 +281,8 @@ export async function gravarCadastros(tx: Tx, p: CadastrosPreparados) {
   for (const [reduzido, codigo] of p.vinculos) {
     const linhaDREId = codigo ? (idPorCodigo.get(codigo) ?? null) : null;
     if (linhaDREId) vinculadas++;
-    await tx.contaResultado.update({ where: { reduzido }, data: { linhaDREId } });
+    // A linha da planilha vale sobre o Sem Resultado (13/11/2026); sem linha, a conta Sem Resultado continua assim.
+    await tx.contaResultado.update({ where: { reduzido }, data: linhaDREId ? { linhaDREId, semResultado: false } : { linhaDREId } });
   }
 
   return {

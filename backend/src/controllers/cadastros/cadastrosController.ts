@@ -63,6 +63,15 @@ export const cadastrosController = {
     return response.json({ data });
   },
 
+  async listarReclassificacoesFornecedor(request: Request, response: Response) {
+    const parametros = lerParametros(request);
+    if (!parametros.success) {
+      return response.status(400).json({ error: "Dados inválidos", details: parametros.error.issues });
+    }
+    const data = await cadastrosService.listarReclassificacoesFornecedor(parametros.data);
+    return response.json({ data });
+  },
+
   async listarPrecosContrato(request: Request, response: Response) {
     const parametros = listarPrecosSchema.safeParse({ ...request.query });
     if (!parametros.success) {

@@ -12,7 +12,16 @@ import type { AcaoPermissao, RecursoSistema } from "../../generated/prisma/enums
 
 export type AbaDoCatalogo = { codigo: string; nome: string };
 export type TelaDoCatalogo = { codigo: string; nome: string; abas?: AbaDoCatalogo[] };
-export type GrupoDoCatalogo = { recurso: RecursoSistema; nome: string; area: string; telas: TelaDoCatalogo[] };
+/**
+ * O código de um processo do catálogo: um recurso do banco ou, desde 12/11/2026 (pedido do Adão), um dos processos das
+ * Análises Gerenciais — os Relatórios Executivos e os Painéis e Apresentações, antes telas do recurso ANALISES_GERENCIAIS
+ * (um grupo do menu, e não um processo). O código só identifica o processo na matriz dos Perfis e no menu; as permissões
+ * gravadas são as das telas (`relatorios_executivos`, `paineis_de_bordo`), que não mudaram. Também os Cadastros Auxiliares
+ * (12/11/2026, pedido do Adão): a tela dos cadastros da Gestão de Colaboradores (`colaboradores_cadastros`, antes no processo
+ * Gestão de Colaboradores), agora "Gestão de Colaboradores".
+ */
+export type ProcessoDoCatalogo = RecursoSistema | "RELATORIOS_EXECUTIVOS" | "PAINEIS_DE_BORDO" | "CADASTROS_AUXILIARES";
+export type GrupoDoCatalogo = { recurso: ProcessoDoCatalogo; nome: string; area: string; telas: TelaDoCatalogo[] };
 
 const UNIDADES: AbaDoCatalogo[] = [
   { codigo: "consolidado", nome: "Consolidado" },
@@ -40,11 +49,12 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
       abas: [
         { codigo: "cenario", nome: "Cenário" },
         { codigo: "referencia", nome: "Referência" },
-        // Os Índices de Reajuste dos analíticos (19/10/2026), que o Comparativo deles usa no lugar da variação digitada.
-        ...(analitico ? [{ codigo: "indices", nome: "Índices" }] : []),
+        // Os Índices de Referência dos analíticos (19/10/2026, a aba Índices; desde 11/11/2026, o quadro do meio da aba
+        // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
+        ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),
         { codigo: "comparativo", nome: "Comparativo" },
-        // Os Indicadores Manuais dos sintéticos (19/10/2026; antes, no Painel de Bordo); nos analíticos, nas Premissas.
-        ...(analitico ? [] : [{ codigo: "manuais", nome: "Indicadores Manuais" }]),
+        // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; os perfis com a aba nas Premissas a herdaram).
+        ...(analitico ? [{ codigo: "reajustes", nome: "Reajustes" }] : []),
       ],
     },
     ...(analitico
@@ -56,6 +66,8 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "matriz", nome: "Matriz" },
               { codigo: "filial", nome: "Filial" },
               { codigo: "servicos", nome: "Serviços" },
+              // A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores); os perfis com a aba Centros de Custo a herdaram.
+              { codigo: "quadro", nome: "Quadro de Lotação" },
               { codigo: "centros", nome: "Centros de Custo" },
               { codigo: "rateios", nome: "Rateios" },
               { codigo: "investimentos", nome: "Investimentos" },
@@ -65,7 +77,9 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
           },
         ]
       : []),
-    { codigo: `${base}_resultados`, nome: "Resultados", abas: UNIDADES },
+    // Os Indicadores Manuais dos sintéticos (12/11/2026, pedido do Adão: uma aba da tela Resultados, depois das visões; os
+    // perfis com a aba nas Configurações a herdaram); nos analíticos, nas Premissas.
+    { codigo: `${base}_resultados`, nome: "Resultados", abas: analitico ? UNIDADES : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }] },
     // A aba Indicadores no Painel de Bordo, depois de Performance (19/10/2026; antes, a tela Indicadores e, por um dia, a
     // aba Metas; a chave continua `metas`): todos os indicadores do cenário.
     { codigo: `${base}_painel`, nome: "Painel de Bordo", abas: [...PAINEL, { codigo: "metas", nome: "Indicadores" }] },
@@ -82,18 +96,12 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
 }
 
 export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
-  // As Análises Gerenciais (15/10/2026): os Relatórios Executivos e, desde 31/10/2026, o processo Painéis e Apresentações (de início,
-  // Painéis de Bordo; de 03 a 04/11/2026, Apresentações de Resultados); os demais
-  // processos do grupo ainda em desenvolvimento.
-  {
-    recurso: "ANALISES_GERENCIAIS",
-    nome: "Análises Gerenciais",
-    area: "analises_gerenciais",
-    telas: [
-      { codigo: "relatorios_executivos", nome: "Relatórios Executivos" },
-      { codigo: "paineis_de_bordo", nome: "Painéis e Apresentações" },
-    ],
-  },
+  // Os processos das Análises Gerenciais (12/11/2026, pedido do Adão; antes, as telas de um processo "Análises Gerenciais", que é
+  // o grupo do menu): os Relatórios Executivos (15/10/2026) e os Painéis e Apresentações (31/10/2026; de início, Painéis de
+  // Bordo; de 03 a 04/11/2026, Apresentações de Resultados), cada um com a sua tela; os demais processos do grupo ainda em
+  // desenvolvimento. A área de leitura do grupo continua a mesma nos dois.
+  { recurso: "RELATORIOS_EXECUTIVOS", nome: "Relatórios Executivos", area: "analises_gerenciais", telas: [{ codigo: "relatorios_executivos", nome: "Relatórios Executivos" }] },
+  { recurso: "PAINEIS_DE_BORDO", nome: "Painéis e Apresentações", area: "analises_gerenciais", telas: [{ codigo: "paineis_de_bordo", nome: "Painéis e Apresentações" }] },
   { recurso: "CENARIOS_SINTETICOS", nome: "Cenários Sintéticos", area: "cenarios", telas: telasDoCenario("cenarios", false) },
   { recurso: "CENARIOS_ANALITICOS", nome: "Cenários Analíticos", area: "cenarios_analiticos", telas: telasDoCenario("cenarios_analiticos", true) },
   // O Realizado por Obra (03/11/2026, pedido do Adão; antes, o processo Resultados por Obra, em desenvolvimento): os
@@ -207,19 +215,81 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
     nome: "Cadastros da Apuração",
     area: "cadastros_apuracao",
     telas: [
-      { codigo: "cadastro_reclassificacoes", nome: "Reclassificações" },
+      // As abas Por Conta (o cadastro de antes) e Por Fornecedor (o centro de custo imperativo do fornecedor), de 13/11/2026.
+      {
+        codigo: "cadastro_reclassificacoes",
+        nome: "Reclassificações",
+        abas: [
+          { codigo: "por_conta", nome: "Por Conta" },
+          { codigo: "por_fornecedor", nome: "Por Fornecedor" },
+        ],
+      },
       { codigo: "cadastro_precos_contrato", nome: "Preços do Contrato" },
       { codigo: "cadastro_tipos_movimento", nome: "Tipos de Movimento" },
       { codigo: "cadastro_tabela_estacas", nome: "Tabela de Estacas" },
     ],
   },
+  // A Gestão de Colaboradores (06/11/2026, pedido do Adão; nos Processos Auxiliares, como no menu). A tela dos cadastros
+  // passou aos Cadastros Auxiliares (12/11/2026), logo abaixo.
+  {
+    recurso: "GESTAO_COLABORADORES",
+    nome: "Gestão de Colaboradores",
+    area: "gestao_colaboradores",
+    telas: [
+      // O Quadro de Lotação (06/11/2026, etapa 2): a lista das competências (Editar abre, fecha, reabre e exclui) e as abas de
+      // uma competência — Movimentações (Editar registra e exclui), Aprovações (Editar aprova e reprova; o código continua
+      // "controle") e Realizado.
+      {
+        codigo: "colaboradores_quadro",
+        nome: "Quadro de Lotação",
+        abas: [
+          { codigo: "movimentacoes", nome: "Movimentações" },
+          { codigo: "controle", nome: "Aprovações" },
+          { codigo: "realizado", nome: "Realizado" },
+          // A Jornada (13/11/2026): as horas extras e as faltas das linhas do quadro realizado (Editar digita).
+          { codigo: "jornada", nome: "Jornada" },
+        ],
+      },
+      { codigo: "colaboradores_painel", nome: "Painel de Bordo", abas: [{ codigo: "resultados", nome: "Resultados" }, { codigo: "indicadores", nome: "Indicadores" }] },
+    ],
+  },
+  // Os Cadastros Auxiliares (12/11/2026, pedido do Adão; abaixo da Gestão de Colaboradores, como no menu): os cadastros dos
+  // Processos Auxiliares, uma tela por processo — a Gestão de Colaboradores (antes, a tela Cadastros dela), com uma aba por
+  // cadastro. Editar cria, edita, inativa, exclui e importa. As permissões gravadas (colaboradores_cadastros…) continuam.
+  {
+    recurso: "CADASTROS_AUXILIARES",
+    nome: "Cadastros Auxiliares",
+    area: "cadastros_auxiliares",
+    telas: [
+      {
+        codigo: "colaboradores_cadastros",
+        nome: "Gestão de Colaboradores",
+        abas: [
+          { codigo: "funcoes", nome: "Funções" },
+          { codigo: "movimentacoes", nome: "Movimentações" },
+          { codigo: "classificacoes", nome: "Classificações" },
+          { codigo: "lancamento_inicial", nome: "Lançamento Inicial" },
+        ],
+      },
+    ],
+  },
   // A Central de Conectividade (24/10/2026; desde 30/10/2026, um processo da Controladoria, acima dos Cadastros da
   // Controladoria, como no menu): a tela APIs — Ler usa as APIs e vê os próprios acessos; Editar vê os de todos e bloqueia
   // APIs, usuários e endereços.
-  { recurso: "CENTRAL_CONECTIVIDADE", nome: "Central de Conectividade", area: "conectividade", telas: [{ codigo: "biblioteca_apis", nome: "APIs" }] },
+  // A tela Acessos (13/11/2026, pedido do Adão), logo depois de APIs: a aba APIs (antes, a aba Acesso às APIs da tela APIs);
+  // Editar bloqueia e libera usuários e endereços.
+  {
+    recurso: "CENTRAL_CONECTIVIDADE",
+    nome: "Central de Conectividade",
+    area: "conectividade",
+    telas: [
+      { codigo: "biblioteca_apis", nome: "APIs" },
+      { codigo: "conectividade_acessos", nome: "Acessos", abas: [{ codigo: "apis", nome: "APIs" }] },
+    ],
+  },
   {
     recurso: "CADASTROS_CONTROLADORIA",
-    nome: "Cadastros da Controladoria",
+    nome: "Cadastros Gerais",
     area: "cadastros_controladoria",
     // Três telas com abas (17/10/2026; antes, uma tela por cadastro): Contábil, Controladoria e Analítico.
     telas: [
@@ -239,8 +309,12 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "linhas", nome: "Linhas" },
           { codigo: "estrutura_dre", nome: "Estrutura da DRE" },
           { codigo: "regras_rateio", nome: "Regras de Rateio" },
+          // As Redistribuições de Gastos (13/11/2026, pedido do Adão), depois das Regras de Rateio.
+          { codigo: "redistribuicoes", nome: "Redistribuições de Gastos" },
           // A Alocação nas Linhas (26/10/2026): os custos sem tarefa nas linhas, para a etapa Linhas da apuração.
           { codigo: "alocacao_linhas", nome: "Alocação nas Linhas" },
+          // Os Departamentos (11/11/2026, pedido do Adão): a ordem, a unidade e o departamento.
+          { codigo: "departamentos", nome: "Departamentos" },
         ],
       },
       {
@@ -280,7 +354,7 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
 ];
 
 /** Todas as chaves da matriz: as telas e as abas (`tela.aba`), com o grupo de cada uma. */
-export const CHAVES_DA_MATRIZ: Array<{ chave: string; recurso: RecursoSistema; tela: string; aba: string | null }> = CATALOGO_DE_TELAS.flatMap((g) =>
+export const CHAVES_DA_MATRIZ: Array<{ chave: string; recurso: ProcessoDoCatalogo; tela: string; aba: string | null }> = CATALOGO_DE_TELAS.flatMap((g) =>
   g.telas.flatMap((t) => [
     { chave: t.codigo, recurso: g.recurso, tela: t.codigo, aba: null },
     ...(t.abas ?? []).map((a) => ({ chave: `${t.codigo}.${a.codigo}`, recurso: g.recurso, tela: t.codigo, aba: a.codigo })),

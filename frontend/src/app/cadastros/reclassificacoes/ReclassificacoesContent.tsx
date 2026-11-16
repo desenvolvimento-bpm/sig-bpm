@@ -56,12 +56,16 @@ export function ReclassificacoesContent() {
 
   return (
     <CadastroShell
-      titulo="Reclassificações de Conta"
-      exportar={<ExportarTabela titulo="Cadastros · Reclassificações de Conta" colunas={colunas} linhas={tabela.filtradas} />}
+      titulo="Reclassificações"
+      exportar={<ExportarTabela titulo="Cadastros · Reclassificações · Por Conta" colunas={colunas} linhas={tabela.filtradas} />}
       comoUsar={
         <ul>
           <li>Use os filtros nos rótulos das colunas.</li>
           <li>Use “Novo” para indicar a conta de destino de uma conta de origem num centro de custo; o lápis edita, e a exclusão fica dentro da edição.</li>
+          <li>
+            A troca vale pelo centro do balancete do RM, também nos movimentos que vão para o centro imperativo do fornecedor (aba Por
+            Fornecedor). A contestação validada continua por cima.
+          </li>
           <li>Ao gravar, as competências ainda não apuradas são reclassificadas; as apuradas só mudam se forem reapuradas.</li>
         </ul>
       }

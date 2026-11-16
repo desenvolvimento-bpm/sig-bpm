@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Trash2 } from "lucide-react";
+import { Bookmark, Eye, Globe, ListFilter, Lock, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAbaLembrada } from "@/hooks/useAbaLembrada";
@@ -17,17 +17,16 @@ import { useAlteracoesPendentes } from "@/lib/alteracoesPendentes";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { cenariosService, rotuloMarcacao, type Cenario, type Visualizacao } from "../services/cenariosService";
+import { cenariosService, rotuloMarcacao, type AcessoInformacoes, type Cenario, type Visualizacao } from "../services/cenariosService";
 import { useTipoDoCenario } from "./tipoDoCenario";
 import { AvisoMarcado, estaTravado } from "./AvisoMarcado";
-import { botaoPrimario, CampoVisualizacao, Erro, ExcluirCenarioDialog } from "./CenarioDialog";
+import { botaoPrimario, CampoVisualizacao, Erro, ExcluirCenarioDialog, OpcaoEmLinha } from "./CenarioDialog";
 import { ComparativoCenario } from "./ComparativoCenario";
 import { IndicesCenario } from "./IndicesCenario";
 import { MarcarCenarioDialog } from "./MarcarCenarioDialog";
 import { ReferenciaAnalitica } from "./ReferenciaAnalitica";
 import { ReferenciaSintetica } from "./ReferenciaSintetica";
-import { IndicadoresDoCenario } from "../sinteticos/[id]/indicadores/CenarioIndicadoresContent";
-import { useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
+import { ReajustesDoCenario } from "./ReajustesDoCenario";
 
 /**
  * As configurações do cenário, em duas abas (12/10/2026; antes, dois quadros lado a lado): Cenário (nome, descrição,
@@ -35,7 +34,7 @@ import { useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/component
  * resultado realizado ou outro analítico). Os quadros ocupam a largura da tela, com o
  * destaque amarelo-ouro à esquerda, e as opções ficam uma embaixo da outra, com o texto ao lado (13/10/2026).
  */
-export type AbaDasConfiguracoes = "cenario" | "referencia" | "indices" | "comparativo" | "manuais";
+export type AbaDasConfiguracoes = "cenario" | "referencia" | "indices" | "comparativo" | "reajustes";
 
 export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cenario: Cenario; abaInicial?: AbaDasConfiguracoes }) {
   const queryClient = useQueryClient();
@@ -47,37 +46,49 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
   // As abas que o perfil lê e as que edita (14/10/2026).
   const { hasPermission } = usePermissions();
   const pode = (a: AbaDasConfiguracoes, acao: "ler" | "editar" = "ler") => hasPermission(t.perm("configuracoes", acao, a));
-  // Só quem criou o cenário (ou o Administrador) altera as Configurações (14/10/2026): num cenário público, os demais as
-  // leem. O servidor recusa do mesmo jeito.
-  const dono = cenario.podeMudarVisualizacao;
+  // Quem altera as Configurações (todas as abas e ações): com a Edição das Configurações Particular (o padrão; a regra de
+  // 14/10/2026), só quem criou o cenário e o Administrador; Pública (12/11/2026, pedido do Adão), todos com a permissão do
+  // perfil. O servidor recusa do mesmo jeito.
+  const dono = cenario.podeEditarConfiguracoes;
   const edita = (a: AbaDasConfiguracoes) => dono && pode(a, "editar");
   // O cenário travado (marcado ou com a versão congelada): o nome, a descrição e o comparativo não mudam (14/10/2026).
   const travado = estaTravado(cenario);
   const soLe = (a: AbaDasConfiguracoes, oQue: string) =>
-    !pode(a, "editar") ? `Seu perfil só lê ${oQue}.` : `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}: só quem o criou (ou o Administrador) altera ${oQue}.`;
+    !pode(a, "editar")
+      ? `Seu perfil só lê ${oQue}.`
+      : `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) altera ${oQue}.`;
   const analitico = t.tipo === "ANALITICO";
-  // Os Indicadores Manuais, só nos sintéticos (19/10/2026; antes, no Painel de Bordo; nos analíticos, ficam nas Premissas).
-  // Os Índices de Reajuste, só nos analíticos (19/10/2026), antes do Comparativo, que os usa.
-  const abas = (["cenario", "referencia", ...(analitico ? ["indices"] : []), "comparativo", ...(analitico ? [] : ["manuais"])] as AbaDasConfiguracoes[]).filter((a) => pode(a));
-  const aba: AbaDasConfiguracoes | null = abas.includes(escolhida) ? escolhida : (abas[0] ?? null);
-  // O Tipo e os Rótulos do gráfico do indicador, os do Painel de Bordo.
-  const [tipoGrafico] = useTipoGrafico();
-  const [comRotulos] = useRotulosDosValores();
+  // Os Índices de Referência dos analíticos (11/11/2026, pedido do Adão; antes, a aba Índices) são o quadro do meio da aba
+  // Comparativo, com a permissão deles: a aba aparece com uma das duas.
+  const lerIndices = analitico && pode("indices");
+  // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; antes, nas Premissas), depois do Comparativo.
+  const abas = (["cenario", "referencia", "comparativo", ...(analitico ? ["reajustes"] : [])] as AbaDasConfiguracoes[]).filter((a) => pode(a) || (a === "comparativo" && lerIndices));
+  // A aba Índices lembrada (ou num endereço) abre o Comparativo.
+  const pedida = escolhida === "indices" ? "comparativo" : escolhida;
+  const aba: AbaDasConfiguracoes | null = abas.includes(pedida) ? pedida : (abas[0] ?? null);
   // A marcação vale para os dois tipos (uma só por vez): o diálogo de marcar olha os sintéticos e os analíticos.
   const sinteticos = useQuery({ queryKey: ["cenarios", "SINTETICO"], queryFn: () => cenariosService.listar("SINTETICO") });
   const analiticos = useQuery({ queryKey: ["cenarios", "ANALITICO"], queryFn: () => cenariosService.listar("ANALITICO"), retry: false });
   const [nome, setNome] = useState(cenario.nome);
   const [descricao, setDescricao] = useState(cenario.descricao ?? "");
   const [visualizacao, setVisualizacao] = useState<Visualizacao>(cenario.visualizacao);
+  const [edicao, setEdicao] = useState<Visualizacao>(cenario.edicaoConfiguracoes);
+  const [acesso, setAcesso] = useState<AcessoInformacoes>(cenario.acessoInformacoes);
 
   const salvar = useMutation({
-    mutationFn: () => cenariosService.atualizar(cenario.id, { nome: nome.trim(), descricao: descricao.trim() || null, visualizacao }),
+    mutationFn: () =>
+      cenariosService.atualizar(cenario.id, { nome: nome.trim(), descricao: descricao.trim() || null, visualizacao, edicaoConfiguracoes: edicao, ...(analitico ? { acessoInformacoes: acesso } : {}) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       toast.success("Configurações gravadas.");
     },
   });
-  const mudou = nome.trim() !== cenario.nome || (descricao.trim() || null) !== cenario.descricao || visualizacao !== cenario.visualizacao;
+  const mudou =
+    nome.trim() !== cenario.nome ||
+    (descricao.trim() || null) !== cenario.descricao ||
+    visualizacao !== cenario.visualizacao ||
+    edicao !== cenario.edicaoConfiguracoes ||
+    (analitico && acesso !== cenario.acessoInformacoes);
   // Sair com o nome, a descrição ou a visualização mudados e não gravados pergunta antes (13/10/2026).
   useAlteracoesPendentes(mudou && !salvar.isPending);
 
@@ -90,10 +101,9 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
         abas={[
           { chave: "cenario", rotulo: "Cenário" },
           { chave: "referencia", rotulo: "Referência" },
-          { chave: "indices", rotulo: "Índices" },
           // O comparativo com outro cenário (13/10/2026; antes, a aba Referência da tela Comparativo).
           { chave: "comparativo", rotulo: "Comparativo" },
-          { chave: "manuais", rotulo: "Indicadores Manuais" },
+          { chave: "reajustes", rotulo: "Reajustes" },
         ].filter((a) => abas.includes(a.chave as AbaDasConfiguracoes))}
       />
       {aba === null ? (
@@ -138,6 +148,73 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
                 emLinhas
               />
             </div>
+            {/* A Edição das Configurações (12/11/2026, pedido do Adão): quem altera esta tela, em todas as abas e ações. */}
+            <fieldset className="space-y-1.5 sm:col-span-2" disabled={!cenario.podeMudarVisualizacao || !edita("cenario")}>
+              <legend className="text-sm leading-none font-medium">Edição das Configurações</legend>
+              <div className="space-y-2 pt-1.5">
+                {(
+                  [
+                    ["PARTICULAR", "Particular", "Apenas quem criou o cenário e os Administradores alteram as Configurações (todas as abas e ações).", Lock],
+                    ["PUBLICA", "Pública", `Todos os usuários com permissão de editar as Configurações dos ${t.titulo} as alteram (todas as abas e ações).`, Globe],
+                  ] as const
+                ).map(([v, rotulo, detalhe, Icone]) => (
+                  <OpcaoEmLinha
+                    key={v}
+                    nome="edicao-configuracoes"
+                    marcada={edicao === v}
+                    onMarcar={() => setEdicao(v)}
+                    rotulo={rotulo}
+                    detalhe={detalhe}
+                    Icone={Icone}
+                    desabilitada={!cenario.podeMudarVisualizacao || !edita("cenario")}
+                    dica={
+                      !cenario.podeMudarVisualizacao
+                        ? "Só quem criou o cenário ou um Administrador muda a Edição das Configurações."
+                        : !edita("cenario")
+                          ? "Seu perfil só lê os dados do cenário."
+                          : undefined
+                    }
+                  />
+                ))}
+              </div>
+            </fieldset>
+            {/* O Acesso às Informações dos analíticos (12/11/2026, pedido do Adão): o que cada usuário vê das premissas e do histórico. */}
+            {analitico ? (
+              <fieldset className="space-y-1.5 sm:col-span-2" disabled={!cenario.podeMudarVisualizacao || !edita("cenario")}>
+                <legend className="text-sm leading-none font-medium">Acesso às Informações</legend>
+                <div className="space-y-2 pt-1.5">
+                  {(
+                    [
+                      ["GERAL", "Geral", "Todos os usuários com acesso ao cenário veem todas as premissas e todo o histórico.", Eye],
+                      [
+                        "POR_RECORTE",
+                        "Por Recorte",
+                        "Quem tem recorte no perfil (Departamento ou Centros de Custo) vê só as premissas e o histórico do seu recorte; quem criou o cenário e os Administradores veem tudo.",
+                        ListFilter,
+                      ],
+                    ] as const
+                  ).map(([v, rotulo, detalhe, Icone]) => (
+                    <OpcaoEmLinha
+                      key={v}
+                      nome="acesso-informacoes"
+                      marcada={acesso === v}
+                      onMarcar={() => setAcesso(v)}
+                      rotulo={rotulo}
+                      detalhe={detalhe}
+                      Icone={Icone}
+                      desabilitada={!cenario.podeMudarVisualizacao || !edita("cenario")}
+                      dica={
+                        !cenario.podeMudarVisualizacao
+                          ? "Só quem criou o cenário ou um Administrador muda o Acesso às Informações."
+                          : !edita("cenario")
+                            ? "Seu perfil só lê os dados do cenário."
+                            : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
           </div>
           {travado && edita("cenario") ? <AvisoMarcado cenario={cenario} oQue="o nome e a descrição" varios /> : null}
           <Erro erro={salvar.isError ? mensagemDeErro(salvar.error, "Não foi possível gravar as configurações.") : null} />
@@ -168,24 +245,35 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
         </section>
       ) : aba === "comparativo" ? (
         <div className="space-y-4">
-          {!edita("comparativo") ? (
+          {/* Os avisos de quem só lê: o comparativo e, nos analíticos, os Índices de Referência (cada um com a sua permissão). */}
+          {pode("comparativo") && !edita("comparativo") ? (
             <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("comparativo", "o comparativo")}</p>
-          ) : travado ? (
-            <AvisoMarcado cenario={cenario} oQue="o comparativo" />
           ) : null}
-          <ComparativoCenario id={cenario.id} podeEditar={edita("comparativo") && !travado} />
+          {lerIndices && !edita("indices") ? (
+            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("indices", "os Índices de Referência")}</p>
+          ) : null}
+          {travado && (edita("comparativo") || (lerIndices && edita("indices"))) ? <AvisoMarcado cenario={cenario} oQue={analitico ? "o comparativo e os índices" : "o comparativo"} varios={analitico} /> : null}
+          {pode("comparativo") ? (
+            <ComparativoCenario
+              id={cenario.id}
+              podeEditar={edita("comparativo") && !travado}
+              // Nos analíticos (11/11/2026), os Índices de Referência entre o Cenário Comparado e as Variações Máximas.
+              indices={lerIndices ? <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} /> : null}
+            />
+          ) : (
+            <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
+          )}
         </div>
-      ) : aba === "indices" ? (
+      ) : aba === "reajustes" ? (
+        // A aba Reajustes dos analíticos (12/11/2026; antes, nas Premissas): os Índices de Reajuste e a Aplicação dos Reajustes.
         <div className="space-y-4">
-          {!edita("indices") ? (
-            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("indices", "os índices")}</p>
+          {!edita("reajustes") ? (
+            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("reajustes", "os reajustes")}</p>
           ) : travado ? (
-            <AvisoMarcado cenario={cenario} oQue="os índices" />
+            <AvisoMarcado cenario={cenario} oQue="os reajustes" varios />
           ) : null}
-          <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
+          <ReajustesDoCenario id={cenario.id} podeEditar={edita("reajustes") && !travado} />
         </div>
-      ) : aba === "manuais" ? (
-        <IndicadoresDoCenario id={cenario.id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />
       ) : analitico ? (
         // A referência dos analíticos (14/10/2026): o realizado (com as Médias de Referência e os centros de custo) ou outro analítico.
         <ReferenciaAnalitica cenario={cenario} podeEditar={edita("referencia")} aviso={soLe("referencia", "a referência")} />

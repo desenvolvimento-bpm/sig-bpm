@@ -1,7 +1,7 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { DEFINICOES_INDICADORES } from "../importacoes/indicadores/leituraIndicadores.js";
 import { LINHAS_TOTAIS } from "../volumes/totaisOperacao.js";
-import { compilarFormula, formulaPorExtenso, type Item } from "./formulaIndicador.js";
+import { compilarFormula, DEPARTAMENTOS_DO_QUADRO, formulaPorExtenso, type Item } from "./formulaIndicador.js";
 import { acumular, CALCULOS_SISTEMA, type DadosDoMes, type Indicador, type Parte } from "./indicadores.js";
 import { acumularMeta } from "./metasOrcamento.js";
 
@@ -29,18 +29,55 @@ export const TOTALIZADORES_DAS_LISTAS: Array<{ codigo: string; rotulo: string }>
 /** Os indicadores do Comercial e do Administrativo (importados ou digitados nas Listas). */
 export const INDICADORES_DAS_LISTAS = [...DEFINICOES_INDICADORES.INDICADORES_COMERCIAL.nomes, ...DEFINICOES_INDICADORES.INDICADORES_ADMIN.nomes];
 
+/**
+ * A Metodologia que vale: sem itens (e fora do cálculo do sistema), o item Valor Registrado ([REGISTRADO], 09/11/2026) — o
+ * valor registrado no mês com o nome do indicador (importado, digitado nas Listas ou apurado no Quadro de Lotação), o mesmo
+ * do antigo [IND|nome] do próprio nome.
+ */
+export function formulaEfetiva(r: { nome: string; formula: string | null; modo: string }): string | null {
+  if (r.formula?.trim()) return r.formula;
+  return r.modo === "SISTEMA" ? null : "[REGISTRADO]";
+}
+
+export const ROTULO_DO_REGISTRADO = "Valor registrado no mês (importado, digitado ou apurado)";
+const ROTULO_DA_PARTE: Record<string, string> = { GERAL: "Geral", DIRETA: "Direto", INDIRETA: "Indireto" };
+const ROTULO_DO_DEPARTAMENTO = new Map(DEPARTAMENTOS_DO_QUADRO);
+/**
+ * O item [QL|…] por extenso: "Produção: Matriz (Direto)", "Total" (o Total Geral) ou "Centro 1.01.00000001"; `centros`, o
+ * nome dos centros pelo código, quando há.
+ */
+export const rotuloDoQuadro = (chave: string, centros?: Map<string, string>) => {
+  const [nivel, a, b] = chave.split("|");
+  if (nivel === "CC") return `Centro ${centros?.get(a) ?? a}`;
+  const departamento = ROTULO_DO_DEPARTAMENTO.get(a) ?? a;
+  return a === "TOTAL" && b === "GERAL" ? departamento : `${departamento} (${ROTULO_DA_PARTE[b] ?? b})`;
+};
+/** Os Movimentos do QL por extenso: o tipo, ou todas as de uma contagem. */
+export const rotuloDoMovimento = (nome: string) =>
+  nome === "#POSITIVA" ? "Todas as de Contagem Positiva" : nome === "#NEGATIVA" ? "Todas as de Contagem Negativa" : nome;
+
 const NOME_DA_VISAO: Record<number, string> = { 0: "Consolidado", 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
 
 /** O nome de cada item, para a fórmula por extenso. */
 export async function rotulosDosItens() {
   const linhas = new Map((await getPrismaClient().linhaDRE.findMany({ select: { codigo: true, descricao: true } })).map((l) => [l.codigo, l.descricao]));
   const listas = new Map(TOTALIZADORES_DAS_LISTAS.map((t) => [t.codigo, t.rotulo]));
+  // Os centros do item Quadro de Lotação (09/11/2026), pelo código RM.
+  const centros = new Map(
+    (await getPrismaClient().centroCusto.findMany({ where: { codigoRM: { not: null } }, select: { codigoRM: true, nomeRM: true } })).map((c) => [c.codigoRM!, `${c.codigoRM} · ${c.nomeRM}`]),
+  );
   return (i: Item) =>
     i.tipo === "DRE"
       ? `${linhas.get(i.codigo) ?? i.codigo} (${NOME_DA_VISAO[i.unidade] ?? i.unidade})`
       : i.tipo === "LISTA"
         ? `${listas.get(i.codigo) ?? i.codigo} [Listas]`
-        : i.tipo === "META"
+        : i.tipo === "QL"
+          ? `Quadro de Lotação: ${rotuloDoQuadro(i.chave, centros)}`
+          : i.tipo === "MQL"
+            ? `Movimentos do QL: ${rotuloDoMovimento(i.nome)}`
+            : i.tipo === "REGISTRADO"
+              ? ROTULO_DO_REGISTRADO
+              : i.tipo === "META"
           ? `Meta: ${i.nome}${i.acumulado ? " (Acumulado no Ano)" : ""}`
           : i.tipo === "INDICADOR" && i.acumulado
             ? `${i.nome} (Acumulado no Ano)`
@@ -94,7 +131,7 @@ function acumuladoDaMeta(m: DadosDoMes, nome: string, irmaos?: Map<string, Indic
 }
 
 /** O valor de um item no mês (NaN sem dado). */
-function valorDoItem(m: DadosDoMes, i: Item, irmaos?: Map<string, Indicador>): number {
+function valorDoItem(m: DadosDoMes, i: Item, irmaos: Map<string, Indicador> | undefined, proprio: string): number {
   switch (i.tipo) {
     case "DRE":
       return m.dre(i.unidade, i.codigo);
@@ -106,6 +143,14 @@ function valorDoItem(m: DadosDoMes, i: Item, irmaos?: Map<string, Indicador>): n
       return i.acumulado ? acumuladoDaMeta(m, i.nome, irmaos) : (m.meta?.(i.nome) ?? NaN);
     case "INDICADOR":
       return i.acumulado ? acumuladoDoIndicador(m, i.nome, irmaos) : (parteDoIndicador(m, i.nome, irmaos)?.valor ?? NaN);
+    // O Quadro de Lotação e os Movimentos do QL (06/11/2026): sem a competência do Quadro de Lotação no mês, sem valor.
+    case "QL":
+      return m.quadro?.(i.chave) ?? NaN;
+    case "MQL":
+      return m.movimentosQL?.(i.nome) ?? NaN;
+    // O valor registrado no mês com o nome do próprio indicador (09/11/2026).
+    case "REGISTRADO":
+      return m.importado(proprio) ?? NaN;
   }
 }
 
@@ -124,11 +169,12 @@ export type LinhaEstruturaIndicador = {
 /** Um indicador do cadastro pronto para calcular; `irmaos`: os indicadores pelo nome, para o item [INDICADOR]. */
 export function montarIndicador(r: LinhaEstruturaIndicador, irmaos?: Map<string, Indicador>): Indicador {
   const base = { grupo: r.grupo, numero: r.numero, nome: r.nome, sentido: r.sentido, unidade: r.unidade, metodologia: r.descricao ?? "" };
-  if (r.modo === "SISTEMA" || !r.formula) {
+  const formula = formulaEfetiva(r);
+  if (r.modo === "SISTEMA" || !formula) {
     const s = CALCULOS_SISTEMA[r.nome];
     return { ...base, acumulado: s?.acumulado ?? "ACUM", calculo: s?.calculo ?? (() => ({ valor: null })) };
   }
-  const f = compilarFormula(r.formula);
+  const f = compilarFormula(formula);
   const peso = r.modo === "MEDIA_PONDERADA" && r.peso ? compilarFormula(r.peso) : null;
   // A Fórmula do Acumulado (o modo FORMULA, 23/10/2026; gravada na coluna peso): o acumulado de janeiro até o mês.
   const doAcumulado = r.modo === "FORMULA" && r.peso ? compilarFormula(r.peso) : null;
@@ -136,14 +182,14 @@ export function montarIndicador(r: LinhaEstruturaIndicador, irmaos?: Map<string,
   const avaliarNoMes = (g: ReturnType<typeof compilarFormula>, m: DadosDoMes) =>
     g.avaliar((k) => {
       const it = g.itens.get(k);
-      return it ? valorDoItem(m, it, irmaos) : NaN;
+      return it ? valorDoItem(m, it, irmaos, r.nome) : NaN;
     });
   return {
     ...base,
     acumulado: r.modo === "ULTIMO" ? "ATUAL" : "ACUM",
     ...(r.modo === "FORMULA" ? { porFormula: true as const } : {}),
     calculo: (m) => {
-      const valores = new Map(itens.map(([chave, item]) => [chave, valorDoItem(m, item, irmaos)]));
+      const valores = new Map(itens.map(([chave, item]) => [chave, valorDoItem(m, item, irmaos, r.nome)]));
       const valor = f.avaliar((k) => valores.get(k) ?? NaN);
       if (peso) {
         const p = avaliarNoMes(peso, m);

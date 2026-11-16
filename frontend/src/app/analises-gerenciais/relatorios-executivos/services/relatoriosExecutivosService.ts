@@ -32,6 +32,8 @@ export type ListaDeRelatorios = {
   meusDepartamentos: Array<{ chave: string; nome: string }>;
 };
 
+/** Os dados dos cards antes do gráfico (12/11/2026): só o Atual ou só o Acumulado (sem o campo, os dois). */
+export type PeriodosDoCard = "ATUAL" | "ACUMULADO";
 /** Um bloco da grade: a posição e o tamanho (colunas e linhas) e o conteúdo. */
 export type Posicao = { id: string; x: number; y: number; w: number; h: number };
 export type Nota = "POSITIVO" | "NEGATIVO" | "ATENCAO";
@@ -46,6 +48,8 @@ export type Bloco = Posicao &
         comGrafico: boolean;
         /** Com o gráfico, só o do acumulado (22/10/2026); sem isso, os meses e o acumulado. */
         soAcumulado?: boolean;
+        /** Os dados antes do gráfico (12/11/2026): só o Atual ou só o Acumulado; sem ele, os dois. */
+        periodos?: PeriodosDoCard;
         /** As opções do gráfico do card (16/10/2026), como no Configurar Gráficos do Painel; sem elas, as do navegador. */
         tipoGrafico?: "barras" | "area";
         comRotulos?: boolean;
@@ -59,7 +63,7 @@ export type Bloco = Posicao &
      * O gráfico do card do indicador (22/10/2026): os meses e o acumulado ou só o acumulado; sem ele, só os valores. As
      * opções do gráfico, como as dos cards do Painel.
      */
-    | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
+    | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; /** Os dados antes do gráfico (12/11/2026). */ periodos?: PeriodosDoCard; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
     /** O título da anotação (16/10/2026); sem ele, o nome da nota. */
     | {
         tipo: "ANOTACAO";
@@ -81,9 +85,21 @@ export type Bloco = Posicao &
      * Um vídeo (20/10/2026): um arquivo do computador (`arquivo`, guardado no servidor, até 200 MB) ou um link do YouTube,
      * Instagram, Facebook ou LinkedIn (`url`, o endereço colado), com a legenda e a proporção; vazio, o quadro esperando o vídeo.
      */
-    | { tipo: "VIDEO"; origem: "ARQUIVO" | "LINK"; arquivo: string; url: string; legenda: string; proporcao: number; legendaHtml?: string }
+    | {
+        tipo: "VIDEO";
+        origem: "ARQUIVO" | "LINK";
+        arquivo: string;
+        url: string;
+        legenda: string;
+        proporcao: number;
+        legendaHtml?: string;
+        /** As Configurações do Vídeo (13/11/2026): começa a tocar sozinho na leitura e na apresentação. */
+        reproducaoAutomatica?: boolean;
+        /** As Configurações do Vídeo (13/11/2026): ao terminar, recomeça do início. */
+        recomecarAoTerminar?: boolean;
+      }
     /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
-    | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number }
+    | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number; /** As Bordas (12/11/2026). */ borda?: BordaDoTexto }
     /**
      * O Sumário (20/10/2026): as telas marcadas (da Introdução em diante), com o número do primeiro slide de cada uma, e, em
      * "TELAS_E_SLIDES", os slides delas; a lista e os números se montam a cada vez, com os slides do relatório.
@@ -159,7 +175,11 @@ export type RecorteDaImagem = { zoom: number; x: number; y: number };
 /** A transição dos slides de um grupo (27/10/2026), guardada em cada página dele. */
 export type Transicao = "ESMAECER" | "ROLAR_VERTICAL" | "ROLAR_HORIZONTAL";
 /** Uma página da aba (16/10/2026): cada departamento tem uma ou mais, cada uma com a sua grade. */
-export type Pagina = { id: string; /** O nome (16/10/2026), o do slide; sem ele, "Página N". */ nome?: string; blocos: Bloco[]; fundo?: Fundo; /** A transição do slide (27/10/2026; até 30/10/2026, a mesma em todas as páginas do grupo). */ transicao?: Transicao; /** Avançar Após (30/10/2026): na apresentação, o slide passa sozinho ao próximo depois desses segundos. */ avancarApos?: number };
+/** As Bordas do Texto Livre (12/11/2026): as posições, o tipo, a espessura (px, de 1/4 a 60) e a cor (as dos textos). */
+export type LadoDaBorda = "CIMA" | "BAIXO" | "ESQUERDA" | "DIREITA";
+export type TipoDaBorda = "CONTINUA" | "TRACEJADA" | "PONTILHADA" | "DUPLA" | "SULCADA";
+export type BordaDoTexto = { lados: LadoDaBorda[]; tipo: TipoDaBorda; espessura: number; cor: string };
+export type Pagina = { id: string; /** O nome (16/10/2026), o do slide; sem ele, "Página N". */ nome?: string; blocos: Bloco[]; fundo?: Fundo; /** A transição do slide (27/10/2026; até 30/10/2026, a mesma em todas as páginas do grupo). */ transicao?: Transicao; /** Avançar Após (30/10/2026): na apresentação, o slide passa sozinho ao próximo depois desses segundos. */ avancarApos?: number; /** Recomeçar ao Terminar (11/11/2026, os painéis): depois do Avançar Após do último slide, a apresentação volta ao primeiro; marcado em todas as páginas do painel. */ recomecarAoTerminar?: boolean; /** Ocultar Página (12/11/2026): a página fica fora dos slides (o Apresentar pula para a próxima; fora também do PDF, do contador e do Sumário). */ oculta?: boolean };
 /** A Capa (20/10/2026): a primeira aba; os slides dela não entram na contagem. */
 export const CHAVE_DA_CAPA = "CAPA";
 /**
@@ -207,7 +227,7 @@ export type Relatorio = {
   automatica?: boolean;
 };
 /**
- * Os cenários dos cards PROVA (31/10/2026): os marcados que existem, na ordem do PROVA (Previsão, Orçado, Vendido e
+ * Os cenários dos cards PROVA (31/10/2026): os marcados que existem, na ordem do PROVA (Forecast, Orçado, Vendido e
  * Anterior), com o nome do cenário; e a marcação do cenário de comparação (a cor dos cards padrão nos slides com cards
  * PROVA; nula: um cenário sem marcação).
  */

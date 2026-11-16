@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { RegraCadastroError } from "../../services/cadastros/edicao/definicoesCadastros.js";
 import { edicaoCadastrosService as s } from "../../services/cadastros/edicao/edicaoCadastrosService.js";
+import { testarFormula, valoresDosItens } from "../../services/cadastros/edicao/testeDaFormula.js";
 
 const valoresSchema = z.record(z.string(), z.unknown());
 
@@ -33,4 +34,13 @@ export const edicaoCadastrosController = {
     return responder(response, () => s.atualizar(entidade(r), id(r), b.data, r.user!.sub));
   },
   excluir: (r: Request, response: Response) => responder(response, () => s.excluir(entidade(r), id(r), r.user!.sub)),
+
+  // Os valores da Metodologia e o Testar (11/11/2026): nos cards do Painel de Bordo e nos indicadores.
+  valoresDosItens: (r: Request, response: Response) => responder(response, () => valoresDosItens(entidade(r))),
+  async testar(r: Request, response: Response) {
+    const b = valoresSchema.safeParse(r.body);
+    if (!b.success) return response.status(400).json({ error: "Dados inválidos" });
+    const idDoRegistro = typeof r.query.id === "string" && r.query.id ? r.query.id : null;
+    return responder(response, () => testarFormula(entidade(r), b.data, idDoRegistro));
+  },
 };

@@ -2,15 +2,19 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   BadgeDollarSign,
+  Boxes,
   Building2,
   Cable,
   Calculator,
   CalendarCheck,
   ChartPie,
+  ClipboardList,
+  GitFork,
   SlidersHorizontal,
   Factory,
   FolderOpen,
   GraduationCap,
+  Network,
   Newspaper,
   FileSpreadsheet,
   HandCoins,
@@ -31,17 +35,20 @@ import {
   ListOrdered,
   ListTree,
   MessageSquareWarning,
-  NotebookPen,
   Percent,
   PanelsTopLeft,
   Presentation,
+  ReceiptText,
   Rows3,
   Scale,
+  ShieldPlus,
   Shuffle,
   Split,
   Table2,
   UserCog,
   Users,
+  UsersRound,
+  Wallet,
   Workflow,
 } from "lucide-react";
 
@@ -63,12 +70,19 @@ export type NavItem = {
    */
   telas?: NavItem[];
   /**
-   * As abas de uma tela (17/10/2026: os Cadastros da Controladoria), cada uma com o endereço e a permissão dela: a tela
+   * As abas de uma tela (17/10/2026: os Cadastros Gerais), cada uma com o endereço e a permissão dela: a tela
    * abre na primeira aba que o perfil alcança, e as abas ficam logo abaixo do título (`AbasDaTela`).
    */
   abas?: NavItem[];
   /** Um processo ainda por fazer (14/10/2026): a tela diz "Tela em desenvolvimento." e o menu o mostra em cinza. */
   emDesenvolvimento?: boolean;
+  /**
+   * A tela inicial de um processo com telas (12/11/2026: a lista das competências da Gestão de Colaboradores, como a do
+   * Fechamento Mensal), fora da barra das telas: o menu, o nome do processo na barra e o caminho do topo levam a ela.
+   */
+  inicio?: { href: string; permission: string };
+  /** O nome curto da tela na barra (12/11/2026: "Colaboradores", a tela Gestão de Colaboradores dos Cadastros Auxiliares). */
+  curto?: string;
 };
 
 export type NavGrupo = { titulo: string; itens: NavItem[] };
@@ -88,7 +102,8 @@ export const navGrupos: NavGrupo[] = [
         href: "/analises-gerenciais/relatorios-executivos",
         icon: Presentation,
         permission: "relatorios_executivos:ler",
-        recurso: "ANALISES_GERENCIAIS",
+        // O processo na matriz dos Perfis (12/11/2026; antes, o recurso ANALISES_GERENCIAIS, junto com os Painéis).
+        recurso: "RELATORIOS_EXECUTIVOS",
       },
       // Resultados PROVA e Custos Operacionais saíram do menu em 04/11/2026 (pedido do Adão; estavam em desenvolvimento).
       // Painéis e Apresentações (antes, Painéis de Bordo: 31/10/2026, pedido do Adão; em desenvolvimento desde 27/10/2026;
@@ -99,29 +114,19 @@ export const navGrupos: NavGrupo[] = [
         href: "/analises-gerenciais/paineis-de-bordo",
         icon: PanelsTopLeft,
         permission: "paineis_de_bordo:ler",
-        recurso: "ANALISES_GERENCIAIS",
+        recurso: "PAINEIS_DE_BORDO",
       },
       // Demonstrativos Financeiros (27/10/2026), em desenvolvimento.
       { title: "Demonstrativos Financeiros", href: "/analises-gerenciais/demonstrativos-financeiros", icon: FileSpreadsheet, emDesenvolvimento: true },
-    ],
-  },
-  {
-    titulo: "Gestão do Patrimônio",
-    itens: [
-      { title: "Auditoria de Investimentos", href: "/gestao-do-patrimonio/auditoria-de-investimentos", icon: ShieldCheck, emDesenvolvimento: true },
-      // Inventários e Cíclicas (15/10/2026; antes, Inventário de Prod. Acabados).
-      { title: "Inventários e Cíclicas", href: "/gestao-do-patrimonio/inventarios-e-ciclicas", icon: PackageCheck, emDesenvolvimento: true },
-      { title: "Ociosidade do Maquinário", href: "/gestao-do-patrimonio/ociosidade-do-maquinario", icon: Factory, emDesenvolvimento: true },
-    ],
-  },
-  {
-    // Criação de Cenários (11/10/2026); os Resultados Vendidos no alto e os analíticos acima dos sintéticos (14/10/2026).
-    titulo: "Criação de Cenários",
-    itens: [
-      { title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true },
+      // Os Cenários Analíticos e Sintéticos (11/11/2026, pedido do Adão; antes, na Criação de Cenários), os analíticos acima.
       { title: "Cenários Analíticos", href: "/cenarios/analiticos", icon: Workflow, permission: "cenarios_analiticos_lista:ler", recurso: "CENARIOS_ANALITICOS" },
       { title: "Cenários Sintéticos", href: "/cenarios/sinteticos", icon: Layers, permission: "cenarios_lista:ler", recurso: "CENARIOS_SINTETICOS" },
     ],
+  },
+  {
+    // Criação de Cenários (11/10/2026): desde 11/11/2026, só os Resultados Vendidos (os Cenários foram para as Análises Gerenciais).
+    titulo: "Criação de Cenários",
+    itens: [{ title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true }],
   },
   {
     titulo: "Apuração dos Resultados",
@@ -176,15 +181,24 @@ export const navGrupos: NavGrupo[] = [
         ],
       },
       { title: "Fechamento Mensal", href: "/competencias", icon: CalendarCheck, permission: "fechamento:ler", recurso: "FECHAMENTO_MENSAL" },
-      // Os Registros dos Indicadores (27/10/2026), em desenvolvimento, logo acima dos Cadastros da Apuração.
-      { title: "Registros dos Indicadores", href: "/registros-dos-indicadores", icon: NotebookPen, emDesenvolvimento: true },
+      // Os Registros dos Indicadores (em desenvolvimento desde 27/10/2026) saíram do menu em 06/11/2026 (pedido do Adão).
       {
         title: "Cadastros da Apuração",
         href: "/cadastros/reclassificacoes",
         icon: SlidersHorizontal,
         recurso: "CADASTROS_APURACAO",
         telas: [
-          { title: "Reclassificações", href: "/cadastros/reclassificacoes", icon: Shuffle, permission: "cadastro_reclassificacoes:ler" },
+          // As abas Por Conta e Por Fornecedor (13/11/2026, pedido do Adão; antes, a tela Reclassificações de Conta).
+          {
+            title: "Reclassificações",
+            href: "/cadastros/reclassificacoes",
+            icon: Shuffle,
+            permission: "cadastro_reclassificacoes:ler",
+            abas: [
+              { title: "Por Conta", href: "/cadastros/reclassificacoes", icon: Shuffle, permission: "cadastro_reclassificacoes.por_conta:ler" },
+              { title: "Por Fornecedor", href: "/cadastros/reclassificacoes-fornecedor", icon: Shuffle, permission: "cadastro_reclassificacoes.por_fornecedor:ler" },
+            ],
+          },
           { title: "Preços do Contrato", href: "/cadastros/precos-contrato", icon: BadgeDollarSign, permission: "cadastro_precos_contrato:ler" },
           { title: "Tipos de Movimento", href: "/cadastros/tipos-movimento", icon: ArrowLeftRight, permission: "cadastro_tipos_movimento:ler" },
           { title: "Tabela de Estacas", href: "/cadastros/tabela-estacas", icon: Columns3, permission: "cadastro_tabela_estacas:ler" },
@@ -193,19 +207,92 @@ export const navGrupos: NavGrupo[] = [
     ],
   },
   {
+    // Os Processos Auxiliares (11/11/2026, pedido do Adão; antes, Processos Administrativos, de 06/11/2026), entre a Apuração e
+    // a Controladoria: a Gestão de Colaboradores (a tela Cadastros, com uma aba por cadastro) e, em desenvolvimento, o Fluxo de
+    // Caixa, a Gestão de Credores, a Gestão da Segurança e os três da Gestão do Patrimônio (o grupo saiu em 11/11/2026):
+    // Auditoria de Investimentos, Inventários e Cíclicas e Ociosidade do Maquinário.
+    titulo: "Processos Auxiliares",
+    itens: [
+      { title: "Fluxo de Caixa", href: "/processos-administrativos/fluxo-de-caixa", icon: Wallet, emDesenvolvimento: true },
+      { title: "Gestão de Credores", href: "/processos-administrativos/gestao-de-credores", icon: ReceiptText, emDesenvolvimento: true },
+      {
+        title: "Gestão de Colaboradores",
+        // A lista das competências é o início do processo (12/11/2026, pedido do Adão, como no Fechamento Mensal).
+        href: "/gestao-de-colaboradores",
+        inicio: { href: "/gestao-de-colaboradores", permission: "colaboradores_quadro:ler" },
+        icon: UsersRound,
+        recurso: "GESTAO_COLABORADORES",
+        telas: [
+          // O Quadro de Lotação (06/11/2026, etapa 2): as abas Movimentações, Aprovações (o endereço /controle) e Realizado de uma competência
+          // (/quadro-de-lotacao/aaaa-mm/<aba>); o endereço sem a competência abre a última aberta (12/11/2026).
+          { title: "Quadro de Lotação", href: "/gestao-de-colaboradores/quadro-de-lotacao", icon: Network, permission: "colaboradores_quadro:ler" },
+          {
+            title: "Painel de Bordo",
+            href: "/gestao-de-colaboradores/painel/resultados",
+            icon: LayoutDashboard,
+            permission: "colaboradores_painel:ler",
+            abas: [
+              { title: "Resultados", href: "/gestao-de-colaboradores/painel/resultados", icon: LayoutDashboard, permission: "colaboradores_painel.resultados:ler" },
+              { title: "Indicadores", href: "/gestao-de-colaboradores/painel/indicadores", icon: LayoutDashboard, permission: "colaboradores_painel.indicadores:ler" },
+            ],
+          },
+        ],
+      },
+      // Os Cadastros Auxiliares (12/11/2026, pedido do Adão): os cadastros dos Processos Auxiliares, uma tela por processo —
+      // a Gestão de Colaboradores ("Colaboradores" na barra; antes, a tela Cadastros da Gestão de Colaboradores), com uma aba
+      // por cadastro. Os endereços continuam os mesmos.
+      {
+        title: "Cadastros Auxiliares",
+        href: "/gestao-de-colaboradores/cadastros/funcoes",
+        icon: ClipboardList,
+        recurso: "CADASTROS_AUXILIARES",
+        telas: [
+          {
+            title: "Gestão de Colaboradores",
+            curto: "Colaboradores",
+            href: "/gestao-de-colaboradores/cadastros/funcoes",
+            icon: UsersRound,
+            permission: "colaboradores_cadastros:ler",
+            abas: [
+              { title: "Funções", href: "/gestao-de-colaboradores/cadastros/funcoes", icon: ClipboardList, permission: "colaboradores_cadastros.funcoes:ler" },
+              { title: "Movimentações", href: "/gestao-de-colaboradores/cadastros/movimentacoes", icon: ClipboardList, permission: "colaboradores_cadastros.movimentacoes:ler" },
+              { title: "Classificações", href: "/gestao-de-colaboradores/cadastros/classificacoes", icon: ClipboardList, permission: "colaboradores_cadastros.classificacoes:ler" },
+              {
+                title: "Lançamento Inicial",
+                href: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+                icon: ClipboardList,
+                permission: "colaboradores_cadastros.lancamento_inicial:ler",
+              },
+            ],
+          },
+        ],
+      },
+      { title: "Gestão da Segurança", href: "/processos-administrativos/gestao-da-seguranca", icon: ShieldPlus, emDesenvolvimento: true },
+      // Os três da Gestão do Patrimônio (11/11/2026, pedido do Adão; o grupo saiu do menu).
+      { title: "Auditoria de Investimentos", href: "/gestao-do-patrimonio/auditoria-de-investimentos", icon: ShieldCheck, emDesenvolvimento: true },
+      // Inventários e Cíclicas (15/10/2026; antes, Inventário de Prod. Acabados).
+      { title: "Inventários e Cíclicas", href: "/gestao-do-patrimonio/inventarios-e-ciclicas", icon: PackageCheck, emDesenvolvimento: true },
+      { title: "Ociosidade do Maquinário", href: "/gestao-do-patrimonio/ociosidade-do-maquinario", icon: Factory, emDesenvolvimento: true },
+    ],
+  },
+  {
     titulo: "Controladoria",
     itens: [
       // A Central de Conectividade (30/10/2026, pedido do Adão: um processo da Controladoria, acima dos Cadastros da
-      // Controladoria): a tela APIs, que abre os dados do SIG a outros aplicativos. O endereço da tela continua o mesmo.
+      // Controladoria): a tela APIs, que abre os dados do SIG a outros aplicativos (o endereço continua o mesmo), e, desde
+      // 13/11/2026 (pedido do Adão), a tela Acessos, com a aba APIs (antes, a aba Acesso às APIs da tela APIs).
       {
         title: "Central de Conectividade",
         href: "/central-de-conectividade/biblioteca-de-apis",
         icon: Cable,
         recurso: "CENTRAL_CONECTIVIDADE",
-        telas: [{ title: "APIs", href: "/central-de-conectividade/biblioteca-de-apis", icon: Library, permission: "biblioteca_apis:ler" }],
+        telas: [
+          { title: "APIs", href: "/central-de-conectividade/biblioteca-de-apis", icon: Library, permission: "biblioteca_apis:ler" },
+          { title: "Acessos", href: "/central-de-conectividade/acessos", icon: History, permission: "conectividade_acessos:ler" },
+        ],
       },
       {
-        title: "Cadastros da Controladoria",
+        title: "Cadastros Gerais",
         href: "/cadastros/unidades",
         icon: Database,
         recurso: "CADASTROS_CONTROLADORIA",
@@ -231,8 +318,12 @@ export const navGrupos: NavGrupo[] = [
               { title: "Linhas", href: "/cadastros/linhas", icon: Rows3, permission: "cadastro_controladoria.linhas:ler" },
               { title: "Estrutura da DRE", href: "/cadastros/estrutura-dre", icon: ListTree, permission: "cadastro_controladoria.estrutura_dre:ler" },
               { title: "Regras de Rateio", href: "/cadastros/regras-rateio", icon: Percent, permission: "cadastro_controladoria.regras_rateio:ler" },
+              // As Redistribuições de Gastos (13/11/2026, pedido do Adão), depois das Regras de Rateio.
+              { title: "Redistribuições de Gastos", href: "/cadastros/redistribuicoes-gastos", icon: GitFork, permission: "cadastro_controladoria.redistribuicoes:ler" },
               // Os custos sem tarefa nas linhas, para a etapa Linhas da apuração (26/10/2026).
               { title: "Alocação nas Linhas", href: "/cadastros/alocacao-linhas", icon: Split, permission: "cadastro_controladoria.alocacao_linhas:ler" },
+              // Os Departamentos (11/11/2026, pedido do Adão).
+              { title: "Departamentos", href: "/cadastros/departamentos", icon: Boxes, permission: "cadastro_controladoria.departamentos:ler" },
             ],
           },
           {
@@ -295,15 +386,21 @@ function telaPermitida(t: NavItem, pode: (p: string) => boolean): NavItem | null
 export function itemPermitido(item: NavItem, pode: (p: string) => boolean): NavItem | null {
   if (!item.telas) return !item.permission || pode(item.permission) ? item : null;
   const telas = item.telas.map((t) => telaPermitida(t, pode)).filter((t): t is NavItem => t !== null);
-  return telas.length > 0 ? { ...item, href: telas[0].href, telas } : null;
+  // Com a tela inicial (12/11/2026), o processo abre nela; sem a permissão dela, na primeira tela.
+  const inicio = item.inicio && pode(item.inicio.permission) ? item.inicio.href : null;
+  return telas.length > 0 ? { ...item, href: inicio ?? telas[0].href, telas } : null;
 }
 
-/** O grupo de telas da tela aberta, com a tela (e a aba, nas telas com abas): a barra no topo e o caminho usam os três. */
-export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem; aba: NavItem | null } | null {
+/**
+ * O grupo de telas da tela aberta, com a tela (e a aba, nas telas com abas): a barra no topo e o caminho usam os três. Na
+ * tela inicial do processo (12/11/2026), a tela é nula: sem a barra das telas (como na lista do Fechamento Mensal), e o caminho só com o processo.
+ */
+export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem | null; aba: NavItem | null } | null {
   for (const g of navGrupos) {
     for (const item of g.itens) {
       const tela = item.telas?.find((t) => naTelaOuAba(pathname, t));
       if (tela) return { grupo: item, tela, aba: tela.abas?.find((a) => naTela(pathname, a.href)) ?? null };
+      if (item.inicio && pathname === item.inicio.href) return { grupo: item, tela: null, aba: null };
     }
   }
   return null;
@@ -312,13 +409,13 @@ export function grupoDaTela(pathname: string): { grupo: NavItem; tela: NavItem; 
 /** As abas da tela aberta que o perfil alcança (17/10/2026), com a aberta; null fora das telas com abas. */
 export function abasDaTela(pathname: string, pode: (p: string) => boolean): { titulo: string; abas: NavItem[]; ativa: string } | null {
   const doGrupo = grupoDaTela(pathname);
-  if (!doGrupo?.tela.abas || !doGrupo.aba) return null;
+  if (!doGrupo?.tela?.abas || !doGrupo.aba) return null;
   return { titulo: doGrupo.tela.title, abas: doGrupo.tela.abas.filter((a) => !a.permission || pode(a.permission)), ativa: doGrupo.aba.href };
 }
 
 /** O item do menu aceso: o da tela, ou o grupo de telas que a contém. */
 export function itemAtivo(pathname: string, item: NavItem): boolean {
-  return item.telas ? item.telas.some((t) => naTelaOuAba(pathname, t)) : naTela(pathname, item.href);
+  return item.telas ? item.telas.some((t) => naTelaOuAba(pathname, t)) || pathname === item.inicio?.href : naTela(pathname, item.href);
 }
 
 /**
@@ -328,7 +425,8 @@ export function itemAtivo(pathname: string, item: NavItem): boolean {
  * A primeira regra que casar vale.
  */
 const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
-  [/^\/cadastros\/reclassificacoes(\/|$)/, "cadastro_reclassificacoes:ler"],
+  [/^\/cadastros\/reclassificacoes(\/|$)/, "cadastro_reclassificacoes.por_conta:ler"],
+  [/^\/cadastros\/reclassificacoes-fornecedor(\/|$)/, "cadastro_reclassificacoes.por_fornecedor:ler"],
   [/^\/cadastros\/precos-contrato(\/|$)/, "cadastro_precos_contrato:ler"],
   [/^\/cadastros\/tipos-movimento(\/|$)/, "cadastro_tipos_movimento:ler"],
   [/^\/cadastros\/tabela-estacas(\/|$)/, "cadastro_tabela_estacas:ler"],
@@ -339,7 +437,9 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/cadastros\/estrutura-indicadores(\/|$)/, "cadastro_analitico.estrutura_indicadores:ler"],
   [/^\/cadastros\/painel-bordo(\/|$)/, "cadastro_analitico.painel_bordo:ler"],
   [/^\/cadastros\/regras-rateio(\/|$)/, "cadastro_controladoria.regras_rateio:ler"],
+  [/^\/cadastros\/redistribuicoes-gastos(\/|$)/, "cadastro_controladoria.redistribuicoes:ler"],
   [/^\/cadastros\/alocacao-linhas(\/|$)/, "cadastro_controladoria.alocacao_linhas:ler"],
+  [/^\/cadastros\/departamentos(\/|$)/, "cadastro_controladoria.departamentos:ler"],
   [/^\/cadastros\/estrutura-dre(\/|$)/, "cadastro_controladoria.estrutura_dre:ler"],
   [/^\/cadastros(\/|$)/, "cadastros_controladoria:ler"],
   [/^\/usuarios(\/|$)/, "usuarios:ler"],
@@ -353,6 +453,22 @@ const PERMISSAO_DA_TELA: Array<[RegExp, string]> = [
   [/^\/analises-gerenciais\/relatorios-executivos(\/|$)/, "relatorios_executivos:ler"],
   [/^\/analises-gerenciais\/paineis-de-bordo(\/|$)/, "paineis_de_bordo:ler"],
   [/^\/central-de-conectividade\/biblioteca-de-apis(\/|$)/, "biblioteca_apis:ler"],
+  [/^\/central-de-conectividade\/acessos(\/|$)/, "conectividade_acessos:ler"],
+  // A Gestão de Colaboradores (06/11/2026): a lista das competências (12/11/2026, o início do processo) e as abas da tela
+  // Gestão de Colaboradores dos Cadastros Auxiliares (antes, a tela Cadastros).
+  [/^\/gestao-de-colaboradores$/, "colaboradores_quadro:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/funcoes(\/|$)/, "colaboradores_cadastros.funcoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/movimentacoes(\/|$)/, "colaboradores_cadastros.movimentacoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/classificacoes(\/|$)/, "colaboradores_cadastros.classificacoes:ler"],
+  [/^\/gestao-de-colaboradores\/cadastros\/lancamento-inicial(\/|$)/, "colaboradores_cadastros.lancamento_inicial:ler"],
+  // O Quadro de Lotação (etapa 2): as abas de uma competência e a lista; o Painel de Bordo.
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/movimentacoes/, "colaboradores_quadro.movimentacoes:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/controle/, "colaboradores_quadro.controle:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/realizado/, "colaboradores_quadro.realizado:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao\/[^/]+\/jornada/, "colaboradores_quadro.jornada:ler"],
+  [/^\/gestao-de-colaboradores\/quadro-de-lotacao(\/|$)/, "colaboradores_quadro:ler"],
+  [/^\/gestao-de-colaboradores\/painel\/resultados(\/|$)/, "colaboradores_painel.resultados:ler"],
+  [/^\/gestao-de-colaboradores\/painel\/indicadores(\/|$)/, "colaboradores_painel.indicadores:ler"],
   // Os Arquivos Gerais (05/11/2026).
   [/^\/arquivos-gerais\/treinamentos(\/|$)/, "arquivos_treinamentos:ler"],
   [/^\/arquivos-gerais\/informativos(\/|$)/, "arquivos_informativos:ler"],
@@ -423,13 +539,16 @@ export const pageTitles: Record<string, string> = {
   "/cadastros/centros-custo": "Centros de Custo",
   "/cadastros/contas-resultado": "Contas de Resultado",
   "/cadastros/estrutura-dre": "Estrutura da DRE",
-  "/cadastros/reclassificacoes": "Reclassificações de Conta",
+  "/cadastros/reclassificacoes": "Reclassificações",
+  "/cadastros/reclassificacoes-fornecedor": "Reclassificações",
   "/cadastros/precos-contrato": "Preços do Contrato",
   "/cadastros/unidades": "Unidades de Negócio",
   "/cadastros/linhas": "Linhas",
   "/cadastros/estrutura-indicadores": "Indicadores",
   "/cadastros/regras-rateio": "Regras de Rateio",
+  "/cadastros/redistribuicoes-gastos": "Redistribuições de Gastos",
   "/cadastros/alocacao-linhas": "Alocação nas Linhas",
+  "/cadastros/departamentos": "Departamentos",
   "/cadastros/tipos-movimento": "Tipos de Movimento",
   "/cadastros/tabela-estacas": "Tabela de Estacas",
   "/usuarios": "Usuários",
@@ -441,6 +560,7 @@ export const pageTitles: Record<string, string> = {
   "/cenarios/sinteticos": "Cenários Sintéticos",
   "/cenarios/analiticos": "Cenários Analíticos",
   "/central-de-conectividade/biblioteca-de-apis": "APIs",
+  "/central-de-conectividade/acessos": "Acessos",
 };
 
 /** Uma parte do caminho no topo da tela; sem href, é a tela atual. */
@@ -472,8 +592,18 @@ export function migalhas(pathname: string, rotuloDaEtapa: (chave: string) => str
   if (/^\/analises-gerenciais\/paineis-de-bordo\/[^/]+/.test(pathname)) {
     return [{ rotulo: "Painéis e Apresentações", href: "/analises-gerenciais/paineis-de-bordo" }, { rotulo: rotuloDoRelatorio ?? "Painel" }];
   }
+  // Uma competência do Quadro de Lotação (06/11/2026; 12/11/2026, como no Fechamento Mensal: o processo leva à lista das
+  // competências): "Gestão de Colaboradores › 11/2026 › Quadro de Lotação › Movimentações".
+  const quadro = pathname.match(/^\/gestao-de-colaboradores\/quadro-de-lotacao\/(\d{4})-(\d{2})\/([^/]+)/);
+  if (quadro) {
+    const aba = { movimentacoes: "Movimentações", controle: "Aprovações", realizado: "Realizado", jornada: "Jornada" }[quadro[3]] ?? quadro[3];
+    return [{ rotulo: "Gestão de Colaboradores", href: "/gestao-de-colaboradores" }, { rotulo: `${quadro[2]}/${quadro[1]}` }, { rotulo: "Quadro de Lotação" }, { rotulo: aba }];
+  }
   const doGrupo = grupoDaTela(pathname);
-  if (doGrupo) return [{ rotulo: doGrupo.grupo.title, href: doGrupo.grupo.href }, { rotulo: doGrupo.tela.title }, ...(doGrupo.aba ? [{ rotulo: doGrupo.aba.title }] : [])];
+  // A tela inicial do processo (12/11/2026): só o nome dele.
+  if (doGrupo && !doGrupo.tela) return [{ rotulo: doGrupo.grupo.title }];
+  if (doGrupo?.tela)
+    return [{ rotulo: doGrupo.grupo.title, href: doGrupo.grupo.inicio?.href ?? doGrupo.grupo.href }, { rotulo: doGrupo.tela.title }, ...(doGrupo.aba ? [{ rotulo: doGrupo.aba.title }] : [])];
   return [{ rotulo: getPageTitle(pathname) }];
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 
@@ -15,9 +15,11 @@ import { Quadradinho } from "./GraficoRealizadoOrcado";
 /**
  * A Comparação de Resultados Empresariais (21/10/2026; de início, "Compara Com"): o cenário comparado (as colunas pretas de Resultados e o
  * orçado do Painel de Bordo), entre os cenários marcados (de qualquer exercício, desde 22/10/2026: num de outro, valem os
- * mesmos meses dele) (Previsão, Orçamento, Anterior e Vendido). A lista mostra só o nome da marcação (30/10/2026, pedido do
+ * mesmos meses dele) (Forecast, Orçamento, Anterior e Vendido). A lista mostra só o nome da marcação (30/10/2026, pedido do
  * Adão; antes, também o nome do cenário e o ano). O padrão (23/10/2026; antes, o Orçamento) é a
- * primeira marcação que houver, nessa ordem; a escolha fica guardada no navegador e vale nas duas telas (o botão fica só em Resultados).
+ * primeira marcação que houver, nessa ordem; a escolha fica guardada no navegador e vale nas duas telas — desde 11/11/2026
+ * (pedido do Adão), com o botão nas duas (Resultados e Painel de Bordo), e a mudança numa vale na outra na hora, também em
+ * outra janela do navegador (o evento da escolha e o storage do navegador), com os dados recarregados.
  * Desde 31/10/2026 (pedido do Adão), num modal, com dois tipos: a Padrão (esse cenário) e a PROVA (dois ou mais dos cenários
  * marcados, lado a lado, com as cores dos objetos PROVA dos Relatórios Executivos).
  */
@@ -47,6 +49,8 @@ function guardar(chave: string, valor: string) {
     // Sem o armazenamento do navegador, vale só nesta tela.
   }
 }
+/** O aviso da escolha nova (11/11/2026): as telas abertas nesta janela leem de novo; nas outras janelas, o evento storage. */
+const EVENTO = "sig:comparacao";
 function lerProva(): MarcacaoComparavel[] {
   try {
     const v: unknown = JSON.parse(ler(CHAVE_DA_PROVA) ?? "[]");
@@ -69,6 +73,24 @@ export function useComparaCom(ano: number | null) {
   const [escolhida, setEscolhida] = useState<MarcacaoComparavel | null>(() => (naTela ? (ler(CHAVE) as MarcacaoComparavel | null) : null));
   const [tipo, setTipo] = useState<TipoDaComparacao>(() => (naTela && ler(CHAVE_DO_TIPO) === "prova" ? "prova" : "padrao"));
   const [escolhidasProva, setEscolhidasProva] = useState<MarcacaoComparavel[]>(() => (naTela ? lerProva() : []));
+  // A escolha mudada em outra tela (o Painel de Bordo e Resultados, abertos juntos) ou em outra janela (11/11/2026): lê de
+  // novo; as consultas, pela chave com a comparação, recarregam sozinhas.
+  useEffect(() => {
+    const reler = () => {
+      setEscolhida(ler(CHAVE) as MarcacaoComparavel | null);
+      setTipo(ler(CHAVE_DO_TIPO) === "prova" ? "prova" : "padrao");
+      setEscolhidasProva(lerProva());
+    };
+    const aoMudarNoNavegador = (e: StorageEvent) => {
+      if (e.key === null || [CHAVE, CHAVE_DO_TIPO, CHAVE_DA_PROVA].includes(e.key)) reler();
+    };
+    window.addEventListener(EVENTO, reler);
+    window.addEventListener("storage", aoMudarNoNavegador);
+    return () => {
+      window.removeEventListener(EVENTO, reler);
+      window.removeEventListener("storage", aoMudarNoNavegador);
+    };
+  }, []);
   const consulta = useQuery({ queryKey: ["relatorios", "comparaveis", ano], queryFn: () => relatoriosService.comparaveis(ano!), enabled: ano !== null });
   const opcoes = consulta.data ?? [];
   // Sem escolha (ou a escolhida sem cenário marcado), a primeira marcação que houver na ORDEM (23/10/2026; antes, o Orçamento
@@ -88,6 +110,7 @@ export function useComparaCom(ano: number | null) {
     guardar(CHAVE, e.comparaCom);
     guardar(CHAVE_DO_TIPO, e.tipo);
     guardar(CHAVE_DA_PROVA, JSON.stringify(e.prova));
+    window.dispatchEvent(new Event(EVENTO));
   };
   return {
     comparaCom,
@@ -179,7 +202,7 @@ function ComparacaoDialog({ opcoes, inicial, onAplicar, onFechar }: { opcoes: Co
         <DialogHeader>
           <DialogTitle>Comparação de Resultados Empresariais</DialogTitle>
           <DialogDescription>
-            Com quais cenários marcados (Criação de Cenários / Cenários Sintéticos) o realizado se compara, em Resultados e no Painel de Bordo (os cards e
+            Com quais cenários marcados (Análises Gerenciais / Cenários Sintéticos) o realizado se compara, em Resultados e no Painel de Bordo (os cards e
             a aba Indicadores). A escolha fica guardada neste navegador.
           </DialogDescription>
         </DialogHeader>

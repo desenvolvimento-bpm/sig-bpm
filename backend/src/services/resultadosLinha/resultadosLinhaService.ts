@@ -2,7 +2,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { ACESSO_TOTAL } from "../acesso/acesso.js";
 import { auditar } from "../auditoriaService.js";
-import { ehCentroDeObra } from "../classificacao/centrosObra.js";
+import { codigoQueVale, ehCentroDeObra } from "../classificacao/centrosObra.js";
 import { manualNoSinalDoBalancete, VOLUMES_DA_DRE } from "../dre/apuracaoUnidades.js";
 import { avaliarExpressao, codigosDaExpressao } from "../dre/expressao.js";
 import { mesesDoExercicio, montar, type LinhaEstrutura } from "../relatorios/resultadosService.js";
@@ -58,7 +58,12 @@ type Composicao = { origem?: { contabil?: OrigemContabil; contabilPar?: OrigemCo
  * Um grupo de lançamentos (os contábeis e os manuais) com o mesmo contexto: a linha da DRE, o balde, a filial, o centro e a
  * conta — e, nos manuais de rateio com os percentuais de outra competência (30/10/2026), ela.
  */
-type Fonte = { linhaDREId: string; balde: string; filial: number; rateio: boolean; rateioDe: string | null; centroCustoId: string | null; codigoCentro: string | null; reduzido: string | null; valor: number };
+/**
+ * `codigoCentro`: o centro do balancete (o RM), que acha as tarefas das requisições e das notas fiscais; `codigoDaObra`: o
+ * centro que vale (13/11/2026: o corrigido pela contestação, pela reclassificação por fornecedor ou o destino da
+ * redistribuição), que diz se o custo é direto de uma obra.
+ */
+type Fonte = { linhaDREId: string; balde: string; filial: number; rateio: boolean; rateioDe: string | null; centroCustoId: string | null; codigoCentro: string | null; codigoDaObra: string | null; reduzido: string | null; valor: number };
 type Regra = { origem: string; centroCustoId: string | null; balde: string | null; destino: string; linhaId: string | null; base: string | null };
 type DadosDoMes = { volumes: Volume[]; receita: ItemDaReceita[] };
 
@@ -90,10 +95,15 @@ export function escopo(est: LinhaDRE[], prefixos: Set<string>) {
 /** Os lançamentos do mês, contábeis e manuais (fora do balde RN), agrupados pelo contexto, no sinal do balancete. */
 async function fontesDoMes(competenciaId: string): Promise<Fonte[]> {
   const prisma = getPrismaClient();
-  const [contabeis, manuais] = await Promise.all([
+  const [diretos, partes, manuais] = await Promise.all([
     prisma.lancamentoContabil.findMany({
-      where: { competenciaId, linhaDREId: { not: null } },
-      select: { linhaDREId: true, balde: true, filial: true, alocacao: true, valorMovimento: true, centroCustoId: true, codigoCentroCusto: true, contaResultado: { select: { reduzido: true } } },
+      where: { competenciaId, redistribuicaoId: null, linhaDREId: { not: null } },
+      select: { linhaDREId: true, balde: true, filial: true, alocacao: true, valorMovimento: true, centroCustoId: true, codigoCentroCusto: true, centroCusto: { select: { codigoRM: true } }, contaResultado: { select: { reduzido: true } } },
+    }),
+    // Os redistribuídos (13/11/2026) pelas partes: o centro (e o código dele) de cada destino.
+    prisma.lancamentoRedistribuido.findMany({
+      where: { competenciaId },
+      select: { linhaDREId: true, balde: true, filial: true, alocacao: true, valorMovimento: true, centroCustoId: true, centroCusto: { select: { codigoRM: true } }, lancamentoContabil: { select: { codigoCentroCusto: true, contaResultado: { select: { reduzido: true } } } } },
     }),
     prisma.lancamentoManual.findMany({
       where: { competenciaId, linhaDREId: { not: null } },
@@ -112,14 +122,18 @@ async function fontesDoMes(competenciaId: string): Promise<Fonte[]> {
   ]);
   const grupos = new Map<string, Fonte>();
   const somar = (f: Omit<Fonte, "valor">, v: number) => {
-    const k = [f.linhaDREId, f.balde, f.filial, f.rateio ? 1 : 0, f.rateioDe ?? "", f.centroCustoId ?? "", f.codigoCentro ?? "", f.reduzido ?? ""].join("|");
+    const k = [f.linhaDREId, f.balde, f.filial, f.rateio ? 1 : 0, f.rateioDe ?? "", f.centroCustoId ?? "", f.codigoCentro ?? "", f.codigoDaObra ?? "", f.reduzido ?? ""].join("|");
     const g = grupos.get(k);
     if (g) g.valor += v;
     else grupos.set(k, { ...f, valor: v });
   };
+  const contabeis = [
+    ...diretos.map(({ centroCusto, ...l }) => ({ ...l, codigoDaObra: codigoQueVale({ ...l, centroCusto }) })),
+    ...partes.map(({ centroCusto, lancamentoContabil, ...p }) => ({ ...p, codigoCentroCusto: lancamentoContabil.codigoCentroCusto, codigoDaObra: centroCusto.codigoRM, contaResultado: lancamentoContabil.contaResultado })),
+  ];
   for (const l of contabeis) {
     somar(
-      { linhaDREId: l.linhaDREId!, balde: l.balde ?? "", filial: l.filial, rateio: l.alocacao === "RATEIO", rateioDe: null, centroCustoId: l.centroCustoId, codigoCentro: l.codigoCentroCusto, reduzido: l.contaResultado.reduzido },
+      { linhaDREId: l.linhaDREId!, balde: l.balde ?? "", filial: l.filial, rateio: l.alocacao === "RATEIO", rateioDe: null, centroCustoId: l.centroCustoId, codigoCentro: l.codigoCentroCusto, codigoDaObra: l.codigoDaObra, reduzido: l.contaResultado.reduzido },
       Number(l.valorMovimento),
     );
   }
@@ -135,6 +149,7 @@ async function fontesDoMes(competenciaId: string): Promise<Fonte[]> {
         rateioDe: rateio && m.competenciaMovimentoId !== competenciaId ? m.competenciaMovimentoId : null,
         centroCustoId: m.centroCustoId,
         codigoCentro: m.centroCusto?.codigoRM ?? null,
+        codigoDaObra: m.centroCusto?.codigoRM ?? null,
         reduzido: m.contaResultado?.reduzido ?? null,
       },
       Number(manualNoSinalDoBalancete(m.linhaDRE!.grupoSigla, m.valor)),
@@ -268,8 +283,8 @@ async function calcularMes(
   const baseDaUnidade = (u: number): Base => (u === 3 ? "DIAS_ACOMPANHAMENTO" : "M3_PRODUZIDO");
   /** A obra do centro de obra: a produção (ou os acompanhamentos, ou a receita nas despesas variáveis de venda) da obra no mês; sem ela, no ano. */
   const pelaObra = (u: number, f: Fonte | null, grupo: string) => {
-    if (!f?.codigoCentro || !ehCentroDeObra(f.codigoCentro)) return null;
-    const obra = obraDoNumero.get(numeroDaObra(f.codigoCentro));
+    if (!f?.codigoDaObra || !ehCentroDeObra(f.codigoDaObra)) return null;
+    const obra = obraDoNumero.get(numeroDaObra(f.codigoDaObra));
     if (!obra) return null;
     const base: Base = grupo === "DVV" ? "RECEITA" : baseDaUnidade(u);
     const montagem = (dados: DadosDoMes) => {
@@ -367,12 +382,14 @@ async function calcularMes(
         { nivel: "RATEIO", pesos: () => (f ? pelaRegra(u, regraDoBalde.get(f.balde)) : null) },
         { nivel: "UNIDADE", pesos: () => pesosDaBase(baseDaUnidade(u), u, dadosDoMes) },
       ];
-      const doCentroDeObra = !!f?.codigoCentro && ehCentroDeObra(f.codigoCentro);
+      // A obra pelo centro que vale (13/11/2026): o movimento que saiu da obra (contestação, reclassificação por fornecedor ou
+      // redistribuição) não é mais direto nela.
+      const doCentroDeObra = !!f?.codigoDaObra && ehCentroDeObra(f.codigoDaObra);
       const alocado = alocar(a, tarefa, passos, semLinha(u));
       registrar(u, codigo, alocado, doCentroDeObra);
       // O lançamento do centro de obra é direto na obra (03/11/2026), em cada linha a que foi.
       if (doCentroDeObra) {
-        const obra = obraDoNumero.get(numeroDaObra(f!.codigoCentro))?.id ?? SEM_OBRA;
+        const obra = obraDoNumero.get(numeroDaObra(f!.codigoDaObra!))?.id ?? SEM_OBRA;
         for (const p of alocado) somarNaObra(r.obras, p.linhaId, obra, codigo, p.valor, true);
       }
     }

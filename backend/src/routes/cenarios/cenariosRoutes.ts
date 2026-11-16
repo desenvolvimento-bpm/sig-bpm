@@ -27,6 +27,8 @@ cenariosRoutes.post("/", autenticacao, express.json(), tela("lista", "editar"), 
 cenariosRoutes.post("/importar/analise", autenticacao, editarSinteticos, express.raw({ type: () => true, limit: `${env.UPLOAD_MAX_MB}mb` }), asyncHandler(c.analisar));
 cenariosRoutes.post("/importar", autenticacao, editarSinteticos, express.json(), asyncHandler(c.importar));
 cenariosRoutes.get("/:id", autenticacao, ler, asyncHandler(c.obter));
+// As Contas do Balancete de uma conta da DRE (13/11/2026): de quem lê o cenário (Premissas / Centros de Custo e Resultados).
+cenariosRoutes.get("/:id/contas-do-balancete", autenticacao, ler, asyncHandler(c.contasDoBalancete));
 cenariosRoutes.patch("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.atualizar));
 cenariosRoutes.delete("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), asyncHandler(c.excluir));
 cenariosRoutes.put("/:id/marcacao", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.marcar));
@@ -34,8 +36,8 @@ cenariosRoutes.put("/:id/marcacao", autenticacao, tela("configuracoes", "editar"
 cenariosRoutes.get("/:id/exportar", autenticacao, tela("resultados", "ler"), asyncHandler(c.exportar));
 cenariosRoutes.get("/:id/centros/exportar", autenticacao, tela("premissas", "ler", "centros"), asyncHandler(c.exportarCentros));
 cenariosRoutes.get("/:id/resultados", autenticacao, tela("resultados", "ler", (r: Request) => abaDaVisao(r.query.visao ?? 0)), asyncHandler(c.resultados));
-// Os indicadores: a tela Indicadores (o controlador deixa só as abas permitidas) ou, no analítico, a aba Indicadores
-// Manuais das Premissas.
+// Os indicadores: a aba Indicadores do Painel de Bordo (o controlador deixa só as abas permitidas) ou a aba Indicadores
+// Manuais (a da tela Resultados, nos sintéticos; a das Premissas, nos analíticos).
 cenariosRoutes.get("/:id/indicadores", autenticacao, verificarIndicadoresDoCenario, asyncHandler(c.indicadores));
 cenariosRoutes.get("/:id/painel", autenticacao, tela("painel"), asyncHandler(c.painel));
 // A edição da DRE do cenário pela ferramenta (12/10/2026).
@@ -49,7 +51,7 @@ cenariosRoutes.put("/:id/realocacoes", autenticacao, tela("configuracoes", "edit
 cenariosRoutes.post("/:id/referencia/composta", autenticacao, tela("configuracoes", "editar", "referencia"), express.json(), asyncHandler(c.referenciaComposta));
 cenariosRoutes.post("/:id/referencia/cenario", autenticacao, tela("configuracoes", "editar", "referencia"), express.json(), asyncHandler(c.referenciaCenario));
 // O versionamento (13/10/2026): Congelar Versão, Reabrir Versão e Criar Revisão.
-// O Recalcular dos Resultados dos analíticos (14/10/2026): depois de editar uma regra de rateio.
+// O Recalcular dos Resultados dos analíticos (14/10/2026): depois de editar uma regra de rateio (os reajustes ficam como estão).
 cenariosRoutes.post("/:id/recalcular", autenticacao, tela("resultados", "editar"), asyncHandler(c.recalcular));
 cenariosRoutes.post("/:id/versao", autenticacao, tela("resultados", "editar"), asyncHandler(c.congelarVersao));
 cenariosRoutes.post("/:id/versao/reabrir", autenticacao, tela("resultados", "editar"), asyncHandler(c.reabrirVersao));
@@ -76,6 +78,19 @@ cenariosRoutes.get("/:id/centros/contas", autenticacao, tela("premissas", "ler",
 cenariosRoutes.put("/:id/centros", autenticacao, tela("premissas", "editar", "centros"), express.json({ limit: "2mb" }), asyncHandler(c.gravarCentro));
 // Os rateios: a aba Rateios das Premissas; o aviso dos rateios sem base também aparece nas outras abas e nos Resultados.
 cenariosRoutes.get("/:id/rateios", autenticacao, verificarPermissaoDoCenario("ler", "premissas"), asyncHandler(c.rateios));
+// A aba Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores).
+cenariosRoutes.get("/:id/quadro", autenticacao, tela("premissas", "ler", "quadro"), asyncHandler(c.quadro));
+cenariosRoutes.put("/:id/quadro/meses", autenticacao, tela("premissas", "editar", "quadro"), express.json({ limit: "4mb" }), asyncHandler(c.gravarMesesDoQuadro));
+cenariosRoutes.post("/:id/quadro/excluir", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.excluirLinhasDoQuadro));
+cenariosRoutes.post("/:id/quadro", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
+cenariosRoutes.put("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
+cenariosRoutes.delete("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), asyncHandler(c.gravarLinhaDoQuadro));
+// A aba Reajustes dos analíticos (11/11/2026; 12/11/2026: nas Configurações): os Índices de Reajuste e a Aplicação dos Reajustes.
+cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("configuracoes", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
+cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));
+cenariosRoutes.put("/:id/premissas/reajustes/aplicacao", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarAplicacaoDosReajustes));
+// Aplicar / Remover Reajustes (o botão do quadro Aplicação dos Reajustes): na DRE, nunca duas vezes seguidas.
+cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.aplicarReajustes));
 // Os investimentos e o extra-operacional dos cenários analíticos (13/10/2026).
 cenariosRoutes.get("/:id/investimentos", autenticacao, tela("premissas", "ler", "investimentos"), asyncHandler(c.investimentos));
 cenariosRoutes.post("/:id/investimentos/excluir", autenticacao, tela("premissas", "editar", "investimentos"), express.json(), asyncHandler(c.excluirInvestimentos));

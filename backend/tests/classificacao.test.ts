@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 
 import {
   classificarLancamento,
+  corrigirCentroEConta,
+  filialDoDepartamento,
+  partesDoValor,
+  redistribuicaoDoMovimento,
   verificarLancamento,
   type CentroParaClassificar,
   type ContaParaClassificar,
@@ -93,5 +97,95 @@ describe("classificarLancamento", () => {
     const c = classificarLancamento("1.12.00000001", centro("CUSTOS DE PRODUÇÃO (CP)", "DIRETA"), conta({ linhaDREId: null, linhaDREDescricao: null }));
     assert.equal(c.validacao, "SEM_DESTINO");
     assert.equal(c.etiqueta, "CUSTOS DE PRODUÇÃO (CP).Mão de Obra Direta.-");
+  });
+
+  it("conta Sem Resultado (13/11/2026): sem linha, sem departamento e sem pendência, qualquer que seja o centro", () => {
+    const semResultado = conta({ linhaDREId: null, linhaDREDescricao: null, departamento: null, atribuicao: null, semResultado: true });
+    // O centro com departamento e a conta sem ele daria <ERRO!>; sem a linha, Sem Destino; fora do cadastro, Centro Não Cadastrado.
+    assert.equal(classificarLancamento("1.12.00000001", centro("CUSTOS DE PRODUÇÃO (CP)", "DIRETA"), semResultado).validacao, "OK");
+    assert.equal(classificarLancamento("1.19.00000063", null, semResultado).validacao, "OK");
+    assert.equal(classificarLancamento("1.12.00000001", centro("CUSTOS DE PRODUÇÃO (CP)", "DIRETA"), semResultado).linhaDREId, null);
+  });
+});
+
+describe("corrigirCentroEConta (Reclassificações por Fornecedor e por Conta, 13/11/2026)", () => {
+  const ccImperativo = { id: "cc-imp", codigoRM: "1.02.003" };
+  const ccContestacao = { id: "cc-ct", codigoRM: "1.05.001" };
+  const regras = {
+    contaDestino: new Map([
+      ["1.01.001|conta-a", "conta-do-centro-rm"],
+      ["1.02.003|conta-a", "conta-do-imperativo"],
+    ]),
+    centroDoFornecedor: new Map([["SKIBA GAS", ccImperativo]]),
+  };
+  const mov = (cliForn: string | null) => ({ codigoCentroCusto: "1.01.001", contaResultadoId: "conta-a", cliForn });
+
+  it("sem regra do fornecedor: o centro do RM e a troca de conta dele", () => {
+    const r = corrigirCentroEConta(mov("OUTRO"), regras, null);
+    assert.deepEqual([r.centro, r.codigoCentroCusto, r.contaId, r.porFornecedor, r.porConta], [null, "1.01.001", "conta-do-centro-rm", false, true]);
+  });
+
+  it("o fornecedor vai para o centro imperativo, comparado sem caixa e sem espaços nas pontas", () => {
+    const r = corrigirCentroEConta(mov("  skiba gas "), regras, null);
+    assert.equal(r.centro, ccImperativo);
+    assert.equal(r.codigoCentroCusto, "1.02.003");
+    assert.equal(r.porFornecedor, true);
+  });
+
+  it("o fornecedor só troca o centro: a troca de conta continua pelo centro do RM, e não pelo imperativo", () => {
+    const r = corrigirCentroEConta(mov("SKIBA GAS"), regras, null);
+    assert.deepEqual([r.codigoCentroCusto, r.contaId, r.porConta], ["1.02.003", "conta-do-centro-rm", true]);
+  });
+
+  it("a contestação sobrepõe: o centro novo no lugar do imperativo e a conta nova no lugar da reclassificada", () => {
+    const r = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: ccContestacao, contaNovaId: "conta-da-contestacao" });
+    assert.deepEqual([r.centro, r.codigoCentroCusto, r.contaId], [ccContestacao, "1.05.001", "conta-da-contestacao"]);
+  });
+
+  it("a contestação só da conta mantém o centro imperativo; a só do centro mantém a conta reclassificada", () => {
+    const soConta = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: null, contaNovaId: "conta-da-contestacao" });
+    assert.deepEqual([soConta.centro, soConta.contaId], [ccImperativo, "conta-da-contestacao"]);
+    const soCentro = corrigirCentroEConta(mov("SKIBA GAS"), regras, { centroNovo: ccContestacao, contaNovaId: null });
+    assert.deepEqual([soCentro.centro, soCentro.contaId], [ccContestacao, "conta-do-centro-rm"]);
+  });
+
+  it("movimento sem fornecedor (o balancete agregado) não muda de centro", () => {
+    const r = corrigirCentroEConta(mov(null), regras, null);
+    assert.deepEqual([r.centro, r.porFornecedor], [null, false]);
+  });
+});
+
+describe("Redistribuições de Gastos (13/11/2026)", () => {
+  const regra = (over: Partial<Parameters<typeof redistribuicaoDoMovimento>[1][number]> = {}) => ({
+    id: "r1",
+    linhaDREId: "linha-pj",
+    departamento: null,
+    fornecedores: new Set(["MK ENGENHARIA E CONSULTORIA"]),
+    destinos: [{ centro: { id: "a" }, percentual: 0.6 }, { centro: { id: "b" }, percentual: 0.4 }],
+    ...over,
+  });
+  const mov = (over: Partial<Parameters<typeof redistribuicaoDoMovimento>[0]> = {}) => ({ linhaDREId: "linha-pj", grupoSigla: "CPP", filial: 1, cliForn: " mk engenharia e consultoria ", ...over });
+
+  it("vale para o fornecedor marcado (sem caixa e sem espaços nas pontas), na conta da DRE da regra", () => {
+    assert.equal(redistribuicaoDoMovimento(mov(), [regra()])?.id, "r1");
+    assert.equal(redistribuicaoDoMovimento(mov({ cliForn: "OUTRO" }), [regra()]), null);
+    assert.equal(redistribuicaoDoMovimento(mov({ linhaDREId: "outra-linha" }), [regra()]), null);
+    assert.equal(redistribuicaoDoMovimento(mov({ cliForn: null }), [regra()]), null);
+  });
+
+  it("no departamento: os grupos da DRE dele e, na Produção, a filial da unidade (1 Matriz, 2 Filial)", () => {
+    const matriz = regra({ departamento: { grupos: new Set(["CPP"]), filial: filialDoDepartamento(1) } });
+    assert.equal(redistribuicaoDoMovimento(mov({ filial: 1 }), [matriz])?.id, "r1");
+    assert.equal(redistribuicaoDoMovimento(mov({ filial: 2 }), [matriz]), null);
+    const administrativo = regra({ departamento: { grupos: new Set(["DA"]), filial: filialDoDepartamento(4) } });
+    assert.equal(redistribuicaoDoMovimento(mov({ grupoSigla: "DA", filial: 2 }), [administrativo])?.id, "r1");
+    assert.equal(redistribuicaoDoMovimento(mov({ grupoSigla: "CPP" }), [administrativo]), null);
+  });
+
+  it("divide o valor em centavos, e as partes somam exatamente o valor", () => {
+    assert.deepEqual(partesDoValor(1000, [0.6, 0.4]), [600, 400]);
+    assert.deepEqual(partesDoValor(100, [1 / 3, 1 / 3, 1 / 3]), [33.33, 33.33, 33.34]);
+    const partes = partesDoValor(-1234.57, [0.25, 0.25, 0.5]);
+    assert.equal(Math.round(partes.reduce((s, x) => s + x, 0) * 100), -123457);
   });
 });

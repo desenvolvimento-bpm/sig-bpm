@@ -91,7 +91,7 @@ const COMO_USAR_ANALITICOS = (
     <li>Clique na linha para abrir o cenário, com as telas Configurações, Premissas, Resultados, Painel de Bordo e Histórico (as que o seu perfil lê).</li>
     <li>
       Marcação, exclusão, nome, descrição, visualização e comparativo ficam em Configurações, como nos sintéticos. Cada marcação (Orçamento,
-      Anterior, Vendido e Previsão) fica ativa em um cenário só, sintético ou analítico: marcar um tira a marcação do anterior.
+      Anterior, Vendido e Forecast) fica ativa em um cenário só, sintético ou analítico: marcar um tira a marcação do anterior.
     </li>
     <li>Use os filtros nos rótulos das colunas, “Apenas com Marcação” e “Apenas Vigentes” (só a versão mais alta de cada cenário).</li>
   </ul>
@@ -149,7 +149,7 @@ export function CenariosContent({ tipo = "SINTETICO" }: { tipo?: TipoCenario }) 
             </li>
             <li>Clique na linha para abrir o cenário, com as telas Configurações, Resultados, Painel de Bordo e Reajustes (as que o seu perfil lê).</li>
             <li>
-              Depois da etiqueta Vigente, a da marcação (com o símbolo de marcação) diz se o cenário é o Orçamento, o Anterior, o Vendido ou a Previsão. Para marcar, excluir,
+              Depois da etiqueta Vigente, a da marcação (com o símbolo de marcação) diz se o cenário é o Orçamento, o Anterior, o Vendido ou o Forecast. Para marcar, excluir,
               importar um arquivo no cenário ou mudar o nome, a descrição, a visualização, a referência e o comparativo, abra o cenário e vá em
               Configurações. Cada marcação fica ativa em um cenário só: marcar outro tira a marcação do anterior.
             </li>

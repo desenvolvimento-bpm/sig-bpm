@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownToLine, CheckCircle2, Circle, Loader2, MinusCircle, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, Calculator, CheckCircle2, Circle, Loader2, MinusCircle, Upload, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { SinalDadosNovos } from "@/components/shared/SinalDadosNovos";
 import { rotuloDoMes } from "@/lib/etapasDoMes";
 
 import { inteiro } from "../../utils/formatacao";
+import { ApurarDialog } from "./ApurarDialog";
 import { plural } from "@/lib/texto";
 import {
   importacoesService,
@@ -272,6 +273,7 @@ export function ImportarLoteDialog({
   const [escolhido, setEscolhido] = useState<File | null>(null);
   const [previa, setPrevia] = useState<PreviaLote | null>(null);
   const [importado, setImportado] = useState<PreviaLote | null>(null);
+  const [apurando, setApurando] = useState(false);
   const analisar = useMutation({
     mutationFn: (arquivo: File) => {
       setEnvio(0);
@@ -311,6 +313,15 @@ export function ImportarLoteDialog({
   // Os arquivos que servem; no Importar da linha, só o do tipo, com a aba dele.
   const arquivos = ARQUIVOS_DE_IMPORTACAO.map((a) => ({ arquivo: a.arquivo, abas: Object.keys(a.abas).filter((aba) => !tipo || a.abas[aba] === tipo) })).filter((a) => a.abas.length);
   const abaDoTipo = tipo ? arquivos[0]?.abas[0] : undefined;
+  // O Apurar (06/11/2026): no Quadro de Lotação e nos Indicadores do Administrativo, os valores do mês saem do Quadro de
+  // Lotação da Gestão de Colaboradores, sem a planilha.
+  const apuravel = tipo === "QUADRO_LOTACAO" || tipo === "INDICADORES_ADMIN";
+  const botaoApurar = apuravel ? (
+    <Button type="button" variant="outline" className="rounded-sm" onClick={() => setApurando(true)} disabled={importar.isPending}>
+      <Calculator className="size-4" />
+      Apurar
+    </Button>
+  ) : null;
   return (
     <Dialog
       open={aberto}
@@ -361,6 +372,12 @@ export function ImportarLoteDialog({
               </p>
             ) : null}
             {analisar.isError ? <p className="text-sm text-red-700">{mensagemDoErro(analisar.error, "Não foi possível ler o arquivo.")}</p> : null}
+            {botaoApurar ? (
+              <div className="flex items-center justify-end gap-3">
+                <p className="text-xs text-gray-600">Ou apure os valores do mês no Quadro de Lotação (Gestão de Colaboradores):</p>
+                {botaoApurar}
+              </div>
+            ) : null}
             {/* Os arquivos que servem para a importação, com as abas que a ferramenta lê de cada um. */}
             <div className="rounded-sm border border-gray-200 bg-gray-50 p-3">
               <p className="text-xs font-bold text-gray-900">{arquivos.length === 1 ? "Arquivo que Serve" : "Arquivos que Servem"} para a Importação</p>
@@ -430,6 +447,7 @@ export function ImportarLoteDialog({
                   <Button type="button" variant="outline" className="rounded-sm" onClick={recomecar} disabled={importar.isPending}>
                     Escolher Outro Arquivo
                   </Button>
+                  {botaoApurar}
                   <Button
                     type="button"
                     onClick={() => importar.mutate()}
@@ -445,6 +463,7 @@ export function ImportarLoteDialog({
           </div>
         )}
       </DialogContent>
+      {apurando && apuravel ? <ApurarDialog anoMes={anoMes} tipo={tipo} onFechar={() => setApurando(false)} /> : null}
     </Dialog>
   );
 }

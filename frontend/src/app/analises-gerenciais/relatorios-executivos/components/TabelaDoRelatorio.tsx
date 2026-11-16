@@ -94,7 +94,7 @@ export function TabelaDoBloco({
   if (cenarios && !cenarios.length) {
     return (
       <div className="flex h-full items-center justify-center rounded-sm border border-dashed border-gray-300 bg-white p-3 text-center text-xs text-gray-500">
-        Nenhum cenário da Comparação PROVA (Configurações) está marcado (Criação de Cenários / Cenários Sintéticos).
+        Nenhum cenário da Comparação PROVA (Configurações) está marcado (Análises Gerenciais / Cenários Sintéticos).
       </div>
     );
   }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CopyCheck, Download, Eraser, FileUp, FolderUp, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { plural } from "@/lib/texto";
+import { usePermissions } from "@/context/PermissionContext";
 
 import { mensagemDoErro, nomeDoArquivo } from "@/app/competencias/[anoMes]/dre/components/ExportarDRE";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -22,12 +23,21 @@ const invalidar = (queryClient: ReturnType<typeof useQueryClient>) => {
 
 /** O que cada botão faz, nos modais e no Como Usar. */
 const ABAS_DA_PLANILHA =
-  "Matriz, Filial, Serviços, Centros de Custo (com o Quadro de Lotação e os Encargos e Benefícios), Investimentos (a Depreciação Base), Extra-Operacional e Indicadores Manuais";
+  "Matriz, Filial, Serviços, Quadro de Lotação, Centros de Custo (com o Quadro de Lotação e os Encargos e Benefícios), Investimentos (a Depreciação Base), Extra-Operacional e Indicadores Manuais";
+
+/** As abas da planilha das premissas (todas menos os Reajustes, que não têm meses digitados), pela chave da permissão. */
+const ABAS_DA_PERMISSAO = ["matriz", "filial", "servicos", "quadro", "centros", "rateios", "investimentos", "extra", "manuais"];
+/** O perfil edita todas as abas das premissas: o que Replicar Médias e Apagar Valores pedem (o servidor confere também). */
+export function useEditaTodasAsAbas() {
+  const { hasPermission } = usePermissions();
+  return ABAS_DA_PERMISSAO.every((a) => hasPermission(`cenarios_analiticos_premissas.${a}:editar`));
+}
 
 /**
  * Os botões Replicar Médias e Apagar Valores (15/10/2026; antes, um botão só, Replicar Médias / Apagar Valores, com a
- * escolha no modal), na altura do título das Premissas: em todas as abas, replica a Média de Referência de cada linha
- * nos doze meses, ou deixa os meses em branco. Cada um abre o modal dele, que confirma antes de gravar.
+ * escolha no modal; desde 12/11/2026, pedido do Adão, em Configurações / Referência, logo depois do Realocar — antes, na
+ * altura do título das Premissas): em todas as abas, replica a Média de Referência de cada linha nos doze meses, ou deixa
+ * os meses em branco. Cada um abre o modal dele, que confirma antes de gravar.
  */
 export function BotaoReplicarMedias({ id }: { id: string }) {
   const [aberto, setAberto] = useState(false);
@@ -142,12 +152,18 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
   const [departamentos, setDepartamentos] = useState<DepartamentoDasPremissas[]>(DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave));
   const [tipo, setTipo] = useState<(typeof TIPOS_DE_EXPORTACAO)[number]["chave"]>("todas");
   const [gerando, setGerando] = useState(false);
-  const todos = departamentos.length === DEPARTAMENTOS_DAS_PREMISSAS.length;
+  // Com o Acesso às Informações Por Recorte (12/11/2026): o Gestor marca só os departamentos dele; o Coordenador não marca (o
+  // arquivo leva os grupos de centros dele).
+  const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
+  const recorte = cenario.data?.recorte ?? null;
+  const disponiveis = recorte ? DEPARTAMENTOS_DAS_PREMISSAS.filter((d) => !recorte.porCentro && recorte.departamentos.includes(d.chave)) : DEPARTAMENTOS_DAS_PREMISSAS;
+  const marcados = recorte?.porCentro ? DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave) : departamentos.filter((d) => disponiveis.some((x) => x.chave === d));
+  const todos = disponiveis.every((d) => departamentos.includes(d.chave));
   const alternar = (d: DepartamentoDasPremissas) => setDepartamentos((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : DEPARTAMENTOS_DAS_PREMISSAS.map((x) => x.chave).filter((x) => x === d || ds.includes(x))));
   const exportar = async () => {
     setGerando(true);
     try {
-      const r = await cenariosService.exportarPremissas(id, tipo, departamentos);
+      const r = await cenariosService.exportarPremissas(id, tipo, marcados);
       const url = URL.createObjectURL(r.data);
       const a = document.createElement("a");
       a.href = url;
@@ -170,19 +186,24 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <DialogTitle>Exportar Premissas</DialogTitle>
           <DialogDescription>
             O arquivo em Excel leva só o que é dos departamentos marcados. Logística, Técnico, Comercial, Administrativo e Extra-Operacional levam também a
-            depreciação e os investimentos de Despesas e Extra; os indicadores manuais vão pelo grupo deles. Cada linha traz a Média e o Total da
-            Referência, a Variação Máxima e Justificar? (em fórmula).
+            depreciação e os investimentos de Despesas e Extra; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos
+            centros dos departamentos marcados. Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
           </DialogDescription>
         </DialogHeader>
+        {recorte?.porCentro ? (
+          <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
+            Acesso Por Recorte: o arquivo leva os grupos de centros de custo com algum centro seu (os Centros de Custo e o Quadro de Lotação deles).
+          </p>
+        ) : (
         <fieldset className="space-y-2">
           <legend className="mb-2 flex w-full items-center justify-between text-sm leading-none font-medium">
             Departamentos
-            <button type="button" className="text-xs font-normal text-gray-600 underline underline-offset-2 hover:text-gray-900" onClick={() => setDepartamentos(todos ? [] : DEPARTAMENTOS_DAS_PREMISSAS.map((d) => d.chave))}>
+            <button type="button" className="text-xs font-normal text-gray-600 underline underline-offset-2 hover:text-gray-900" onClick={() => setDepartamentos(todos ? [] : disponiveis.map((d) => d.chave))}>
               {todos ? "Desmarcar Todos" : "Marcar Todos"}
             </button>
           </legend>
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {DEPARTAMENTOS_DAS_PREMISSAS.map((d) => (
+            {disponiveis.map((d) => (
               <label key={d.chave} className="flex cursor-pointer items-start gap-2 rounded-sm border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50">
                 <input type="checkbox" className="mt-0.5 accent-black" checked={departamentos.includes(d.chave)} onChange={() => alternar(d.chave)} />
                 <span>
@@ -193,6 +214,7 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
             ))}
           </div>
         </fieldset>
+        )}
         <fieldset className="space-y-2">
           <legend className="mb-2 text-sm leading-none font-medium">Tipo da Exportação</legend>
           {TIPOS_DE_EXPORTACAO.map((t) => (
@@ -203,7 +225,7 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" className={botaoPrimario} disabled={!departamentos.length || gerando} onClick={() => void exportar()}>
+          <Button type="button" className={botaoPrimario} disabled={!marcados.length || gerando} onClick={() => void exportar()}>
             {gerando ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             {gerando ? "Gerando…" : "Exportar"}
           </Button>
@@ -265,18 +287,28 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
   const [ignorar, setIgnorar] = useState<Set<string>>(() => new Set());
   const vencedor = new Map(repetidos.map((r) => [r.bloco, ignorar.has(r.bloco) ? r.em[0] : r.em[r.em.length - 1]]));
   const doVencedor = (i: number) => (x: { bloco: string }) => !vencedor.has(x.bloco) || vencedor.get(x.bloco) === i;
-  const aImportar = validas.map((a, i) => ({ ...a, alteracoes: a.alteracoes.filter(doVencedor(i)), justificativas: a.justificativas.filter(doVencedor(i)) }));
+  // O Quadro de Lotação que substitui as linhas (11/11/2026) é um trecho: em dois arquivos, vale o do arquivo escolhido.
+  const semQuadro = { novas: [], alteradas: [], excluidas: [] };
+  const aImportar = validas.map((a, i) => ({
+    ...a,
+    alteracoes: a.alteracoes.filter(doVencedor(i)),
+    justificativas: a.justificativas.filter(doVencedor(i)),
+    quadro: doVencedor(i)({ bloco: "Quadro de Lotação" }) ? a.quadro : semQuadro,
+  }));
   const valores = aImportar.reduce((s, a) => s + a.alteracoes.length, 0);
   const justificativas = aImportar.reduce((s, a) => s + a.justificativas.length, 0);
   const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length, 0);
+  // As linhas do Quadro de Lotação (09/11/2026): as novas, as alteradas e (11/11/2026) as que saem.
+  const doQuadro = aImportar.reduce((s, a) => s + a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length, 0);
   const analisando = itens.some((x) => x.estado === "analisando");
   const importar = useMutation({
     mutationFn: () => cenariosService.importarPremissas(id, aImportar),
     onSuccess: (r) => {
       invalidar(queryClient);
       const inv = r.investimentosNovos + r.investimentosAlterados;
+      const ql = r.quadroNovas + r.quadroAlteradas + r.quadroExcluidas;
       toast.success(
-        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? ` e ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}; a DRE do cenário foi recalculada.`,
+        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
       );
       onFechar();
     },
@@ -290,7 +322,10 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
             Escolha os arquivos (ou uma pasta) gerados pelo Exportar Premissas: planilhas .xlsx ou o .zip de um arquivo por centro. Cada arquivo é
             conferido assim que entra na lista; os valores mensais, as justificativas e os investimentos se gravam só em “Importar” (em branco, o mês
             fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. Na aba Investimentos, os com o Nome de
-            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem.
+            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Nas outras abas, a
+            linha se acha pelas colunas que a descrevem (as antes da Und.). Na aba Quadro de Lotação, as linhas da planilha substituem as do cenário
+            nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com outros valores são alteradas, as novas entram e as que não
+            estão na planilha saem; um cadastro que não existe recusa o arquivo.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2">
@@ -324,13 +359,14 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                 <th className="px-3 py-2 text-right text-xs font-bold">Valores</th>
                 <th className="px-3 py-2 text-right text-xs font-bold">Justificativas</th>
                 <th className="px-3 py-2 text-right text-xs font-bold">Investimentos</th>
+                <th className="px-3 py-2 text-right text-xs font-bold">Quadro de Lotação</th>
                 <th className="w-10 px-2 py-2" />
               </tr>
             </thead>
             <tbody>
               {itens.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
                     Nenhum arquivo escolhido.
                   </td>
                 </tr>
@@ -345,7 +381,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                   return [
                     <tr key={x.id} className="border-b border-gray-100">
                       <td className="px-3 py-2 break-all text-gray-900">{x.nome}</td>
-                      <td colSpan={5} className={`px-3 py-2 ${x.estado === "erro" ? "text-red-700" : "text-gray-500"}`}>
+                      <td colSpan={6} className={`px-3 py-2 ${x.estado === "erro" ? "text-red-700" : "text-gray-500"}`}>
                         {x.estado === "erro" ? x.erro : "Conferindo…"}
                       </td>
                       <td className="px-2 py-2 text-right">{remover}</td>
@@ -370,6 +406,13 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                         ? "—"
                         : a.investimentos.novos.length + a.investimentos.alterados.length
                           ? `${a.investimentos.novos.length} ${plural(a.investimentos.novos.length, "novo", "novos")} · ${a.investimentos.alterados.length} ${plural(a.investimentos.alterados.length, "alterado", "alterados")}`
+                          : "0"}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {!a.valido
+                        ? "—"
+                        : a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length
+                          ? `${a.quadro.novas.length} ${plural(a.quadro.novas.length, "nova", "novas")} · ${a.quadro.alteradas.length} ${plural(a.quadro.alteradas.length, "alterada", "alteradas")} · ${a.quadro.excluidas.length} ${plural(a.quadro.excluidas.length, "excluída", "excluídas")}`
                           : "0"}
                     </td>
                     <td className="px-2 py-2 text-right">{k === 0 ? remover : null}</td>
@@ -435,12 +478,13 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
         <DialogFooter className="items-center">
           <span className="text-xs text-gray-600 sm:mr-auto">
             {validas.length} {plural(validas.length, "planilha no padrão", "planilhas no padrão")}: {valores.toLocaleString("pt-BR")} {plural(valores, "valor muda", "valores mudam")},{" "}
-            {justificativas} {plural(justificativas, "justificativa", "justificativas")} e {investimentos} {plural(investimentos, "investimento", "investimentos")}.
+            {justificativas} {plural(justificativas, "justificativa", "justificativas")}, {investimentos} {plural(investimentos, "investimento", "investimentos")} e {doQuadro}{" "}
+            {plural(doQuadro, "linha do Quadro de Lotação", "linhas do Quadro de Lotação")}.
           </span>
           <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" className={botaoPrimario} disabled={analisando || importar.isPending || valores + justificativas + investimentos === 0} onClick={() => importar.mutate()}>
+          <Button type="button" className={botaoPrimario} disabled={analisando || importar.isPending || valores + justificativas + investimentos + doQuadro === 0} onClick={() => importar.mutate()}>
             {importar.isPending ? "Importando…" : "Importar"}
           </Button>
         </DialogFooter>

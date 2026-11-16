@@ -14,9 +14,10 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { plural } from "@/lib/texto";
 
 import { cenariosService, rotuloVersao, type Cenario } from "../services/cenariosService";
-import { AvisoMarcado, estaTravado } from "./AvisoMarcado";
+import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "./AvisoMarcado";
 import { descreverFechadas } from "./descreverFechadas";
 import { BotaoRealocar, QuadroDeRealocacoes } from "./RealocacoesDialog";
+import { BotaoApagarValores, BotaoReplicarMedias, useEditaTodasAsAbas } from "./PlanilhaPremissas";
 import { botaoPrimario, classeSelect, Erro, OpcaoEmLinha } from "./CenarioDialog";
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -55,6 +56,11 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
   const outros = (analiticos.data ?? []).filter((c) => c.id !== cenario.id);
   const [origemEscolhida, setOrigem] = useState<string | null>(null);
   const origem = outros.find((c) => c.id === origemEscolhida) ?? outros[0] ?? null;
+  // Manter os doze meses do cenário (11/11/2026, pedido do Adão): a referência muda só as Médias de Referência.
+  const [manterMeses, setManterMeses] = useState(false);
+  // O Quadro de Lotação Vigente (12/11/2026, pedido do Adão): no realizado, as linhas da aba Quadro de Lotação pelo QL Realizado
+  // mais recente da Gestão de Colaboradores, qualquer que seja o período (De / Até).
+  const [importarQuadro, setImportarQuadro] = useState(false);
 
   const aoCarregar = (msg: string, lista: string[]) => {
     queryClient.invalidateQueries({ queryKey: ["cenarios"] });
@@ -66,22 +72,44 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
   const carregar = useMutation({
     mutationFn: () =>
       tipo === "cenario"
-        ? cenariosService.referenciaCenario(cenario.id, origem!.id).then(() => [] as string[])
-        : cenariosService.referenciaRealizado(cenario.id, ano!, modo === "MEDIA" ? { modo, de, ate } : { modo }).then((r) => r.avisos ?? []),
-    onSuccess: (lista) =>
+        ? cenariosService.referenciaCenario(cenario.id, origem!.id, manterMeses).then(() => ({ avisos: [] as string[], vigente: "" }))
+        : cenariosService
+            .referenciaRealizado(cenario.id, ano!, modo === "MEDIA" ? { modo, de, ate, manterMeses, importarQuadro } : { modo, manterMeses, importarQuadro })
+            .then((r) => ({
+              avisos: r.avisos ?? [],
+              // O Quadro de Lotação Vigente importado (12/11/2026), na mensagem.
+              vigente: r.quadroVigente
+                ? ` Quadro de Lotação Vigente importado: ${r.quadroVigente.colaboradores} colaboradores do fim de ${r.quadroVigente.competencia}, em ${r.quadroVigente.linhas} linhas.`
+                : "",
+            })),
+    onSuccess: ({ avisos: lista, vigente }) =>
       aoCarregar(
-        tipo === "cenario"
-          ? `${origem!.nome} carregado no cenário; a DRE foi recalculada.`
-          : modo === "MEDIA"
-            ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, nas Premissas).`
-            : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`,
+        (manterMeses
+          ? `Médias de Referência de ${tipo === "cenario" ? origem!.nome : `${ano} (${modo === "MEDIA" ? `${abrev(de)} a ${abrev(ate)}` : "Mês a Mês"})`} carregadas; os meses do cenário ficaram como estavam, e a DRE foi recalculada.`
+          : tipo === "cenario"
+            ? `${origem!.nome} carregado no cenário; a DRE foi recalculada.`
+            : modo === "MEDIA"
+              ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, aqui na Referência).`
+              : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`) + vigente,
         lista,
       ),
   });
   const travado = estaTravado(cenario);
+  // Com os reajustes aplicados na DRE (11/11/2026), a referência, que regrava as premissas, não se carrega nem se realoca.
+  const bloqueada = travado || cenario.reajustesAplicados;
   // As ações do realizado (03/11/2026, pedido do Adão): o Carregar Realizado e, depois dele, o Realocar, na altura do De e do
   // Até (na Média do Período) ou sozinhos à direita (no Mês a Mês).
-  const comCarregarRealizado = podeEditar && !travado && tipo === "realizado" && anos.length > 0;
+  const comCarregarRealizado = podeEditar && !bloqueada && tipo === "realizado" && anos.length > 0;
+  // O Replicar Médias e o Apagar Valores (12/11/2026, pedido do Adão; antes, na tela Premissas), logo depois do Realocar (ou do
+  // Carregar Cenário): mexem nos meses de todas as abas das premissas, que o perfil precisa editar.
+  const editaTodasAsAbas = useEditaTodasAsAbas();
+  const replicarOuApagar =
+    podeEditar && !bloqueada && editaTodasAsAbas ? (
+      <>
+        <BotaoReplicarMedias id={cenario.id} />
+        <BotaoApagarValores id={cenario.id} />
+      </>
+    ) : null;
   const acoes = (
     <>
       <Button type="button" className={botaoPrimario} disabled={periodoInvalido} onClick={() => setConfirmar(true)}>
@@ -89,6 +117,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
         Carregar Realizado
       </Button>
       <BotaoRealocar cenario={cenario} podeEditar />
+      {replicarOuApagar}
     </>
   );
 
@@ -97,7 +126,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
       <p className="text-sm text-gray-600">
         Opcional: uma base para as premissas do cenário, que depois se editam na tela Premissas. A DRE do cenário analítico é sempre calculada das
         premissas, dos centros de custo, dos investimentos e do extra-operacional. Os custos do realizado vão para as linhas pela Correspondência
-        Tarefa × Linha (Cadastros da Controladoria / Linhas, botão “Tarefas”).
+        Tarefa × Linha (Cadastros Gerais / Linhas, botão “Tarefas”).
       </p>
       <p className="text-sm text-gray-700">
         Referência atual:{" "}
@@ -133,7 +162,22 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{aviso ?? "Seu perfil só lê a referência."}</p>
       ) : travado ? (
         <AvisoMarcado cenario={cenario} oQue="a referência" />
-      ) : tipo === "cenario" ? (
+      ) : cenario.reajustesAplicados ? (
+        <AvisoReajustesAplicados oQue="a referência" />
+      ) : (
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input type="checkbox" className="mt-0.5 accent-black" checked={manterMeses} onChange={(e) => setManterMeses(e.target.checked)} />
+          <span>
+            <span className="font-medium text-gray-900">Manter os Valores dos Meses</span>
+            <span className="block text-xs text-gray-600">
+              {manterMeses
+                ? "A referência muda só as Médias de Referência: os doze meses do cenário (digitados ou importados), os investimentos e as linhas do Quadro de Lotação ficam como estão."
+                : "Desmarcada, a referência substitui também os doze meses do cenário (os valores digitados ou importados se perdem)."}
+            </span>
+          </span>
+        </label>
+      )}
+      {!podeEditar || bloqueada ? null : tipo === "cenario" ? (
         outros.length === 0 ? (
           <p className="rounded-sm border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Nenhum outro cenário analítico.</p>
         ) : (
@@ -152,6 +196,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
               <Copy className="size-4" />
               Carregar Cenário
             </Button>
+            {replicarOuApagar}
           </div>
         )
       ) : anos.length === 0 ? (
@@ -177,13 +222,35 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
             <legend className="mb-1.5 text-sm leading-none font-medium">Importação</legend>
             {(
               [
-                ["MEDIA", "Média do Período", "As Médias de Referência de um período (os centros de custo, cada conta só nos meses com movimentação): os meses do cenário ficam em branco, para replicar as médias (Premissas / Replicar Médias) ou digitar."],
-                ["MES_A_MES", "Mês a Mês", "As Médias de Referência de todos os meses fechados e, nos centros de custo, na depreciação, no extra-operacional e nos indicadores, cada competência fechada no mês dela."],
+                [
+                  "MEDIA",
+                  "Média do Período",
+                  `As Médias de Referência de um período (os centros de custo, cada conta só nos meses com movimentação)${manterMeses ? "; os meses do cenário ficam como estão." : ": os meses do cenário ficam em branco, para replicar as médias (Replicar Médias, abaixo) ou digitar."}`,
+                ],
+                [
+                  "MES_A_MES",
+                  "Mês a Mês",
+                  manterMeses
+                    ? "As Médias de Referência de todos os meses fechados; os meses do cenário ficam como estão."
+                    : "As Médias de Referência de todos os meses fechados e, nos centros de custo, na depreciação, no extra-operacional e nos indicadores, cada competência fechada no mês dela.",
+                ],
               ] as const
             ).map(([v, rotulo, detalhe]) => (
               <OpcaoEmLinha key={v} nome="modo-realizado-analitico" marcada={modo === v} onMarcar={() => setModo(v)} rotulo={rotulo} detalhe={detalhe} />
             ))}
           </fieldset>
+          {/* O Quadro de Lotação Vigente (12/11/2026): os colaboradores do cenário vêm só da aba Quadro de Lotação (a Gestão de Colaboradores). */}
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 accent-black" checked={importarQuadro} onChange={(e) => setImportarQuadro(e.target.checked)} />
+            <span>
+              <span className="font-medium text-gray-900">Importar Quadro de Lotação Vigente</span>
+              <span className="block text-xs text-gray-600">
+                {importarQuadro
+                  ? "As linhas da aba Quadro de Lotação (Premissas) passam a ser as do Quadro de Lotação mais recente da Gestão de Colaboradores — os colaboradores do fim da competência mais recente, em todos os meses —, qualquer que seja o período escolhido (De / Até). Os salários das linhas que o cenário já tinha ficam."
+                  : "Desmarcada, as linhas da aba Quadro de Lotação ficam como estão. Os colaboradores do cenário vêm só dessa aba (a referência não os traz)."}
+              </span>
+            </span>
+          </label>
           {modo === "MEDIA" ? (
             <div className="flex flex-wrap items-end gap-3">
               {(
@@ -230,7 +297,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
       ) : null}
 
       {/* As movimentações fora dos padrões da última carga do realizado e as realocações delas (14/10/2026); o Realocar fica ao lado do Carregar Realizado, quando ele está na tela. */}
-      <QuadroDeRealocacoes cenario={cenario} podeEditar={podeEditar && !travado} comBotao={!comCarregarRealizado} />
+      <QuadroDeRealocacoes cenario={cenario} podeEditar={podeEditar && !bloqueada} comBotao={!comCarregarRealizado} />
 
       {confirmar ? (
         <Dialog open onOpenChange={(o) => (!o ? setConfirmar(false) : undefined)}>
@@ -239,7 +306,19 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
               <DialogTitle>{tipo === "cenario" ? "Carregar Cenário Analítico" : "Carregar Resultado Realizado"}</DialogTitle>
               <DialogDescription render={<div />}>
                 <ul className="list-disc space-y-1.5 pl-5">
-                  {tipo === "cenario" ? (
+                  {manterMeses ? (
+                    <>
+                      <li>
+                        As Médias de Referência das premissas, dos centros de custo, da depreciação base, do extra-operacional e dos indicadores passam a
+                        ser {tipo === "cenario" ? `as de ${origem?.nome}` : `as do realizado de ${ano} (${modo === "MEDIA" ? `${abrev(de)} a ${abrev(ate)}` : mesesFechados.map(abrev).join(", ")})`}.
+                      </li>
+                      <li>
+                        Os doze meses do cenário (digitados ou importados), os investimentos e as linhas do Quadro de Lotação ficam como estão; o
+                        Justificar? do Exportar Premissas passa a comparar os meses com as médias novas.
+                      </li>
+                      <li>A DRE do cenário é recalculada.</li>
+                    </>
+                  ) : tipo === "cenario" ? (
                     <>
                       <li>
                         As premissas, os centros de custo, os investimentos e os indicadores do cenário são substituídos pelos de {origem?.nome}
@@ -261,7 +340,18 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                       <li>Os investimentos ficam. A DRE do cenário é recalculada.</li>
                     </>
                   )}
-                  <li>Os valores digitados nas premissas se perdem.</li>
+                  {tipo === "realizado" ? (
+                    importarQuadro ? (
+                      <li>
+                        As linhas da aba Quadro de Lotação são trocadas pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim
+                        da competência mais recente, em todos os meses; os salários das linhas que já havia ficam): os colaboradores e as Remunerações dos centros
+                        de custo saem delas.
+                      </li>
+                    ) : (
+                      <li>As linhas da aba Quadro de Lotação ficam como estão: os colaboradores e as Remunerações dos centros de custo saem delas.</li>
+                    )
+                  ) : null}
+                  {manterMeses ? null : <li>Os valores digitados nas premissas se perdem (para mantê-los, marque “Manter os Valores dos Meses”).</li>}
                 </ul>
               </DialogDescription>
             </DialogHeader>

@@ -6,6 +6,7 @@ import { ehContaDeCentro } from "../cenarios/centrosCenario.js";
 import type { LinhaEstrutura } from "./apuracaoUnidades.js";
 import { estrutura, RegraDREError } from "./dreService.js";
 import { linhasDaObra } from "./obrasService.js";
+import { basesDoConsolidadoDoMes, comParticipacoes } from "./participacoesDoMes.js";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -80,7 +81,8 @@ async function apuracao(competenciaId: string) {
 async function movimentos(competenciaId: string, linhas: LinhaEstrutura[], acesso: Acesso) {
   const porId = new Map(linhas.filter((l) => deveriaTerCentro(l) && podeVerMovimentos(acesso, l)).map((l) => [l.id, l]));
   const ls = await getPrismaClient().lancamentoContabil.findMany({
-    where: { competenciaId, centroCustoId: null, linhaDREId: { in: [...porId.keys()] } },
+    // O redistribuído (13/11/2026) não fica sem centro: vai aos centros dos destinos.
+    where: { competenciaId, centroCustoId: null, redistribuicaoId: null, linhaDREId: { in: [...porId.keys()] } },
     select: { filial: true, linhaDREId: true, valorMovimento: true },
   });
   const grupos = new Map<GrupoSemCentro, Map<string, { valor: Decimal; n: number }>>();
@@ -128,7 +130,8 @@ export const semCentroService = {
       grupo: { codigo: grupo, nome: nomeDoGrupoSemCentro(grupo) },
       apuradoEm: ap?.apuradoEm ?? null,
       congelado: ap?.congelado ?? false,
-      linhas: linhasDaObra(linhas, itens, false, acesso),
+      // O % e o R$/m³ (13/11/2026), sobre as bases do Consolidado, como nos Resultados Empresariais.
+      linhas: comParticipacoes(linhasDaObra(linhas, itens, false, acesso), "centros", await basesDoConsolidadoDoMes(c.id)),
     };
   },
 };

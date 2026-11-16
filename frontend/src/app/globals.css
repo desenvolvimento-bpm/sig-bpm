@@ -117,6 +117,38 @@
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
 }
+/*
+ * A alça da largura das colunas (13/11/2026; LargurasDasColunas): a divisa entre dois rótulos, com um traço discreto (a cor
+ * do texto do rótulo, bem clara, também nos temas), que engrossa e escurece ao passar o mouse e ao arrastar.
+ */
+.alca-coluna {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.alca-coluna::after {
+  content: "";
+  position: absolute;
+  top: 22%;
+  bottom: 22%;
+  right: 0;
+  width: 1px;
+  background-color: currentColor;
+  opacity: 0.3;
+}
+.alca-coluna:hover::after,
+.alca-coluna[data-arrastando]::after {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  opacity: 0.55;
+}
 /* Padrão (09/10/2026): os números das tabelas na mesma fonte dos textos — os
    algarismos comuns do Inter, sem os de largura fixa (tabular-nums), que
    mudam o desenho de alguns dígitos. Vale também para o que vier dentro das

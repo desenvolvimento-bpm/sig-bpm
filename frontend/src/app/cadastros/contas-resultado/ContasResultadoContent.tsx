@@ -34,8 +34,9 @@ const COLUNAS: Coluna<ContaResultado>[] = [
   {
     chave: "destino",
     rotulo: "Destino na DRE",
-    // A analítica sem destino aparece como "sem destino", para achar as pendências pelo filtro.
-    valor: (c) => c.linhaDRE?.descricao ?? (c.tipoConta === "ANALITICA" ? "sem destino" : null),
+    // A analítica sem destino aparece como "sem destino", para achar as pendências pelo filtro; a Sem Resultado, com o
+    // traço das sintéticas, filtra por "Sem Resultado" (13/11/2026).
+    valor: (c) => c.linhaDRE?.descricao ?? (c.semResultado ? "Sem Resultado" : c.tipoConta === "ANALITICA" ? "sem destino" : null),
   },
   { chave: "balde", rotulo: "Balde", valor: (c) => c.balde },
 ];
@@ -69,11 +70,16 @@ export function ContasResultadoContent() {
           <li>Use os filtros nos rótulos das colunas.</li>
           <li>Use “Novo” para incluir; o lápis edita, e a exclusão fica dentro da edição.</li>
           <li>
-            Na edição, o Departamento escolhe o grupo da DRE, e a Linha da DRE mostra só as linhas dele. Ao trocar o Departamento, fica a linha de mesma
+            Na edição, o Departamento escolhe o grupo da DRE, e a Linha do DRE mostra só as linhas dele. Ao trocar o Departamento, fica a linha de mesma
             atribuição e descrição, quando ele tem uma; a Atribuição sai da linha.
           </li>
           <li>
-            A gravação é recusada quando nenhuma aba de resultado lê a combinação da Linha da DRE com o Rateio: os lançamentos que seguem o rateio da conta
+            Na Linha do DRE, a opção Sem Resultado (com qualquer Departamento, ou sem ele) deixa a conta fora da DRE: os movimentos dela não entram no
+            resultado e não aparecem como pendência na Classificação dos fechamentos. Na lista, a conta aparece com o traço (—) das sintéticas no Destino
+            na DRE; o filtro da coluna a acha por “Sem Resultado”.
+          </li>
+          <li>
+            A gravação é recusada quando nenhuma aba de resultado lê a combinação da Linha do DRE com o Rateio: os lançamentos que seguem o rateio da conta
             (de obras, de centros fora do cadastro e sem centro) ficariam fora do resultado, com a pendência Sem Aba de Resultado. O aviso lista as combinações
             que alguma aba lê, com as abas de cada uma; “Usar” põe a escolhida no formulário, para conferir e gravar.
           </li>
@@ -85,7 +91,7 @@ export function ContasResultadoContent() {
           </li>
           <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os registros inativos.</li>
           <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Reduzido e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
-          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros da Controladoria): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
         </ul>
       }
       descricao="As contas de resultado, editáveis aqui. O departamento escolhe o grupo da DRE; a atribuição vem da linha de destino."
@@ -122,8 +128,8 @@ export function ContasResultadoContent() {
         ]}
         renderRow={(item) => {
           // Conta analítica sem destino na DRE não entra na apuração — é a
-          // pendência que impede o fechamento da competência (RF006).
-          const pendente = item.tipoConta === "ANALITICA" && !item.linhaDRE;
+          // pendência que impede o fechamento da competência (RF006). A Sem Resultado (13/11/2026) não é pendência: o traço.
+          const pendente = item.tipoConta === "ANALITICA" && !item.linhaDRE && !item.semResultado;
 
           return (
             <tr
@@ -151,7 +157,9 @@ export function ContasResultadoContent() {
                     sem destino
                   </span>
                 ) : (
-                  <span className="text-gray-400">—</span>
+                  <span className="text-gray-400" title={item.semResultado ? "Sem Resultado" : undefined}>
+                    —
+                  </span>
                 )}
               </td>
               <td className="px-4 py-3 text-sm">

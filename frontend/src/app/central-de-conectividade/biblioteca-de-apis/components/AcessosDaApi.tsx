@@ -64,7 +64,7 @@ function Indicador({ rotulo, valor, detalhe }: { rotulo: string; valor: number; 
 }
 
 /**
- * Os acessos às APIs (24/10/2026, a Auditoria): quem edita a tela APIs vê os de todos — os pedidos por dia, os usuários e
+ * Os acessos às APIs (24/10/2026, a Auditoria; desde 13/11/2026, a aba APIs da tela Acessos): quem edita a tela Acessos vê os de todos — os pedidos por dia, os usuários e
  * os endereços que chamam, as APIs mais pedidas e os últimos pedidos — e bloqueia ou libera um usuário ou um endereço no
  * controle deslizante; quem só lê vê os próprios.
  */

@@ -20,7 +20,7 @@ export const ehProva = (b: { prova?: true | MarcacaoComparavel[] }) => b.prova =
 export const temProva = (blocos: Bloco[]) => blocos.some((b) => (ehCard(b) || b.tipo === "TABELA") && ehProva(b));
 
 /**
- * A cor do orçado dos cards padrão: num slide com objetos PROVA, a do cenário de comparação do relatório (a Previsão em
+ * A cor do orçado dos cards padrão: num slide com objetos PROVA, a do cenário de comparação do relatório (o Forecast em
  * cinza forte, como no PROVA); sem eles, ou com um cenário sem marcação, a de sempre.
  */
 export function corDosCardsPadrao(blocos: Bloco[], dados: DadosDoRelatorio | undefined) {

@@ -76,7 +76,7 @@ export const rateiosService = {
     ]);
     // As chaves sem regra vigente no mês (14/10/2026): os lançamentos de rateio delas não vão para nenhuma unidade.
     const avisos = CHAVES_DE_RATEIO.filter((k) => !regras.some((r) => r.chave === k)).map(
-      (k) => `Rateio de ${NOME_DA_CHAVE[k]} sem regra vigente em ${rotulo(ano, mes)}: os lançamentos de rateio dele não vão para nenhuma unidade. Cadastre a regra em Cadastros da Controladoria / Regras de Rateio.`,
+      (k) => `Rateio de ${NOME_DA_CHAVE[k]} sem regra vigente em ${rotulo(ano, mes)}: os lançamentos de rateio dele não vão para nenhuma unidade. Cadastre a regra em Cadastros Gerais / Regras de Rateio.`,
     );
     return { ...(await this.consultar(ano, mes)), avisos };
   },
@@ -107,12 +107,14 @@ export const rateiosService = {
     const totalAtual = new Map(totais.map((t) => [t.codigo as string, t.quantidade]));
     // Os lançamentos de rateio do mês por chave (13/10/2026): numa chave sem volume, ficam fora de todas as unidades.
     // As receitas e despesas financeiras do acompanhamento vão inteiras para Despesas e Extra e não contam.
-    const deRateio = await prisma.lancamentoContabil.groupBy({
-      by: ["balde"],
-      where: { competenciaId: c.id, alocacao: "RATEIO", NOT: { AND: [{ balde: "ACOMPANHAMENTO" }, { linhaDRE: { grupoSigla: { in: ["RFC", "RFNC", "DFC", "DFNC"] } } }] } },
-      _sum: { valorMovimento: true },
-    });
-    const lancadoNaChave = new Map(deRateio.map((x) => [x.balde as string, Number(x._sum.valorMovimento ?? 0)]));
+    // Os redistribuídos (13/11/2026) pelas partes, na chave do centro de cada destino.
+    const foraDaChave = { NOT: { AND: [{ balde: "ACOMPANHAMENTO" as const }, { linhaDRE: { grupoSigla: { in: ["RFC", "RFNC", "DFC", "DFNC"] } } }] } };
+    const [deRateio, partesDeRateio] = await Promise.all([
+      prisma.lancamentoContabil.groupBy({ by: ["balde"], where: { competenciaId: c.id, redistribuicaoId: null, alocacao: "RATEIO", ...foraDaChave }, _sum: { valorMovimento: true } }),
+      prisma.lancamentoRedistribuido.groupBy({ by: ["balde"], where: { competenciaId: c.id, alocacao: "RATEIO", ...foraDaChave }, _sum: { valorMovimento: true } }),
+    ]);
+    const lancadoNaChave = new Map<string, number>();
+    for (const x of [...deRateio, ...partesDeRateio]) lancadoNaChave.set(x.balde as string, (lancadoNaChave.get(x.balde as string) ?? 0) + Number(x._sum.valorMovimento ?? 0));
     const chaves = new Map<string, { chave: string; baseFisica: string; total: number; percentual: number; destinos: unknown[] }>();
     for (const v of volumes) {
       const r = v.regraRateio;

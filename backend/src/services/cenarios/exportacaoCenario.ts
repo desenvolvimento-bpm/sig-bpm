@@ -98,7 +98,13 @@ type ContasDaAba = Array<{ codigo: string; linha: number; valores: number[] }>;
  * Adicionais) e as contas por atribuição, nos doze meses e no total. A conta Encargos e Benefícios vai em fórmula:
  * base × [(INSS + FGTS + Férias + Décimo Terceiro) + (INSS + FGTS) × (Férias + Décimo Terceiro)] + Benefícios Adicionais
  * (20/10/2026: com a incidência sobre as provisões; a base = Remunerações CLT + Horas Extras; os benefícios, na mão de obra
- * da atribuição do grupo); os subtotais e o total somam as contas, também em fórmula.
+ * da atribuição do grupo); os subtotais e o total somam as contas, também em fórmula. Desde 09/11/2026 (o Quadro de Lotação
+ * do cenário), o FGTS em duas linhas (Aprendiz e CLT) e, nos grupos com linhas no Quadro de Lotação, os colaboradores e as
+ * remunerações vindos de lá. Desde 11/11/2026, os Colaboradores Aprendizes e Estagiários antes dos CLT (o Total soma os
+ * quatro). Desde 12/11/2026 (pedido do Adão), os Salários de cada tipo (Aprendizes, Estagiários, CLT e PJ; antes, os dos
+ * Aprendizes e dos Estagiários de cada mão de obra): na mão de obra principal do grupo, as Remunerações CLT são a soma dos
+ * três primeiros e as PJ, os Salários PJ, em fórmula; os Encargos e Benefícios dela tiram da base os Salários dos
+ * Estagiários e aplicam o FGTS Aprendiz aos Salários dos Aprendizes.
  */
 function abaDoCentro(
   grupo: string,
@@ -136,21 +142,43 @@ function abaDoCentro(
 
   // O quadro de lotação: os colaboradores de cada mês; no total, a média.
   secao("Quadro de Lotação", `Entra em: ${dados.lotacao.quadro}`);
-  const rClt = proxima();
-  linhas.push([{ valor: null, estilo: ESTILO.item }, { valor: "Colaboradores CLT", estilo: ESTILO.item }, ...dados.lotacao.clt.valores.map((v) => num(v, false)), num(soma(dados.lotacao.clt.valores) / 12, false, `AVERAGE(${cJan}${rClt}:${cDez}${rClt})`)]);
-  const rPj = proxima();
-  linhas.push([{ valor: null, estilo: ESTILO.item }, { valor: "Colaboradores PJ", estilo: ESTILO.item }, ...dados.lotacao.pj.valores.map((v) => num(v, false)), num(soma(dados.lotacao.pj.valores) / 12, false, `AVERAGE(${cJan}${rPj}:${cDez}${rPj})`)]);
+  // Com linhas no Quadro de Lotação do cenário (09/11/2026), os colaboradores vêm de lá.
+  const doQuadro = dados.lotacao.linhasDoQuadro > 0 ? " (do Quadro de Lotação)" : "";
+  // Os colaboradores (11/11/2026: com linhas no Quadro de Lotação, os Aprendizes e os Estagiários antes dos CLT); no total, a média.
+  const series = [
+    ...(dados.lotacao.aprendizes ? [["Colaboradores Aprendizes", dados.lotacao.aprendizes.valores] as const] : []),
+    ...(dados.lotacao.estagiarios ? [["Colaboradores Estagiários", dados.lotacao.estagiarios.valores] as const] : []),
+    ["Colaboradores CLT", dados.lotacao.clt.valores] as const,
+    ["Colaboradores PJ", dados.lotacao.pj.valores] as const,
+  ];
+  const linhasDaLotacao: number[] = [];
+  for (const [rotulo, valores] of series) {
+    const r = proxima();
+    linhasDaLotacao.push(r);
+    linhas.push([{ valor: null, estilo: ESTILO.item }, { valor: `${rotulo}${doQuadro}`, estilo: ESTILO.item }, ...valores.map((v) => num(v, false)), num(soma(valores) / 12, false, `AVERAGE(${cJan}${r}:${cDez}${r})`)]);
+  }
   const rTot = proxima();
-  const totalLot = dados.lotacao.clt.valores.map((v, k) => v + dados.lotacao.pj.valores[k]);
+  const totalLot = Array.from({ length: 12 }, (_, k) => soma(series.map(([, valores]) => valores[k] ?? 0)));
   linhas.push([
     { valor: null, estilo: ESTILO.destaque },
     { valor: "Total de Colaboradores", estilo: ESTILO.destaque },
-    ...totalLot.map((v, k) => num(v, true, `${cMes(k)}${rClt}+${cMes(k)}${rPj}`)),
+    ...totalLot.map((v, k) => num(v, true, linhasDaLotacao.map((r) => `${cMes(k)}${r}`).join("+"))),
     num(soma(totalLot) / 12, true, `AVERAGE(${cJan}${rTot}:${cDez}${rTot})`),
   ]);
+  // Os Salários de cada tipo de colaborador (12/11/2026; os valores do Quadro de Lotação do cenário); no total, a soma.
+  const linhaDoSalario = new Map<string, number>();
+  for (const s of dados.salarios) {
+    const r = proxima();
+    linhaDoSalario.set(s.tipo, r);
+    linhas.push([{ valor: null, estilo: ESTILO.item }, { valor: `${s.rotulo}${doQuadro}`, estilo: ESTILO.item }, ...s.valores.map((v) => num(v, false)), num(soma(s.valores), false, `SUM(${cJan}${r}:${cDez}${r})`)]);
+  }
+  const salario = (tipo: string, k: number) => `${cMes(k)}${linhaDoSalario.get(tipo)}`;
 
   // Os encargos e benefícios: os percentuais (em fração, no formato %; no total, a média) e os Benefícios Adicionais (R$).
-  secao("Encargos e Benefícios", "base × [(INSS + FGTS + Férias + 13º) + (INSS + FGTS) × (Férias + 13º)] + Benefícios Adicionais; base = Remunerações CLT + Horas Extras");
+  secao(
+    "Encargos e Benefícios",
+    "base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º) + Benefícios Adicionais; base = Remunerações CLT + Horas Extras − Salários dos Estagiários",
+  );
   const linhaDoItem = new Map<string, number>();
   for (const e of dados.encargos) {
     const r = proxima();
@@ -196,13 +224,30 @@ function abaDoCentro(
       const rem = linhaDaConta.get(`${prefixo(x.codigo)}.REMUNERACOES_CLT`);
       const he = linhaDaConta.get(`${prefixo(x.codigo)}.HORAS_EXTRAS`);
       const comBeneficios = beneficiosNaConta(dados, x.codigo);
+      // Na mão de obra principal (12/11/2026: a que recebe as remunerações do Quadro de Lotação), os salários do grupo.
+      const daPrincipal = !!dados.principal && prefixo(x.codigo) === dados.principal;
+      // 09/11/2026: a diferença do FGTS dos aprendizes sobre os salários deles, com a incidência nas provisões.
+      const aprendizes = (k: number) => {
+        if (!daPrincipal) return "";
+        const c = (item: string) => `${cMes(k)}${linhaDoItem.get(item)}`;
+        return `+(${c("FGTS_APRENDIZ")}-${c("FGTS")})*${salario("aprendizes", k)}*(1+${c("FERIAS")}+${c("DECIMO_TERCEIRO")})`;
+      };
+      // 11/11/2026: os salários dos estagiários saem da base.
+      const estagiarios = (k: number) => (daPrincipal ? `-${salario("estagiarios", k)}` : "");
+      // As Remunerações da mão de obra principal (12/11/2026): CLT, os Salários dos Aprendizes, dos Estagiários e CLT; PJ, os Salários PJ.
+      const remuneracao = (k: number) =>
+        !daPrincipal || !x.doQuadro
+          ? undefined
+          : x.codigo.endsWith(".REMUNERACOES_PJ")
+            ? salario("pj", k)
+            : ["aprendizes", "estagiarios", "clt"].map((t) => salario(t, k)).join("+");
       const formula = (k: number) =>
-        x.calculada
-          ? `(${rem ? `${cMes(k)}${rem}` : "0"}+${he ? `${cMes(k)}${he}` : "0"})*(${percentuais(k)})${comBeneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}`
-          : undefined;
+        x.calculada && !x.doQuadro
+          ? `(${rem ? `${cMes(k)}${rem}` : "0"}+${he ? `${cMes(k)}${he}` : "0"}${estagiarios(k)})*(${percentuais(k)})${aprendizes(k)}${comBeneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}`
+          : remuneracao(k);
       linhas.push([
         { valor: null, estilo: ESTILO.item },
-        { valor: x.calculada ? `${x.descricao} (calculada)` : x.descricao, estilo: ESTILO.item },
+        { valor: x.doQuadro ? `${x.descricao} (do Quadro de Lotação)` : x.calculada ? `${x.descricao} (calculada)` : x.descricao, estilo: ESTILO.item },
         ...x.valores.map((v, k) => num(v, false, formula(k))),
         num(soma(x.valores), false, `SUM(${cJan}${r}:${cDez}${r})`),
       ]);

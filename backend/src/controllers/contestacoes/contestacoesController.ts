@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 
 import { getPrismaClient } from "../../config/prisma.js";
+import { temPermissao } from "../../middlewares/verificarPermissao.js";
 import { anoMesSchema } from "../../schemas/importacoes/importacaoSchemas.js";
 import { departamentoDaLinha, gestaoDoCentro } from "../../services/acesso/recorteDepartamento.js";
 import { centroForaDaContestacao, contestacoesService, RegraContestacaoError, type UsuarioDaContestacao } from "../../services/contestacoes/contestacoesService.js";
@@ -17,12 +18,15 @@ const criarSchema = z.object({
   // Contestar Anteriores e Posteriores (30/10/2026): o mesmo fornecedor, conta e centro nas outras competências.
   anteriores: z.boolean().default(false),
   posteriores: z.boolean().default(false),
+  // Contestar Selecionados (10/11/2026): só os itens escolhidos do movimento (a lista e o id de cada um).
+  itens: z.array(z.object({ origem: z.enum(["REQUISICAO", "NOTA_FISCAL"]), id: idSchema })).max(2000).default([]),
 });
 const previaSchema = z.object({
   lancamentoId: idSchema,
   centroNovoId: idSchema.nullable().catch(null).default(null),
   contaNovaId: idSchema.nullable().catch(null).default(null),
 });
+const editarSchema = z.object({ centroNovoId: idSchema.nullable().default(null), contaNovaId: idSchema.nullable().default(null) });
 const responderSchema = z.object({ acatar: z.boolean(), justificativa: z.string().trim().max(500).nullable().default(null) });
 const situacaoSchema = z.object({
   situacao: z.enum(["PENDENTE", "ACATADA", "RECUSADA", "VALIDADA"]),
@@ -55,7 +59,20 @@ function competencia(request: Request, response: Response) {
   return c.data;
 }
 
+/** A permissão de Ler de cada aba das contestações. */
+const LER_DA_ABA = { solicitadas: "contestacoes.solicitadas:ler", recebidas: "contestacoes.recebidas:ler", validacoes: "contestacoes_validacoes:ler" } as const;
+
 export const contestacoesController = {
+  /** Os itens de um movimento da contestação (10/11/2026): ?aba= (a aba em que o usuário a vê). */
+  async itensDoMovimento(request: Request, response: Response) {
+    const aba = abaSchema.safeParse(request.query.aba);
+    const id = idSchema.safeParse(request.params.id);
+    const movimentoId = idSchema.safeParse(request.params.movimentoId);
+    if (!aba.success || !id.success || !movimentoId.success) return response.status(400).json({ error: "Dados inválidos." });
+    if (!temPermissao(request, LER_DA_ABA[aba.data])) return response.status(403).json({ error: "Sem acesso a esta aba das contestações." });
+    return responder(response, () => contestacoesService.itensDoMovimento(id.data, movimentoId.data, aba.data, usuario(request)));
+  },
+
   async criar(request: Request, response: Response) {
     const b = criarSchema.safeParse(request.body);
     if (!b.success) return invalido(response, b.error);
@@ -109,6 +126,13 @@ export const contestacoesController = {
     const b = responderSchema.safeParse(request.body);
     if (!b.success) return invalido(response, b.error);
     return responder(response, () => contestacoesService.responder(String(request.params.id), b.data, usuario(request)));
+  },
+
+  /** O Editar das Validações (10/11/2026): o centro e/ou a conta novos da contestação. */
+  async editar(request: Request, response: Response) {
+    const b = editarSchema.safeParse(request.body);
+    if (!b.success) return invalido(response, b.error);
+    return responder(response, () => contestacoesService.editar(String(request.params.id), b.data, usuario(request)));
   },
 
   async alterarSituacao(request: Request, response: Response) {

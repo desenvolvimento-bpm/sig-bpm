@@ -24,6 +24,7 @@ import { ExportarRelatorio, type OpcaoExportar } from "../components/ExportarRel
 import { SeletorPeriodo, useExercicios } from "../components/SeletorPeriodo";
 import { TabelaEstatica, TabelaLarga } from "../components/TabelaLarga";
 import { ExportarImpostos, VisaoImpostos } from "./VisaoImpostos";
+import { PesquisarResultados } from "./PesquisarResultados";
 import {
   formato,
   mensagemDeErro,
@@ -143,6 +144,7 @@ export function TabelaResultados({
   rotulosDoTotal,
   consultaDaVenda,
   recolheTodosOsMeses = false,
+  acaoDaLinha,
 }: {
   dados: Resultados;
   titulo: string;
@@ -196,6 +198,8 @@ export function TabelaResultados({
    * e o comparado) e as variações.
    */
   recolheTodosOsMeses?: boolean;
+  /** Um botão depois da descrição da linha (13/11/2026: as Contas do Balancete nos Resultados dos Cenários Analíticos). */
+  acaoDaLinha?: (l: LinhaResultado) => ReactNode;
 }) {
   // Sem o primeiro total da ROL (21/10/2026): ele repete o segundo (depois da receita bruta e dos impostos). Nas visões
   // com um só (Despesas e Extra e RN, a ROL do Consolidado no topo), ele fica.
@@ -425,6 +429,7 @@ export function TabelaResultados({
                     <span className="truncate" title={l.descricao}>
                       {l.descricao}
                     </span>
+                    {acaoDaLinha ? acaoDaLinha(l) : null}
                   </span>
                 </td>
                 {l.meses.map((c, i) => {
@@ -916,10 +921,11 @@ export function ResultadosContent() {
             <li>No menu de níveis (a seta antes do título da tabela), escolha Totais, Atribuições ou Contas (Produção e Serviços, os volumes, aparece em todos: recolhido em Totais e Atribuições, aberto em Contas); a seta de cada total ou atribuição (e a de Produção e Serviços) abre e fecha só aquele grupo.</li>
             <li>A tabela rola para os lados: a descrição e os rótulos ficam presos. O mês de referência (o último) e o total do exercício trazem também o valor por m³.</li>
             <li>
-              “Comparação”, ao lado do período, abre o modal Comparação de Resultados Empresariais, com os cenários marcados (Previsão, Orçamento,
-              Anterior e Vendido, em Criação de Cenários), de qualquer exercício (num cenário de outro exercício, valem os mesmos meses dele): escolha o
+              “Comparação”, ao lado do período, abre o modal Comparação de Resultados Empresariais, com os cenários marcados (Forecast, Orçamento,
+              Anterior e Vendido, nos Cenários Sintéticos e Analíticos), de qualquer exercício (num cenário de outro exercício, valem os mesmos meses dele): escolha o
               tipo, Padrão ou PROVA, e os cenários, e clique em Aplicar. O botão mostra a escolha: o nome da marcação, na Padrão, ou PROVA, com as cores
-              dos cenários. A escolha fica guardada neste navegador e vale também no Painel de Bordo (os cards e a aba Indicadores).
+              dos cenários. A escolha fica guardada neste navegador e vale também no Painel de Bordo (os cards e a aba Indicadores), que tem o mesmo
+              botão: mudar numa tela muda a outra, que recarrega sozinha.
             </li>
             <li>
               Na Comparação Padrão (um cenário; de início, a primeira marcação que houver, nessa ordem), nas unidades e no Consolidado, as colunas de
@@ -930,7 +936,7 @@ export function ResultadosContent() {
             <li>
               Na Comparação PROVA (dois a quatro dos cenários marcados), os cenários ficam lado a lado no lugar do orçado: depois do mês de referência,
               o do mês de cada um (PREVISÃO AGO/26, ORÇADO AGO/26…); depois do total, o acumulado de cada um (PREVISÃO TOTAL/2026…), sem a Diferença, o
-              Atingimento e a Eficiência. Cada cenário tem a cor dos objetos PROVA dos Relatórios Executivos — a Previsão em cinza, o Orçado em preto, o
+              Atingimento e a Eficiência. Cada cenário tem a cor dos objetos PROVA dos Relatórios Executivos — o Forecast em cinza, o Orçado em preto, o
               Vendido em ouro forte e o Anterior em ouro fraco —, com as linhas nos tons mais fracos dela. Passe o mouse no rótulo para ver o nome do
               cenário. Os centros de custo, as obras e as linhas não têm orçado.
             </li>
@@ -939,6 +945,14 @@ export function ResultadosContent() {
               No extrato, clique na conta de um lançamento contábil para ver o balancete dela no mês (o modal Balancete): os movimentos do
               balancete importado no fechamento, com a emissão, o cliente ou fornecedor e o histórico de cada um. Abre no centro
               de custo e na filial do lançamento, com a soma ao lado do valor dele; desmarque a caixa para ver a conta inteira.
+            </li>
+            <li>
+              No Balancete, a coluna ID mostra o ID do movimento no RM (a coluna ID do Balancete (Lista)), e o botão Itens, na coluna Ações, abre os itens
+              da requisição ou da nota fiscal com esse ID (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas): o produto, o centro de custo, a
+              conta, a quantidade e os valores. Abre com os itens do centro de custo e da conta do movimento, que somam o valor dele; desmarque a caixa para
+              ver o documento inteiro, com os do movimento em amarelo. Quem contesta marca os itens do movimento e clica em “Contestar Selecionados” (no
+              rodapé, à direita): a contestação leva só o valor deles para o novo centro de custo e/ou a nova conta (o item já contestado mostra o número
+              da contestação). “Voltar aos Movimentos” (à esquerda) volta ao Balancete.
             </li>
             <li>
               “Regras de Rateio”, no canto de baixo do extrato, mostra as regras de rateio vigentes no mês: em cada chave (Projeto, Produção,
@@ -951,17 +965,29 @@ export function ResultadosContent() {
               Balancete, o “Exportar” baixa só a conta: o lançamento numa aba e os movimentos que o modal mostra (no recorte da caixa) na outra.
             </li>
             <li>
-              No extrato e no balancete, o centro de custo e a conta são os que valem na DRE. Os corrigidos — pela reclassificação (Cadastros da Apuração /
-              Reclassificações) ou por uma contestação validada (Contestações de Gastos) — têm um ícone ao lado, que abre o original (o do balancete do
+              No extrato e no balancete, o centro de custo e a conta são os que valem na DRE. Os corrigidos — pela reclassificação por conta ou por fornecedor (Cadastros da
+              Apuração / Reclassificações) ou por uma contestação validada (Contestações de Gastos) — têm um ícone ao lado, que abre o original (o do balancete do
               RM) e o corrigido.
             </li>
             <li>
               No balancete, a coluna Ações tem “Contestar” (de quem edita Contestações de Gastos › Contestações › Solicitadas): o modal sugere o novo centro
               de custo (os de um departamento da DRE, com o código de três níveis, como 1.01.00000001) e/ou a nova conta de resultado (as do departamento do centro e as do Extra-Operacional) do movimento
-              (as listas buscam por código ou nome) e, se quiser, o motivo. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
+              (as listas buscam por código ou nome) e, se quiser, o motivo. Com um centro novo de outro departamento, a conta do movimento não serve, e a nova
+              conta é obrigatória. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
               mesmo fornecedor, conta e centro de custo nas competências anteriores e nas seguintes, com o total que muda. O movimento com uma contestação
               em andamento mostra o número e a situação dela; o que chega à linha pelo rateio de outra (como os da Metalurgia nas linhas de Serviços)
               mostra “Rateio”: contesta-se na linha de origem. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.
+            </li>
+            <li>
+              “Pesquisar”, antes do “Exportar”, abre o modal Pesquisar nos Resultados Empresariais: escolha Fornecedor ou Cliente (digite ao menos três
+              letras do nome) ou Conta de Resultado (a lista do plano de contas, com busca pelo código ou pelo nome; vale a conta da DRE, com a
+              reclassificação e a contestação) e clique em Pesquisar. Vêm os movimentos do balancete das competências fechadas do exercício até o mês
+              escolhido, só os que o seu perfil vê (os departamentos, os centros de custo e as informações sensíveis, como no Balancete): o Mês, o Centro
+              de Custo, a Atribuição, a Conta do DRE (a linha), a Conta de Resultado (na pesquisa por fornecedor) ou o Fornecedor/Cliente (na pesquisa
+              por conta) e o Valor, com a soma; passe o mouse na linha para ver a emissão, a filial e o histórico. Os rótulos das colunas filtram. Na
+              coluna Ações, como no Balancete, “Itens” abre os itens da requisição ou da nota fiscal do movimento (com o “Contestar Selecionados”) e
+              “Contestar” (de quem edita Contestações de Gastos › Contestações › Solicitadas) abre o modal Contestar; o movimento em contestação mostra
+              o número e a situação dela. Mais de 2.000 ocorrências: a tabela mostra as primeiras (a soma é a de todas); refine a pesquisa.
             </li>
             <li>
               Sem o Acesso a Informações Sensíveis no perfil (Controle de Usuários / Perfis), as linhas de Mão de Obra Direta e Indireta (Remunerações
@@ -1025,6 +1051,8 @@ export function ResultadosContent() {
             />
             {/* A Comparação (21/10/2026), entre os cenários marcados (de qualquer exercício, 22/10/2026); num modal, com a Padrão e a PROVA (31/10/2026). */}
             <SeletorComparaCom comparacao={comparacao} />
+            {/* O Pesquisar (11/11/2026, pedido do Adão), antes do Exportar: os movimentos de um fornecedor ou de uma conta. */}
+            {visoes.length ? <PesquisarResultados ano={ano} ate={ate} /> : null}
             {/* Na aba Impostos (03/11/2026), o Exportar leva a tabela dela. */}
             {visao === "impostos" ? <ExportarImpostos ano={ano} ate={ate} /> : opcoesExportar.length && visoes.length ? <ExportarRelatorio
                 caminho="resultados"

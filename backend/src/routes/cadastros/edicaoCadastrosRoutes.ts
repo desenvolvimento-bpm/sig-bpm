@@ -17,6 +17,9 @@ const editar = verificarPermissaoDoCadastro("editar");
 export const edicaoCadastrosRoutes = Router();
 edicaoCadastrosRoutes.get("/:entidade/definicao", autenticacao, ler, asyncHandler(c.definicao));
 edicaoCadastrosRoutes.get("/:entidade", autenticacao, ler, asyncHandler(c.listar));
+// Os valores dos itens da Metodologia e o Testar (11/11/2026): só leem (a competência fechada mais recente).
+edicaoCadastrosRoutes.get("/:entidade/valores-da-metodologia", autenticacao, ler, asyncHandler(c.valoresDosItens));
+edicaoCadastrosRoutes.post("/:entidade/testar", autenticacao, ler, asyncHandler(c.testar));
 edicaoCadastrosRoutes.get("/:entidade/:id", autenticacao, ler, asyncHandler(c.ler));
 edicaoCadastrosRoutes.post("/:entidade", autenticacao, editar, asyncHandler(c.criar));
 edicaoCadastrosRoutes.put("/:entidade/:id", autenticacao, editar, asyncHandler(c.atualizar));

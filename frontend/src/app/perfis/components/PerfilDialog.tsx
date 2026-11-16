@@ -44,8 +44,10 @@ function Caixa({ rotulo, chaves, acao, nivel, onMarcar, desabilitada }: { rotulo
 
 /**
  * Tipo de usuário: nome, situação, recortes e as permissões por tela e por aba (14/10/2026; antes, por grupo de telas
- * do menu), sob o título do menu (Análises Gerenciais, Criação de Cenários, Apuração dos Resultados, Controladoria). Cada grupo abre nas
- * telas dele, e cada tela com abas nas abas. A caixa do grupo ou da tela marca (ou desmarca) tudo o que está abaixo; o
+ * do menu): os processos sob o título do grupo do menu (Análises Gerenciais, Criação de Cenários, Apuração dos Resultados,
+ * Processos Auxiliares, Controladoria). Cada processo abre nas telas dele, e cada tela com abas nas abas; o processo com uma
+ * tela só, de mesmo nome e sem abas (os Relatórios Executivos e os Painéis e Apresentações, 12/11/2026), fica numa linha.
+ * A caixa do processo ou da tela marca (ou desmarca) tudo o que está abaixo; o
  * traço mostra que só parte está marcada. Marcar "Editar" marca também "Ler"; desmarcar "Ler" desmarca "Editar"; a aba
  * só vale com a tela lida (marcar a aba marca a leitura da tela) — a mesma coerência que o backend grava.
  */
@@ -113,8 +115,8 @@ export function PerfilDialog({ opcoes, editando, onFechar }: Props) {
       return n;
     });
 
-  // Os grupos de telas do catálogo, sob o título do menu e com o ícone do item dele. Um grupo com vários processos no menu
-  // (as Análises Gerenciais: os Relatórios Executivos e os Painéis de Bordo) aparece uma vez, com o ícone do primeiro.
+  // Os processos do catálogo, sob o título do grupo do menu e com o ícone do item dele (um processo com vários itens no menu
+  // aparece uma vez, com o ícone do primeiro).
   const blocos = navGrupos
     .map((s) => ({
       titulo: s.titulo,
@@ -135,7 +137,9 @@ export function PerfilDialog({ opcoes, editando, onFechar }: Props) {
       {abertos.has(chave) ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
     </button>
   );
-  const todosAbertos = opcoes.telas.every((g) => abertos.has(g.recurso) && g.telas.every((t) => !t.abas.length || abertos.has(t.codigo)));
+  // O processo que é uma tela só (o mesmo nome, sem abas: os Relatórios Executivos e os Painéis e Apresentações, 12/11/2026): uma linha, sem a seta.
+  const umaTelaSo = (g: (typeof opcoes.telas)[number]) => g.telas.length === 1 && g.telas[0].nome === g.nome && !g.telas[0].abas.length;
+  const todosAbertos = opcoes.telas.every((g) => (umaTelaSo(g) || abertos.has(g.recurso)) && g.telas.every((t) => !t.abas.length || abertos.has(t.codigo)));
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
@@ -217,7 +221,7 @@ export function PerfilDialog({ opcoes, editando, onFechar }: Props) {
                     >
                       {todosAbertos ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
                     </Button>
-                    Grupo, Tela e Aba
+                    Processo, Tela e Aba
                   </span>
                 </th>
                 {opcoes.acoes.map((a) => (
@@ -240,14 +244,14 @@ export function PerfilDialog({ opcoes, editando, onFechar }: Props) {
                       <tr className="border-b border-gray-100">
                         <td className="px-3 py-1.5 font-bold text-gray-900">
                           <span className="inline-flex items-center gap-1.5">
-                            <Seta chave={g.recurso} rotulo={g.nome} />
+                            {umaTelaSo(g) ? <span className="w-5" /> : <Seta chave={g.recurso} rotulo={g.nome} />}
                             <g.icon className="size-4 text-gray-500" />
                             {g.nome}
                           </span>
                         </td>
                         {celulas(g.nome, chavesDoGrupo(g))}
                       </tr>
-                      {abertos.has(g.recurso)
+                      {abertos.has(g.recurso) && !umaTelaSo(g)
                         ? g.telas.map((t) => (
                             <Fragment key={t.codigo}>
                               <tr className="border-b border-gray-100">

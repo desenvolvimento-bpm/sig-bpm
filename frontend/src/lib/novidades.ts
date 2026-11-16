@@ -28,6 +28,703 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 16/11/2026: sem as senioridades (só as funções contam); o Tipo com Aprendiz e Estagiário.
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: [
+      "Sai a aba Senioridades: só as funções contam. Cada função existe uma vez, pelo nome; as funções de mesmo nome (uma por senioridade) viraram uma só, com os registros delas.",
+      "O Tipo do colaborador passa a ter CLT, PJ, Aprendiz e Estagiário. Os colaboradores que tinham a senioridade Aprendiz ou Estagiário ficaram com o Tipo correspondente.",
+      "A importação das Funções usa as colunas Função, Descrição, Competências e Atividades; a do Lançamento Inicial, Unidade, Tipo, Função e Centro de Custo.",
+    ],
+  },
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "No modal Nova Movimentação, o Tipo tem CLT, PJ, Aprendiz e Estagiário, e a Função aparece sem a senioridade.",
+      "No Realizado, o fim do mês por tipo ganha as colunas Aprendizes e Estagiários, ao lado de CLT e PJ.",
+    ],
+  },
+  {
+    publicada: "2026-11-16T10:00",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Quadro de Lotação, sai a coluna Senioridade: o Tipo (CLT, PJ, Aprendiz ou Estagiário) separa os Aprendizes, com o Fundo de Garantia: Aprendiz, e os Estagiários, sem encargos. As linhas que só se diferenciavam pela senioridade viraram uma, com os colaboradores somados e o salário pela média ponderada (o custo não mudou).",
+      "No Exportar Premissas, a aba Quadro de Lotação sai sem a coluna Senioridade, com o Tipo em lista. Um arquivo exportado antes ainda se importa: o Aprendiz e o Estagiário da Senioridade viram o Tipo da linha.",
+    ],
+  },
+  // 13/11/2026 (noite): as Redistribuições de Gastos, a Jornada, a Tela Inicial, a largura das colunas e os demais ajustes do dia.
+  {
+    publicada: "2026-11-13T18:55",
+    processo: TODO_O_SIG,
+    itens: [
+      "Em todas as tabelas (fora dos modais), arraste a divisa entre os rótulos de duas colunas para ajustar a largura delas; o duplo clique na divisa volta ao padrão. As larguras ficam guardadas neste navegador.",
+      "No menu do usuário, logo antes do Tema, a opção Tela Inicial: escolha o processo que o SIG abre depois do login (Padrão: as competências do Fechamento Mensal). A escolha fica guardada neste navegador.",
+      "Cadastros da Controladoria passa a se chamar Cadastros Gerais, no menu lateral, no caminho do topo e nos Perfis.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: [
+      "A aba Redistribuições de Gastos, depois das Regras de Rateio: escolha o Departamento e a Conta da DRE, marque os fornecedores com movimentos nessa combinação e diga para quais centros de custo os gastos vão, com o percentual de cada um (somando 100%) e a vigência por mês. Na apuração, cada movimento desses fornecedores se divide entre os centros escolhidos; a conta da DRE não muda.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/contas-resultado",
+    itens: [
+      "Em Contas de Resultado, o campo Linha da DRE passa a se chamar Linha do DRE e ganha a opção Sem Resultado, com ou sem departamento: a conta fica fora da DRE, e os movimentos dela não aparecem como pendência na Classificação dos fechamentos. Na lista, a conta aparece com o traço (—) das contas sintéticas.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "As colunas % e R$/m³, com as mesmas regras dos Resultados Empresariais, na tela e no Exportar.",
+      "O Exportar do extrato traz os movimentos com o centro de custo corrigido (pelas contestações, pelas reclassificações por fornecedor e pelas redistribuições), e o movimento contestado entra uma vez só.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Fechamento Mensal",
+    tela: "Classificação",
+    rota: "/competencias/0000-00/classificacao",
+    itens: ["O lançamento de uma conta Sem Resultado aparece com Sem Resultado na coluna Classificação na DRE, sem pendência."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Nas próximas apurações, os Resultados por Linha e a aba Obras seguem o centro de custo que vale para o movimento: o que uma contestação, uma reclassificação por fornecedor ou uma redistribuição tirou de uma obra deixa de contar nela.",
+      "O Exportar do extrato traz os movimentos com o centro de custo corrigido, e o movimento contestado entra uma vez só.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "A aba Controle passa a se chamar Aprovações e é a única com o recorte do perfil: Movimentações (inclusive o Excluir), Realizado e o Painel de Bordo mostram o quadro inteiro.",
+      "No modal Nova Movimentação, sai o campo Senioridade (vale a da função); o Tipo de Movimentação vem antes da Classificação, que lista só as do tipo escolhido; a caixa Gerar Vaga em Aberto fica ao lado da Origem.",
+      "No Realizado, a coluna Departamento vem antes do Centro de Custo.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao/0000-00/jornada",
+    itens: [
+      "A aba Jornada, depois do Realizado: as linhas do quadro realizado (Departamento, Centro de Custo e Função), com as Horas Extras (HH:MM) e as Faltas (dias). O Editar de cada linha abre o modal para informá-las, enquanto a competência está aberta.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: ["No Lançamento Inicial, o Importar e o Novo ficam bloqueados quando há competências fechadas na Gestão de Colaboradores; o aviso diz quais."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Central de Conectividade",
+    tela: "Acessos",
+    rota: "/central-de-conectividade/acessos",
+    itens: ["A tela Acessos, depois da tela APIs. A aba APIs traz o que ficava na aba Acesso às APIs: os pedidos do período, os recusados, os usuários e os endereços, com o bloqueio de um usuário ou de um endereço para quem edita."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Replicar Referências, logo depois do Reajustar Marcados: põe a Média de Ref. nas contas e nos meses marcados (no Histórico, Referências Replicadas).",
+      "Na aba Centros de Custo, o botão ao lado de cada conta abre as Contas do Balancete: as contas do RM que caem nela.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: ["Em todas as abas, o botão ao lado de cada conta abre as Contas do Balancete: as contas do RM que caem nela."],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Relatórios Executivos",
+    rota: RE,
+    itens: [
+      "Com um vídeo escolhido na edição, o Configurar da barra abre as Configurações do Vídeo: Reprodução Automática (o vídeo começa sozinho na leitura e na apresentação) e Recomeçar ao Terminar. Valem nos vídeos do computador e do YouTube; no Facebook, só a Reprodução Automática.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T18:55",
+    processo: "Painéis e Apresentações",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Com um vídeo escolhido na edição, o Configurar da barra abre as Configurações do Vídeo: Reprodução Automática (o vídeo começa sozinho na leitura e na apresentação) e Recomeçar ao Terminar. Valem nos vídeos do computador e do YouTube; no Facebook, só a Reprodução Automática.",
+    ],
+  },
+  // 13/11/2026: as Reclassificações Por Fornecedor e o Acesso às Informações dos cenários analíticos.
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cadastros da Apuração",
+    tela: "Reclassificações",
+    rota: "/cadastros/reclassificacoes",
+    itens: [
+      "A tela Reclassificações de Conta passa a se chamar Reclassificações, com as abas Por Conta (o cadastro de sempre) e Por Fornecedor.",
+      "Na aba Por Fornecedor, cadastre o fornecedor (a lista dos fornecedores com movimentos já importados) e o Centro de Custo Imperativo: no fechamento mensal, todos os movimentos do fornecedor vão para esse centro, seja qual for o centro em que o RM os lançou. Muda só o centro: as reclassificações Por Conta continuam valendo pelo centro do RM, e a contestação validada continua por cima.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Cenário, a opção Acesso às Informações: Geral (todos veem todas as premissas) ou Por Recorte (quem tem recorte no perfil vê só as premissas e o histórico do seu recorte: o Gestor, os seus departamentos; o Coordenador, os grupos de centros com algum centro dele). Quem criou o cenário e os Administradores veem tudo, e só eles mudam a opção.",
+      "A aba Reajustes (Índices de Reajuste e Aplicação dos Reajustes) fica nas Configurações, depois do Comparativo.",
+    ],
+  },
+  {
+    publicada: "2026-11-13T08:44",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Com o Acesso às Informações Por Recorte, as abas, o Exportar Premissas e o Importar Valores ficam no recorte de quem acessa, com um aviso.",
+      "Na aba Investimentos, os de Despesas e Extra têm o campo Departamento: Logística, Técnico, Comercial, Administrativo ou Extra-Operacional.",
+      "A aba Reajustes saiu das Premissas: fica em Configurações / Reajustes.",
+    ],
+  },
+  // 12/11/2026, 16:47
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Referência, os botões Replicar Médias e Apagar Valores ficam logo depois de Realocar (na referência de outro cenário, depois de Carregar Cenário). Valem para todas as abas das Premissas.",
+      "Na aba Cenário, a opção Edição das Configurações: Particular (só quem criou o cenário e os Administradores alteram as Configurações) ou Pública (todos com permissão de editar as Configurações). Vale para toda a tela: todas as abas e ações. Só quem criou o cenário ou um Administrador muda a opção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Replicar Médias e Apagar Valores ficam em Configurações / Referência, logo depois de Realocar."],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Sintéticos",
+    tela: "Configurações",
+    rota: "/cenarios/sinteticos/0/configuracoes",
+    itens: [
+      "Na aba Cenário, a opção Edição das Configurações: Particular (só quem criou o cenário e os Administradores alteram as Configurações) ou Pública (todos com permissão de editar as Configurações). Vale para toda a tela: todas as abas e ações. Só quem criou o cenário ou um Administrador muda a opção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T16:47",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: [
+      "A aba Indicadores Manuais fica na tela Resultados, depois de RN: com a permissão de editar a aba, clique numa linha para digitar os meses; sem ela, clique no indicador para ver o gráfico. As permissões dos perfis passaram para a aba nova.",
+    ],
+  },
+  // 12/11/2026, 15:24
+  {
+    publicada: "2026-11-12T15:24",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: ["No Comparativo, a PRODUÇÃO E SERVIÇOS (PS) aparece também nos níveis Totais e Atribuições, recolhida (a seta a abre), como em Resultados Empresariais."],
+  },
+  {
+    publicada: "2026-11-12T15:24",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Na aba Reajustes, a Aplicação dos Reajustes mostra a PRODUÇÃO E SERVIÇOS (PS), recolhida em Totais e Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam."],
+  },
+  // 12/11/2026, 14:22
+  {
+    publicada: "2026-11-12T14:22",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["No Exportar Premissas, o Total da Referência dos percentuais (os Encargos e Benefícios — INSS, FGTS, Férias e Décimo Terceiro — e os indicadores manuais em %) é a própria Média de Referência; nos valores, continua a Média × 12."],
+  },
+  // 12/11/2026, 13:25
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Centros de Custo, abaixo do Total de Colaboradores, uma linha de Salários para cada tipo de colaborador: Salários dos Aprendizes, dos Estagiários, CLT e PJ (colaboradores × Salário Total das linhas da aba Quadro de Lotação). Todos vão para a mão de obra da atribuição do grupo: as Remunerações CLT são a soma dos três primeiros, e as PJ, os Salários PJ; a outra mão de obra fica sem remunerações do Quadro de Lotação. No Exportar Premissas, as linhas e as Remunerações em fórmula.",
+      "Na aba Centros de Custo, sem o aviso das linhas do grupo na aba Quadro de Lotação.",
+      "Nas abas Investimentos e Extra-Operacional, cada tabela (Depreciação, Investimentos, Despesas e Extra e RN) tem o título e a descrição num card de destaque, com as funções dela à direita.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "No Texto Livre, o menu da edição ganhou o Alinhamento (Esquerda, Justificado, Centralizado ou Direita), antes do espaçamento, e as Bordas, depois dele: as posições, o tipo, a espessura e a cor.",
+      "Quando as abas das páginas não cabem, sem a barra de rolagem: elas rolam sozinhas até a página aberta (Página Anterior, Próxima Página, Nova Página ou Duplicar Página).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "No Texto Livre, o menu da edição ganhou o Alinhamento (Esquerda, Justificado, Centralizado ou Direita), antes do espaçamento, e as Bordas, depois dele: as posições, o tipo, a espessura e a cor.",
+      "Quando as abas não cabem, sem a barra de rolagem: elas rolam sozinhas até a aba aberta (Página Anterior, Próxima Página, Nova Página ou Duplicar Página).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores",
+    itens: [
+      "Como no Fechamento Mensal, o processo abre nas competências do Quadro de Lotação; clicar numa delas abre o Quadro de Lotação dela. O nome do processo, no menu, na barra e no caminho do topo, volta às competências; o Quadro de Lotação da barra abre a última competência aberta.",
+      "Os Cadastros passaram ao processo novo Cadastros Auxiliares.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "A situação da competência (Aberta ou Fechada) fica à direita da barra do topo, e o mês, no caminho do topo (saíram do lado do título).",
+      "No Realizado, sem os cards dos indicadores (ficam no Painel de Bordo) e sem o aviso do cenário sem a aba Quadro de Lotação; ao rolar, a tabela para logo abaixo do título, como nas outras telas.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: ["O Configurar Gráficos, depois da Comparação, com os Rótulos e o Tipo, como no Painel de Bordo de Resultados Empresariais; sem a competência ao lado do título (o mês aparece nos cards)."],
+  },
+  {
+    publicada: "2026-11-12T13:25",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: [
+      "O processo novo, abaixo da Gestão de Colaboradores, com os cadastros dos Processos Auxiliares: a tela Gestão de Colaboradores (“Colaboradores” na barra), antes a tela Cadastros da Gestão de Colaboradores, com as mesmas abas e permissões.",
+    ],
+  },
+  // 12/11/2026, 11:10
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "Ao lado do Nova Página, o Duplicar Página: a cópia inteira da página aberta (os blocos, a Imagem de Fundo e as transições) entra logo depois dela; o nome escolhido ganha “(Cópia)”.",
+      "Depois do Excluir a Página, o Ocultar Página: ativo, o olho cortado aparece antes do nome da página, e o Apresentar a pula e passa à próxima (ela também fica fora do PDF, do contador dos slides e do Sumário). Outro clique a mostra de novo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Ao lado do Nova Página, o Duplicar Página: a cópia inteira da aba aberta (os blocos, a Imagem de Fundo e as transições) entra logo depois dela; o nome escolhido ganha “(Cópia)”.",
+      "Depois do Excluir a Página, o Ocultar Página: ativo, o olho cortado aparece antes do nome da aba, e o Apresentar a pula e passa à próxima (ela também fica fora do PDF, do contador dos slides e do Sumário). Outro clique a mostra de novo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Os colaboradores (Aprendizes, Estagiários, CLT e PJ) vêm só da aba Quadro de Lotação, alimentada pela Gestão de Colaboradores: na aba Centros de Custo, são calculados em todos os grupos e não se digitam; o grupo sem linhas no Quadro de Lotação fica sem colaboradores.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: [
+      "Na Referência, com Resultado Realizado, a caixa Importar Quadro de Lotação Vigente: as linhas da aba Quadro de Lotação passam a ser as do Quadro de Lotação mais recente da Gestão de Colaboradores (em todos os meses), qualquer que seja o período De / Até; os salários das linhas que o cenário já tinha ficam.",
+      "A referência realizada não traz mais os colaboradores das listas do Fechamento Mensal.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: ["Nos modais Importar das Funções e do Lançamento Inicial, os filtros nos rótulos da tabela da prévia."],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "No Realizado, os cards Quadro de Lotação, Turnover e Abertura de Vagas x Contratações com o destaque amarelo à esquerda.",
+      "A lista Comparação no padrão das outras telas; no Abrir Competência, os campos Mês e Ano no espaçamento dos outros modais.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: [
+      "Os indicadores nos cards padrão do Painel de Bordo de Resultados Empresariais: o Atual e o Acumulado, com a comparação e o gráfico dos meses.",
+      "Sem os campos do ano e do mês: o painel mostra sempre a competência mais recente do Quadro de Lotação (a em edição ou a última fechada), ao lado do título.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T11:10",
+    processo: "Controle de Usuários",
+    tela: "Perfis",
+    rota: "/perfis",
+    itens: ["No modal do perfil, os Relatórios Executivos e os Painéis e Apresentações são processos do grupo Análises Gerenciais, cada um com a sua tela (antes, abas de um processo Análises Gerenciais)."],
+  },
+  // 12/11/2026, 09:00
+  {
+    publicada: "2026-11-12T09:00",
+    processo: TODO_O_SIG,
+    itens: [
+      "O menu mudou: os Cenários Analíticos e os Cenários Sintéticos passaram para as Análises Gerenciais; a Criação de Cenários ficou com os Resultados Vendidos; o grupo Processos Administrativos se chama Processos Auxiliares e recebeu a Auditoria de Investimentos, os Inventários e Cíclicas e a Ociosidade do Maquinário (em desenvolvimento), e o grupo Gestão do Patrimônio saiu.",
+      "A marcação Previsão dos cenários se chama Forecast nas etiquetas e nos cards (“vs. Forecast”).",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Pesquisar, antes do Exportar: os movimentos do balancete de um fornecedor ou cliente (digite ao menos três letras) ou de uma conta de resultado (escolha na lista do plano de contas), nas competências fechadas do exercício até o mês escolhido e só os que o seu perfil vê — o Mês, o Centro de Custo, a Atribuição, a Conta do DRE, a Conta de Resultado ou o Fornecedor/Cliente e o Valor, com a soma. Em cada movimento, Itens e Contestar, como no Balancete.",
+      "A Comparação escolhida aqui vale também no Painel de Bordo, na hora.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "O botão Comparação (Padrão ou PROVA) também aqui, antes do Configurar Gráficos; mudar numa tela muda a outra.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "Nos cards do Painel e dos Indicadores, padrão e PROVA, o botão Dados do Card (no menu da edição, antes do gráfico) passa em ciclo de Atual e Acumulado a Apenas o Atual e Apenas o Acumulado; com um só, o card fica mais estreito, na proporção.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Nos cards do Painel e dos Indicadores, padrão e PROVA, o botão Dados do Card (no menu da edição, antes do gráfico) passa em ciclo de Atual e Acumulado a Apenas o Atual e Apenas o Acumulado; com um só, o card fica mais estreito, na proporção.",
+      "No modal Transições, no Cronômetro, a caixa Recomeçar ao Terminar: ao fim do Avançar Após do último slide, a apresentação volta ao primeiro, em ciclo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Reajustes, depois de Indicadores Manuais: os Índices de Reajuste (até quatro reajustes por índice, cada um com o Valor e o mês em que inicia) e a Aplicação dos Reajustes (o índice de cada conta), com Aplicar Reajustes / Remover Reajustes. Aplicados, os reajustes entram na DRE do cenário, e as demais abas das Premissas (menos Indicadores Manuais) e a Referência ficam bloqueadas até Remover Reajustes.",
+      "Na aba Centros de Custo, os Colaboradores Aprendizes e Estagiários aparecem à parte dos CLT; os salários dos estagiários saem da base dos Encargos e Benefícios. As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação e não se digitam (sem linhas no Quadro de Lotação, ficam zeradas). O grupo, os centros e o destino ficam no card de destaque.",
+      "Na aba Quadro de Lotação, o texto num destaque e o botão Nova Entrada.",
+      "Exportar Premissas: sem as colunas de código; as primeiras colunas presas ao rolar; os rótulos com quebra de texto; com a referência carregada, os doze meses dela (Realizado ou Referência) antes da Média de Referência e o QL Realizado no Quadro de Lotação; os colaboradores e as Remunerações em fórmula sobre a aba Quadro de Lotação do arquivo.",
+      "Importar Valores acha cada linha pelas descrições; a aba Quadro de Lotação do arquivo substitui as linhas do cenário nos departamentos dele (as iguais ficam, as alteradas mudam, as novas entram e as que faltam saem). Os arquivos de antes continuam valendo.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos",
+    itens: [
+      "A aba Índices saiu: o Comparativo traz o Cenário Comparado, os Índices de Referência e as Variações Máximas, cada um com o seu Gravar.",
+      "Na Referência, a caixa Manter os Valores dos Meses: a referência troca só as Médias de Referência, e os meses digitados ou importados ficam.",
+      "O Novo Cenário copiando outro leva também o Comparativo (o Cenário Comparado, os Índices e as Variações Máximas) e as realocações.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: [
+      "Cada função se cadastra uma vez por senioridade, com a sua descrição, competências e atividades; as listas mostram a função com a senioridade (“Conferente · Pleno”), e escolher a função escolhe a senioridade. O Nível passou a se chamar Senioridade.",
+      "O Importar das Funções substitui o cadastro: as funções fora da planilha são excluídas (a prévia diz quais), e o Lançamento Inicial que usa alguma delas é apagado junto; a planilha que exclui uma função das movimentações ou dos cenários é recusada.",
+      "No Lançamento Inicial, o resumo do quadro fica num destaque, acima da tabela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Arquivos Gerais",
+    tela: "Treinamentos",
+    rota: "/arquivos-gerais/treinamentos",
+    itens: [
+      "Cada arquivo tem o Processo (Geral ou um processo do menu), escolhido ao adicionar ou no Editar, novo no menu Ações; a lista mostra a coluna Processo e só os arquivos Gerais e os dos processos em que você vê alguma tela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Arquivos Gerais",
+    tela: "Informativos",
+    rota: "/arquivos-gerais/informativos",
+    itens: [
+      "Cada arquivo tem o Processo (Geral ou um processo do menu), escolhido ao adicionar ou no Editar, novo no menu Ações; a lista mostra a coluna Processo e só os arquivos Gerais e os dos processos em que você vê alguma tela.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cadastros da Controladoria",
+    tela: "Analítico",
+    rota: "/cadastros/painel-bordo",
+    itens: [
+      "Nos modais dos cards do Painel de Bordo e dos Indicadores, a lista de itens da Metodologia mostra, ao lado de cada item, o valor acumulado até a competência fechada mais recente; o Testar, antes do Gravar, mostra o Realizado (Atual) com a fórmula do formulário, sem gravar.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Cadastros da Controladoria",
+    tela: "Controladoria",
+    rota: "/cadastros/departamentos",
+    itens: [
+      "A aba Departamentos: a Ordem, a Unidade, o Departamento e os Departamentos da DRE (os grupos da DRE de cada um), com a carga da Produção (Matriz e Filial), da Montagem e dos Complementares, das despesas (Logística, Técnico, Comercial e Administrativo) e do Extra-Operacional.",
+    ],
+  },
+  {
+    publicada: "2026-11-12T09:00",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "Na confirmação do Excluir Competência, o campo da competência fica à direita, alinhado com o Excluir.",
+    ],
+  },
+  // 10/11/2026, 21:27
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No modal Balancete do extrato, o botão Itens abre os itens do movimento com uma caixa em cada um: marque os itens e clique em Contestar Selecionados (no rodapé, à direita) para contestar só eles — o valor deles muda de centro de custo e/ou de conta, e o resto do movimento fica. O item já contestado mostra o número da contestação.",
+      "Voltar aos Movimentos (no rodapé dos Itens, à esquerda) volta ao Balancete.",
+      "No Contestar, ao escolher um centro de custo de outro departamento, a nova conta de resultado passa a ser obrigatória (a do movimento não serve no departamento novo).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No modal Balancete do extrato, o botão Itens abre os itens do movimento com uma caixa em cada um: marque os itens e clique em Contestar Selecionados (no rodapé, à direita) para contestar só eles — o valor deles muda de centro de custo e/ou de conta, e o resto do movimento fica. O item já contestado mostra o número da contestação.",
+      "Voltar aos Movimentos (no rodapé dos Itens, à esquerda) volta ao Balancete.",
+      "No Contestar, ao escolher um centro de custo de outro departamento, a nova conta de resultado passa a ser obrigatória (a do movimento não serve no departamento novo).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Fechamento Mensal",
+    tela: "Lançamentos Manuais › Contestações",
+    rota: "/competencias/0000-00/lancamentos-contestacoes",
+    itens: [
+      "A contestação de itens de um movimento chega aqui pelo Processar das Validações, na competência do movimento: o estorno e o lançamento novo com o valor dos itens, e a descrição diz quantos itens.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "Na contestação de itens de um movimento, o Valor é o dos itens, com quantos são; no Ver Movimentos, os Itens mostram o número da contestação nos itens contestados, e Voltar aos Movimentos volta à lista.",
+      "O Exportar leva também os Itens Contestados e o Valor do Movimento.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T21:27",
+    processo: "Contestações de Gastos",
+    tela: "Validações",
+    rota: "/contestacoes-de-gastos/validacoes",
+    itens: [
+      "O botão Alterar Status virou o menu Ações (⋮): Motivo, Justificativa, Ver Movimentos, Editar e Alterar Status. As colunas Motivo e Justificativa saíram da tabela (estão no menu e no Exportar), e o Movimento ocupa até quatro linhas.",
+      "Editar troca o novo centro de custo e/ou a nova conta de resultado de uma contestação pendente ou acatada, sem movimento corrigido, com as mesmas listas e regras do Contestar; a situação não muda, e a alteração fica na Auditoria.",
+      "O Processar lança a contestação de itens de um movimento na competência dele (aberta): o estorno e o lançamento novo com o valor dos itens, na aba Contestações dos Lançamentos Manuais.",
+    ],
+  },
+  // 10/11/2026, 14:43
+  {
+    publicada: "2026-11-10T14:43",
+    processo: TODO_O_SIG,
+    itens: [
+      "O menu ganha o grupo Processos Administrativos, entre a Apuração dos Resultados e a Controladoria: a Gestão de Colaboradores, em uso, e o Fluxo de Caixa, a Gestão de Credores e a Gestão da Segurança, em desenvolvimento.",
+      "O Registros dos Indicadores, em desenvolvimento, saiu do menu.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Cadastros",
+    rota: "/gestao-de-colaboradores/cadastros/funcoes",
+    itens: [
+      "O processo entra em uso, com a tela Cadastros: as abas Senioridades, Funções, Movimentações (os tipos de movimentação, com a contagem Positiva, Negativa ou Nula e a aprovação Automática ou Manual), Classificações e Lançamento Inicial (o quadro de lotação do início, um colaborador por linha).",
+      "Funções e Lançamento Inicial têm o Importar, com a prévia de cada linha (Nova, Alterada, Igual ou Inválida); com uma linha inválida, a importação é cancelada. O Lançamento Inicial pede a competência.",
+      "No menu da coluna Ações, Editar, Inativar (ou Reativar) e Excluir, este só no registro que não está em uso.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: [
+      "As competências do processo: Abrir Competência e, no menu Ações, Fechar, Reabrir e Excluir.",
+      "Em cada competência, as abas Movimentações (o Novo registra admissões, reposições, desligamentos e vagas; o desligamento pode gerar a vaga em aberto), Controle (Aprovar e Reprovar as de aprovação manual) e Realizado (os indicadores do mês e a tabela por centro de custo).",
+      "No Realizado, a lista Comparação, ao lado do título, compara com um cenário marcado (Previsão, Orçamento, Anterior ou Vendido): o mês e o acumulado nos cards e, com um cenário analítico que tem a aba Quadro de Lotação, as colunas Cenário e Diferença de cada centro de custo.",
+      "Com recorte por departamento ou por centro de custo, as abas mostram só os seus centros.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: [
+      "Os indicadores Quadro de Lotação, Turnover e Abertura de Vagas x Contratações: na aba Resultados, um card por indicador (o mês, o anterior, o ano e as barras dos meses); na aba Indicadores, a tabela dos meses com o Acumulado.",
+      "A lista Comparação, ao lado do título, traz o cenário marcado e a diferença nos cards e, na aba Indicadores, uma linha do cenário e outra da diferença abaixo de cada indicador.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Quadro de Lotação, entre Serviços e Centros de Custo: as linhas como as do Lançamento Inicial (Unidade, Tipo, Senioridade, Função e Centro de Custo) e, em cada mês, os Colaboradores e o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada um, com o Custo no Ano. Nova Linha, a edição dos meses na própria tabela e o Excel (Exportar Premissas e Importar Valores).",
+      "Na aba Centros de Custo, o grupo com linhas no Quadro de Lotação conta por elas os Colaboradores e as Remunerações CLT e PJ, que deixam de ser digitados; o grupo sem linhas fica como está.",
+      "Nos Encargos e Benefícios, o FGTS em duas linhas: Fundo de Garantia: Aprendiz (2%), sobre os salários dos aprendizes, e Fundo de Garantia: CLT (8%).",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cadastros da Controladoria",
+    tela: "Indicadores",
+    rota: "/cadastros/estrutura-indicadores",
+    itens: [
+      "No montador da Metodologia, entram os itens Quadro de Lotação (por Departamento, com a Atribuição Geral, Direto ou Indireto, ou por Centro de Custo), Movimentos do QL (por movimentação, ou todas as de contagem Positiva ou Negativa) e Valor Registrado (o valor registrado no mês com o nome do indicador: importado, digitado ou apurado). O item Comercial e Administrativo saiu.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Cadastros da Controladoria",
+    tela: "Centros de Custo",
+    rota: "/cadastros/centros-custo",
+    itens: [
+      "Um centro de custo usado na Gestão de Colaboradores (o Lançamento Inicial e as movimentações) ou na aba Quadro de Lotação de um cenário não se exclui: inative-o.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Fechamento Mensal",
+    tela: "Importações",
+    rota: "/competencias/0000-00/importar",
+    itens: [
+      "Nas linhas do Quadro de Lotação e dos Indicadores do Administrativo, o botão Apurar tira os valores do mês da Gestão de Colaboradores (a competência do Quadro de Lotação do mesmo mês), mostra o registrado hoje ao lado e os grava.",
+      "A DRE do Comercial tem o Importar da linha, e o Saldo Inicial do Estoque aparece só na primeira competência.",
+      "O balancete lê a coluna ID da aba Balancete (Lista), o ID do movimento no RM, que abre os itens da nota fiscal ou da requisição nos extratos.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No modal Balancete do extrato, a coluna ID (o ID do movimento no RM, a coluna ID da aba Balancete (Lista)) e, na coluna Ações, o botão Itens: os itens da nota fiscal ou da requisição do movimento, com o produto, o centro de custo, a conta, a quantidade e os valores.",
+      "Os Itens abrem só com os do centro de custo e da conta do movimento, que somam o valor dele; desmarcando a caixa, aparece o documento inteiro, com os do movimento em amarelo. O botão aparece nos meses cujo balancete foi importado com a coluna ID preenchida.",
+      "O Exportar do extrato e do Balancete leva a coluna ID na aba Detalhes.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No modal Balancete do extrato, a coluna ID (o ID do movimento no RM, a coluna ID da aba Balancete (Lista)) e, na coluna Ações, o botão Itens: os itens da nota fiscal ou da requisição do movimento, com o produto, o centro de custo, a conta, a quantidade e os valores.",
+      "Os Itens abrem só com os do centro de custo e da conta do movimento, que somam o valor dele; desmarcando a caixa, aparece o documento inteiro, com os do movimento em amarelo. O botão aparece nos meses cujo balancete foi importado com a coluna ID preenchida.",
+      "O Exportar do extrato e do Balancete leva a coluna ID na aba Detalhes.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "Na aba Indicadores, o valor de um mês apurado na Gestão de Colaboradores traz a lupa: as movimentações aprovadas do mês e a contagem de cada uma.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "No Ver Movimentos, a coluna ID e o botão Itens de cada movimento: os itens da nota fiscal ou da requisição dele, como no Balancete dos extratos.",
+    ],
+  },
+  {
+    publicada: "2026-11-10T14:43",
+    processo: "Contestações de Gastos",
+    tela: "Validações",
+    rota: "/contestacoes-de-gastos/validacoes",
+    itens: [
+      "No Ver Movimentos, a coluna ID e o botão Itens de cada movimento; o Ver Movimentos também aparece na contestação de um movimento só, quando ele tem itens.",
+    ],
+  },
   // 06/11/2026, 15:50
   {
     publicada: "2026-11-06T15:50",

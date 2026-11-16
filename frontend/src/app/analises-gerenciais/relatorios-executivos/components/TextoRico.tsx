@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
-import { Bold, CaseSensitive, ChevronDown, Italic, List, Palette, Underline, UnfoldVertical } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, CaseSensitive, ChevronDown, Italic, List, Palette, Underline, UnfoldVertical } from "lucide-react";
 
 /**
  * O texto formatado das anotações e das legendas das fotos dos Relatórios Executivos (17/10/2026): negrito, itálico,
@@ -63,6 +63,26 @@ const FONTE_PADRAO = "fonte-padrao";
 export const ESPACAMENTOS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export const alturaDaLinha = (espacamento?: number) => (espacamento ? espacamento * 1.2 : undefined);
 export const rotuloDoEspacamento = (e: number) => e.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+
+/**
+ * O alinhamento dos parágrafos (12/11/2026, pedido do Adão; no Texto Livre): o comando do navegador grava o text-align no
+ * parágrafo (com a seleção, nos parágrafos dela; sem ela, em todo o texto, como os outros botões).
+ */
+export const ALINHAMENTOS = [
+  { chave: "left", nome: "Esquerda", comando: "justifyLeft", Icone: AlignLeft },
+  { chave: "justify", nome: "Justificado", comando: "justifyFull", Icone: AlignJustify },
+  { chave: "center", nome: "Centralizado", comando: "justifyCenter", Icone: AlignCenter },
+  { chave: "right", nome: "Direita", comando: "justifyRight", Icone: AlignRight },
+] as const;
+type ChaveDoAlinhamento = (typeof ALINHAMENTOS)[number]["chave"];
+/** O alinhamento do parágrafo onde está o cursor (o "start" do navegador é a Esquerda). */
+function alinhamentoDaSelecao(campo: HTMLElement): ChaveDoAlinhamento {
+  const sel = window.getSelection();
+  let n: Node | null = sel && sel.rangeCount && campo.contains(sel.anchorNode) ? sel.anchorNode : campo;
+  if (n && n.nodeType === Node.TEXT_NODE) n = n.parentNode;
+  const a = getComputedStyle((n as HTMLElement) ?? campo).textAlign;
+  return a === "justify" ? "justify" : a === "center" ? "center" : a === "right" || a === "end" ? "right" : "left";
+}
 
 /** A classe dos itens das listas da barra. */
 export const ITEM_DA_BARRA = "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-100";
@@ -388,6 +408,7 @@ export function BarraDeTexto({
   titulo,
   fontes = false,
   espacamento,
+  alinhamento = false,
   desabilitado = false,
 }: {
   campo: () => HTMLElement | null;
@@ -401,13 +422,15 @@ export function BarraDeTexto({
   fontes?: boolean;
   /** O espaçamento entre as linhas do texto todo do bloco (20/10/2026: nas anotações e no Texto Livre). */
   espacamento?: { valor?: number; definir: (e: number | undefined) => void };
+  /** O alinhamento dos parágrafos (12/11/2026: no Texto Livre). */
+  alinhamento?: boolean;
   /**
    * O título da anotação (19/10/2026): com o cursor nele, o tamanho da fonte muda o dele (os demais botões não valem
    * para o título).
    */
   titulo?: { campo: () => HTMLInputElement | null; tamanho: number; definir: (px: number) => void; fonte?: string; definirFonte?: (chave: ChaveDaFonte | undefined) => void };
 }) {
-  const [aberta, setAberta] = useState<"cor" | "marcador" | "tamanho" | "fonte" | "espacamento" | null>(null);
+  const [aberta, setAberta] = useState<"cor" | "marcador" | "tamanho" | "fonte" | "espacamento" | "alinhamento" | null>(null);
   // Outro bloco escolhido (24/10/2026, o menu único): a lista aberta fecha.
   const [doBloco, setDoBloco] = useState({ campo, desabilitado });
   if (doBloco.campo !== campo || doBloco.desabilitado !== desabilitado) {
@@ -418,6 +441,8 @@ export function BarraDeTexto({
   const [tamanho, setTamanho] = useState(14);
   // A fonte do texto onde está o cursor (22/10/2026), destacada na lista das fontes; no título, a dele.
   const [fonteAtual, setFonteAtual] = useState<ChaveDaFonte | undefined>(undefined);
+  // O alinhamento do parágrafo onde está o cursor (12/11/2026), o ícone do botão e o destaque da lista.
+  const [alinhamentoAtual, setAlinhamentoAtual] = useState<ChaveDoAlinhamento>("left");
   // O título mais recente (para os eventos) e se o cursor está nele (para a lista dos tamanhos).
   const doTitulo = useRef(titulo);
   useEffect(() => {
@@ -432,6 +457,7 @@ export function BarraDeTexto({
       if (el && sel && sel.rangeCount && el.contains(sel.anchorNode)) {
         setTamanho(tamanhoDaSelecao(el));
         setFonteAtual(fonteDaSelecao(el));
+        setAlinhamentoAtual(alinhamentoDaSelecao(el));
       }
     };
     const aoFocar = () => {
@@ -482,6 +508,7 @@ export function BarraDeTexto({
     });
     setFonteAtual(undefined);
   };
+  const IconeDoAlinhamento = ALINHAMENTOS.find((x) => x.chave === alinhamentoAtual)!.Icone;
   // A fonte destacada na lista: a do título, com o cursor nele; senão, a do texto.
   const fonteMarcada = titulo && focoNoTitulo ? titulo.fonte : fonteAtual;
   const marcada = (chave?: string) => (fonteMarcada === chave ? "bg-gray-100 font-bold text-gray-900" : "");
@@ -613,6 +640,34 @@ export function BarraDeTexto({
           </span>
         ) : null}
       </span>
+      {/* O alinhamento (12/11/2026, pedido do Adão), logo antes do espaçamento: no Texto Livre; nos demais, quase apagado. */}
+      <MenuDaBarra
+        botao={botao}
+        titulo="Alinhamento"
+        gatilho={<IconeDoAlinhamento className="size-4" />}
+        aberto={aberta === "alinhamento"}
+        onAlternar={alternar("alinhamento")}
+        largura="w-40"
+        desabilitado={desabilitado || !alinhamento}
+      >
+        {ALINHAMENTOS.map((x) => (
+          <button
+            key={x.chave}
+            type="button"
+            className={`${item} ${x.chave === alinhamentoAtual ? "bg-gray-100 font-bold text-gray-900" : ""}`}
+            aria-current={x.chave === alinhamentoAtual}
+            onMouseDown={semFoco}
+            onClick={() => {
+              exec(x.comando, undefined, true);
+              setAlinhamentoAtual(x.chave);
+              setAberta(null);
+            }}
+          >
+            <x.Icone className="size-4 shrink-0" />
+            {x.nome}
+          </button>
+        ))}
+      </MenuDaBarra>
       {/* O espaçamento, sempre à vista (24/10/2026): quase apagado nas legendas, que não o têm. */}
       <MenuDaBarra
         botao={botao}

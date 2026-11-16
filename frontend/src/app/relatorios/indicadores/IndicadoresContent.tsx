@@ -80,7 +80,7 @@ export function IndicadoresContent({ periodoFixo }: { periodoFixo?: { ano: numbe
           <>
             <p>
               Os indicadores gerenciais do exercício, {periodoFixo ? "no mês da competência" : "mês a mês e acumulados"}, na ordem e com os nomes do
-              cadastro. O catálogo — grupo, numeração, nome, comportamento, unidade, a fórmula de cada indicador e a forma do acumulado — fica em Cadastros da Controladoria / Analítico / Indicadores, onde se edita.
+              cadastro. O catálogo — grupo, numeração, nome, comportamento, unidade, a fórmula de cada indicador e a forma do acumulado — fica em Cadastros Gerais / Analítico / Indicadores, onde se edita.
             </p>
             <p>
               Os valores saem da DRE apurada (congelada) de cada competência{periodoFixo ? "" : " fechada (as abertas e em conferência não entram em Resultados Empresariais)"}, dos volumes da apuração (projetos liberados) e dos indicadores

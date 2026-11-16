@@ -5,7 +5,7 @@ import { manualNoSinalDoBalancete, type Composicao, type OrigemValor, type Parce
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
 import { MENSAGEM_SENSIVEL, podeVerCentro, podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { grupoDoCentro, RegraDREError } from "./dreService.js";
-import { CENTRO_DE_OBRA, foraDaObra, PREVIAS_DA_OBRA, previasDaObra, sinalDaLinha } from "./obrasService.js";
+import { CENTRO_DE_OBRA, foraDaObra, ondeOCentroVale, PREVIAS_DA_OBRA, previasDaObra, sinalDaLinha } from "./obrasService.js";
 import { numeroDaObra } from "../resultadosLinha/alocacaoNasLinhas.js";
 import { plural } from "../../utils/plural.js";
 import { deveriaTerCentro, ehGrupoSemCentro, grupoSemCentro, nomeDoGrupoSemCentro, veSemCentros } from "./semCentroService.js";
@@ -66,6 +66,8 @@ type LancamentoDetalhe = {
   centroOriginal?: { codigoRM: string | null; nome: string | null } | null;
   contestacaoId?: string | null;
   contestacao?: { numero: number; centro: boolean; conta: boolean } | null;
+  /** A parte de um movimento redistribuído (13/11/2026, Redistribuições de Gastos): o centro é o do destino; o original, o do movimento. */
+  redistribuido?: boolean;
 };
 
 type Bloco =
@@ -94,8 +96,35 @@ const selecaoContabil = {
   contaResultado: { select: { reduzido: true, descricao: true } },
   contaAdotada: { select: { reduzido: true, descricao: true } },
   contestacaoId: true,
+  redistribuicaoId: true,
 } satisfies Prisma.LancamentoContabilSelect;
 type Contabil = Prisma.LancamentoContabilGetPayload<{ select: typeof selecaoContabil }>;
+
+/**
+ * As partes redistribuídas (13/11/2026) como lançamentos do extrato: o valor da parte, no centro, no rateio e na alocação do
+ * destino, com a conta e o centro do balancete do movimento (o centro original aparece no ícone da correção).
+ */
+const selecaoParte = {
+  id: true,
+  filial: true,
+  balde: true,
+  alocacao: true,
+  valorMovimento: true,
+  redistribuicaoId: true,
+  centroCusto: { select: { codigoRM: true, nomeRM: true } },
+  lancamentoContabil: { select: { codigoCentroCusto: true, nomeCentroCusto: true, contaResultado: { select: { reduzido: true, descricao: true } }, contaAdotada: { select: { reduzido: true, descricao: true } } } },
+} satisfies Prisma.LancamentoRedistribuidoSelect;
+async function partesComoLancamentos(where: Prisma.LancamentoRedistribuidoWhereInput): Promise<Contabil[]> {
+  const ps = await getPrismaClient().lancamentoRedistribuido.findMany({ where, select: selecaoParte });
+  return ps.map(({ lancamentoContabil: l, ...p }) => ({
+    ...p,
+    codigoCentroCusto: l.codigoCentroCusto,
+    nomeCentroCusto: l.nomeCentroCusto,
+    contaResultado: l.contaResultado,
+    contaAdotada: l.contaAdotada,
+    contestacaoId: null,
+  }));
+}
 
 function paraDetalhe(l: Contabil, multiplicador: Decimal): LancamentoDetalhe {
   const adotada = l.contaAdotada && l.contaAdotada.reduzido !== l.contaResultado.reduzido ? l.contaAdotada : null;
@@ -115,6 +144,7 @@ function paraDetalhe(l: Contabil, multiplicador: Decimal): LancamentoDetalhe {
     // O centro do balancete, quando o que vale é outro (a contestação validada no balancete).
     centroOriginal: l.centroCusto && l.codigoCentroCusto && l.centroCusto.codigoRM !== l.codigoCentroCusto ? { codigoRM: l.codigoCentroCusto, nome: l.nomeCentroCusto } : null,
     contestacaoId: l.contestacaoId,
+    ...(l.redistribuicaoId ? { redistribuido: true } : {}),
   };
 }
 
@@ -130,7 +160,7 @@ function agrupar(ls: Contabil[]): Contabil[] {
   const grupos = new Map<string, Contabil>();
   for (const l of ls) {
     // O movimento contestado fica à parte (27/10/2026): o ícone mostra o original e a contestação dele.
-    const k = [l.filial, l.codigoCentroCusto ?? "", l.centroCusto?.codigoRM ?? "", l.contaResultado.reduzido, l.contaAdotada?.reduzido ?? "", l.balde ?? "", l.alocacao ?? "", l.contestacaoId ?? ""].join("|");
+    const k = [l.filial, l.codigoCentroCusto ?? "", l.centroCusto?.codigoRM ?? "", l.contaResultado.reduzido, l.contaAdotada?.reduzido ?? "", l.balde ?? "", l.alocacao ?? "", l.contestacaoId ?? "", l.redistribuicaoId ?? ""].join("|");
     const g = grupos.get(k);
     if (g) g.valorMovimento = g.valorMovimento.plus(l.valorMovimento);
     else grupos.set(k, { ...l });
@@ -194,11 +224,19 @@ async function blocosDaUnidade(competenciaId: string, unidade: number, c: Compos
     if (f.baldes) filtros.push({ balde: { in: f.baldes as never } });
     if (f.excetoBaldes) filtros.push({ OR: [{ balde: null }, { balde: { notIn: f.excetoBaldes as never } }] });
     if (f.pares) filtros.push({ OR: f.pares.map((p) => ({ balde: p.balde as never, ...(p.filial !== undefined ? { filial: p.filial } : {}) })) });
-    const ls = await prisma.lancamentoContabil.findMany({
-      where: { competenciaId, linhaDREId: f.linhaId, ...(f.filial !== undefined ? { filial: f.filial } : {}), AND: filtros },
-      select: selecaoContabil,
-      orderBy: { linhaArquivo: "asc" },
-    });
+    // As partes redistribuídas (13/11/2026) do mesmo filtro: a alocação delas nunca é nula.
+    const filtrosDasPartes: Prisma.LancamentoRedistribuidoWhereInput[] = [{ alocacao: { not: "RATEIO" } }];
+    if (f.baldes) filtrosDasPartes.push({ balde: { in: f.baldes as never } });
+    if (f.excetoBaldes) filtrosDasPartes.push({ OR: [{ balde: null }, { balde: { notIn: f.excetoBaldes as never } }] });
+    if (f.pares) filtrosDasPartes.push({ OR: f.pares.map((p) => ({ balde: p.balde as never, ...(p.filial !== undefined ? { filial: p.filial } : {}) })) });
+    const ls = [
+      ...(await prisma.lancamentoContabil.findMany({
+        where: { competenciaId, redistribuicaoId: null, linhaDREId: f.linhaId, ...(f.filial !== undefined ? { filial: f.filial } : {}), AND: filtros },
+        select: selecaoContabil,
+        orderBy: { linhaArquivo: "asc" },
+      })),
+      ...(await partesComoLancamentos({ competenciaId, linhaDREId: f.linhaId, ...(f.filial !== undefined ? { filial: f.filial } : {}), AND: filtrosDasPartes })),
+    ];
     const fator = new Decimal(f.fator ?? 1);
     const partes = [
       f.pares ? null : f.filial !== undefined ? `filial ${f.filial}` : "todas as filiais",
@@ -240,11 +278,15 @@ async function blocosDaUnidade(competenciaId: string, unidade: number, c: Compos
       );
       continue;
     }
-    const ls = await prisma.lancamentoContabil.findMany({
-      where: { competenciaId, linhaDREId: r.linhaId, alocacao: "RATEIO", balde: r.chave as never },
-      select: selecaoContabil,
-      orderBy: { linhaArquivo: "asc" },
-    });
+    const ls = [
+      ...(await prisma.lancamentoContabil.findMany({
+        where: { competenciaId, redistribuicaoId: null, linhaDREId: r.linhaId, alocacao: "RATEIO", balde: r.chave as never },
+        select: selecaoContabil,
+        orderBy: { linhaArquivo: "asc" },
+      })),
+      // As partes redistribuídas (13/11/2026) na chave do rateio.
+      ...(await partesComoLancamentos({ competenciaId, linhaDREId: r.linhaId, alocacao: "RATEIO", balde: r.chave as never })),
+    ];
     const p = new Decimal(r.percentual);
     blocos.push({
       tipo: "RATEIO",
@@ -348,7 +390,7 @@ export const detalhamentoService = {
       titulo = `Sem Centro de Custo · ${nomeDoGrupoSemCentro(visao.semCentro)}`;
       regra = "Lançamentos contábeis sem centro de custo do cadastro, nas contas de mão de obra e de gastos gerais, antes do rateio";
       const ls = deveriaTerCentro(linha)
-        ? (await prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, centroCustoId: null }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } })).filter(
+        ? (await prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, centroCustoId: null, redistribuicaoId: null }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } })).filter(
             (l) => grupoSemCentro(linha.codigo, l.filial) === visao.semCentro,
           )
         : [];
@@ -370,7 +412,8 @@ export const detalhamentoService = {
       // da obra, como na lista (obrasService).
       if (!CENTRO_DE_OBRA.test(visao.obra)) throw new RegraDREError(400, `${visao.obra} não é um centro de custo de obra (1.98 ou 1.99).`);
       const [todos, previas] = await Promise.all([
-        prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, codigoCentroCusto: visao.obra }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } }),
+        // Pelo centro que vale (13/11/2026): sem os movimentos que saíram da obra.
+        prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, ...ondeOCentroVale(visao.obra) }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } }),
         previasDaObra(c.id, visao.obra),
       ]);
       const ls = todos.filter((l) => !foraDaObra(linha.codigo, l.contaAdotada ?? l.contaResultado));
@@ -424,7 +467,11 @@ export const detalhamentoService = {
       if (ids.length === 0) throw new RegraDREError(403, `O centro de custo ${visao.grupo} não é de um departamento seu.`);
       const [gravados, ls] = await Promise.all([
         prisma.resultadoApurado.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, centroCustoId: { in: ids } }, select: { valor: true, composicao: true } }),
-        prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, linhaDREId: linha.id, centroCustoId: { in: ids } }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } }),
+        // Os redistribuídos (13/11/2026) pelas partes, nos centros dos destinos.
+        Promise.all([
+          prisma.lancamentoContabil.findMany({ where: { competenciaId: c.id, redistribuicaoId: null, linhaDREId: linha.id, centroCustoId: { in: ids } }, select: selecaoContabil, orderBy: { linhaArquivo: "asc" } }),
+          partesComoLancamentos({ competenciaId: c.id, linhaDREId: linha.id, centroCustoId: { in: ids } }),
+        ]).then(([diretos, partes]) => [...diretos, ...partes]),
       ]);
       // Antes da apuração (15/10/2026), a soma dos lançamentos.
       valor = gravados.length ? somar(gravados.map((g) => g.valor)) : ls.length ? somar(ls.map((l) => l.valorMovimento)) : null;

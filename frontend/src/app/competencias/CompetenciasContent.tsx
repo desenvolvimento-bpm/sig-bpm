@@ -59,7 +59,7 @@ function passosDe(c: Competencia): Passo[] {
     c.apuracoes === 0
       ? { rotulo: "Apurado", estado: "falta", dica: "Ainda não apurada.", etapa: "dre" }
       : a.desatualizada
-        ? { rotulo: "Reapurar", estado: "atencao", dica: "As entradas ou os Cadastros da Controladoria mudaram depois da apuração: reapure.", etapa: "dre" }
+        ? { rotulo: "Reapurar", estado: "atencao", dica: "As entradas ou os Cadastros Gerais mudaram depois da apuração: reapure.", etapa: "dre" }
         : { rotulo: "Apurado", estado: "feito", dica: `Apurada ${c.apuracoes}× · a última em ${dataCurta(c.apuradaEm)}${c.usuarioApuracao ? ` por ${c.usuarioApuracao.nome}` : ""}.`, etapa: "dre" },
     c.status === "FECHADA"
       ? { rotulo: "Fechado", estado: "feito", dica: `Fechada em ${dataCurta(c.fechadaEm)}${c.usuarioFechamento ? ` por ${c.usuarioFechamento.nome}` : ""}.`, etapa: "dre" }
@@ -169,11 +169,11 @@ export function CompetenciasContent() {
             <li>Use os filtros nos rótulos das colunas (por exemplo, o ano na coluna Competência).</li>
             <li>Clique na linha para abrir o mês; dentro dele, a barra de etapas leva de Importações até a Conferência e as Divergências.</li>
             <li>Na coluna Andamento, clique num passo (importado, classificado, apurado, fechado) para ir direto à etapa.</li>
-            <li>A bola verde ao lado do mês pede reapuração: as entradas ou os Cadastros da Controladoria mudaram depois da apuração (os cadastros só contam nos meses ainda abertos), o mês anterior foi reapurado depois dele, ou ele recebeu dados importados a partir de outro mês. Reapure os meses em ordem, na tela Resultados de cada um.</li>
+            <li>A bola verde ao lado do mês pede reapuração: as entradas ou os Cadastros Gerais mudaram depois da apuração (os cadastros só contam nos meses ainda abertos), o mês anterior foi reapurado depois dele, ou ele recebeu dados importados a partir de outro mês. Reapure os meses em ordem, na tela Resultados de cada um.</li>
             <li>Use “Abrir Competência” para começar um mês novo.</li>
             <li>
               O aviso “Rateios sem Vigência” lista as competências em andamento com alguma chave de rateio sem regra vigente no mês: cadastre a regra em
-              Cadastros da Controladoria / Regras de Rateio. Sem ela, a competência não se abre nem se fecha.
+              Cadastros Gerais / Regras de Rateio. Sem ela, a competência não se abre nem se fecha.
             </li>
           </ul>
         }
@@ -204,7 +204,7 @@ export function CompetenciasContent() {
                 </li>
               ))}
             </ul>
-            <p className="mt-1">Cadastre as regras em Cadastros da Controladoria / Regras de Rateio: sem elas, a competência não se abre nem se fecha.</p>
+            <p className="mt-1">Cadastre as regras em Cadastros Gerais / Regras de Rateio: sem elas, a competência não se abre nem se fecha.</p>
           </div>
         ) : null;
       })()}

@@ -14,6 +14,8 @@
     "producao:construir": "npm run build",
     "teste": "node scripts/teste.mjs",
     "teste:construir": "node scripts/teste.mjs construir",
+    "pre-contestacoes": "node scripts/teste.mjs --ambiente=pre-contestacoes",
+    "pre-contestacoes:construir": "node scripts/teste.mjs construir --ambiente=pre-contestacoes",
     "db:copiar-producao": "npm run db:copiar-producao --prefix backend",
     "db:migrar-producao": "npm run db:migrar-producao --prefix backend",
     "dev:frontend": "npm run dev -w frontend",

@@ -31,7 +31,9 @@ const comSinal = (v: number, texto: string) => (v > 0 ? `+${texto}` : texto);
 
 /** O tipo: o reajuste dos marcados, a edição de um valor (replicada ou não) ou a carga de uma referência. */
 const tipoDe = (r: ReajusteDoCenario) =>
-  r.tipo === "MARCADOS"
+  r.tipo === "MARCADOS" && r.modo === "REFERENCIA"
+    ? "Referências Replicadas"
+    : r.tipo === "MARCADOS"
     ? "Reajuste dos Marcados"
     : r.tipo === "REFERENCIA"
       ? "Referência Carregada"
@@ -49,6 +51,7 @@ const comDescricao = (r: ReajusteDoCenario) => ["REFERENCIA", "RECALCULO", "MEDI
 /** O reajuste informado: +5,00%, +1.000 ou o valor digitado direto. */
 const reajusteDe = (r: ReajusteDoCenario) => {
   if (comDescricao(r)) return null;
+  if (r.modo === "REFERENCIA") return "Média de Referência";
   if (r.modo === "DIGITADO" || r.reajuste === null) return "Valor digitado";
   return r.modo === "PERCENTUAL" ? `${comSinal(r.reajuste, formato.valor(r.reajuste))}%` : comSinal(r.reajuste, formato.valor(r.reajuste));
 };
@@ -123,20 +126,27 @@ export function ReajustesContent() {
               Na aba {doLog}, cada linha é uma gravação na DRE do cenário ({analitico ? "as Premissas, os centros de custo, os investimentos, o recálculo" : "tela Resultados"}) ou a carga de
               uma referência (tela Configurações), do mais recente ao mais antigo. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).
             </li>
-            <li>Tipo: Reajuste dos Marcados (o reajuste aplicado às contas e meses marcados), Edição de Valor (um valor clicado; Replicada quando copiado aos meses seguintes) ou Referência Carregada (um arquivo ou o resultado realizado, que substitui a DRE).</li>
-            <li>Reajuste: o percentual ou o valor informado; “Valor digitado” quando o valor recalculado foi digitado direto. As somas são as dos valores alterados, antes e depois.</li>
+            <li>Tipo: Reajuste dos Marcados (o reajuste aplicado às contas e meses marcados), Referências Replicadas (a Média de Referência das contas marcadas levada aos meses marcados, nas Premissas dos analíticos), Edição de Valor (um valor clicado; Replicada quando copiado aos meses seguintes) ou Referência Carregada (um arquivo ou o resultado realizado, que substitui a DRE).</li>
+            <li>Reajuste: o percentual ou o valor informado; “Valor digitado” quando o valor recalculado foi digitado direto; “Média de Referência” nas Referências Replicadas. As somas são as dos valores alterados, antes e depois.</li>
             <li>
               Na coluna Contas, o botão abre o modal com as contas alteradas (Departamento, Atribuição e Conta) ou, na Referência Carregada, a descrição
               da referência. Use os filtros nos rótulos das colunas.
             </li>
             <li>
               Na aba Justificativas (só com um cenário comparado, em Configurações / Comparativo): escolha a aba da DRE (Consolidado ou cada unidade); acima
-              da tabela, quantas contas da aba passam da variação{analitico ? " — a variação máxima de cada conta é a do Índice de Reajuste escolhido para ela no Comparativo (Configurações / Índices)" : ""}. Cada linha é uma conta com algum mês acima da variação máxima dela: os meses
+              da tabela, quantas contas da aba passam da variação{analitico ? " — a variação máxima de cada conta é a do Índice de Referência escolhido para ela nas Variações Máximas (Configurações / Comparativo)" : ""}. Cada linha é uma conta com algum mês acima da variação máxima dela: os meses
               mostram a variação (passe o mouse para ver o valor do cenário e o do comparado; “sem base”: o comparado é zero no mês). Digite a
               justificativa e clique em “Gravar”; apagar o texto e gravar a apaga. “Só Sem Justificativa” esconde as já justificadas. Uma conta que
               deixa de passar da variação sai da lista (a justificativa fica guardada). Com o cenário marcado ou com a versão congelada, as
               justificativas só se leem. “Exportar”, acima da tabela, leva as contas da aba (com os meses e as justificativas) em Excel ou PDF.
             </li>
+            {analitico ? (
+              <li>
+                Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só as alterações do seu recorte (as
+                que tocaram só as premissas dos departamentos dele ou, para o Coordenador, dos grupos de centros dele) e as do cenário inteiro (a
+                referência, os recálculos e os reajustes); nas Justificativas, só as contas dos departamentos dele (o Coordenador não as vê).
+              </li>
+            ) : null}
           </ul>
         }
         sobre={

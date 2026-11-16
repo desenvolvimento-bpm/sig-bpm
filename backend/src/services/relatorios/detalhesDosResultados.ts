@@ -1,4 +1,5 @@
 import { getPrismaClient } from "../../config/prisma.js";
+import { codigoQueVale } from "../classificacao/centrosObra.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { ESTILO, type AbaEscrita, type Celula } from "../../lib/xlsxEscrita.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
@@ -112,7 +113,25 @@ export async function detalhesDosResultados(ano: number, ate: number, acesso: Ac
   async function doMes(competenciaId: string) {
     const ja = movimentos.get(competenciaId);
     if (ja) return ja;
-    const ms = await prisma.lancamentoContabil.findMany({ where: { competenciaId }, select: selecao, orderBy: [{ linhaArquivo: "asc" }, { id: "asc" }] });
+    // Os redistribuídos (13/11/2026) pelas partes: o valor e o centro de cada destino, com o detalhe do movimento.
+    const [diretos, partes] = await Promise.all([
+      prisma.lancamentoContabil.findMany({ where: { competenciaId, redistribuicaoId: null }, select: selecao, orderBy: [{ linhaArquivo: "asc" }, { id: "asc" }] }),
+      prisma.lancamentoRedistribuido.findMany({
+        where: { competenciaId },
+        select: {
+          linhaDREId: true,
+          filial: true,
+          balde: true,
+          alocacao: true,
+          valorMovimento: true,
+          centroCustoId: true,
+          centroCusto: { select: { codigoRM: true, nomeRM: true } },
+          lancamentoContabil: { select: { emissao: true, cliForn: true, historico: true, codigoCentroCusto: true, nomeCentroCusto: true, contaResultado: { select: { reduzido: true, descricao: true } }, contaAdotada: { select: { reduzido: true, descricao: true } } } },
+        },
+        orderBy: [{ lancamentoContabil: { linhaArquivo: "asc" } }, { id: "asc" }],
+      }),
+    ]);
+    const ms: Movimento[] = [...diretos, ...partes.map(({ lancamentoContabil: l, ...p }) => ({ ...l, ...p }))];
     const porLinha = new Map<string, Movimento[]>();
     for (const m of ms) if (m.linhaDREId) porLinha.set(m.linhaDREId, [...(porLinha.get(m.linhaDREId) ?? []), m]);
     movimentos.set(competenciaId, porLinha);
@@ -199,7 +218,8 @@ export async function detalhesDosResultados(ano: number, ate: number, acesso: Ac
             if (!naAba(linha) || !podeVerLinhaNaObra(acesso, linha)) continue;
             // O sinal da DRE (as receitas trocadas), como na aba Obras; sem as contas de Reconhecimento do CPV nas receitas (03/11/2026).
             const fator = new Prisma.Decimal(sinalDaLinha(linha.codigo));
-            const daObra = ms.filter((m) => m.codigoCentroCusto === alvo.codigo && !foraDaObra(linha.codigo, m.contaAdotada ?? m.contaResultado));
+            // A obra pelo centro que vale (13/11/2026): sem os movimentos que saíram dela.
+            const daObra = ms.filter((m) => codigoQueVale(m) === alvo.codigo && !foraDaObra(linha.codigo, m.contaAdotada ?? m.contaResultado));
             partes.push({ linha, bloco: "Lançamentos Contábeis", ms: daObra, fator: () => fator });
           }
         } else {

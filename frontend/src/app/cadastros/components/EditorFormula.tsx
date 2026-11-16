@@ -6,7 +6,7 @@ import { Delete, Eraser, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import type { Opcao } from "../services/edicaoService";
+import type { Opcao, ValoresDaMetodologia } from "../services/edicaoService";
 
 /**
  * O montador da fórmula de um indicador (Estrutura dos Indicadores, 11/10/2026): a fórmula aparece por extenso, item a
@@ -18,12 +18,28 @@ import type { Opcao } from "../services/edicaoService";
  * indicadores), o Período escolhe o valor do mês ou o acumulado de janeiro até o mês ([META|nome|ACUM]).
  */
 
+// O "Comercial e Administrativo" ([IND]) saiu da lista em 06/11/2026 (os indicadores-base ficam sem itens: o valor registrado
+// com o nome deles; os demais usam o Indicador); os itens já gravados continuam aparecendo pelo nome. O Quadro de Lotação e os
+// Movimentos do QL (a Gestão de Colaboradores) entraram logo abaixo do Indicador.
 const TIPOS = [
   { valor: "DRE", rotulo: "Linha da DRE" },
   { valor: "LISTA", rotulo: "Totalizador das Listas" },
-  { valor: "IND", rotulo: "Comercial e Administrativo" },
   { valor: "META", rotulo: "Meta do Orçamento" },
   { valor: "INDICADOR", rotulo: "Indicador" },
+  { valor: "QL", rotulo: "Quadro de Lotação" },
+  { valor: "MQL", rotulo: "Movimentos do QL" },
+  // O valor registrado no mês com o nome do indicador (09/11/2026): o item dos indicadores sem processo de coleta ainda.
+  { valor: "REGISTRADO", rotulo: "Valor Registrado" },
+];
+// O Quadro de Lotação (09/11/2026): por Departamento, com a Atribuição, ou por Centro de Custo.
+const NIVEIS_DO_QUADRO = [
+  { valor: "QL_DEP", rotulo: "Departamento" },
+  { valor: "QL_CC", rotulo: "Centro de Custo" },
+];
+const ATRIBUICOES = [
+  { valor: "GERAL", rotulo: "Geral" },
+  { valor: "DIRETA", rotulo: "Direto" },
+  { valor: "INDIRETA", rotulo: "Indireto" },
 ];
 const VISOES = [
   { valor: "0", rotulo: "Consolidado" },
@@ -46,17 +62,38 @@ const OPERADORES: Array<{ valor: string; rotulo: string; dica: string }> = [
   { valor: ")", rotulo: ")", dica: "Fechar parêntese" },
 ];
 
+const numero2 = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** O valor acumulado do item (11/11/2026): #.##0,00 ou, nos indicadores e metas em %, 0,00%. */
+export const formatarValorDoItem = (v: number, percentual: boolean) => (percentual ? `${numero2.format(v * 100)}%` : numero2.format(v));
+
 /** Os pedaços da fórmula: itens entre colchetes, números, operadores e parênteses. */
 const pedacos = (formula: string) => formula.match(/\[[^\]]*\]|\d+(?:[.,]\d+)?|[-+*/()]/g) ?? [];
 
 const classeSelect = "h-9 rounded-sm border border-gray-300 bg-white px-2 text-sm";
 
-export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: string; onMuda: (v: string) => void; opcoes: Opcao[]; travado?: boolean; id?: string }) {
+export function EditorFormula({
+  valor,
+  onMuda,
+  opcoes,
+  travado,
+  id,
+  valores,
+}: {
+  valor: string;
+  onMuda: (v: string) => void;
+  opcoes: Opcao[];
+  travado?: boolean;
+  id?: string;
+  /** Os valores acumulados dos itens (11/11/2026: os cards do Painel de Bordo e os indicadores), ao lado de cada um na lista. */
+  valores?: ValoresDaMetodologia;
+}) {
   // Os tipos que as opções trazem, na ordem de TIPOS.
   const tipos = useMemo(() => TIPOS.filter((t) => opcoes.some((o) => o.grupos?.includes(t.valor))), [opcoes]);
   const [tipo, setTipo] = useState(() => tipos[0]?.valor ?? "DRE");
   const [visao, setVisao] = useState("0");
   const [periodo, setPeriodo] = useState("MES");
+  const [nivel, setNivel] = useState("QL_DEP");
+  const [atribuicao, setAtribuicao] = useState("GERAL");
   const [busca, setBusca] = useState("");
   const [item, setItem] = useState("");
   const [numero, setNumero] = useState("");
@@ -66,8 +103,8 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
   const acumulavel = useMemo(() => opcoes.some((o) => o.grupos?.includes(tipo) && o.grupos.includes("ACUMULAVEL")), [opcoes, tipo]);
   const doTipo = useMemo(() => {
     const t = busca.trim().toLowerCase();
-    return opcoes.filter((o) => o.grupos?.includes(tipo) && (!t || o.rotulo.toLowerCase().includes(t)));
-  }, [opcoes, tipo, busca]);
+    return opcoes.filter((o) => o.grupos?.includes(tipo) && (tipo !== "QL" || o.grupos.includes(nivel)) && (!t || o.rotulo.toLowerCase().includes(t)));
+  }, [opcoes, tipo, busca, nivel]);
 
   /** O pedaço como a tela mostra: o item pelo nome (a linha da DRE com a visão), os operadores como × e ÷. */
   const mostrar = (p: string) => {
@@ -77,14 +114,48 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
     // O indicador pelo nome (a opção traz o grupo antes: "Produção › …").
     const noAno = partes[2] === "ACUM" ? " (Acumulado no Ano)" : "";
     if (partes[0] === "INDICADOR") return `${partes[1]}${noAno}`;
+    // O Quadro de Lotação (o total ou um departamento) e os Movimentos do QL (06/11/2026).
+    if (partes[0] === "QL") {
+      // [QL|DEP|departamento|atribuição] ou [QL|CC|centro]; o [QL|TOTAL] antigo é o Total Geral.
+      if (partes[1] === "DEP") {
+        const departamento = rotulos.get(`QL|DEP|${partes[2]}`) ?? partes[2];
+        return partes[2] === "TOTAL" && partes[3] === "GERAL"
+          ? `Quadro de Lotação: ${departamento}`
+          : `Quadro de Lotação: ${departamento} (${ATRIBUICOES.find((a) => a.valor === partes[3])?.rotulo ?? partes[3]})`;
+      }
+      if (partes[1] === "CC") return `Quadro de Lotação: Centro ${rotulos.get(`QL|CC|${partes[2]}`) ?? partes[2]}`;
+      return `Quadro de Lotação: ${partes.slice(1).join(" ")}`;
+    }
+    if (partes[0] === "MQL") return `Movimentos do QL: ${rotulos.get(`MQL|${partes[1]}`) ?? partes[1]}`;
+    if (partes[0] === "REGISTRADO") return rotulos.get("REGISTRADO|") ?? "Valor registrado no mês";
     const r = rotulos.get(`${partes[0]}|${partes[1]}`) ?? partes[1];
     return partes[0] === "META" ? `Meta: ${r}${noAno}` : partes[0] === "LISTA" ? `${r} [Listas]` : r;
+  };
+  // O valor acumulado da opção (11/11/2026), pela chave do item que ela insere: a linha da DRE com a unidade escolhida e o
+  // departamento do Quadro de Lotação com a atribuição; o Valor Registrado é o do próprio indicador, sem valor aqui.
+  const percentuais = useMemo(() => new Set(valores?.percentuais ?? []), [valores]);
+  const valorDaOpcao = (o: Opcao) => {
+    if (!valores?.competencia) return "";
+    const [t, chave] = [o.valor.slice(0, o.valor.indexOf("|")), o.valor.slice(o.valor.indexOf("|") + 1)];
+    const k = t === "DRE" ? `DRE|${visao}|${chave}` : t === "QL" && chave.startsWith("DEP|") ? `QL|${chave}|${atribuicao}` : o.valor;
+    const v = valores.valores[k];
+    return v === undefined || v === null ? (k in valores.valores ? " · —" : "") : ` · ${formatarValorDoItem(v, percentuais.has(k))}`;
   };
   const inserir = (p: string) => onMuda([...lista, p].join(" "));
   const inserirItem = () => {
     if (!item) return;
     const [t, chave] = [item.slice(0, item.indexOf("|")), item.slice(item.indexOf("|") + 1)];
-    inserir(t === "DRE" ? `[DRE|${visao}|${chave}]` : acumulavel && periodo === "ACUM" ? `[${t}|${chave}|ACUM]` : `[${t}|${chave}]`);
+    inserir(
+      t === "DRE"
+        ? `[DRE|${visao}|${chave}]`
+        : t === "REGISTRADO"
+          ? "[REGISTRADO]"
+          : t === "QL" && chave.startsWith("DEP|")
+            ? `[QL|${chave}|${atribuicao}]`
+            : acumulavel && periodo === "ACUM"
+              ? `[${t}|${chave}|ACUM]`
+              : `[${t}|${chave}]`,
+    );
     setItem("");
   };
 
@@ -139,6 +210,33 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
                 ))}
               </select>
             ) : null}
+            {/* O Quadro de Lotação (09/11/2026): o nível (Departamento ou Centro de Custo) e, nos departamentos, a atribuição. */}
+            {tipo === "QL" ? (
+              <select
+                aria-label="Nível do Quadro de Lotação"
+                value={nivel}
+                onChange={(e) => {
+                  setNivel(e.target.value);
+                  setItem("");
+                }}
+                className={classeSelect}
+              >
+                {NIVEIS_DO_QUADRO.map((n) => (
+                  <option key={n.valor} value={n.valor}>
+                    {n.rotulo}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {tipo === "QL" && nivel === "QL_DEP" ? (
+              <select aria-label="Atribuição" value={atribuicao} onChange={(e) => setAtribuicao(e.target.value)} className={classeSelect}>
+                {ATRIBUICOES.map((a) => (
+                  <option key={a.valor} value={a.valor}>
+                    {a.rotulo}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             {acumulavel ? (
               <select aria-label="Período do item" value={periodo} onChange={(e) => setPeriodo(e.target.value)} className={classeSelect}>
                 {PERIODOS.map((p) => (
@@ -157,6 +255,7 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
               {doTipo.map((o) => (
                 <option key={o.valor} value={o.valor}>
                   {o.rotulo}
+                  {valorDaOpcao(o)}
                 </option>
               ))}
             </select>
@@ -165,6 +264,12 @@ export function EditorFormula({ valor, onMuda, opcoes, travado, id }: { valor: s
               Inserir Item
             </Button>
           </div>
+          {valores?.competencia ? (
+            <p className="text-xs text-gray-500">
+              Ao lado de cada item, o valor acumulado de janeiro até {valores.competencia} (a competência fechada mais recente em Resultados Empresariais)
+              {tipo === "QL" ? "; no Quadro de Lotação, a posição do mês" : ""}.
+            </p>
+          ) : null}
           {/* Os operadores, os números e a correção; Apagar e Limpar na linha do Inserir (20/10/2026: nomes curtos para caberem). */}
           <div className="flex flex-wrap items-center gap-1.5">
             {OPERADORES.map((o) => (

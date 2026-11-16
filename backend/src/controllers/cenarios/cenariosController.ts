@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { CODIGO_ADMINISTRADOR } from "../../services/acesso/acesso.js";
 import { ABA_DA_PERMISSAO, CenarioError, cenariosService } from "../../services/cenarios/cenariosService.js";
+import { contasDoBalancete } from "../../services/cenarios/contasDoBalancete.js";
 import { abaDaChave, ABAS_DAS_PREMISSAS, DEPARTAMENTOS, NOME_DA_ABA, type AbaDasPremissas, type Departamento } from "../../services/cenarios/planilhaPremissas.js";
 
 /** As abas das premissas que o perfil lê ou edita (15/10/2026: a planilha das premissas). */
@@ -28,9 +29,36 @@ const visaoSchema = z.coerce.number().int().min(0).max(5);
 const marcacaoSchema = z.enum(["ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS", "PREVISAO"]).nullable();
 const visualizacaoSchema = z.enum(["PARTICULAR", "PUBLICA"]).optional();
 const tipoSchema = z.enum(["SINTETICO", "ANALITICO"]);
+/** Um mês de uma linha do Quadro de Lotação dos analíticos (09/11/2026): os colaboradores e os salários de cada um. */
+const mesDoQuadroSchema = z.object({
+  colaboradores: z.number().finite().min(0, "Os colaboradores não podem ser negativos.").max(1e9),
+  salarioBruto: z.number().finite().min(0, "O Salário Bruto não pode ser negativo.").max(1e9),
+  adicional: z.number().finite().min(0, "A Insalubridade / Periculosidade não pode ser negativa.").max(1e9),
+});
+const linhaDoQuadroSchema = z.object({
+  unidadeNegocioId: z.string().uuid("Escolha a unidade."),
+  vinculo: z.enum(["CLT", "PJ", "APRENDIZ", "ESTAGIARIO"], { message: "O tipo é CLT, PJ, Aprendiz ou Estagiário." }),
+  funcaoId: z.string().uuid("Escolha a função."),
+  centroCustoId: z.string().uuid("Escolha o centro de custo."),
+});
 
 /** Quem pede; o Administrador (Editar no Controle de Usuários) vê também os cenários particulares. */
-const usuario = (request: Request) => ({ id: request.user!.sub, nome: request.user!.nome, admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR });
+/** O usuário da requisição, com o recorte do perfil (12/11/2026: o Acesso às Informações Por Recorte dos analíticos). */
+/** O Departamento de um investimento de Despesas e Extra (12/11/2026): um dos cinco do patrimônio, ou nenhum. */
+const departamentoDoInvestimentoSchema = z
+  .enum(["LOGISTICA", "TECNICO", "COMERCIAL", "ADMINISTRATIVO", "EXTRA_OPERACIONAL"])
+  .nullish()
+  .transform((x) => x ?? null);
+
+const usuario = (request: Request) => {
+  const a = request.user!.acesso;
+  return {
+    id: request.user!.sub,
+    nome: request.user!.nome,
+    admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR,
+    recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
+  };
+};
 
 /** Envia um arquivo exportado (14/10/2026), com a auditoria; os erros do cenário viram a resposta. */
 async function enviarArquivo(request: Request, response: Response, gerar: () => Promise<{ nomeArquivo: string; tipo: string; conteudo: Uint8Array; visoes: string[] }>) {
@@ -72,6 +100,12 @@ function id(request: Request, response: Response) {
 const unidadeSchema = z.coerce.number().int().min(1).max(3);
 
 export const cenariosController = {
+  /** GET /cenarios/:id/contas-do-balancete?linha=<código> (13/11/2026): as contas do RM que caem numa conta da DRE. */
+  async contasDoBalancete(request: Request, response: Response) {
+    const linha = z.string().trim().min(1).max(200).safeParse(request.query.linha);
+    if (!linha.success) return response.status(400).json({ error: "Informe a conta (a linha da DRE)." });
+    return responder(response, () => contasDoBalancete(linha.data));
+  },
   /** As premissas de uma unidade de um cenário analítico (?unidade=1 a 3). */
   premissas(request: Request, response: Response) {
     const c = id(request, response);
@@ -127,7 +161,7 @@ export const cenariosController = {
     return enviarArquivo(request, response, () => exportacaoCenarioService.centros(c, e, usuario(request)));
   },
 
-  /** Recalcula a DRE do cenário analítico com as regras de rateio de hoje (14/10/2026). */
+  /** Recalcula a DRE do cenário analítico com as regras de rateio de hoje (14/10/2026), com os reajustes como estão. */
   recalcular(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.recalcular(c, usuario(request))) : undefined;
@@ -150,7 +184,7 @@ export const cenariosController = {
         grupo: z.string().trim().min(1).max(200),
         alteracoes: z.array(z.object({ linha: z.string().min(1).max(200), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).min(1).max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -177,7 +211,7 @@ export const cenariosController = {
         tipo: z.enum(["BASE", "EXTRA"]),
         alteracoes: z.array(z.object({ linha: z.string().min(1).max(200), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).min(1).max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -202,6 +236,8 @@ export const cenariosController = {
         valorTotal: z.number().finite().positive("O valor total precisa ser maior que zero."),
         valorPosUso: z.number().finite().min(0),
         vidaUtil: z.number().int().min(1, "A vida útil é de pelo menos 1 mês.").max(600),
+        // O Departamento dos investimentos de Despesas e Extra (12/11/2026).
+        departamento: departamentoDoInvestimentoSchema,
       })
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Investimento inválido." });
@@ -215,6 +251,52 @@ export const cenariosController = {
     const corpo = z.object({ ids: z.array(idSchema).min(1).max(2000) }).safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Escolha os investimentos a excluir." });
     return responder(response, () => cenariosService.excluirInvestimentos(c, corpo.data.ids, usuario(request)));
+  },
+
+  /** A aba Quadro de Lotação dos analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores). */
+  quadro(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.quadro(c, usuario(request))) : undefined;
+  },
+
+  /** Nova linha do Quadro de Lotação (POST, com os doze meses), alteração dos cadastros dela (PUT /:linhaId) ou exclusão (DELETE /:linhaId). */
+  gravarLinhaDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const linhaId = request.params.linhaId ? idSchema.safeParse(request.params.linhaId) : null;
+    if (linhaId && !linhaId.success) return response.status(400).json({ error: "Linha do Quadro de Lotação inválida." });
+    if (request.method === "DELETE") return responder(response, () => cenariosService.gravarLinhaDoQuadro(c, linhaId!.data!, null, usuario(request)));
+    const corpo = linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroSchema).length(12).optional() }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Linha do Quadro de Lotação inválida." });
+    return responder(response, () => cenariosService.gravarLinhaDoQuadro(c, linhaId?.data ?? null, corpo.data, usuario(request)), linhaId ? 200 : 201);
+  },
+
+  /** O Excluir Selecionados do Quadro de Lotação (09/11/2026). */
+  excluirLinhasDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ ids: z.array(idSchema).min(1).max(5000) }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Escolha as linhas a excluir." });
+    return responder(response, () => cenariosService.excluirLinhasDoQuadro(c, corpo.data.ids, usuario(request)));
+  },
+
+  /** Os meses das linhas do Quadro de Lotação (a edição da tabela): os colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade. */
+  gravarMesesDoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z
+      .object({
+        alteracoes: z
+          .array(z.object({ linha: idSchema, mes: z.number().int().min(1).max(12), campo: z.enum(["colaboradores", "salarioBruto", "adicional"]), valor: z.number().finite().nullable() }))
+          .min(1)
+          .max(60_000),
+        origem: z
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .optional(),
+      })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Valores inválidos." });
+    return responder(response, () => cenariosService.gravarMesesDoQuadro(c, corpo.data.alteracoes, usuario(request), corpo.data.origem));
   },
 
   rateios(request: Request, response: Response) {
@@ -233,7 +315,7 @@ export const cenariosController = {
           .min(1)
           .max(5000),
         origem: z
-          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
           .optional(),
       })
       .safeParse(request.body);
@@ -264,7 +346,15 @@ export const cenariosController = {
   atualizar(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const corpo = z.object({ nome: nomeSchema, descricao: descricaoSchema, visualizacao: visualizacaoSchema }).safeParse(request.body);
+    const corpo = z
+      .object({
+        nome: nomeSchema,
+        descricao: descricaoSchema,
+        visualizacao: visualizacaoSchema,
+        edicaoConfiguracoes: z.enum(["PARTICULAR", "PUBLICA"]).optional(),
+        acessoInformacoes: z.enum(["GERAL", "POR_RECORTE"]).optional(),
+      })
+      .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Dados inválidos." });
     return responder(response, () => cenariosService.atualizar(c, corpo.data, usuario(request)));
   },
@@ -343,6 +433,7 @@ export const cenariosController = {
       valorTotal: z.number().finite().positive(),
       valorPosUso: z.number().finite().min(0),
       vidaUtil: z.number().int().min(1).max(600),
+      departamento: departamentoDoInvestimentoSchema,
     });
     const corpo = z
       .object({
@@ -353,6 +444,15 @@ export const cenariosController = {
               alteracoes: z.array(z.object({ chave: z.string().min(1).max(400), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).max(200_000),
               justificativas: z.array(z.object({ chave: z.string().min(1).max(400), texto: z.string().max(2000).nullable() })).max(50_000),
               investimentos: z.object({ novos: z.array(investimento).max(2000), alterados: z.array(investimento.extend({ id: idSchema })).max(2000) }).optional(),
+              // O Quadro de Lotação (09/11/2026): as linhas novas e as alteradas, já conferidas na análise, e (11/11/2026: a aba
+              // que substitui as linhas dos departamentos do arquivo) as que saem.
+              quadro: z
+                .object({
+                  novas: z.array(linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
+                  alteradas: z.array(linhaDoQuadroSchema.extend({ id: idSchema, meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
+                  excluidas: z.array(z.object({ id: idSchema })).max(5000).optional(),
+                })
+                .optional(),
             }),
           )
           .min(1)
@@ -363,6 +463,7 @@ export const cenariosController = {
     const editaveis = abasDasPremissas(request, response, "editar");
     const abas = new Set(corpo.data.arquivos.flatMap((a) => [...a.alteracoes, ...a.justificativas].map((x) => abaDaChave(x.chave))));
     if (corpo.data.arquivos.some((a) => (a.investimentos?.novos.length ?? 0) + (a.investimentos?.alterados.length ?? 0) > 0)) abas.add("investimentos");
+    if (corpo.data.arquivos.some((a) => (a.quadro?.novas.length ?? 0) + (a.quadro?.alteradas.length ?? 0) + (a.quadro?.excluidas?.length ?? 0) > 0)) abas.add("quadro");
     if (abas.has(null)) return response.status(400).json({ error: "Há um Código de linha inválido." });
     const fora = [...abas].filter((a): a is AbaDasPremissas => !!a && !editaveis.includes(a));
     if (fora.length) return response.status(403).json({ error: `Seu perfil não edita ${fora.map((a) => NOME_DA_ABA[a]).join(", ")}.` });
@@ -421,20 +522,22 @@ export const cenariosController = {
 
   /**
    * Os indicadores do cenário, só os das abas permitidas (14/10/2026): a aba Indicadores do Painel de Bordo traz todos; a
-   * dos Indicadores Manuais (Configurações, nos sintéticos; Premissas, nos analíticos), os manuais.
+   * dos Indicadores Manuais (Resultados, nos sintéticos; Premissas, nos analíticos), os manuais.
    */
   indicadores(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const base = String(response.locals.areaDoCenario ?? "cenarios");
     const tem = (p: string) => request.user!.permissions.includes(`${p}:ler`);
-    // A aba Indicadores do Painel de Bordo traz todos; os Indicadores Manuais, a aba deles (19/10/2026: nos sintéticos, na
-    // tela Configurações; nos analíticos, nas Premissas).
+    // A aba Indicadores do Painel de Bordo traz todos; os Indicadores Manuais, a aba deles (nos sintéticos, na tela Resultados;
+    // nos analíticos, nas Premissas).
     const todas = tem(`${base}_painel.metas`);
     const resultados = todas;
-    const manuais = todas || tem(`${base}_${base === "cenarios_analiticos" ? "premissas" : "configuracoes"}.manuais`);
+    const manuais = todas || tem(`${base}_${base === "cenarios_analiticos" ? "premissas" : "resultados"}.manuais`);
+    // O Acesso às Informações Por Recorte (12/11/2026): a aba Indicadores Manuais (?aba=manuais) ou quem só a lê, recortada.
+    const recortar = request.query.aba === "manuais" || !todas;
     return responder(response, async () => {
-      const r = await cenariosService.indicadores(c, usuario(request));
+      const r = await cenariosService.indicadores(c, usuario(request), recortar);
       return { ...r, indicadores: todas ? r.indicadores : r.indicadores.filter((i) => (i.classe === "MANUAL" ? manuais : i.classe === "RESULTADO" ? resultados : false)) };
     });
   },
@@ -459,7 +562,7 @@ export const cenariosController = {
         origem: z
           .object({
             tipo: z.enum(["MARCADOS", "VALOR"]),
-            modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO"]),
+            modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]),
             reajuste: z.number().finite().nullable(),
             replicado: z.boolean(),
           })
@@ -481,7 +584,16 @@ export const cenariosController = {
     const c = id(request, response);
     if (!c) return;
     const corpo = z
-      .object({ ano: anoSchema, modo: z.enum(["MES_A_MES", "MEDIA"]).default("MES_A_MES"), de: z.number().int().min(1).max(12).optional(), ate: z.number().int().min(1).max(12).optional() })
+      .object({
+        ano: anoSchema,
+        modo: z.enum(["MES_A_MES", "MEDIA"]).default("MES_A_MES"),
+        de: z.number().int().min(1).max(12).optional(),
+        ate: z.number().int().min(1).max(12).optional(),
+        // Só as Médias de Referência; os doze meses do cenário ficam (11/11/2026).
+        manterMeses: z.boolean().optional(),
+        // O Quadro de Lotação Vigente (12/11/2026): as linhas da aba Quadro de Lotação pelo QL Realizado mais recente.
+        importarQuadro: z.boolean().optional(),
+      })
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Exercício ou período inválido." });
     const { ano, ...opcoes } = corpo.data;
@@ -579,6 +691,55 @@ export const cenariosController = {
     return responder(response, () => cenariosService.gravarIndices(c, corpo.data.indices, usuario(request)));
   },
 
+  /** A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes. */
+  reajustesDasPremissas(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.reajustesDasPremissas(c, usuario(request))) : undefined;
+  },
+
+  /** Grava os Índices de Reajuste: { indices: [{ chave?, descricao, observacao?, reajustes: [{ valor (%), mes }] }] }. */
+  gravarIndicesDosReajustes(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z
+      .object({
+        indices: z
+          .array(
+            z.object({
+              chave: z.string().max(20).nullable().optional(),
+              descricao: z.string().trim().min(1, "Toda linha precisa da descrição.").max(120),
+              observacao: z.string().max(500).nullable().optional(),
+              reajustes: z
+                .array(z.object({ valor: z.number().finite().gt(-100, "O Valor (%) precisa ser maior que −100.").max(100000), mes: z.number().int().min(1).max(12) }))
+                .min(1, "Todo índice precisa de ao menos um reajuste (o Valor (%) e o Inicia Em).")
+                .max(4),
+            }),
+          )
+          .max(200),
+      })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Índices inválidos." });
+    return responder(response, () => cenariosService.gravarIndicesDosReajustes(c, corpo.data.indices, usuario(request)));
+  },
+
+  /** Grava a Aplicação dos Reajustes: { indices: { código da conta: chave do índice ou nulo } }. */
+  gravarAplicacaoDosReajustes(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ indices: z.record(z.string().max(200), z.string().max(20).nullable()) }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Aplicação dos Reajustes inválida." });
+    return responder(response, () => cenariosService.gravarAplicacaoDosReajustes(c, corpo.data.indices, usuario(request)));
+  },
+
+  /** Aplica ou remove os Reajustes das Premissas na DRE: { aplicados: true (Aplicar) | false (Remover) }. */
+  aplicarReajustes(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ aplicados: z.boolean() }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Escolha Aplicar Reajustes ou Remover Reajustes." });
+    return responder(response, () => cenariosService.aplicarReajustes(c, corpo.data.aplicados, usuario(request)));
+  },
+
   /** As contas acima da variação máxima do comparativo, por visão, com as justificativas. */
   justificativas(request: Request, response: Response) {
     const c = id(request, response);
@@ -595,9 +756,9 @@ export const cenariosController = {
   },
 
   referenciaCenario(request: Request, response: Response) {
-    const corpo = z.object({ origemId: z.string().min(1) }).safeParse(request.body);
+    const corpo = z.object({ origemId: z.string().min(1), manterMeses: z.boolean().optional() }).safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ message: "Escolha o cenário de referência." });
-    return responder(response, () => cenariosService.referenciaCenario(String(request.params.id), corpo.data.origemId, usuario(request)));
+    return responder(response, () => cenariosService.referenciaCenario(String(request.params.id), corpo.data.origemId, usuario(request), corpo.data.manterMeses ?? false));
   },
 
   correspondencias(_request: Request, response: Response) {

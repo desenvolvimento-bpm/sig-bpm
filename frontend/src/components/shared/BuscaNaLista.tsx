@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 
 export type OpcaoDaBusca = { id: string; codigo: string; nome: string; detalhe?: string | null };
 
-const rotulo = (o: OpcaoDaBusca) => `${o.codigo} — ${o.nome}`;
+/** Sem código (13/11/2026: os fornecedores das Reclassificações), só o nome. */
+const rotulo = (o: OpcaoDaBusca) => (o.codigo ? `${o.codigo} — ${o.nome}` : o.nome);
 /** Sem acentos e sem caixa, para a busca achar "manutencao" em "MANUTENÇÃO". */
 const normal = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -91,7 +92,8 @@ export function BuscaNaLista({
                 }}
                 className="block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100"
               >
-                <span className="font-medium">{o.codigo}</span> {o.nome}
+                {o.codigo ? <span className="font-medium">{o.codigo} </span> : null}
+                {o.nome}
                 {o.detalhe ? <span className="block text-xs text-gray-500">{o.detalhe}</span> : null}
               </button>
             </li>

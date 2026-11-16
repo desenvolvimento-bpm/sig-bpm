@@ -14,6 +14,7 @@ import { Abas } from "@/components/shared/Abas";
 import { CampoBusca } from "@/components/shared/Filtros";
 
 import { lerAnoMes, moeda, moedaInteira } from "../utils/formatacao";
+import { formato } from "@/app/relatorios/services/relatoriosService";
 import { CreditosDoMes, ExportarCreditosDoMes } from "../impostos/components/CreditosDoMes";
 import { DetalheDialog } from "./components/DetalheDialog";
 import { ExportarDRE } from "./components/ExportarDRE";
@@ -24,6 +25,8 @@ import { Agrupador, fundoDaLinha, SeletorNivel, semPrimeiroTotalDaRol, useNiveis
 import { dreService, mensagemDeErro, ROTULO_CHAVE, UNIDADES, type LinhaDRE, type VisaoDetalhe } from "./services/dreService";
 
 const ehVolume = (l: LinhaDRE) => l.grupoSigla === "P" || l.grupoSigla === "S";
+/** As larguras das colunas de números, iguais nos rótulos da faixa do título e nas células (13/11/2026: o % e o R$/m³). */
+const COLUNA = { valor: "w-36", pct: "w-24", unitario: "w-28" };
 const volume = (v: string) => Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 
 /** Consolidado, uma das unidades (1 a 5), a visão por centro de custo, a dos movimentos sem centro, a por obra ou os créditos de impostos. */
@@ -111,13 +114,20 @@ function TabelaDRE({
     // Destaque amarelo-ouro à esquerda, como nos quadros da Receita Prévia.
     <div className="rounded-sm border border-gray-200 bg-white">
       {/* Título como nos quadros da Receita Prévia e de Rateios; fica preso no topo ao rolar a DRE (E10 do levantamento de layout). */}
-      <div className="sticky top-[var(--topo-tabela,0px)] z-10 flex items-center gap-4 border-b border-gray-200 bg-bpm-primary px-4 py-3">
+      <div className="sticky top-[var(--topo-tabela,0px)] z-10 flex items-center gap-4 border-b border-gray-200 bg-bpm-primary py-3 pl-4">
         {/* Os níveis da planilha (1, 2 e 3 do contorno do Excel), num menu. */}
         <SeletorNivel nivel={niveis.nivelGeral} onEscolher={niveis.escolherNivel} />
         <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">{titulo}</h2>
         {aoLadoDoTitulo}
-        {/* Sobre a coluna dos valores (o px-4 é o mesmo das células). */}
-        <span className="ml-auto text-base font-bold tracking-wide text-gray-900 uppercase">Valor</span>
+        {/*
+         * Sobre as colunas dos números, com as larguras e o espaço das células (o px-4): o Valor, o % e o R$/m³ (13/11/2026,
+         * pedido do Adão, com as regras dos Resultados Empresariais). A faixa não tem o espaço da direita: o da última célula.
+         */}
+        <div className="ml-auto flex shrink-0">
+          <span className={`${COLUNA.valor} px-4 text-right text-base font-bold tracking-wide text-gray-900 uppercase`}>Valor</span>
+          <span className={`${COLUNA.pct} px-4 text-right text-base font-bold tracking-wide text-gray-900`}>%</span>
+          <span className={`${COLUNA.unitario} px-4 text-right text-base font-bold tracking-wide text-gray-900`}>R$/m³</span>
+        </div>
       </div>
       <table className="tabela-sig w-full border-collapse text-sm">
         <tbody>
@@ -143,14 +153,21 @@ function TabelaDRE({
                         {l.descricao}
                       </span>
                     </td>
-                    <td className="px-4 py-1.5 text-right">
+                    <td className={`${COLUNA.valor} px-4 py-1.5 text-right`}>
                       {/* Os valores sem os centavos; os volumes com as casas da lista. */}
                       {l.tipo === "SECAO" ? "" : l.valor === null ? "—" : ehVolume(l) ? volume(l.valor) : moedaInteira(l.valor)}
+                    </td>
+                    {/* O % e o R$/m³, como nos Resultados Empresariais: em branco sem a coluna ou sem a base. */}
+                    <td className={`${COLUNA.pct} px-4 py-1.5 text-right text-xs ${destaque ? "text-gray-700" : "text-gray-500"}`}>
+                      {l.pct === null || l.pct === undefined ? "" : formato.pct(l.pct)}
+                    </td>
+                    <td className={`${COLUNA.unitario} px-4 py-1.5 text-right text-xs ${destaque ? "text-gray-700" : "text-gray-500"}`}>
+                      {l.unitario === null || l.unitario === undefined ? "" : formato.valor(l.unitario)}
                     </td>
                   </tr>
                   {aberto && abre(l) ? (
                     <tr className="border-t border-gray-100 bg-gray-50/50">
-                      <td colSpan={2} className="px-8 py-2">
+                      <td colSpan={4} className="px-8 py-2">
                         <Composicao l={l} />
                       </td>
                     </tr>
@@ -520,9 +537,21 @@ export function DREContent() {
             </li>
             <li>Clique numa linha com lupa para ver os lançamentos de origem; nas linhas de volume (Produção, Expedição, Montagem, Acompanhamento), as listas somadas por obra.</li>
             <li>
+              As colunas % e R$/m³ ficam em branco nas linhas sem elas (os volumes, as contas sem R$/m³) e quando a base é zero; nos centros de custo e sem
+              centro de custo, antes da apuração, também (a base é o Consolidado apurado). O Exportar leva as duas colunas.
+            </li>
+            <li>
               No extrato, clique na conta de um lançamento contábil para ver o balancete dela no mês (o modal Balancete): os movimentos da aba
               Balancete (Lista) do LISTAS REALIZADO (RESULTADOS), com a emissão, o cliente ou fornecedor e o histórico de cada um. Abre no centro
               de custo e na filial do lançamento, com a soma ao lado do valor dele; desmarque a caixa para ver a conta inteira.
+            </li>
+            <li>
+              No Balancete, a coluna ID mostra o ID do movimento no RM (a coluna ID do Balancete (Lista)), e o botão Itens, na coluna Ações, abre os itens
+              da requisição ou da nota fiscal com esse ID (as abas Requisições (Lista) e Notas Fiscais (Lista) importadas): o produto, o centro de custo, a
+              conta, a quantidade e os valores. Abre com os itens do centro de custo e da conta do movimento, que somam o valor dele; desmarque a caixa para
+              ver o documento inteiro, com os do movimento em amarelo. Quem contesta marca os itens do movimento e clica em “Contestar Selecionados” (no
+              rodapé, à direita): a contestação leva só o valor deles para o novo centro de custo e/ou a nova conta (o item já contestado mostra o número
+              da contestação). “Voltar aos Movimentos” (à esquerda) volta ao Balancete.
             </li>
             <li>
               “Regras de Rateio”, no canto de baixo do extrato, mostra as regras de rateio vigentes no mês: em cada chave (Projeto, Produção,
@@ -535,14 +564,15 @@ export function DREContent() {
               Balancete, o “Exportar” baixa só a conta: o lançamento numa aba e os movimentos que o modal mostra (no recorte da caixa) na outra.
             </li>
             <li>
-              No extrato e no balancete, o centro de custo e a conta são os que valem na DRE. Os corrigidos — pela reclassificação (Cadastros da Apuração /
-              Reclassificações) ou por uma contestação validada (Contestações de Gastos) — têm um ícone ao lado, que abre o original (o do balancete do
+              No extrato e no balancete, o centro de custo e a conta são os que valem na DRE. Os corrigidos — pela reclassificação por conta ou por fornecedor (Cadastros da
+              Apuração / Reclassificações) ou por uma contestação validada (Contestações de Gastos) — têm um ícone ao lado, que abre o original (o do balancete do
               RM) e o corrigido.
             </li>
             <li>
               No balancete, a coluna Ações tem “Contestar” (de quem edita Contestações de Gastos › Contestações › Solicitadas): o modal sugere o novo centro
               de custo (os de um departamento da DRE, com o código de três níveis, como 1.01.00000001) e/ou a nova conta de resultado (as do departamento do centro e as do Extra-Operacional) do movimento
-              (as listas buscam por código ou nome) e, se quiser, o motivo. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
+              (as listas buscam por código ou nome) e, se quiser, o motivo. Com um centro novo de outro departamento, a conta do movimento não serve, e a nova
+              conta é obrigatória. “Contestar Anteriores” e “Contestar Posteriores” levam junto os movimentos do
               mesmo fornecedor, conta e centro de custo nas competências anteriores e nas seguintes, com o total que muda. O movimento com uma contestação
               em andamento mostra o número e a situação dela; o que chega à linha pelo rateio de outra (como os da Metalurgia nas linhas de Serviços)
               mostra “Rateio”: contesta-se na linha de origem. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.
@@ -595,7 +625,17 @@ export function DREContent() {
             <p>
               Os resultados do mês: a DRE consolidada, a de cada unidade e a de cada centro de custo, a partir da classificação, dos rateios, da
               receita prévia e dos lançamentos manuais, e a de cada obra, com os lançamentos do balancete nos centros de custo de obra (1.98 e 1.99),
-              a receita prévia de frete e complementar da obra e, em Produção e Serviços (PS), os volumes da obra nas Listas Operacionais.
+              a receita prévia de frete e complementar da obra e, em Produção e Serviços (PS), os volumes da obra nas Listas Operacionais. O lançamento é
+              da obra pelo centro de custo que vale para ele: o que uma contestação ou uma reclassificação por fornecedor levou a outro centro, e o
+              redistribuído, não entram na obra.
+            </p>
+            <p>
+              Ao lado do valor, o % e o R$/m³, como em Resultados Empresariais: o % da receita bruta, dos impostos e das receitas líquidas por natureza
+              sobre a receita bruta (ROB); dos custos de produção, de montagem e complementares sobre a receita líquida do pré-fabricado, de montagem e
+              complementar; do Frete e Descarga sobre a receita líquida de frete (em Serviços, a complementar); o resto sobre a receita líquida (ROL). O
+              R$/m³ da receita do pré-fabricado e dos custos de produção sobre a produção (m³), da receita e dos custos de montagem sobre a montagem (m³) e
+              do Frete e Descarga sobre a expedição (m³). Em Despesas e Extra, no RN, nos centros de custo e sem centro de custo, as bases são as do
+              Consolidado; em cada obra, a receita (a ROB nas receitas e nos impostos, a ROL no resto) e os volumes da própria obra.
             </p>
             <p>
               Em Impostos, os créditos de impostos do mês em cada unidade (Matriz e Filial): o Creditado e o Estornado das contas de Matérias Primas, de

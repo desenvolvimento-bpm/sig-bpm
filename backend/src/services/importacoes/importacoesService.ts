@@ -116,7 +116,7 @@ export const importacoesService = {
     if (input.tipo === "METAS_ORCAMENTO") {
       throw new RegraImportacaoError(
         400,
-        "As metas do orçamento não se importam mais no mês: importe a aba Metas (Orçamento) num cenário (Criação de Cenários / Cenários Sintéticos) e marque-o como Orçamento.",
+        "As metas do orçamento não se importam mais no mês: importe a aba Metas (Orçamento) num cenário (Análises Gerenciais / Cenários Sintéticos) e marque-o como Orçamento.",
       );
     }
     if (!TIPOS_DISPONIVEIS.includes(input.tipo)) {
@@ -366,7 +366,9 @@ export const importacoesService = {
       orderBy: { importadoEm: "desc" },
       select: CAMPOS_RESUMO,
     });
-    return { competencia, itens };
+    // A primeira competência do SIG (06/11/2026): só nela a tela mostra o Saldo Inicial do Estoque.
+    const primeira = await getPrismaClient().competencia.findFirst({ orderBy: [{ ano: "asc" }, { mes: "asc" }], select: { id: true } });
+    return { competencia, itens, primeira: primeira?.id === competencia.id };
   },
 
   async detalhar(id: string) {

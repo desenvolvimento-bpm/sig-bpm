@@ -1,4 +1,5 @@
 import { getPrismaClient } from "../../config/prisma.js";
+import { valoresDoQuadro } from "../colaboradores/quadroService.js";
 import { acumular, type DadosDoMes } from "./indicadores.js";
 import { catalogoDeIndicadores, TOTAIS_SINTETICOS } from "./catalogoIndicadores.js";
 import { totaisDaCompetencia } from "../volumes/volumesService.js";
@@ -15,7 +16,7 @@ import { mesesDoExercicio } from "./resultadosService.js";
  */
 export async function dadosDoMes(competenciaId: string, apurado: boolean, metasDoOrcamento?: Map<string, number> | null): Promise<DadosDoMes> {
   const prisma = getPrismaClient();
-  const [dre, volumes, importados, digitados, totaisListas] = await Promise.all([
+  const [dre, volumes, importados, digitados, totaisListas, competencia] = await Promise.all([
     apurado
       ? prisma.resultadoApurado.findMany({
           where: { competenciaId, centroCustoId: null },
@@ -28,7 +29,10 @@ export async function dadosDoMes(competenciaId: string, apurado: boolean, metasD
     prisma.indicadorDigitado.findMany({ where: { competenciaId }, select: { nome: true, valor: true } }),
     // Os totais das listas do mês (os totalizadores que não têm volume congelado: Expedição, Montagem, Pistas…).
     apurado ? totaisDaCompetencia(competenciaId) : [],
+    prisma.competencia.findUnique({ where: { id: competenciaId }, select: { ano: true, mes: true } }),
   ]);
+  // O Quadro de Lotação do mês (os itens [QL] e [MQL], 06/11/2026), da competência dele no mesmo mês.
+  const doQuadro = competencia ? await valoresDoQuadro(competencia.ano, competencia.mes) : null;
   const porLista = new Map(totaisListas.map((t) => [t.codigo as string, Number(t.quantidade)]));
   const totalDaLista = (c: string): number => (porOrigem.has(c) ? porOrigem.get(c)! : (porLista.get(c) ?? 0));
   const porMeta = metasDoOrcamento ?? new Map<string, number>();
@@ -41,6 +45,8 @@ export async function dadosDoMes(competenciaId: string, apurado: boolean, metasD
     volume: (o) => (apurado ? (porOrigem.get(o) ?? 0) : NaN),
     importado: (n) => porNome.get(n) ?? null,
     meta: (n) => porMeta.get(n) ?? null,
+    quadro: (k) => doQuadro?.quadro(k) ?? null,
+    movimentosQL: (tipo) => doQuadro?.movimentos(tipo) ?? null,
     lista: (c) => {
       if (!apurado) return NaN;
       const sintetico = TOTAIS_SINTETICOS[c];
@@ -83,6 +89,15 @@ export const indicadoresService = {
       await Promise.all(meses.map((m) => (competencias.has(m.mes) ? dadosDoMes(competencias.get(m.mes)!, m.competenciaId !== null, orcamento.porMes[m.mes - 1]) : null))),
     );
     const doProva = await prova;
+    // Os meses de cada indicador apurados no Quadro de Lotação (06/11/2026): a lupa com as movimentações do mês.
+    const apurados = new Set(
+      (
+        await getPrismaClient().indicadorDigitado.findMany({
+          where: { competenciaId: { in: [...competencias.values()] }, origem: "APURADO" },
+          select: { competenciaId: true, nome: true },
+        })
+      ).map((d) => `${d.competenciaId}|${d.nome}`),
+    );
     return {
       ano,
       ate: ultimo,
@@ -102,6 +117,7 @@ export const indicadoresService = {
           metodologia: i.metodologia,
           acumulado: i.acumulado,
           meses: partes.map((p) => p?.valor ?? null),
+          apurados: meses.map((m) => apurados.has(`${competencias.get(m.mes)}|${i.nome}`)),
           total: acumular(i, partes),
           /** O orçado de cada mês e o acumulado do orçado (zero sem o cenário Orçamento Empresarial ou sem o valor nele). */
           orcado: metas.map((m) => m.get(i.nome) ?? 0),

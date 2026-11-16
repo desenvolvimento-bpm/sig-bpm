@@ -141,7 +141,8 @@ export function LancamentoDialog({ id, indicador, meses, onFechar }: { id: strin
  */
 export function IndicadoresManuais({ id, podeEditar, comReferencia = false }: { id: string; podeEditar: boolean; comReferencia?: boolean }) {
   const [editando, setEditando] = useState<IndicadorDoCenario | null>(null);
-  const consulta = useQuery({ queryKey: ["cenarios", id, "indicadores"], queryFn: () => cenariosService.indicadores(id) });
+  // A aba Indicadores Manuais das Premissas (12/11/2026): com o Acesso às Informações Por Recorte, só os dos grupos do recorte.
+  const consulta = useQuery({ queryKey: ["cenarios", id, "indicadores", "manuais"], queryFn: () => cenariosService.indicadores(id, "manuais") });
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar os indicadores do cenário.")} />;
   if (consulta.isPending) return <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
   const dados = consulta.data;

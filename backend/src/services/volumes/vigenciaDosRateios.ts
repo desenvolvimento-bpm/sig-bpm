@@ -58,7 +58,7 @@ export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: numbe
       else periodos.push([m, m]);
     }
     const texto = periodos.map(([a, b]) => (a === b ? rotuloDoMes(a) : `${rotuloDoMes(a)} a ${rotuloDoMes(b)}`)).join(", ");
-    avisos.push(`Rateio de ${nome(chave)} sem regra vigente em ${texto}: cadastre a regra em Cadastros da Controladoria / Regras de Rateio.`);
+    avisos.push(`Rateio de ${nome(chave)} sem regra vigente em ${texto}: cadastre a regra em Cadastros Gerais / Regras de Rateio.`);
   }
   const somas = new Map<string, { soma: number; regra: RegraDoMes }>();
   for (const r of regras.filter((x) => x.percentualFixo !== null && meses.some((m) => valeNoMes(vigencia(x), m.ano, m.mes)))) {
@@ -74,7 +74,7 @@ export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: numbe
 /** Por que abrir ou fechar (`acao`) não pode (nulo se pode): os rateios sem regra vigente em algum dos meses. */
 export function bloqueioPorRateios(regras: RegraDoMes[], meses: Array<{ ano: number; mes: number }>, acao: string) {
   const sem = avisosDosRateios(regras, meses).filter((a) => a.includes("sem regra vigente"));
-  return sem.length ? `Não é possível ${acao}: ${sem.map((a) => a.replace(/: cadastre a regra.*$/, "")).join("; ")}. Cadastre as regras em Cadastros da Controladoria / Regras de Rateio.` : null;
+  return sem.length ? `Não é possível ${acao}: ${sem.map((a) => a.replace(/: cadastre a regra.*$/, "")).join("; ")}. Cadastre as regras em Cadastros Gerais / Regras de Rateio.` : null;
 }
 
 /** Os doze meses de um exercício. */

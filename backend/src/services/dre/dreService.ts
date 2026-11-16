@@ -4,9 +4,11 @@ import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
 import { podeVerCentro, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { totaisDaCompetencia } from "../volumes/volumesService.js";
 import { apurarUnidades, CHAVES_DE_RATEIO, type LinhaEstrutura } from "./apuracaoUnidades.js";
-import { atribuicoesDoCentro, prefixoDaAtribuicao } from "./recorteCentros.js";
+import { atribuicoesDoCentro, linhasDoCentro, prefixoDaAtribuicao } from "./recorteCentros.js";
 import { apurarCentros, consolidar } from "./consolidacao.js";
 import { plural } from "../../utils/plural.js";
+import type { VisaoResultados } from "../relatorios/basesResultados.js";
+import { basesDoConsolidadoDoMes, comParticipacoes } from "./participacoesDoMes.js";
 
 /** Erro de regra — vira 400/404/409 no controller, não 500. */
 export class RegraDREError extends Error {
@@ -74,6 +76,12 @@ function montarLinhas(linhas: LinhaEstrutura[], valores: ValorGravado[], acesso:
   };
 }
 
+/** As bases do % e do R$/m³ (13/11/2026): os valores gravados por código da linha, com todas as casas (os volumes, três). */
+function basesGravadas(linhas: LinhaEstrutura[], valores: Array<{ linhaDREId: string; valor: Prisma.Decimal }>) {
+  const codigo = new Map(linhas.map((l) => [l.id, l.codigo]));
+  return new Map(valores.flatMap((v) => (codigo.has(v.linhaDREId) ? [[codigo.get(v.linhaDREId)!, Number(v.valor)] as const] : [])));
+}
+
 /**
  * Agrupamento do centro na visão por centro de custo: a coluna CENTRO DE CUSTO
  * (CONTROLADORIA) do cadastro (decisão do usuário de 30/09/2026). O centro é
@@ -98,10 +106,15 @@ async function valoresDosCentros(competenciaId: string, linhas: LinhaEstrutura[]
     select: { linhaDREId: true, valor: true, apuradoEm: true, congelado: true, centroCusto: { select: selecao } },
   });
   if (apurados.length) return apurados.map((a) => ({ ...a, centroCusto: a.centroCusto! }));
-  const lancamentos = await prisma.lancamentoContabil.findMany({
-    where: { competenciaId, centroCustoId: { not: null }, linhaDREId: { not: null } },
-    select: { centroCustoId: true, linhaDREId: true, valorMovimento: true },
-  });
+  // Os redistribuídos (13/11/2026) pelas partes, nos centros dos destinos.
+  const [diretos, partes] = await Promise.all([
+    prisma.lancamentoContabil.findMany({
+      where: { competenciaId, redistribuicaoId: null, centroCustoId: { not: null }, linhaDREId: { not: null } },
+      select: { centroCustoId: true, linhaDREId: true, valorMovimento: true },
+    }),
+    prisma.lancamentoRedistribuido.findMany({ where: { competenciaId }, select: { centroCustoId: true, linhaDREId: true, valorMovimento: true } }),
+  ]);
+  const lancamentos = [...diretos, ...partes];
   if (!lancamentos.length) return [];
   const centros = new Map(
     (await prisma.centroCusto.findMany({ where: { id: { in: [...new Set(lancamentos.map((l) => l.centroCustoId!))] } }, select: selecao })).map((c) => [c.id, c]),
@@ -132,8 +145,9 @@ export const dreService = {
     }
     const [linhas, lancamentos, manuais, volumes, receitas, totais, pendentes] = await Promise.all([
       estrutura(),
+      // Os redistribuídos (13/11/2026) entram pelas partes (no centro, no rateio e na alocação de cada destino), abaixo.
       prisma.lancamentoContabil.findMany({
-        where: { competenciaId: c.id },
+        where: { competenciaId: c.id, redistribuicaoId: null },
         select: { filial: true, centroCustoId: true, linhaDREId: true, balde: true, alocacao: true, valorMovimento: true },
       }),
       prisma.lancamentoManual.findMany({ where: { competenciaId: c.id }, select: { linhaDREId: true, balde: true, valor: true, filial: true, competenciaMovimentoId: true } }),
@@ -142,7 +156,12 @@ export const dreService = {
       totaisDaCompetencia(c.id),
       prisma.lancamentoContabil.count({ where: { competenciaId: c.id, classificadoEm: null } }),
     ]);
-    if (lancamentos.length === 0) throw new RegraDREError(409, `A competência ${rotulo(ano, mes)} não tem balancete importado.`);
+    const partes = await prisma.lancamentoRedistribuido.findMany({
+      where: { competenciaId: c.id },
+      select: { filial: true, centroCustoId: true, linhaDREId: true, balde: true, alocacao: true, valorMovimento: true },
+    });
+    const daApuracao = [...lancamentos, ...partes];
+    if (daApuracao.length === 0) throw new RegraDREError(409, `A competência ${rotulo(ano, mes)} não tem balancete importado.`);
     if (pendentes > 0) throw new RegraDREError(409, `Há ${pendentes} ${plural(pendentes, "lançamento", "lançamentos")} sem classificação. Classifique a competência antes de apurar.`);
     if (volumes.length === 0) throw new RegraDREError(409, `Os rateios de ${rotulo(ano, mes)} não foram apurados.`);
     if (receitas.length === 0) throw new RegraDREError(409, `A receita prévia de ${rotulo(ano, mes)} não foi apurada.`);
@@ -160,7 +179,7 @@ export const dreService = {
 
     const { resultados, avisos } = apurarUnidades({
       linhas,
-      lancamentos: lancamentos.map((l) => ({ filial: l.filial, linhaDREId: l.linhaDREId, balde: l.balde, alocacao: l.alocacao, valor: l.valorMovimento })),
+      lancamentos: daApuracao.map((l) => ({ filial: l.filial, linhaDREId: l.linhaDREId, balde: l.balde, alocacao: l.alocacao, valor: l.valorMovimento })),
       manuais: manuais.map((m) => ({ linhaDREId: m.linhaDREId, balde: m.balde, valor: m.valor, filial: m.filial, rateioDe: m.competenciaMovimentoId })),
       percentuais: new Map(volumes.map((v) => [`${v.regraRateio.chave}|${v.regraRateio.destino}`, v.percentual])),
       percentuaisDe,
@@ -170,7 +189,7 @@ export const dreService = {
     const consolidado = consolidar(linhas, resultados);
     const centros = apurarCentros(
       linhas,
-      lancamentos.map((l) => ({ centroCustoId: l.centroCustoId, linhaDREId: l.linhaDREId, valor: l.valorMovimento })),
+      daApuracao.map((l) => ({ centroCustoId: l.centroCustoId, linhaDREId: l.linhaDREId, valor: l.valorMovimento })),
     );
 
     const unidades = new Map((await prisma.unidadeNegocio.findMany({ select: { id: true, codigo: true } })).map((u) => [u.codigo, u.id]));
@@ -201,7 +220,12 @@ export const dreService = {
         select: { linhaDREId: true, valor: true, composicao: true, apuradoEm: true, congelado: true },
       }),
     ]);
-    return { competencia: { ano, mes, status: c.status }, unidade, ...montarLinhas(linhas, valores, acesso) };
+    const m = montarLinhas(linhas, valores, acesso);
+    // O % e o R$/m³ (13/11/2026): em Despesas e Extra e no RN, sobre as bases do Consolidado; nas outras, os valores gravados
+    // da unidade (os volumes com todas as casas, como nos Resultados Empresariais).
+    const gravados = basesGravadas(linhas, valores);
+    const bases = unidade >= 4 ? await basesDoConsolidadoDoMes(c.id) : gravados;
+    return { competencia: { ano, mes, status: c.status }, unidade, ...m, linhas: comParticipacoes(m.linhas, unidade as VisaoResultados, bases, gravados) };
   },
 
   /** A DRE consolidada, na ordem da estrutura. */
@@ -214,7 +238,10 @@ export const dreService = {
         select: { linhaDREId: true, valor: true, composicao: true, apuradoEm: true, congelado: true },
       }),
     ]);
-    return { competencia: { ano, mes, status: c.status }, ...montarLinhas(linhas, valores, acesso) };
+    const m = montarLinhas(linhas, valores, acesso);
+    // O % e o R$/m³ (13/11/2026), sobre os valores gravados do próprio Consolidado.
+    const gravados = basesGravadas(linhas, valores);
+    return { competencia: { ano, mes, status: c.status }, ...m, linhas: comParticipacoes(m.linhas, 0, gravados, gravados) };
   },
 
   /**
@@ -282,27 +309,38 @@ export const dreService = {
     }
     const porCodigo = (a: { codigoRM: string | null }, b: { codigoRM: string | null }) => (a.codigoRM ?? "").localeCompare(b.codigoRM ?? "");
     const centros = new Map(doGrupo.map((v) => [v.centroCusto!.id, { codigoRM: v.centroCusto!.codigoRM, nome: v.centroCusto!.nomeRM }]));
+    // O % e o R$/m³ (13/11/2026), sobre as bases do Consolidado, como nos Resultados Empresariais.
+    const bases = await basesDoConsolidadoDoMes(c.id);
+    const linhasDoGrupo = linhas
+      .filter((l) => l.tipo === "SECAO" || porLinha.has(l.id))
+      .map((l) => {
+        const a = porLinha.get(l.id);
+        return {
+          codigo: l.codigo,
+          tipo: l.tipo,
+          grupo: l.grupo,
+          grupoSigla: l.grupoSigla,
+          descricao: l.descricao,
+          valor: a?.valor.toFixed(2) ?? null,
+          composicao: a && centros.size > 1 ? { regra: "Soma dos centros do agrupamento", centros: a.centros.sort(porCodigo) } : null,
+          podeDetalhar: podeVerSensiveis(acesso, l),
+        };
+      });
     return {
       competencia: { ano, mes, status: c.status },
       grupo,
       centros: [...centros.values()].sort(porCodigo),
       apuradoEm: doGrupo[0].apuradoEm,
       congelado: doGrupo.some((v) => v.congelado),
-      linhas: linhas
-        .filter((l) => l.tipo === "SECAO" || porLinha.has(l.id))
-        .map((l) => {
-          const a = porLinha.get(l.id);
-          return {
-            codigo: l.codigo,
-            tipo: l.tipo,
-            grupo: l.grupo,
-            grupoSigla: l.grupoSigla,
-            descricao: l.descricao,
-            valor: a?.valor.toFixed(2) ?? null,
-            composicao: a && centros.size > 1 ? { regra: "Soma dos centros do agrupamento", centros: a.centros.sort(porCodigo) } : null,
-            podeDetalhar: podeVerSensiveis(acesso, l),
-          };
-        }),
+      // Na tela e no Exportar, o total de cada grupo é a soma das atribuições mostradas (linhasDoCentro): o % e o R$/m³ dele,
+      // sobre esse valor.
+      linhas: (() => {
+        const mostradas = new Map(comParticipacoes(linhasDoCentro(linhasDoGrupo), "centros", bases).map((l) => [l.codigo, l]));
+        return comParticipacoes(linhasDoGrupo, "centros", bases).map((l) => {
+          const m = mostradas.get(l.codigo);
+          return m ? { ...l, pct: m.pct, unitario: m.unitario } : l;
+        });
+      })(),
     };
   },
 };

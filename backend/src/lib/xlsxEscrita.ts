@@ -45,6 +45,10 @@ export const ESTILO = {
   destaqueDireitaResultado: 27,
   destaqueNumeroResultado: 28,
   destaquePercentualResultado: 29,
+  /** O cabeçalho à direita com a quebra de texto automática (11/11/2026: os rótulos dos meses da aba Quadro de Lotação). */
+  cabecalhoDireitaQuebra: 30,
+  /** O cabeçalho à esquerda com a quebra de texto automática (11/11/2026: os rótulos do Exportar Premissas). */
+  cabecalhoQuebra: 31,
 } as const;
 export type Estilo = (typeof ESTILO)[keyof typeof ESTILO];
 
@@ -66,6 +70,8 @@ export type AbaEscrita = {
   paisagem?: boolean;
   /** A primeira coluna fica presa ao rolar para os lados. */
   congelarPrimeiraColuna?: boolean;
+  /** As primeiras colunas (quantas) presas ao rolar para os lados (11/11/2026: o Exportar Premissas); vale no lugar da de cima. */
+  congelarColunas?: number;
   /**
    * As validações das células (15/10/2026: a aba Investimentos das premissas): a lista suspensa (`lista`) ou um número
    * inteiro entre `minimo` e `maximo`, no intervalo `celulas` ("B6:B205").
@@ -112,7 +118,7 @@ const ESTILOS = `${XML}<styleSheet xmlns="${NS}">
 <fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEF9C3"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEF08A"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF9CA3AF"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="30">
+<cellXfs count="32">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
@@ -143,6 +149,8 @@ const ESTILOS = `${XML}<styleSheet xmlns="${NS}">
 <xf numFmtId="0" fontId="1" fillId="4" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right"/></xf>
 <xf numFmtId="166" fontId="1" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1"/>
 <xf numFmtId="167" fontId="1" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
@@ -167,9 +175,12 @@ function planilha(aba: AbaEscrita) {
       return `<row r="${i + 1}">${celulas}</row>`;
     })
     .join("");
+  // As colunas presas: as `congelarColunas` primeiras (11/11/2026) ou só a primeira.
+  const presas = aba.congelarColunas ?? (aba.congelarPrimeiraColuna ? 1 : 0);
+  const canto = `${coluna(presas)}${(aba.linhaCabecalho ?? 0) + 1}`;
   const congela =
-    aba.linhaCabecalho && aba.congelarPrimeiraColuna
-      ? `<pane xSplit="1" ySplit="${aba.linhaCabecalho}" topLeftCell="B${aba.linhaCabecalho + 1}" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="B${aba.linhaCabecalho + 1}" sqref="B${aba.linhaCabecalho + 1}"/>`
+    aba.linhaCabecalho && presas > 0
+      ? `<pane xSplit="${presas}" ySplit="${aba.linhaCabecalho}" topLeftCell="${canto}" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="${canto}" sqref="${canto}"/>`
       : aba.linhaCabecalho
         ? `<pane ySplit="${aba.linhaCabecalho}" topLeftCell="A${aba.linhaCabecalho + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${aba.linhaCabecalho + 1}" sqref="A${aba.linhaCabecalho + 1}"/>`
         : "";

@@ -61,6 +61,20 @@ export function PlayerDoVideo({
   const link = b.origem === "LINK" && b.url ? videoDoLink(b.url) : null;
   const youtube = link?.comandos ?? false;
   const apresentacao = modo === "apresentacao";
+  // As Configurações do Vídeo (13/11/2026): a Reprodução Automática vale na leitura e na apresentação (na edição, não), e
+  // o Recomeçar ao Terminar, em todos os modos.
+  const automatico = !!b.reproducaoAutomatica && (modo === "leitura" || apresentacao);
+  const repetir = !!b.recomecarAoTerminar;
+
+  // A Reprodução Automática do arquivo: tenta com o som; se o navegador recusar (sem um clique na página), toca sem som.
+  useEffect(() => {
+    const v = video.current;
+    if (!automatico || !v) return;
+    v.play().catch(() => {
+      v.muted = true;
+      void v.play().catch(() => undefined);
+    });
+  }, [automatico, b.arquivo]);
 
   // O estado do player do YouTube (o tempo e se está tocando), que ele manda por mensagens depois do "listening".
   useEffect(() => {
@@ -131,6 +145,7 @@ export function PlayerDoVideo({
         controls={!apresentacao}
         preload="metadata"
         playsInline
+        loop={repetir}
         autoPlay={modo === "ampliado" && tocar}
         onLoadedMetadata={(e) => {
           if (inicio) e.currentTarget.currentTime = inicio;
@@ -145,7 +160,7 @@ export function PlayerDoVideo({
       <iframe
         ref={iframe}
         // Na apresentação, o YouTube sem os controles dele (os botões são os da página); os outros, com os deles.
-        src={link!.embed({ controles: !(apresentacao && youtube), inicio: modo === "ampliado" ? inicio : undefined, tocar: modo === "ampliado" && tocar })}
+        src={link!.embed({ controles: !(apresentacao && youtube), inicio: modo === "ampliado" ? inicio : undefined, tocar: (modo === "ampliado" && tocar) || automatico, repetir })}
         data-video-do-bloco={b.id}
         title={`Vídeo do ${NOME_DA_PLATAFORMA[link!.plataforma]}${b.legenda ? `: ${b.legenda}` : ""}`}
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"

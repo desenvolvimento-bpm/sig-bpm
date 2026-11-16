@@ -13,12 +13,14 @@ import { EtapasDoMes } from "@/components/layout/EtapasDoMes";
 import { FaixaDaPublicacao } from "@/components/layout/FaixaDaPublicacao";
 import { IntroducaoDoLayout } from "@/components/layout/IntroducaoAoSig";
 import { BarraDoCenario, lerRotaDoCenario } from "@/app/cenarios/components/BarraDoCenario";
+import { SituacaoDaCompetenciaDoQuadro, competenciaDoQuadroNaRota } from "@/app/gestao-de-colaboradores/quadro-de-lotacao/components/SituacaoDaCompetenciaDoQuadro";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/context/AuthContext";
 import { usePermissions } from "@/context/PermissionContext";
 import { abasDoMes, lerRotaDoMes } from "@/lib/etapasDoMes";
 import { abasDaTela, grupoDaTela, permissaoDaTela, primeiraTelaPermitida } from "@/lib/navigation-config";
 import { AbasDaTela } from "@/components/shared/AbasDaTela";
+import { LargurasDasColunas } from "@/components/shared/LargurasDasColunas";
 
 type ProtectedLayoutProps = {
   children: ReactNode;
@@ -58,7 +60,7 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
   const doGrupo = grupoDaTela(pathname);
   // Nas telas de um cenário sintético, a barra do cenário (Resultados e Indicadores).
   const doCenario = lerRotaDoCenario(pathname);
-  // Nas telas com abas (17/10/2026: os Cadastros da Controladoria), o nome da tela e as abas que o perfil alcança.
+  // Nas telas com abas (17/10/2026: os Cadastros Gerais), o nome da tela e as abas que o perfil alcança.
   // Nas etapas do mês com abas (27/10/2026: Totais e Prévias), o nome da etapa e as abas dela.
   const abas = abasDaTela(pathname, hasPermission) ?? abasDoMes(pathname, hasPermission);
 
@@ -66,6 +68,8 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
     <SidebarProvider>
       {/* O aviso ao sair com alterações não gravadas (13/10/2026), em todas as telas. */}
       <AvisoDeSaida />
+      {/* A largura das colunas (13/11/2026), em todas as tabelas fora dos modais, guardada no navegador. */}
+      <LargurasDasColunas />
       {/* A Introdução ao SIG (21/10/2026), aberta pelo menu do usuário: por cima do menu lateral e da tela. */}
       <IntroducaoDoLayout />
       <AppSidebar />
@@ -88,7 +92,15 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
         ) : null}
         <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
           {doMes && user ? <EtapasDoMes anoMes={doMes.anoMes} chave={doMes.chave} resto={doMes.resto} /> : null}
-          {doGrupo && user ? <BarraDeTelas grupo={doGrupo.grupo} atual={doGrupo.tela.title} /> : null}
+          {/* Na tela inicial do processo (12/11/2026: a lista das competências da Gestão de Colaboradores), sem a barra, como na do Fechamento Mensal. */}
+          {doGrupo?.tela && user ? (
+            <BarraDeTelas
+              grupo={doGrupo.grupo}
+              atual={doGrupo.tela?.title ?? ""}
+              // A situação da competência do Quadro de Lotação aberta (12/11/2026), à direita da barra, como no Fechamento Mensal.
+              etiquetas={competenciaDoQuadroNaRota(pathname) ? <SituacaoDaCompetenciaDoQuadro anoMes={competenciaDoQuadroNaRota(pathname)!} /> : undefined}
+            />
+          ) : null}
           {doCenario && user && !bloqueada ? <BarraDoCenario id={doCenario.id} tela={doCenario.tela} /> : null}
           {isLoading && exigida ? (
             <div className="h-40 animate-pulse rounded-sm bg-gray-100" />

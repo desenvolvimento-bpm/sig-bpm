@@ -22,9 +22,10 @@ const duasCasas = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigi
 const QUADRO = "space-y-4 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white p-5";
 
 /**
- * A aba Índices das Configurações do cenário analítico (19/10/2026): a lista dos Índices de Reajuste — a descrição, a
- * observação e a variação máxima (em %) —, que o Comparativo usa no lugar da variação digitada em cada conta. A lista
- * se grava inteira, em “Gravar Índices”.
+ * Os Índices de Referência do cenário analítico (19/10/2026, como a aba Índices de Reajuste; desde 11/11/2026, pedido do Adão,
+ * o quadro do meio da aba Comparativo das Configurações): a lista dos índices — a descrição, a observação e a variação
+ * máxima (em %) —, que as Variações Máximas, abaixo, usam no lugar da variação digitada em cada conta. A lista se grava
+ * inteira, em “Gravar Índices”.
  */
 export function IndicesCenario({ id, podeEditar }: { id: string; podeEditar: boolean }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "indices"], queryFn: () => cenariosService.indices(id) });
@@ -68,10 +69,10 @@ function Lista({ id, indices, podeEditar }: { id: string; indices: Array<IndiceD
     <section className={QUADRO}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-gray-900">Índices de Reajuste</h2>
+          <h2 className="text-sm font-bold text-gray-900">Índices de Referência</h2>
           <p className="mt-1 text-xs text-gray-600">
-            A variação máxima aceita (em %, para mais ou para menos) de cada índice. No Comparativo, cada conta escolhe um índice; as contas sem índice
-            não são verificadas.
+            A variação máxima aceita (em %, para mais ou para menos) de cada índice. Em Variações Máximas, abaixo, cada conta escolhe um índice; as
+            contas sem índice não são verificadas.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -82,7 +83,7 @@ function Lista({ id, indices, podeEditar }: { id: string; indices: Array<IndiceD
             </Button>
           ) : null}
           {/* O Exportar (30/10/2026): os índices gravados; por último, depois do Incluir Índice (03/11/2026, pedido do Adão). */}
-          <ExportarTabela titulo="Cenário · Índices de Reajuste" colunas={COLUNAS_DOS_INDICES} linhas={indices} />
+          <ExportarTabela titulo="Cenário · Comparativo · Índices de Referência" colunas={COLUNAS_DOS_INDICES} linhas={indices} />
         </div>
       </div>
       <div className="rounded-sm border border-gray-200">
@@ -137,7 +138,7 @@ function Lista({ id, indices, podeEditar }: { id: string; indices: Array<IndiceD
                         className={`ml-auto h-8 w-28 rounded-sm bg-white text-right ${ruim && l.descricao.trim() ? "border-red-400" : ""}`}
                       />
                     </td>
-                    <td className={`${celula} text-right text-sm text-gray-600`} title={l.contas ? "Contas do Comparativo com este índice" : undefined}>
+                    <td className={`${celula} text-right text-sm text-gray-600`} title={l.contas ? "Contas das Variações Máximas com este índice" : undefined}>
                       {l.contas ? `${l.contas} ${plural(l.contas, "conta", "contas")}` : "—"}
                     </td>
                     {podeEditar ? (
@@ -145,7 +146,7 @@ function Lista({ id, indices, podeEditar }: { id: string; indices: Array<IndiceD
                         <button
                           type="button"
                           className="inline-flex size-7 items-center justify-center rounded-sm text-gray-500 hover:bg-gray-100 hover:text-red-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                          title={l.contas ? "O índice está no Comparativo: troque o índice dessas contas antes de excluir" : "Excluir o índice"}
+                          title={l.contas ? "O índice está nas Variações Máximas: troque o índice dessas contas antes de excluir" : "Excluir o índice"}
                           aria-label="Excluir o índice"
                           disabled={l.contas > 0}
                           onClick={() => setLinhas((atual) => atual.filter((_, i) => i !== k))}

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { LinhaPlanilha, ValorCelula } from "../src/lib/xlsx.js";
 import { limiteDaLinha, mesesAcima, totaisDaDRE } from "../src/services/cenarios/comparativoCenario.js";
-import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, lerArquivoDePremissas, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
+import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, chaveDaDescricao, lerArquivoDePremissas, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
 import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
 import { classificar } from "../src/services/cenarios/indicadoresDoCenario.js";
 import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leituraCenario.js";
@@ -151,35 +151,71 @@ describe("comparativo entre cenários", () => {
     const xlsx = gerarXlsx([abaDaPlanilha("Centros de Custo", "centros", linhas, Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste")]);
     const [lido] = lerArquivoDePremissas("p.xlsx", xlsx);
     assert.deepEqual(lido.erros, []);
-    assert.deepEqual(lido.linhas.map((l) => [l.chave, l.meses[0], l.meses[1], l.meses[2], l.justificativa]), [
-      ["C|ESTRUTURA|CPP.MOD.REMUNERACOES_CLT", 1000, 1200, null, "Dissídio"],
-      ["L|ESTRUTURA", 44, 44, 44, null],
+    // 11/11/2026: sem a coluna Código, a linha pela aba e pelas descrições.
+    assert.deepEqual(lido.linhas.map((l) => [l.chave, l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.meses[2], l.justificativa]), [
+      [null, "centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, null, "Dissídio"],
+      [null, "centros|ESTRUTURA › Quadro de Lotação › Colaboradores", 44, 44, 44, null],
     ]);
+    // As abas das unidades (os mesmos rótulos) pelo título; os arquivos de antes, com o Código, pela chave.
+    const unidade: LinhaDaPlanilha = { aba: "2", chave: "P|2|GLOBAL|DEMANDA:X", descricao: ["Global", "Produção", "Estrutura (m³)", "Demanda Diária"], und: "m³/dia", conta: null, limite: null, media: 10, meses: Array(12).fill(10), justificativa: null };
+    const [daFilial] = lerArquivoDePremissas("f.xlsx", gerarXlsx([abaDaPlanilha("Filial", "2", [unidade], Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste")]));
+    assert.deepEqual([daFilial.linhas[0].doTipo, daFilial.linhas[0].chave], ["2", null]);
+    const antiga = abaDaPlanilha("Filial", "2", [unidade], Array.from({ length: 12 }, (_, k) => `M${k + 1}`), "teste");
+    antiga.linhas[4].unshift({ valor: "Código (não altere)" });
+    antiga.linhas[5].unshift({ valor: unidade.chave });
+    const [daAntiga] = lerArquivoDePremissas("a.xlsx", gerarXlsx([antiga]));
+    assert.deepEqual([daAntiga.erros, daAntiga.linhas[0].chave, daAntiga.linhas[0].meses[0]], [[], "P|2|GLOBAL|DEMANDA:X", 10]);
     assert.match(lerArquivoDePremissas("x.xlsx", gerarXlsx([{ nome: "Outra", larguras: [10], linhas: [[{ valor: "a" }]] }]))[0].erros[0], /não está no padrão/);
   });
-  it("a aba Investimentos (15/10/2026): a lista volta igual; o Nome de Referência obrigatório e sem repetir; a conta tem de ser a da unidade", () => {
-    const inv = { id: "abc", nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24 };
+  it("os meses da referência (11/11/2026): doze colunas antes da Média de Referência, que não se importam; as fórmulas acompanham", () => {
+    const meses = Array.from({ length: 12 }, (_, k) => `M${k + 1}`);
+    const linhas: LinhaDaPlanilha[] = [
+      { aba: "centros", chave: "C|ESTRUTURA|X", descricao: ["ESTRUTURA", "Mão de Obra Direta", "Remunerações CLT"], und: "R$", conta: "X", limite: 5, media: 1000, meses: [1000, 1200, ...Array(10).fill(null)], justificativa: "Dissídio", referencia: [900, 950, ...Array(10).fill(null)] },
+    ];
+    const aba = abaDaPlanilha("Centros de Custo", "centros", linhas, meses, "teste", { rotulo: "Realizado", meses: meses.map((m) => `R${m}`), descricao: "o realizado" });
+    const cab = aba.linhas[4].map((c) => c.valor);
+    // As três descrições (11/11/2026: sem o Código antes), a Und. e os doze da referência; depois a Média (Q).
+    assert.equal(cab[4], "Realizado · RM1");
+    assert.equal(cab[16], "Média de Referência");
+    assert.deepEqual([aba.linhas[5][4].valor, aba.linhas[5][5].valor, aba.linhas[5][16].valor, aba.linhas[5][19].valor], [900, 950, 1000, 1000]);
+    // O Total da Referência e o Justificar? apontam para as colunas deslocadas.
+    assert.equal(aba.linhas[5][17].formula, "IF(Q6=\"\",\"\",Q6*12)");
+    assert.ok(String(aba.linhas[5][31].formula).includes("SUM(T6:AE6)"));
+    // Nos percentuais (12/11/2026: os Encargos e Benefícios), o Total da Referência é a própria Média.
+    const pct: LinhaDaPlanilha = { aba: "centros", chave: "E|ESTRUTURA|INSS", descricao: ["ESTRUTURA", "Encargos e Benefícios", "Previdência Social (INSS)"], und: "%", conta: null, limite: null, media: 0.29, meses: Array(12).fill(null), justificativa: null, percentual: true };
+    const comPct = abaDaPlanilha("Centros de Custo", "centros", [pct], meses, "teste");
+    assert.deepEqual([comPct.linhas[5][4].valor, comPct.linhas[5][5].valor, comPct.linhas[5][5].formula], [0.29, 0.29, "IF(E6=\"\",\"\",E6)"]);
+    const [lido] = lerArquivoDePremissas("p.xlsx", gerarXlsx([aba]));
+    assert.deepEqual(lido.erros, []);
+    assert.deepEqual(lido.linhas.map((l) => [l.doTipo && chaveDaDescricao(l.doTipo, l.descricao), l.meses[0], l.meses[1], l.justificativa]), [["centros|ESTRUTURA › Mão de Obra Direta › Remunerações CLT", 1000, 1200, "Dissídio"]]);
+  });
+  it("a aba Investimentos (15/10/2026): a lista volta igual; o Nome de Referência obrigatório e sem repetir; a conta tem de ser a da unidade; o Departamento só em Despesas e Extra (12/11/2026)", () => {
+    const inv = { id: "abc", nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24, departamento: "COMERCIAL" as const };
     const aba = abaDeInvestimentos([inv], "teste");
-    // A linha nova (a primeira em branco), uma com a conta de outra unidade, uma sem nome e uma com o nome repetido.
-    aba.linhas[6] = [{ valor: "Ponte 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Ponte rolante" }, { valor: null }, { valor: 5 }, { valor: 80000 }, { valor: null }, { valor: 120 }];
-    aba.linhas[7] = [{ valor: "Caminhão" }, { valor: "Serviços" }, { valor: "Depreciação do Patrimônio" }, { valor: "Caminhão" }, { valor: null }, { valor: 1 }, { valor: 300000 }, { valor: 0 }, { valor: 60 }];
-    aba.linhas[8] = [{ valor: null }, { valor: "Matriz" }, { valor: null }, { valor: "Sem nome" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
-    aba.linhas[9] = [{ valor: "notebooks 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Repetido" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    // A linha nova (a primeira em branco, com um Departamento ignorado fora de Despesas e Extra), uma com a conta de outra
+    // unidade, uma sem nome, uma com o nome repetido e uma com um Departamento que não existe.
+    aba.linhas[6] = [{ valor: "Ponte 2026" }, { valor: "Matriz" }, { valor: null }, { valor: "Comercial" }, { valor: "Ponte rolante" }, { valor: null }, { valor: 5 }, { valor: 80000 }, { valor: null }, { valor: 120 }];
+    aba.linhas[7] = [{ valor: "Caminhão" }, { valor: "Serviços" }, { valor: "Depreciação do Patrimônio" }, { valor: null }, { valor: "Caminhão" }, { valor: null }, { valor: 1 }, { valor: 300000 }, { valor: 0 }, { valor: 60 }];
+    aba.linhas[8] = [{ valor: null }, { valor: "Matriz" }, { valor: null }, { valor: null }, { valor: "Sem nome" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    aba.linhas[9] = [{ valor: "notebooks 2026" }, { valor: "Matriz" }, { valor: null }, { valor: null }, { valor: "Repetido" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
+    aba.linhas[10] = [{ valor: "Cadeiras" }, { valor: "Despesas e Extra" }, { valor: null }, { valor: "Vendas" }, { valor: "Cadeiras" }, { valor: null }, { valor: 1 }, { valor: 10 }, { valor: 0 }, { valor: 6 }];
     const [lido] = lerArquivoDePremissas("i.xlsx", gerarXlsx([aba]));
     assert.deepEqual(
       lido.investimentos.map(({ aba: _a, numero: _n, ...i }) => i),
       [
-        { nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24 },
-        { nomeReferencia: "Ponte 2026", unidade: 1, descricao: "Ponte rolante", condicaoPagamento: null, inicio: 5, valorTotal: 80000, valorPosUso: 0, vidaUtil: 120 },
+        { nomeReferencia: "Notebooks 2026", unidade: 4, descricao: "Notebooks", condicaoPagamento: "Entrada + 10x", inicio: 3, valorTotal: 12000, valorPosUso: 2000, vidaUtil: 24, departamento: "COMERCIAL" },
+        { nomeReferencia: "Ponte 2026", unidade: 1, descricao: "Ponte rolante", condicaoPagamento: null, inicio: 5, valorTotal: 80000, valorPosUso: 0, vidaUtil: 120, departamento: null },
       ],
     );
-    assert.equal(lido.erros.length, 3);
+    assert.equal(lido.erros.length, 4);
     assert.match(lido.erros[0], /Conta de Serviços é a Depreciação do Maquinário de Serviços/);
     assert.match(lido.erros[1], /dê um Nome de Referência/);
     assert.match(lido.erros[2], /se repete na aba/);
-    // A fórmula da Depreciação Mensal, com o valor calculado (19/10/2026: sem o ROI).
-    assert.equal(aba.linhas[5][9].valor, 416.67);
-    assert.equal(aba.linhas[5][9].formula, 'IF(OR(G6="",I6="",I6=0),"",(G6-IF(H6="",0,H6))/I6)');
+    assert.match(lido.erros[3], /Departamento “Vendas” não é um dos da lista/);
+    // O Departamento na planilha (12/11/2026) e a fórmula da Depreciação Mensal, com o valor calculado (19/10/2026: sem o ROI).
+    assert.equal(aba.linhas[5][3].valor, "Comercial");
+    assert.equal(aba.linhas[5][10].valor, 416.67);
+    assert.equal(aba.linhas[5][10].formula, 'IF(OR(H6="",J6="",J6=0),"",(H6-IF(I6="",0,I6))/J6)');
   });
   it("a média dos centros conta só os meses com movimentação de cada grupo e conta", () => {
     const r = mediaNosMesesComOcorrencia(

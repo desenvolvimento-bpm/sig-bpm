@@ -5,7 +5,7 @@ import { arquivosGeraisService as s, RegraArquivosError, type TelaDosArquivos } 
 
 /** Os Arquivos Gerais (05/11/2026): as telas Treinamentos e Informativos. A rota já conferiu a tela e a permissão. */
 
-const usuario = (request: Request) => ({ id: request.user!.sub, nome: request.user!.nome });
+const usuario = (request: Request) => ({ id: request.user!.sub, nome: request.user!.nome, permissoes: request.user!.permissions ?? [] });
 const tela = (request: Request) => String(request.params.tela) as TelaDosArquivos;
 
 async function responder(response: Response, fn: () => Promise<unknown>, status = 200) {
@@ -26,8 +26,16 @@ function disposicao(tipo: "inline" | "attachment", nome: string) {
 }
 
 export const arquivosGeraisController = {
+  /** Edita a descrição e o processo (11/11/2026): { descricao, processo } no corpo (o processo vazio é Geral). */
+  editar(request: Request, response: Response) {
+    const corpo = (request.body ?? {}) as { descricao?: unknown; processo?: unknown };
+    return responder(response, () =>
+      s.editar(tela(request), String(request.params.id), { descricao: texto(corpo.descricao), processo: texto(corpo.processo) || null }, usuario(request)),
+    );
+  },
+
   listar(request: Request, response: Response) {
-    return responder(response, () => s.listar(tela(request)));
+    return responder(response, () => s.listar(tela(request), usuario(request).permissoes));
   },
 
   /** Um arquivo novo: o conteúdo cru no corpo (gravado enquanto chega), o tipo no Content-Type e ?nome= e ?descricao=. */
@@ -39,7 +47,14 @@ export const arquivosGeraisController = {
         s.adicionar(
           tela(request),
           request,
-          { nome: texto(request.query.nome), descricao: texto(request.query.descricao), tipo: String(request.headers["content-type"] ?? ""), tamanho: Number.isFinite(tamanho) ? tamanho : null },
+          {
+            nome: texto(request.query.nome),
+            descricao: texto(request.query.descricao),
+            tipo: String(request.headers["content-type"] ?? ""),
+            tamanho: Number.isFinite(tamanho) ? tamanho : null,
+            // O processo (11/11/2026): o código; vazio, Geral.
+            processo: texto(request.query.processo) || null,
+          },
           usuario(request),
         ),
       201,
@@ -53,7 +68,7 @@ export const arquivosGeraisController = {
   async conteudo(request: Request, response: Response) {
     let a: Awaited<ReturnType<typeof s.ler>>;
     try {
-      a = await s.ler(tela(request), String(request.params.id));
+      a = await s.ler(tela(request), String(request.params.id), usuario(request).permissoes);
     } catch (error) {
       if (error instanceof RegraArquivosError) return response.status(error.status).json({ error: error.message });
       throw error;

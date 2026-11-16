@@ -143,6 +143,11 @@ export function LancamentosContestacoesContent() {
               A lixeira exclui a importação de uma contestação, depois da confirmação num modal: os lançamentos dela saem (o estorno e o novo), e ela volta à
               lista do Importar (acatada).
             </li>
+            <li>
+              A contestação de itens de um movimento (o “Contestar Selecionados” do botão Itens, no balancete da conta) chega aqui pelo Processar das
+              Validações, na competência do movimento (aberta), com o valor dos itens — a descrição diz quantos; com a competência do movimento fechada,
+              ela fica para o Importar. Na lixeira, ela volta a acatada, para o Processar.
+            </li>
             <li>Os lançamentos entram na DRE na próxima apuração. Use os filtros nos rótulos das colunas; o total no rodapé acompanha o filtro.</li>
           </ul>
         }

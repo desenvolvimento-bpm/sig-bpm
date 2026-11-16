@@ -59,7 +59,7 @@ export type CardVisual = {
   periodo: string;
   /** A unidade, no rótulo do Atual e do Acumulado ("R$ M"). */
   unidade: string;
-  /** O nome do comparado ("Orçamento", "Previsão"…). */
+  /** O nome do comparado ("Orçamento", "Forecast"…). */
   rotuloComparado: string;
   mes: BlocoDoCard;
   acumulado: BlocoDoCard;
