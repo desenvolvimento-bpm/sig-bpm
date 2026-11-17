@@ -141,14 +141,13 @@ export type LinhaDoQuadroDoCenario = {
   /** Os colaboradores da linha na referência do cenário (16/11/2026; nulo: a linha não está nela, ou sem referência). */
   referencia: number | null;
   /** Na referência realizada (16/11/2026), os salários de cada colaborador da linha (a média do Lançamento Inicial); nulos sem salário. */
-  referenciaSalarios: { salarioBruto: number; adicional: number } | null;
 };
 export type QuadroDoCenario = {
   ano: number;
   meses: Array<{ mes: number; rotulo: string }>;
   editavel: boolean;
   /** A referência do cenário para o Quadro de Lotação (16/11/2026): o QL Realizado mais recente ou o último mês do cenário de origem. */
-  referencia: { rotulo: string; comSalarios: boolean } | null;
+  referencia: { rotulo: string } | null;
   linhas: LinhaDoQuadroDoCenario[];
   opcoes: {
     unidades: Array<{ id: string; nome: string }>;

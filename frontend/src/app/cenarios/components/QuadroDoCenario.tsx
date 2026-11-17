@@ -32,9 +32,8 @@ const CAMPOS: Array<{ campo: CampoDoMes; rotulo: string; dica: string; largura: 
 const LARGURA_TOTAL = 108;
 const LARGURA_CUSTO = 156;
 /**
- * As colunas da Referência, depois do Centro de Custo: os colaboradores da linha na referência e (16/11/2026, pedido do Adão: na
- * referência realizada) o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada colaborador, com as larguras
- * das colunas dos meses.
+ * A coluna da Referência, depois do Centro de Custo: os colaboradores da linha na referência (17/11/2026, pedido do Adão: só a
+ * quantidade de colaboradores, sem os salários).
  */
 const LARGURA_REFERENCIA = 100;
 /** Os botões da marcação, como os das tabelas das outras abas (cinza-claro, ao lado dos amarelos). */
@@ -101,24 +100,17 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   const linhas = dados.linhas.filter((l) => !t || [l.unidade, rotuloDoTipo(l.vinculo), l.funcao, l.centro, l.grupo ?? ""].join(" ").toLowerCase().includes(t));
   const meses = dados.meses;
   const comReferencia = !!dados.referencia;
-  // Os salários na referência (16/11/2026): só na realizada (o QL Realizado, com os salários do Lançamento Inicial).
-  const comSalarios = !!dados.referencia?.comSalarios;
   // Os valores marcados: as linhas marcadas (as que a busca mostra) × os meses marcados. O Replicar Referências leva os
-  // Colaboradores da referência de cada uma aos meses marcados e, com os salários dela (16/11/2026), também o Salário Bruto e a
-  // Insalubridade / Periculosidade; as linhas sem a referência (ou sem os salários nela) ficam como estão.
+  // Colaboradores da referência de cada uma aos meses marcados; as linhas sem a referência ficam como estão, e os salários não
+  // têm referência.
   const linhasMarcadas = linhas.filter((l) => marcadas.has(l.id));
   const mesesDaMarcacao = [...mesesMarcados].sort((a, b) => a - b);
   const nMarcados = linhasMarcadas.length * mesesDaMarcacao.length;
   const dasReferencias = linhasMarcadas.flatMap((l) => {
     const r = l.referencia;
-    const sal = l.referenciaSalarios;
-    return mesesDaMarcacao.flatMap((mes) => [
-      ...(r === null ? [] : [{ linha: l.id, mes, campo: "colaboradores" as const, valor: r }]),
-      ...(sal ? [{ linha: l.id, mes, campo: "salarioBruto" as const, valor: sal.salarioBruto }, { linha: l.id, mes, campo: "adicional" as const, valor: sal.adicional }] : []),
-    ]);
+    return r === null ? [] : mesesDaMarcacao.map((mes) => ({ linha: l.id, mes, campo: "colaboradores" as const, valor: r }));
   });
-  const semReferencia = linhasMarcadas.filter((l) => l.referencia === null && !l.referenciaSalarios).length;
-  const semSalarios = comSalarios ? linhasMarcadas.filter((l) => l.referencia !== null && !l.referenciaSalarios).length : 0;
+  const semReferencia = linhasMarcadas.filter((l) => l.referencia === null).length;
   const todosOsMeses = mesesMarcados.size === meses.length;
   const custoNoAno = (l: LinhaDoQuadroDoCenario) => l.meses.reduce((s, _, k) => s + efetivo(l, k).colaboradores * total(efetivo(l, k)), 0);
   const foraDosGrupos = dados.linhas.filter((l) => !l.grupo).length;
@@ -130,7 +122,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
     acumulado += d.largura;
   }
   // As larguras das colunas: a caixa (com edição), os cadastros, as quatro de cada mês, o Custo no Ano e as Ações (com edição).
-  const larguras = [...(pode ? [36] : []), ...DESCRICAO.map((d) => d.largura), ...(comReferencia ? [LARGURA_REFERENCIA, ...(comSalarios ? [...CAMPOS.slice(1).map((c) => c.largura), LARGURA_TOTAL] : [])] : []), ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL]), LARGURA_CUSTO, ...(pode ? [56] : [])];
+  const larguras = [...(pode ? [36] : []), ...DESCRICAO.map((d) => d.largura), ...(comReferencia ? [LARGURA_REFERENCIA] : []), ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL]), LARGURA_CUSTO, ...(pode ? [56] : [])];
   const todasMarcadas = linhas.length > 0 && linhas.every((l) => marcadas.has(l.id));
   const classeFixa = "sticky z-10 bg-white";
   // O destaque (11/11/2026; 16/11/2026, pedido do Adão: o nome da tabela dentro dele, sem o texto e sem a lista dos meses, e a
@@ -170,11 +162,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                 type="button"
                 className={botaoPrimario}
                 disabled={dasReferencias.length === 0}
-                title={
-                  comReferencia
-                    ? `Os Colaboradores${comSalarios ? ", o Salário Bruto e a Insalubridade / Periculosidade" : ""} da referência de cada linha marcada vão para os meses marcados`
-                    : "O cenário não tem referência carregada (Configurações / Referência)"
-                }
+                title={comReferencia ? "Os Colaboradores da referência de cada linha marcada vão para os meses marcados" : "O cenário não tem referência carregada (Configurações / Referência)"}
                 onClick={() => setReplicando(true)}
               >
                 Replicar Referências
@@ -225,12 +213,11 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   </th>
                 ))}
                 {comReferencia ? (
-                  // A Referência (16/11/2026): o grupo das colunas dela, como o de um mês, com o QL Realizado (ou o cenário) no título.
+                  // A Referência (16/11/2026): o grupo da coluna dela, como o de um mês, com o QL Realizado (ou o cenário) no título.
                   <th
-                    colSpan={comSalarios ? 4 : 1}
                     className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap"
                     style={{ height: ALTURA_DOS_MESES }}
-                    title={`A referência do cenário: ${dados.referencia!.rotulo}${comSalarios ? " — os salários de cada colaborador são os do Lançamento Inicial com o mesmo centro, tipo e função (a média)" : ""}`}
+                    title={`A referência do cenário: ${dados.referencia!.rotulo}`}
                   >
                     Referência
                   </th>
@@ -265,7 +252,11 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                 {pode ? <th rowSpan={2} className="px-2 py-2" aria-label="Ações" /> : null}
               </tr>
               <tr className="border-b border-gray-300 text-xs font-bold text-gray-900">
-                {comReferencia ? (comSalarios ? <SubCabecalhos /> : <th className="border-l border-gray-300 px-2 py-1.5 text-right whitespace-nowrap" title="Colaboradores">Colab.</th>) : null}
+                {comReferencia ? (
+                  <th className="border-l border-gray-300 px-2 py-1.5 text-right whitespace-nowrap" title="Colaboradores">
+                    Colab.
+                  </th>
+                ) : null}
                 {meses.map((m) => (
                   <SubCabecalhos key={m.mes} />
                 ))}
@@ -300,24 +291,9 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     </td>
                   ))}
                   {comReferencia ? (
-                    <>
-                      <td className="border-l border-gray-300 bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-700" title={l.referencia === null ? "A linha não está na referência" : undefined}>
-                        {l.referencia === null ? "—" : numero(l.referencia)}
-                      </td>
-                      {comSalarios ? (
-                        l.referenciaSalarios ? (
-                          <>
-                            <td className="bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-700">{numero(l.referenciaSalarios.salarioBruto)}</td>
-                            <td className="bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-700">{l.referenciaSalarios.adicional ? numero(l.referenciaSalarios.adicional) : ""}</td>
-                            <td className="bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-600">{reais(l.referenciaSalarios.salarioBruto + l.referenciaSalarios.adicional)}</td>
-                          </>
-                        ) : (
-                          <td colSpan={3} className="bg-gray-50 px-2 py-1 text-right text-gray-400" title="Sem salário no Lançamento Inicial para esta linha">
-                            —
-                          </td>
-                        )
-                      ) : null}
-                    </>
+                    <td className="border-l border-gray-300 bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-700" title={l.referencia === null ? "A linha não está na referência" : undefined}>
+                      {l.referencia === null ? "—" : numero(l.referencia)}
+                    </td>
                   ) : null}
                   {meses.map((m) => {
                     const e = efetivo(l, m.mes - 1);
@@ -328,7 +304,6 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                         mes={m.mes}
                         editavel={pode}
                         marcada={pode && marcadas.has(l.id) && mesesMarcados.has(m.mes)}
-                        comSalarios={comSalarios}
                         onEditar={(campo) => setValor({ linha: l, mes: m.mes, campo })}
                         salarioTotal={total(e)}
                       />
@@ -375,18 +350,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     Total
                   </td>
                   {comReferencia ? (
-                    <>
-                      <td className="border-l border-gray-300 bg-gray-50 px-2 py-2 text-right whitespace-nowrap">{numero(linhas.reduce((s, l) => s + (l.referencia ?? 0), 0))}</td>
-                      {comSalarios ? (
-                        <>
-                          <td className="bg-gray-50" />
-                          <td className="bg-gray-50" />
-                          <td className="bg-gray-50 px-2 py-2 text-right whitespace-nowrap" title="A folha da referência: colaboradores × Salário Total">
-                            {reais(linhas.reduce((s, l) => s + (l.referencia ?? 0) * (l.referenciaSalarios ? l.referenciaSalarios.salarioBruto + l.referenciaSalarios.adicional : 0), 0))}
-                          </td>
-                        </>
-                      ) : null}
-                    </>
+                    <td className="border-l border-gray-300 bg-gray-50 px-2 py-2 text-right whitespace-nowrap">{numero(linhas.reduce((s, l) => s + (l.referencia ?? 0), 0))}</td>
                   ) : null}
                   {meses.map((m) => {
                     const k = m.mes - 1;
@@ -453,7 +417,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
       {replicando ? (
         <ConfirmacaoDialog
           titulo="Replicar Referências"
-          descricao={`Quadro de Lotação. ${comSalarios ? "Os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade" : "Os Colaboradores"} da referência (${dados.referencia?.rotulo ?? ""}) de cada linha marcada vão para os meses marcados: ${dasReferencias.length} ${plural(dasReferencias.length, "valor", "valores")}.${comSalarios ? "" : " Os salários não têm referência (só na referência realizada) e ficam como estão."}`}
+          descricao={`Quadro de Lotação. Os Colaboradores da referência (${dados.referencia?.rotulo ?? ""}) de cada linha marcada vão para os meses marcados: ${dasReferencias.length} ${plural(dasReferencias.length, "valor", "valores")}. Os salários não têm referência e ficam como estão.`}
           acao="Replicar"
           acaoPendente="Replicando…"
           destrutiva={false}
@@ -464,12 +428,6 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
             gravar.reset();
           }}
         >
-          {semSalarios ? (
-            <p className="text-sm text-gray-600">
-              {semSalarios} {plural(semSalarios, "linha marcada não tem", "linhas marcadas não têm")} salário no Lançamento Inicial: só os Colaboradores mudam{" "}
-              {plural(semSalarios, "nela", "nelas")}.
-            </p>
-          ) : null}
           {semReferencia ? (
             <p className="text-sm text-gray-600">
               {semReferencia} {plural(semReferencia, "linha marcada não tem", "linhas marcadas não têm")} a referência e {plural(semReferencia, "fica", "ficam")} como{" "}
@@ -508,16 +466,14 @@ function CelulasDoMes({
   mes,
   editavel,
   marcada,
-  comSalarios,
   onEditar,
   salarioTotal,
 }: {
   linha: LinhaDoQuadroDoCenario;
   mes: number;
   editavel: boolean;
-  /** A linha e o mês marcados: o que o Replicar Referências muda fica contornado — os Colaboradores e, com os salários na referência, também os salários. */
+  /** A linha e o mês marcados: os Colaboradores (o que o Replicar Referências muda) ficam contornados. */
   marcada: boolean;
-  comSalarios: boolean;
   onEditar: (campo: CampoDoMes) => void;
   salarioTotal: number;
 }) {
@@ -528,7 +484,7 @@ function CelulasDoMes({
         return (
           <td
             key={c.campo}
-            className={`px-2 py-1 text-right whitespace-nowrap ${i === 0 ? "border-l border-gray-300" : ""} ${editavel ? "cursor-pointer hover:bg-gray-100" : ""} ${marcada && (i === 0 || comSalarios) ? "outline outline-1 -outline-offset-1 outline-gray-900" : ""}`}
+            className={`px-2 py-1 text-right whitespace-nowrap ${i === 0 ? "border-l border-gray-300" : ""} ${editavel ? "cursor-pointer hover:bg-gray-100" : ""} ${marcada && i === 0 ? "outline outline-1 -outline-offset-1 outline-gray-900" : ""}`}
             title={editavel ? (valor ? "Editar o valor" : "Em branco; clique para editar") : undefined}
             onClick={editavel ? () => onEditar(c.campo) : undefined}
           >

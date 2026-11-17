@@ -28,6 +28,25 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 17/11/2026, à tarde: sem os salários e os benefícios no Lançamento Inicial e sem os salários na Referência do Quadro de Lotação.
+  {
+    publicada: "2026-11-17T12:55",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: [
+      "O Lançamento Inicial volta a ter só a Unidade, o Tipo, a Função e o Centro de Custo de cada colaborador: saem os salários da tabela e do modal, e a importação não lê mais as colunas de salário e de benefícios da planilha.",
+    ],
+  },
+  {
+    publicada: "2026-11-17T12:55",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "No Quadro de Lotação, a Referência mostra só a quantidade de colaboradores (Colab.), e o Replicar Referências leva só os Colaboradores. Os meses continuam com os colaboradores e os salários. O Exportar Premissas leva a mesma coluna da Referência.",
+    ],
+  },
   // 17/11/2026: as Premissas dos analíticos (Liberação de Projetos, destaques, Quadro de Lotação com os salários da referência),
   // os salários do Lançamento Inicial, o Exportar dos Resultados pela comparação da tela e o Testar Token das APIs (do TI).
   {

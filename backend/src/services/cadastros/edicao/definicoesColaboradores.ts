@@ -204,41 +204,6 @@ export async function competenciaDaCarga(db: Db) {
   return c ? { ano: c.ano, mes: c.mes } : null;
 }
 
-/**
- * Os valores do colaborador do Lançamento Inicial (16/11/2026, pedido do Adão), em R$ por mês, na ordem da tela e da
- * planilha; o Salário Total (Salário Bruto + Adicional) o SIG calcula.
- */
-export const VALORES_DO_COLABORADOR = [
-  { nome: "salarioBruto", rotulo: "Salário Bruto (R$)" },
-  // O rótulo (16/11/2026, pedido do Adão; antes, Adicional de Periculosidade / Insalubridade).
-  { nome: "adicional", rotulo: "Salário Adicional (Peric. / Insal.) (R$)" },
-  { nome: "cestaBasica", rotulo: "Cesta Básica / Seguro de Vida / Vale Alimentação (R$)" },
-  { nome: "planoSaude", rotulo: "Plano de Saúde (R$)" },
-  { nome: "valeTransporte", rotulo: "Vale Transporte (R$)" },
-] as const;
-export type ValorDoColaborador = (typeof VALORES_DO_COLABORADOR)[number]["nome"];
-export const ROTULO_DO_SALARIO_TOTAL = "Salário Total (R$)";
-
-/** Um valor em R$ (vazio: nulo); aceita "5200", "5200,50", "5.200,50" e "R$ 5.200"; não aceita negativo. */
-export function valorEmReais(v: unknown, rotulo: string): number | null {
-  const bruto = (texto(v) ?? "").replace(/R\$/gi, "").replace(/\s/g, "");
-  if (!bruto) return null;
-  const t = bruto.includes(",") || /^\d{1,3}(\.\d{3})+$/.test(bruto) ? bruto.replace(/\./g, "").replace(",", ".") : bruto;
-  const n = Number(t);
-  if (!Number.isFinite(n)) throw new RegraCadastroError(400, `${rotulo}: "${String(v)}" não é um número.`);
-  if (n < 0) throw new RegraCadastroError(400, `${rotulo} não pode ser negativo.`);
-  return Math.round(n * 100) / 100;
-}
-/** O Salário Total: o Salário Bruto mais o Adicional (nulo sem nenhum dos dois). */
-export const salarioTotal = (bruto: number | null, adicional: number | null) =>
-  bruto === null && adicional === null ? null : Math.round(((bruto ?? 0) + (adicional ?? 0)) * 100) / 100;
-const emNumero = (d: { toString(): string } | null) => (d === null ? null : Number(d.toString()));
-/** Os valores do registro em número, com o Salário Total calculado. */
-function valoresDoRegistro(i: Record<ValorDoColaborador, { toString(): string } | null>) {
-  const v = Object.fromEntries(VALORES_DO_COLABORADOR.map((c) => [c.nome, emNumero(i[c.nome])])) as Record<ValorDoColaborador, number | null>;
-  return { ...v, salarioTotal: salarioTotal(v.salarioBruto, v.adicional) };
-}
-
 const lancamentoInicial: DefinicaoCadastro = {
   entidade: "colaboradores-lancamento-inicial",
   titulo: "Colaborador do Lançamento Inicial",
@@ -248,8 +213,9 @@ const lancamentoInicial: DefinicaoCadastro = {
   explicacao: "Um colaborador do quadro de lotação do início da competência do Lançamento Inicial. Para trocar a competência, importe a planilha de novo.",
   // Com competências fechadas na Gestão de Colaboradores, o quadro inicial não muda (13/11/2026, pedido do Adão).
   trava: travaDoLancamentoInicial,
-  // A tabela com só as colunas do modal (16/11/2026, pedido do Adão): sem a Competência (no destaque acima da tabela) e sem a
-  // Cesta Básica, o Plano de Saúde e o Vale Transporte (só na importação).
+  // A tabela com só as colunas do modal (16/11/2026, pedido do Adão): sem a Competência (no destaque acima da tabela). Sem os
+  // valores do colaborador (17/11/2026, pedido do Adão: os salários e os benefícios saíram da tela e da importação; as colunas do
+  // banco ficam, sem uso, até a migração que as tira).
   campos: [
     { nome: "competencia", rotulo: "Competência", tipo: "texto", derivado: true, noFormulario: false, naTabela: false, estreita: true },
     { nome: "unidadeNegocioId", rotulo: "Unidade", tipo: "opcao", obrigatorio: true, opcoes: opcoesUnidades },
@@ -257,15 +223,6 @@ const lancamentoInicial: DefinicaoCadastro = {
     // A Função com a largura das duas colunas do modal (16/11/2026, pedido do Adão).
     { nome: "funcaoId", rotulo: "Função", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesFuncoes },
     { nome: "centroCustoId", rotulo: "Centro de Custo", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesCentros },
-    // Os valores do colaborador (16/11/2026, pedido do Adão), em R$. No modal e na tabela, o Salário Bruto, o Salário Adicional e o
-    // Salário Total (calculado: a soma dos dois, refeita no modal enquanto se digita); a Cesta Básica, o Plano de Saúde e o Vale
-    // Transporte vêm só da importação (fora do modal e da tabela; a edição pelo modal não os muda).
-    { nome: "salarioBruto", rotulo: VALORES_DO_COLABORADOR[0].rotulo, tipo: "decimal", moeda: true },
-    { nome: "adicional", rotulo: VALORES_DO_COLABORADOR[1].rotulo, tipo: "decimal", moeda: true },
-    { nome: "salarioTotal", rotulo: ROTULO_DO_SALARIO_TOTAL, tipo: "decimal", moeda: true, derivado: true, soma: ["salarioBruto", "adicional"], larguraInteira: true, ajuda: "O SIG calcula: o Salário Bruto mais o Salário Adicional." },
-    { nome: "cestaBasica", rotulo: VALORES_DO_COLABORADOR[2].rotulo, tipo: "decimal", moeda: true, noFormulario: false, naTabela: false },
-    { nome: "planoSaude", rotulo: VALORES_DO_COLABORADOR[3].rotulo, tipo: "decimal", moeda: true, noFormulario: false, naTabela: false },
-    { nome: "valeTransporte", rotulo: VALORES_DO_COLABORADOR[4].rotulo, tipo: "decimal", moeda: true, noFormulario: false, naTabela: false },
   ],
   async listar(db, busca) {
     const itens = await db.colaboradorCargaInicial.findMany({
@@ -274,11 +231,11 @@ const lancamentoInicial: DefinicaoCadastro = {
     });
     return itens
       .filter((i) => contem(busca, i.funcao.nome, i.centroCusto.nomeRM, i.centroCusto.codigoRM, ROTULO_VINCULO[i.vinculo]))
-      .map(({ funcao: _f, centroCusto: _c, ...i }) => ({ ...i, ...valoresDoRegistro(i), competencia: mesAno(i.ano, i.mes), emUso: null }));
+      .map(({ funcao: _f, centroCusto: _c, ...i }) => ({ ...i, competencia: mesAno(i.ano, i.mes), emUso: null }));
   },
   ler: async (db, id) => {
     const i = await db.colaboradorCargaInicial.findUnique({ where: { id } });
-    return i ? { ...i, ...valoresDoRegistro(i), competencia: mesAno(i.ano, i.mes) } : null;
+    return i ? { ...i, competencia: mesAno(i.ano, i.mes) } : null;
   },
   async preparar(db, v, id) {
     const atual = id ? await db.colaboradorCargaInicial.findUnique({ where: { id }, select: { ano: true, mes: true } }) : await competenciaDaCarga(db);
@@ -294,12 +251,7 @@ const lancamentoInicial: DefinicaoCadastro = {
       db.centroCusto.findUnique({ where: { id: centroCustoId }, select: { id: true } }),
     ]);
     if (!u || !f || !c) throw new RegraCadastroError(400, "Unidade, função ou centro de custo inexistente.");
-    // Só os valores que o modal manda: os que ficam fora dele (a Cesta Básica, o Plano de Saúde e o Vale Transporte, da
-    // importação) continuam como estão na edição (num colaborador novo, em branco).
-    const valores = Object.fromEntries(
-      VALORES_DO_COLABORADOR.filter((x) => v[x.nome] !== undefined).map((x) => [x.nome, valorEmReais(v[x.nome], `O campo ${x.rotulo.replace(" (R$)", "")}`)]),
-    );
-    return { ano: atual.ano, mes: atual.mes, unidadeNegocioId, vinculo, funcaoId, centroCustoId, ...valores };
+    return { ano: atual.ano, mes: atual.mes, unidadeNegocioId, vinculo, funcaoId, centroCustoId };
   },
   async gravar(db, d, id) {
     const dados = d as Prisma.ColaboradorCargaInicialUncheckedCreateInput;

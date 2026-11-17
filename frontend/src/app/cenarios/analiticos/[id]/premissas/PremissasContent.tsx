@@ -109,13 +109,11 @@ export function PremissasContent() {
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
               (colaboradores × Salário Total nos doze meses) e, na última linha, o Total: os colaboradores e a folha de cada mês. No destaque acima da tabela,
               com o nome dela, busque as linhas pela função, pelo centro, pela unidade ou pelo tipo. Com a referência carregada (Configurações /
-              Referência), as colunas da Referência, depois do Centro de Custo, trazem a linha nela: os Colaboradores do QL Realizado da competência
-              mais recente da Gestão de Colaboradores (referência realizada) ou do último mês do Quadro de Lotação do outro cenário (em branco, a linha
-              não está na referência) e, na referência realizada, também o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada
-              colaborador — a média dos colaboradores do Lançamento Inicial com o mesmo centro, tipo e função (só ele tem os salários; em branco, sem
-              salário lá).
+              Referência), a coluna da Referência, depois do Centro de Custo, traz os Colaboradores da linha nela: os do QL Realizado da competência
+              mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
+              linha não está na referência). Os salários não têm referência.
               {podeEditar
-                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva a referência de cada linha marcada (as colunas da Referência) aos meses marcados, depois da confirmação — os Colaboradores e, na referência realizada, o Salário Bruto e a Insalubridade / Periculosidade; as linhas sem a referência (ou sem os salários nela) ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
                 : null}{" "}
               O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
               Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
@@ -215,8 +213,7 @@ export function PremissasContent() {
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
               em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), o Custo no Ano em fórmula
               e linhas em branco para as novas; com a referência, depois do Centro de Custo, os colaboradores da linha no QL Realizado da competência
-              mais recente da Gestão de Colaboradores (referência realizada, com o Salário Bruto e a Insalubridade / Periculosidade de cada um e o
-              Salário Total em fórmula, como as colunas da Referência da tela) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
+              mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
               linhas em branco para os novos. No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
               conta somada em todas as abas dos centros (em fórmulas, que acompanham os valores das abas; também os meses da referência), para conferir com a DRE do cenário; o
               total bate, e a parte dos rateios que vai para Serviços está, na DRE, nas contas da CSM ou da CSC.
@@ -266,8 +263,8 @@ export function PremissasContent() {
                 <li>
                   Para levar a Média de Referência aos meses: marque as premissas e os meses e clique em “Replicar Referências”, ao lado de “Reajustar
                   Marcados”. Depois da confirmação, cada premissa marcada recebe a Média de Ref. dela nos meses marcados; as sem a média ficam como estão.
-                  Também nas abas Centros de Custo, Investimentos (a Depreciação), Extra-Operacional e Quadro de Lotação (os Colaboradores e, na referência
-                  realizada, os salários, pelas colunas da Referência); a aba Rateios não tem a Média de Referência.
+                  Também nas abas Centros de Custo, Investimentos (a Depreciação), Extra-Operacional e Quadro de Lotação (os Colaboradores, pela coluna da
+                  Referência); a aba Rateios não tem a Média de Referência.
                 </li>
                 <li>Os valores em cinza-claro são os padrões (os dias úteis do calendário, ou zero), ainda não gravados. Cada gravação recalcula a DRE do cenário (tela Resultados) e fica no histórico (tela Reajustes).</li>
               </>

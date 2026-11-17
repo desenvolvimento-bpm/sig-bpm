@@ -5,7 +5,6 @@ import { gerarXlsx, type AbaEscrita } from "../src/lib/xlsxEscrita.js";
 import { CHAVES_DA_MATRIZ } from "../src/services/acesso/telas.js";
 import { chaveDoNome, ImportacaoColaboradoresError, lerCompetencia, lerPlanilha } from "../src/services/colaboradores/importacaoCadastros.js";
 import { ROTULO_DO_TIPO, tipoDoTexto } from "../src/services/colaboradores/tiposDoColaborador.js";
-import { salarioTotal, valorEmReais } from "../src/services/cadastros/edicao/definicoesColaboradores.js";
 import { calcularQuadros, departamentosDoGrupo, indicadoresDoMes } from "../src/services/colaboradores/quadroService.js";
 import { formulaEfetiva, montarIndicador } from "../src/services/relatorios/catalogoIndicadores.js";
 import { lerItem } from "../src/services/relatorios/formulaIndicador.js";
@@ -70,25 +69,13 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
     const semCentro = gerarXlsx([aba("QL", [["UNIDADE", "TIPO", "FUNÇÃO"], ["Matriz", "CLT", "Analista"]])]);
     assert.throws(() => lerPlanilha(semCentro, "lancamento-inicial"), (e) => e instanceof ImportacaoColaboradoresError && /CENTRO DE CUSTO/.test(e.message));
     const certo = gerarXlsx([aba("QL", [["Unidade", "Tipo", "Função", "Centro de Custo"], ["Matriz", "Aprendiz", "Jovem Aprendiz", "1.01 - CONTROLADORIA"]])]);
-    // Sem as colunas de valor (16/11/2026: opcionais), os valores ficam em branco.
-    assert.deepEqual(lerPlanilha(certo, "lancamento-inicial").itens[0].valores, {
-      unidade: "Matriz",
-      tipo: "Aprendiz",
-      funcao: "Jovem Aprendiz",
-      centro: "1.01 - CONTROLADORIA",
-      salarioBruto: "",
-      adicional: "",
-      salarioTotal: "",
-      cestaBasica: "",
-      planoSaude: "",
-      valeTransporte: "",
-    });
+    assert.deepEqual(lerPlanilha(certo, "lancamento-inicial").itens[0].valores, { unidade: "Matriz", tipo: "Aprendiz", funcao: "Jovem Aprendiz", centro: "1.01 - CONTROLADORIA" });
     assert.deepEqual(lerCompetencia("2026-11"), { ano: 2026, mes: 11 });
     assert.throws(() => lerCompetencia("2026-13"), ImportacaoColaboradoresError);
     assert.throws(() => lerCompetencia(undefined), ImportacaoColaboradoresError);
   });
 
-  it("o Lançamento Inicial com os valores do colaborador (16/11/2026): os nomes com ou sem acento e (R$); os números em R$", () => {
+  it("o Lançamento Inicial sem os valores do colaborador (17/11/2026): as colunas de salário e de benefícios da planilha não se importam", () => {
     const arquivo = gerarXlsx([
       aba("QL", [
         ["Unidade", "Tipo", "Função", "Centro de Custo", "Salário Bruto (R$)", "ADICIONAL DE PERICULOSIDADE/INSALUBRIDADE", "Salário Total (R$)", "Cesta Basica / Seguro de Vida / Vale Alimentacao (R$)", "Plano de Saúde", "Vale-Transporte (R$)"],
@@ -96,20 +83,7 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
       ]),
     ]);
     const { valores } = lerPlanilha(arquivo, "lancamento-inicial").itens[0];
-    assert.deepEqual(
-      [valores.salarioBruto, valores.adicional, valores.salarioTotal, valores.cestaBasica, valores.planoSaude, valores.valeTransporte],
-      ["3200.5", "640", "9999", "450,00", "R$ 320", ""],
-    );
-    assert.equal(valorEmReais(valores.salarioBruto, "O Salário Bruto"), 3200.5);
-    assert.equal(valorEmReais(valores.cestaBasica, "A Cesta"), 450);
-    assert.equal(valorEmReais(valores.planoSaude, "O Plano"), 320);
-    assert.equal(valorEmReais("5.200,75", "O Salário Bruto"), 5200.75);
-    assert.equal(valorEmReais(valores.valeTransporte, "O Vale"), null);
-    assert.throws(() => valorEmReais("-10", "O Salário Bruto"), /não pode ser negativo/);
-    assert.throws(() => valorEmReais("abc", "O Salário Bruto"), /não é um número/);
-    // O Salário Total o SIG calcula (o 9999 da planilha não vale): o Salário Bruto mais o Adicional.
-    assert.equal(salarioTotal(3200.5, 640), 3840.5);
-    assert.equal(salarioTotal(null, null), null);
+    assert.deepEqual(valores, { unidade: "Matriz", tipo: "CLT", funcao: "Soldador", centro: "1.11.00000001" });
   });
 
   it("o quadro: o Lançamento Inicial no mês dele, só as aprovadas contam, e o final passa ao mês seguinte", () => {

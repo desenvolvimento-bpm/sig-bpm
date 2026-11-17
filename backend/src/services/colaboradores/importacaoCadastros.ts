@@ -4,8 +4,6 @@ import { auditar } from "../auditoriaService.js";
 import { localizarCabecalho } from "../importacoes/listas/leituraListas.js";
 import { plural } from "../../utils/plural.js";
 import { tipoDoTexto, type TipoDoColaborador } from "./tiposDoColaborador.js";
-import { ROTULO_DO_SALARIO_TOTAL, salarioTotal, valorEmReais, VALORES_DO_COLABORADOR, type ValorDoColaborador } from "../cadastros/edicao/definicoesColaboradores.js";
-import { RegraCadastroError } from "../cadastros/edicao/erroCadastro.js";
 import { travaDoLancamentoInicial } from "./travaDoLancamentoInicial.js";
 
 /**
@@ -65,17 +63,6 @@ export const chaveDoNome = (s: string) =>
 const textoDaCelula = (v: ValorCelula | undefined) => (v === null || v === undefined ? "" : String(v).trim());
 const mesAno = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 
-/**
- * Os nomes aceitos de uma coluna de valor (16/11/2026): cada nome com e sem acento, com e sem os espaços em volta das barras e
- * com e sem "(R$)", em maiúsculas (o cabeçalho se compara em maiúsculas).
- */
-function nomesDaColuna(...bases: string[]) {
-  const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const nomes = new Set<string>();
-  for (const b of bases) for (const a of [b, semAcento(b)]) for (const s of [a, a.replace(/ \/ /g, "/")]) for (const x of [`${s} (R$)`, s]) nomes.add(x.toUpperCase());
-  return [...nomes];
-}
-
 type Coluna = { chave: string; rotulo: string; cabecalhos: string[]; obrigatoria: boolean };
 const COLUNAS: Record<TipoImportacaoColaboradores, Coluna[]> = {
   funcoes: [
@@ -89,28 +76,8 @@ const COLUNAS: Record<TipoImportacaoColaboradores, Coluna[]> = {
     { chave: "tipo", rotulo: "Tipo", cabecalhos: ["TIPO"], obrigatoria: true },
     { chave: "funcao", rotulo: "Função", cabecalhos: ["FUNÇÃO", "FUNCAO"], obrigatoria: true },
     { chave: "centro", rotulo: "Centro de Custo", cabecalhos: ["CENTRO DE CUSTO", "CENTRO"], obrigatoria: true },
-    // Os valores do colaborador (16/11/2026, pedido do Adão), em R$: opcionais (a planilha sem eles fica com os valores em branco).
-    // O Salário Total o SIG calcula (Salário Bruto + Adicional): a coluna da planilha, se houver, não se importa.
-    { chave: "salarioBruto", rotulo: VALORES_DO_COLABORADOR[0].rotulo, cabecalhos: nomesDaColuna("SALÁRIO BRUTO"), obrigatoria: false },
-    {
-      chave: "adicional",
-      rotulo: VALORES_DO_COLABORADOR[1].rotulo,
-      // O nome de agora (16/11/2026, Salário Adicional (Peric. / Insal.)) e os de antes.
-      cabecalhos: nomesDaColuna(
-        "SALÁRIO ADICIONAL (PERIC. / INSAL.)",
-        "SALÁRIO ADICIONAL",
-        "ADICIONAL DE PERICULOSIDADE / INSALUBRIDADE",
-        "ADICIONAL DE INSALUBRIDADE / PERICULOSIDADE",
-        "PERICULOSIDADE / INSALUBRIDADE",
-        "INSALUBRIDADE / PERICULOSIDADE",
-        "ADICIONAL",
-      ),
-      obrigatoria: false,
-    },
-    { chave: "salarioTotal", rotulo: ROTULO_DO_SALARIO_TOTAL, cabecalhos: nomesDaColuna("SALÁRIO TOTAL"), obrigatoria: false },
-    { chave: "cestaBasica", rotulo: VALORES_DO_COLABORADOR[2].rotulo, cabecalhos: nomesDaColuna("CESTA BÁSICA / SEGURO DE VIDA / VALE ALIMENTAÇÃO", "CESTA BÁSICA"), obrigatoria: false },
-    { chave: "planoSaude", rotulo: VALORES_DO_COLABORADOR[3].rotulo, cabecalhos: nomesDaColuna("PLANO DE SAÚDE"), obrigatoria: false },
-    { chave: "valeTransporte", rotulo: VALORES_DO_COLABORADOR[4].rotulo, cabecalhos: nomesDaColuna("VALE TRANSPORTE", "VALE-TRANSPORTE"), obrigatoria: false },
+    // Sem os valores do colaborador (17/11/2026, pedido do Adão): as colunas de salário e de benefícios da planilha, se houver,
+    // não se importam.
   ],
 };
 
@@ -282,33 +249,14 @@ export async function resolvedorDeColaboradores(db: Db) {
   };
 }
 
-const emReais = (n: number | null) => (n === null ? "" : n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-
-/**
- * A prévia do Lançamento Inicial: os cadastros de cada linha e (16/11/2026) os valores do colaborador — números de zero para
- * cima (vazio: sem valor), mostrados em R$ —, com o Salário Total calculado (Salário Bruto + Adicional; o da planilha não vale).
- */
+/** A prévia do Lançamento Inicial: os cadastros de cada linha. */
 async function previaLancamentoInicial(db: Db, itens: Array<{ linha: number; valores: Record<string, string> }>) {
   const resolver = await resolvedorDeColaboradores(db);
-  const gravar: Array<ColaboradorResolvido & { linhaArquivo: number } & Record<ValorDoColaborador, number | null>> = [];
-  const linhas: LinhaDaPrevia[] = itens.map(({ linha, valores: lidos }) => {
-    const r = resolver(lidos as CamposDoColaborador);
-    const motivos = [...r.motivos];
-    const valores = { ...lidos };
-    const numeros = {} as Record<ValorDoColaborador, number | null>;
-    for (const c of VALORES_DO_COLABORADOR) {
-      try {
-        numeros[c.nome] = valorEmReais(lidos[c.nome], `O ${c.rotulo.replace(" (R$)", "")}`);
-        valores[c.nome] = emReais(numeros[c.nome]);
-      } catch (e) {
-        if (!(e instanceof RegraCadastroError)) throw e;
-        numeros[c.nome] = null;
-        motivos.push(e.message.endsWith(".") ? e.message : `${e.message}.`);
-      }
-    }
-    valores.salarioTotal = emReais(salarioTotal(numeros.salarioBruto, numeros.adicional));
-    if (!r.cadastros || motivos.length) return { linha, valores, situacao: "INVALIDA", motivo: motivos.join(" ") };
-    gravar.push({ ...r.cadastros, ...numeros, linhaArquivo: linha });
+  const gravar: Array<ColaboradorResolvido & { linhaArquivo: number }> = [];
+  const linhas: LinhaDaPrevia[] = itens.map(({ linha, valores }) => {
+    const r = resolver(valores as CamposDoColaborador);
+    if (!r.cadastros || r.motivos.length) return { linha, valores, situacao: "INVALIDA", motivo: r.motivos.join(" ") };
+    gravar.push({ ...r.cadastros, linhaArquivo: linha });
     return { linha, valores, situacao: "NOVA" };
   });
   return { linhas, gravar };

@@ -574,14 +574,10 @@ type FontesDaReferencia = {
   ind: Map<string, number>;
   linhasDoQuadro: LinhaDoQuadro[] | null;
   /**
-   * A coluna da aba Quadro de Lotação: o QL Realizado da competência mais recente ou o último mês do cenário de origem; no
-   * realizado (16/11/2026), também os salários de cada colaborador da linha (as colunas deles, depois da dos colaboradores).
+   * A coluna da aba Quadro de Lotação: os colaboradores do QL Realizado da competência mais recente ou do último mês do cenário
+   * de origem (17/11/2026, pedido do Adão: só a quantidade de colaboradores, sem os salários na referência).
    */
-  colunaDoQuadro: {
-    rotulo: string;
-    daLinha: (l: CadastrosDaLinhaDoQuadro) => number;
-    salariosDaLinha?: (l: CadastrosDaLinhaDoQuadro) => SalariosDaReferencia | null;
-  } | null;
+  colunaDoQuadro: { rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number } | null;
 };
 
 /**
@@ -618,20 +614,10 @@ type CadastrosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: string; fun
  * do Exportar Premissas; 16/11/2026, também a coluna Colab. Ref. da tela e o Replicar Referências dela): da referência
  * realizada, o QL Realizado da competência mais recente da Gestão de Colaboradores (pelo centro, o tipo e a função); de outro
  * cenário, os colaboradores do último mês do Quadro de Lotação dele (pelos cadastros da linha). A linha que não está lá fica
- * nula. Nula sem referência (ou sem o quadro dela).
+ * nula. Nula sem referência (ou sem o quadro dela). Só a quantidade de colaboradores (17/11/2026, pedido do Adão: sem os salários
+ * do Lançamento Inicial na referência).
  */
-/** Os salários de cada colaborador de uma linha na referência (16/11/2026): o Salário Bruto e a Insalubridade / Periculosidade. */
-type SalariosDaReferencia = { salarioBruto: number; adicional: number };
-async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null): Promise<{
-  rotulo: string;
-  daLinha: (l: CadastrosDaLinhaDoQuadro) => number | null;
-  /**
-   * Na referência realizada (16/11/2026, pedido do Adão), os salários de cada colaborador da linha no QL Realizado adotado: a
-   * média dos do Lançamento Inicial com o mesmo centro, tipo e função (só ele tem os salários; as movimentações não); nulo sem
-   * nenhum colaborador com salário. De outro cenário, sem os salários.
-   */
-  salariosDaLinha?: (l: CadastrosDaLinhaDoQuadro) => SalariosDaReferencia | null;
-} | null> {
+async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null): Promise<{ rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number | null } | null> {
   if (!detalhe) return null;
   const prisma = getPrismaClient();
   if (detalhe.tipo === "CENARIO") {
@@ -643,32 +629,10 @@ async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null): Promise<{
     for (const l of lotacao) doUltimo.set(chave(l), (doUltimo.get(chave(l)) ?? 0) + (mesesDaLinha(l.meses)[11]?.colaboradores ?? 0));
     return { rotulo: `Colaboradores da Referência (${rotuloMes(origem.ano, 12)})`, daLinha: (l) => doUltimo.get(chave(l)) ?? null };
   }
-  const [ql, carga] = await Promise.all([
-    quadroRealizadoMaisRecente(prisma),
-    prisma.colaboradorCargaInicial.findMany({ select: { centroCustoId: true, vinculo: true, funcaoId: true, salarioBruto: true, adicional: true } }),
-  ]);
+  const ql = await quadroRealizadoMaisRecente(prisma);
   if (!ql) return null;
-  // Os salários de cada linha ("centro|tipo|função"): a soma e os colaboradores do Lançamento Inicial com algum salário.
-  const somas = new Map<string, { bruto: number; adicional: number; n: number }>();
-  for (const i of carga) {
-    if (i.salarioBruto === null && i.adicional === null) continue;
-    const k = chaveDaLinhaDoQuadro(i);
-    const x = somas.get(k) ?? { bruto: 0, adicional: 0, n: 0 };
-    x.bruto += Number(i.salarioBruto ?? 0);
-    x.adicional += Number(i.adicional ?? 0);
-    x.n++;
-    somas.set(k, x);
-  }
   const chave = (l: CadastrosDaLinhaDoQuadro) => chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId });
-  const centavos = (v: number) => Math.round(v * 100) / 100;
-  return {
-    rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`,
-    daLinha: (l) => ql.final.get(chave(l)) ?? null,
-    salariosDaLinha: (l) => {
-      const x = somas.get(chave(l));
-      return x ? { salarioBruto: centavos(x.bruto / x.n), adicional: centavos(x.adicional / x.n) } : null;
-    },
-  };
+  return { rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`, daLinha: (l) => ql.final.get(chave(l)) ?? null };
 }
 
 /**
@@ -752,7 +716,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
     cen,
     ind,
     linhasDoQuadro: null,
-    colunaDoQuadro: coluna ? { rotulo: coluna.rotulo, daLinha: (l) => coluna.daLinha(l) ?? 0, salariosDaLinha: coluna.salariosDaLinha } : null,
+    colunaDoQuadro: coluna ? { rotulo: coluna.rotulo, daLinha: (l) => coluna.daLinha(l) ?? 0 } : null,
   };
 }
 
@@ -2859,8 +2823,7 @@ export const cenariosService = {
       ano: c.ano,
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1) })),
       editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
-      // Com os salários (16/11/2026): só na referência realizada (o QL Realizado com os salários do Lançamento Inicial).
-      referencia: referencia ? { rotulo: referencia.rotulo, comSalarios: !!referencia.salariosDaLinha } : null,
+      referencia: referencia ? { rotulo: referencia.rotulo } : null,
       linhas: linhas.filter((l) => q.ve(l.centroCustoId)).map((l) => ({
         id: l.id,
         unidadeNegocioId: l.unidadeNegocioId,
@@ -2873,10 +2836,8 @@ export const cenariosService = {
         // O grupo do centro (null: fora dos grupos do cenário; a linha não conta).
         grupo: cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupo ?? null,
         meses: mesesDaLinha(l.meses),
-        // Os colaboradores da linha na referência (nulo: a linha não está nela, ou o cenário não tem referência) e, na realizada,
-        // os salários de cada colaborador (16/11/2026; nulos sem salário no Lançamento Inicial).
+        // Os colaboradores da linha na referência (nulo: a linha não está nela, ou o cenário não tem referência).
         referencia: referencia ? referencia.daLinha(l) : null,
-        referenciaSalarios: referencia?.salariosDaLinha ? referencia.salariosDaLinha(l) : null,
       })),
       opcoes: { unidades: cad.unidades, funcoes: cad.funcoes, centros: cad.centros.filter((x) => q.ve(x.id)) },
     };
@@ -3216,8 +3177,6 @@ export const cenariosService = {
                 meses: mesesDaLinha(l.meses),
                 // A coluna da referência (11/11/2026): o QL Realizado ou o último mês do cenário de origem.
                 referencia: fonte?.colunaDoQuadro ? fonte.colunaDoQuadro.daLinha(l) : null,
-                // Os salários na referência realizada (16/11/2026): a média do Lançamento Inicial, como na tela.
-                referenciaSalarios: fonte?.colunaDoQuadro?.salariosDaLinha?.(l) ?? null,
               })),
           };
         })()
@@ -3246,13 +3205,10 @@ export const cenariosService = {
                 fonte?.colunaDoQuadro
                   ? {
                       rotulo: fonte.colunaDoQuadro.rotulo,
-                      explicacao: fonte.colunaDoQuadro.salariosDaLinha
-                        ? "trazem os colaboradores da linha (o centro de custo, o tipo e a função) no Quadro de Lotação realizado da competência mais recente da Gestão de Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um (a média dos colaboradores do Lançamento Inicial com o mesmo centro, tipo e função; em branco sem salário lá), com o Salário Total em fórmula,"
-                        : fonte.rotulo === "Realizado"
+                      explicacao:
+                        fonte.rotulo === "Realizado"
                           ? "traz os colaboradores da linha (o centro de custo, o tipo e a função) no Quadro de Lotação realizado da competência mais recente da Gestão de Colaboradores"
                           : `traz os colaboradores da linha no último mês do Quadro de Lotação de ${fonte.descricao}`,
-                      // Os salários na referência realizada (16/11/2026), como as colunas da Referência da tela.
-                      comSalarios: !!fonte.colunaDoQuadro.salariosDaLinha,
                     }
                   : undefined,
                 // Os departamentos do arquivo (11/11/2026): as linhas do cenário que a aba substitui na importação.
@@ -3274,7 +3230,7 @@ export const cenariosService = {
     }
     // A aba Quadro de Lotação no mesmo arquivo (11/11/2026): os centros dos grupos com linhas nela vão em fórmula sobre ela
     // (no um arquivo por centro, não: ela fica em outro arquivo).
-    const noArquivo = quadroDaPlanilha ? quadroDoArquivo(quadroDaPlanilha.linhas.length, !!fonte?.colunaDoQuadro, !!fonte?.colunaDoQuadro?.salariosDaLinha) : undefined;
+    const noArquivo = quadroDaPlanilha ? quadroDoArquivo(quadroDaPlanilha.linhas.length, !!fonte?.colunaDoQuadro) : undefined;
     const umPorAba = escopo === "centros_abas" && grupos.length > 0;
     const doCentro = new Map<AbaEscrita, LinhaDaPlanilha[]>();
     const centros = !daAba("centros").length
