@@ -6,6 +6,7 @@ import { acumular, type DadosDoMes, type Indicador, type Parte } from "../relato
 import { acumularMeta } from "../relatorios/metasOrcamento.js";
 import { gruposDoCadastro } from "./centrosCenario.js";
 import { QUADROS_DE_LOTACAO, quadrosDeLotacao, VENDAS_LOTACAO } from "./lotacaoCenario.js";
+import { LIBERACAO_TOTAL, LIBERACOES_DA_LISTA, LIBERACOES_DIGITADAS } from "./projetosCenario.js";
 
 /**
  * Os indicadores de um cenário sintético (11/10/2026), com as fórmulas do cadastro Estrutura dos Indicadores — as
@@ -23,7 +24,8 @@ import { QUADROS_DE_LOTACAO, quadrosDeLotacao, VENDAS_LOTACAO } from "./lotacaoC
  * O acumulado é o de Resultados Empresariais (acumular); nos importados, o das metas (acumularMeta).
  *
  * No cenário analítico (14/10/2026), os quadros de lotação são CALCULADOS: saem do Quadro de Lotação dos grupos de
- * centros de custo (lotacaoCenario.ts), e não são lançamentos manuais.
+ * centros de custo (lotacaoCenario.ts), e não são lançamentos manuais. A Liberação de Projetos: Matriz e Filial (16/11/2026)
+ * são MANUAIS — a base do rateio de Projeto (projetosCenario.ts) —, e a Liberação de Projetos: Total, CALCULADA (a soma).
  */
 
 export type ClasseIndicador = "RESULTADO" | "MANUAL" | "CALCULADO" | "IMPORTADO";
@@ -34,6 +36,8 @@ type Linha = { nome: string; formula: string | null; peso: string | null; modo: 
 
 export function classificar(r: Linha, analitico = false): ClasseIndicador {
   if (analitico && QUADROS_DE_LOTACAO.has(r.nome)) return "CALCULADO";
+  if (analitico && LIBERACOES_DIGITADAS.has(r.nome)) return "MANUAL";
+  if (analitico && r.nome === LIBERACAO_TOTAL) return "CALCULADO";
   if (MANUAIS.has(r.nome)) return "MANUAL";
   // Sem itens na Metodologia (06/11/2026), a mesma do [IND|nome] do próprio nome.
   const formula = formulaEfetiva(r);
@@ -108,7 +112,13 @@ export async function calcularCenario(cenarioId: string): Promise<CalculoDoCenar
     return {
       dre: (u, c) => (temDRE ? (porLinha.get(`${mes}|${u}|${c}`) ?? 0) : NaN),
       volume: () => NaN,
-      lista: () => NaN,
+      // No analítico, os Projetos Liberados das Listas (o item [LISTA] da Liberação de Projetos) são os da Liberação de
+      // Projetos digitada no cenário (16/11/2026); os demais totalizadores das Listas, sem valor.
+      lista: (codigo) => {
+        const nomes = analitico ? (LIBERACOES_DA_LISTA[codigo] ?? []) : [];
+        const vs = nomes.map((n) => porMeta.get(`${mes}|${n}`)?.valor).filter((v): v is number => v !== undefined);
+        return vs.length ? vs.reduce((s, v) => s + v, 0) : NaN;
+      },
       importado: (n) => (quadros?.has(n) ? quadros.get(n)![k] : (porMeta.get(`${mes}|${n}`)?.valor ?? null)),
       meta: () => null,
       // O item [INDICADOR]: num importado, o valor das metas; nos outros, a conta dele no cenário.

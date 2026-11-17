@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { EllipsisVertical, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/shared/DataTable";
@@ -119,7 +120,7 @@ export function JornadaContent() {
         comoUsar={
           <ul>
             <li>
-              No Editar de cada linha (na coluna Ações), digite as Horas Extras no formato HH:MM (por exemplo, 12:30) e as Faltas em dias (meio dia: 0,5) e
+              No menu Ações de cada linha (os três pontos, na última coluna), clique em Editar e digite as Horas Extras no formato HH:MM (por exemplo, 12:30) e as Faltas em dias (meio dia: 0,5) e
               clique em Gravar. A gravação fica na Auditoria.
             </li>
             <li>Com a competência fechada, a jornada fica como está: reabra-a na lista das competências para mudar.</li>
@@ -147,11 +148,23 @@ export function JornadaContent() {
               <td className="px-4 py-2 text-right text-sm">{l.horasExtrasMinutos ? hhmm(l.horasExtrasMinutos) : <span className="text-gray-400">00:00</span>}</td>
               <td className="px-4 py-2 text-right text-sm">{l.faltasDias ? dias(l.faltasDias) : <span className="text-gray-400">0</span>}</td>
               {pode ? (
-                <td className="px-4 py-2">
-                  <Button type="button" size="sm" variant="outline" className="h-7 rounded-sm" onClick={() => setEditando(l)} title="Editar as horas extras e as faltas">
-                    <Pencil className="size-3.5" />
-                    Editar
-                  </Button>
+                <td className="px-2 py-2 whitespace-nowrap">
+                  {/* O menu Ações de três pontos (16/11/2026, pedido do Adão), como nas Contestações de Gastos. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button type="button" size="icon" variant="outline" className="size-7 rounded-sm" aria-label={`Ações de ${l.funcao} · ${l.centroCusto}`} title="Ações: Editar">
+                          <EllipsisVertical className="size-4" />
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="end" className="w-auto min-w-44">
+                      <DropdownMenuItem onClick={() => setEditando(l)} title="Editar as horas extras e as faltas">
+                        <PencilLine />
+                        Editar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               ) : null}
             </tr>

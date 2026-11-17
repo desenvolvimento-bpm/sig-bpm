@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { CampoBusca } from "@/components/shared/Filtros";
 
@@ -25,7 +25,9 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * gerais, por atribuição; a Encargos e Benefícios, calculada). O grupo com centros de baldes diferentes traz o aviso: o
  * valor vai pelo balde mais comum. Os colaboradores (Aprendizes, Estagiários, CLT e PJ), os Salários de cada um (12/11/2026)
  * e as Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (sem linhas do grupo lá, zero) e não se digitam (12/11/2026:
- * sem o aviso das linhas do grupo, pedido do Adão; a explicação fica no Como Usar).
+ * sem o aviso das linhas do grupo, pedido do Adão; a explicação fica no Como Usar). O destaque do grupo (16/11/2026, pedido do
+ * Adão) fica acima da lista e da tabela, a partir da esquerda da lista, e a lista começa na altura dos rótulos da tabela; ao
+ * rolar, a cópia dele flutua sobre a tabela.
  */
 export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const [busca, setBusca] = useState("");
@@ -33,71 +35,89 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
   const lista = useQuery({ queryKey: ["cenarios", id, "centros"], queryFn: () => cenariosService.centros(id) });
   const grupos = [...(lista.data?.grupos ?? [])].sort((a, b) => a.grupo.localeCompare(b.grupo, "pt-BR"));
   const grupo = (escolhido && grupos.some((g) => g.grupo === escolhido) ? escolhido : grupos[0]?.grupo) ?? null;
-  const contas = useQuery({ queryKey: ["cenarios", id, "centros", grupo], queryFn: () => cenariosService.centro(id, grupo!), enabled: grupo !== null });
+  // Ao trocar de grupo, o anterior fica na tela até o novo chegar (o destaque e a lista não pulam).
+  const contas = useQuery({ queryKey: ["cenarios", id, "centros", grupo], queryFn: () => cenariosService.centro(id, grupo!), enabled: grupo !== null, placeholderData: keepPreviousData });
   if (lista.isError) return <Erro erro={mensagemDeErro(lista.error, "Erro ao carregar os centros de custo.")} />;
   if (lista.isPending) return <Carregando />;
   const dados = lista.data;
   const t = busca.trim().toLowerCase();
   const filtrados = grupos.filter((g) => !t || `${g.grupo} ${g.centros.map((c) => `${c.codigo ?? ""} ${c.nome}`).join(" ")}`.toLowerCase().includes(t));
-  return (
+  const doGrupo = contas.data;
+  const listaDosCentros = (
+    <div className="rounded-sm border border-gray-200 bg-white">
+      <div className="border-b border-gray-200 p-2">
+        <CampoBusca rotulo="Buscar centro de custo" valor={busca} onMudar={setBusca} placeholder="Centro de Custo ou código…" largura="w-full" />
+      </div>
+      <ul className="max-h-[70vh] overflow-y-auto py-1" aria-label="Centros de custo">
+        {filtrados.map((g) => (
+          <li key={g.grupo}>
+            <button
+              type="button"
+              onClick={() => setEscolhido(g.grupo)}
+              aria-current={g.grupo === grupo ? "true" : undefined}
+              title={`${g.grupo} · ${g.destino}${g.baldes.length > 1 ? " · centros de baldes diferentes" : ""}`}
+              className={`flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-sm ${g.grupo === grupo ? "bg-black text-white" : "text-gray-800 hover:bg-gray-100"}`}
+            >
+              <span className="min-w-0 truncate">
+                {g.grupo}
+                {g.baldes.length > 1 ? <span className={g.grupo === grupo ? "text-yellow-300" : "text-red-700"}> *</span> : null}
+              </span>
+              {g.total ? <span className={`shrink-0 text-xs ${g.grupo === grupo ? "text-white/80" : "text-gray-500"}`}>{reais(g.total)}</span> : null}
+            </button>
+          </li>
+        ))}
+        {filtrados.length === 0 ? <li className="px-3 py-2 text-sm text-gray-500">Nenhum centro com esse nome.</li> : null}
+      </ul>
+    </div>
+  );
+  // A lista à esquerda e, ao lado, a tabela do grupo: as duas começam na mesma altura (a dos rótulos da tabela).
+  const grade = (aoLado: ReactNode) => (
     <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
-      <div className="rounded-sm border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 p-2">
-          <CampoBusca rotulo="Buscar centro de custo" valor={busca} onMudar={setBusca} placeholder="Centro de Custo ou código…" largura="w-full" />
-        </div>
-        <ul className="max-h-[70vh] overflow-y-auto py-1" aria-label="Centros de custo">
-          {filtrados.map((g) => (
-            <li key={g.grupo}>
-              <button
-                type="button"
-                onClick={() => setEscolhido(g.grupo)}
-                aria-current={g.grupo === grupo ? "true" : undefined}
-                title={`${g.grupo} · ${g.destino}${g.baldes.length > 1 ? " · centros de baldes diferentes" : ""}`}
-                className={`flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-sm ${g.grupo === grupo ? "bg-black text-white" : "text-gray-800 hover:bg-gray-100"}`}
-              >
-                <span className="min-w-0 truncate">
-                  {g.grupo}
-                  {g.baldes.length > 1 ? <span className={g.grupo === grupo ? "text-yellow-300" : "text-red-700"}> *</span> : null}
-                </span>
-                {g.total ? <span className={`shrink-0 text-xs ${g.grupo === grupo ? "text-white/80" : "text-gray-500"}`}>{reais(g.total)}</span> : null}
-              </button>
-            </li>
-          ))}
-          {filtrados.length === 0 ? <li className="px-3 py-2 text-sm text-gray-500">Nenhum centro com esse nome.</li> : null}
-        </ul>
-      </div>
-      <div className="min-w-0 space-y-3">
-        {/* 20/10/2026: sem o Exportar do grupo (repetia o Exportar Premissas, ao lado do título da tela). */}
-        {contas.isError ? (
-          <Erro erro={mensagemDeErro(contas.error, "Erro ao carregar o centro de custo.")} />
-        ) : contas.isPending || !contas.data ? (
-          <Carregando />
-        ) : (
-          <>
-            {contas.data.grupo.baldes.length > 1 ? (
-              <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">
-                Os centros deste grupo têm baldes diferentes ({contas.data.grupo.baldes.join(", ")}): o valor vai pelo balde mais comum,{" "}
-                {contas.data.grupo.balde ?? "—"}. Revise o agrupamento no cadastro Centros de Custo para que o grupo tenha um balde só.
-              </p>
-            ) : null}
-            <TabelaEditavel
-              key={grupo ?? ""}
-              titulo={contas.data.grupo.grupo}
-              subtitulo={`${contas.data.grupo.centros.map((c) => c.codigo ?? c.nome).join(", ")} · Balde ${contas.data.grupo.balde ?? "—"} · Vai para: ${contas.data.grupo.destino}`}
-              tituloNoDestaque
-              meses={dados.meses}
-              linhas={linhasDoCentro(contas.data)}
-              editavel={editavel && dados.editavel}
-              item={["linha", "linhas"]}
-              cabecalho="PREMISSAS"
-              aoGravar={(alteracoes, origem) => cenariosService.gravarCentro(id, grupo!, alteracoes, origem)}
-              mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; a DRE e os quadros de lotação do cenário foram recalculados.`}
-              // As Contas do Balancete de cada conta (13/11/2026; não nas linhas do quadro de lotação, dos encargos e do total).
-              acaoDaLinha={(l) => (contas.data.contas.some((c) => c.codigo === l.chave) ? <BotaoContasDoBalancete id={id} linha={l.chave} descricao={l.rotulo} /> : null)}
-            />
-          </>
-        )}
-      </div>
+      {listaDosCentros}
+      <div className={`min-w-0 ${contas.isPlaceholderData ? "opacity-60" : ""}`}>{aoLado}</div>
+    </div>
+  );
+  return (
+    <div className="space-y-3">
+      {doGrupo && doGrupo.grupo.baldes.length > 1 ? (
+        <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">
+          Os centros deste grupo têm baldes diferentes ({doGrupo.grupo.baldes.join(", ")}): o valor vai pelo balde mais comum, {doGrupo.grupo.balde ?? "—"}. Revise o
+          agrupamento no cadastro Centros de Custo para que o grupo tenha um balde só.
+        </p>
+      ) : null}
+      {/* 20/10/2026: sem o Exportar do grupo (repetia o Exportar Premissas, ao lado do título da tela). */}
+      {contas.isError ? (
+        grade(<Erro erro={mensagemDeErro(contas.error, "Erro ao carregar o centro de custo.")} />)
+      ) : !doGrupo ? (
+        <>
+          <div className="h-14 animate-pulse rounded-sm bg-gray-100" />
+          {grade(<Carregando />)}
+        </>
+      ) : (
+        <TabelaEditavel
+          chave={doGrupo.grupo.grupo}
+          titulo={doGrupo.grupo.grupo}
+          subtitulo={`${doGrupo.grupo.centros.map((c) => c.codigo ?? c.nome).join(", ")} · Balde ${doGrupo.grupo.balde ?? "—"} · Vai para: ${doGrupo.grupo.destino}`}
+          tituloNoDestaque
+          // O destaque do grupo (o nome, os centros, o balde e para onde vai o valor e, à direita, a marcação e os botões) acima
+          // da lista e da tabela, a partir da esquerda da lista (16/11/2026, pedido do Adão).
+          envolver={({ destaque, tabela }) => (
+            <div className="space-y-3">
+              {destaque}
+              {grade(tabela)}
+            </div>
+          )}
+          meses={dados.meses}
+          linhas={linhasDoCentro(doGrupo)}
+          editavel={editavel && dados.editavel}
+          item={["linha", "linhas"]}
+          cabecalho="PREMISSAS"
+          aoGravar={(alteracoes, origem) => cenariosService.gravarCentro(id, doGrupo.grupo.grupo, alteracoes, origem)}
+          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; a DRE e os quadros de lotação do cenário foram recalculados.`}
+          // As Contas do Balancete de cada conta (13/11/2026; não nas linhas do quadro de lotação, dos encargos e do total).
+          acaoDaLinha={(l) => (doGrupo.contas.some((c) => c.codigo === l.chave) ? <BotaoContasDoBalancete id={id} linha={l.chave} descricao={l.rotulo} /> : null)}
+        />
+      )}
     </div>
   );
 }

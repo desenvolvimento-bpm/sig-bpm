@@ -186,8 +186,12 @@ export const resultadosService = {
     };
     const celulaOrcada = celulaDo(orcado);
     const porCodigo = new Map(linhas.map((l) => [l.codigo, l]));
-    // As linhas que entram mesmo sem o realizado: as que têm o orçado do comparado ou de um dos cenários.
-    const comOrcado = new Set([orcado, ...doProva.map((c) => c.orcado)].flatMap((o) => [...o.daVisao.total.keys()]));
+    // As linhas que entram mesmo sem o realizado: as que têm o orçado do comparado ou de um dos cenários, diferente de zero
+    // (16/11/2026, pedido do Adão: o cenário guarda zeradas as linhas que a unidade não usa — na Matriz, as dos Serviços —,
+    // e elas apareciam zeradas na tabela e nos arquivos do Exportar).
+    const temOrcado = (o: typeof orcado) =>
+      [...o.daVisao.total, ...o.daVisao.mes].filter(([, v]) => arredonda(v, 4) !== 0).map(([codigo]) => codigo);
+    const comOrcado = new Set([orcado, ...doProva.map((c) => c.orcado)].flatMap(temOrcado));
     return {
       ano,
       ate: ultimo,

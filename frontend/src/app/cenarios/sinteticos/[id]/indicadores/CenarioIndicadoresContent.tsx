@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChartColumn, Pencil } from "lucide-react";
+import { ChartColumn } from "lucide-react";
 
 import { usePermissions } from "@/context/PermissionContext";
 
@@ -11,7 +11,7 @@ import { GraficoIndicadorDialog } from "@/app/relatorios/indicadores/GraficoIndi
 import { RotulosDoGrafico, type TipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { LancamentoDialog } from "../../../components/IndicadoresManuais";
+import { EditarIndicadorDialog, type MesEmEdicao } from "../../../components/IndicadoresManuais";
 import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
 import { cenariosService, type IndicadorDoCenario } from "../../../services/cenariosService";
 import { useTipoDoCenario } from "../../../components/tipoDoCenario";
@@ -51,14 +51,15 @@ export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string
   // Os Indicadores Manuais são uma aba da tela Resultados (12/11/2026): vale a permissão de editar a aba, como na DRE.
   const editaAba = hasPermission(t.perm("resultados", "editar", "manuais"));
   const podeEditar = editaAba && !!cenario.data && !travado && !analitico;
-  const [editando, setEditando] = useState<IndicadorDoCenario | null>(null);
+  const [editando, setEditando] = useState<MesEmEdicao | null>(null);
   // O gráfico do indicador (16/10/2026), como em Resultados Empresariais: o cenário × o comparado.
   const [comGrafico, setComGrafico] = useState<IndicadorDoCenario | null>(null);
   const consulta = useQuery({ queryKey: ["cenarios", id, "indicadores"], queryFn: () => cenariosService.indicadores(id) });
   const dados = consulta.data;
   const daAba = DA_ABA[aba] ? (dados?.indicadores.filter(DA_ABA[aba]) ?? []) : [];
   const manuais = aba === "manuais";
-  // Nos Indicadores Manuais que se editam, o clique digita os lançamentos; nos demais, abre o gráfico.
+  // Nos Indicadores Manuais que se editam, o clique no valor de um mês abre o modal Editar Valor (16/11/2026), como nas demais
+  // tabelas dos cenários; o clique no indicador abre o gráfico.
   const digita = manuais && podeEditar;
 
   return (
@@ -66,8 +67,8 @@ export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string
       {aba === "metas" ? (
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
           Os indicadores do cenário: os que saem da DRE (na tela Resultados) e os Indicadores Manuais (
-          {analitico ? "nas Premissas, aba Indicadores Manuais" : "na tela Resultados, aba Indicadores Manuais"}), com as eficiências calculadas e os
-          importados (liberação de projetos, GME). Não se editam aqui.
+          {analitico ? "nas Premissas, aba Indicadores Manuais, com a Liberação de Projetos: Matriz e Filial; o Total é a soma delas" : "na tela Resultados, aba Indicadores Manuais"}), com as
+          eficiências calculadas e os importados ({analitico ? "os GME" : "liberação de projetos, GME"}). Não se editam aqui.
         </p>
       ) : null}
       {manuais && cenario.data && travado && editaAba ? <AvisoMarcado cenario={cenario.data} oQue="os Indicadores Manuais" varios /> : null}
@@ -88,14 +89,15 @@ export function IndicadoresDoCenario({ id, aba, tipo, comRotulos }: { id: string
           meses={dados.meses}
           indicadores={daAba}
           comparado={dados.comparado}
-          onClicar={digita ? setEditando : setComGrafico}
-          dicaDoClique={digita ? "Digitar os lançamentos do indicador" : "Ver o gráfico do indicador"}
-          iconeDoClique={digita ? Pencil : ChartColumn}
+          onClicar={setComGrafico}
+          dicaDoClique="Ver o gráfico do indicador"
+          iconeDoClique={ChartColumn}
+          onCelula={digita ? (indicador, mes) => setEditando({ indicador, mes }) : undefined}
           destacar={manuais ? (i, k) => i.digitados[k] : undefined}
           dicaDoDestaque="Valor digitado"
         />
       )}
-      {editando && dados ? <LancamentoDialog id={id} indicador={editando} meses={dados.meses} onFechar={() => setEditando(null)} /> : null}
+      {editando && dados ? <EditarIndicadorDialog id={id} edicao={editando} meses={dados.meses} onFechar={() => setEditando(null)} /> : null}
       {comGrafico && dados ? (
         <RotulosDoGrafico.Provider value={{ realizado: "Cenário", orcado: dados.comparado ? `Comparado (${dados.comparado.nome})` : "Comparado" }}>
           <GraficoIndicadorDialog

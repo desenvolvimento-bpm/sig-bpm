@@ -121,10 +121,13 @@ export function ReajusteDialog({
   );
 }
 
+type GravarValor<V> = (valor: V, replicar: boolean, reajuste: { modo: Reajuste; valor: number } | null) => void;
+
 /**
  * A edição de um valor (uma conta num mês): o valor atual, o reajuste (percentual ou absoluto) e o valor recalculado,
  * que também se digita direto (o reajuste acompanha). A chave replica o valor recalculado aos meses seguintes. Não
- * olha as caixas marcadas.
+ * olha as caixas marcadas. Com `permiteVazio` (16/11/2026: os Indicadores Manuais dos cenários, em que o mês em branco é
+ * sem valor, e não zero), o Valor Recalculado em branco grava o mês em branco, e o `atual` nulo é o mês em branco.
  */
 export function ValorDialog({
   conta,
@@ -135,41 +138,49 @@ export function ValorDialog({
   erro,
   onGravar,
   onFechar,
+  permiteVazio = false,
 }: {
   conta: string;
   rotuloMes: string;
   /** Os rótulos dos meses depois deste (para a chave de replicar). */
   mesesSeguintes: string[];
-  atual: number;
   gravando: boolean;
   erro: string | null;
-  /** O valor e, para o histórico, o reajuste informado (sem ele, o valor foi digitado direto). */
-  onGravar: (valor: number, replicar: boolean, reajuste: { modo: Reajuste; valor: number } | null) => void;
   onFechar: () => void;
-}) {
+} & (
+  | {
+      atual: number;
+      permiteVazio?: false;
+      /** O valor e, para o histórico, o reajuste informado (sem ele, o valor foi digitado direto). */
+      onGravar: GravarValor<number>;
+    }
+  | { atual: number | null; permiteVazio: true; onGravar: GravarValor<number | null> }
+)) {
+  // O mês em branco reajusta a partir de zero.
+  const base = atual ?? 0;
   const [tipo, setTipo] = useState<Reajuste>("PERCENTUAL");
   const [reajuste, setReajuste] = useState("");
   // O recalculado sempre com separador de milhar e duas casas (12/10/2026); ao digitar, fica como se digita e se
   // formata ao sair do campo.
-  const [novo, setNovo] = useState(comDuasCasas(atual));
+  const [novo, setNovo] = useState(atual === null ? "" : comDuasCasas(atual));
   const [replicar, setReplicar] = useState(false);
   const valorNovo = lerNumero(novo);
   // O reajuste muda o valor recalculado; digitar o recalculado muda o reajuste (o percentual, só com valor atual).
   const mudarReajuste = (t: string, tp = tipo) => {
     setReajuste(t);
     const x = lerNumero(t);
-    if (typeof x === "number") setNovo(comDuasCasas(reajustar(atual, tp, x)));
-    else if (x === null) setNovo(comDuasCasas(atual));
+    if (typeof x === "number") setNovo(comDuasCasas(reajustar(base, tp, x)));
+    else if (x === null) setNovo(atual === null ? "" : comDuasCasas(atual));
   };
   const mudarNovo = (t: string) => {
     setNovo(t);
     const v = lerNumero(t);
     if (typeof v !== "number") return;
-    if (tipo === "PERCENTUAL" && atual !== 0) setReajuste(paraCampo(Math.round((v / atual - 1) * 10000) / 100));
-    else if (tipo === "ABSOLUTO") setReajuste(paraCampo(Math.round((v - atual) * 100) / 100));
+    if (tipo === "PERCENTUAL" && base !== 0) setReajuste(paraCampo(Math.round((v / base - 1) * 10000) / 100));
+    else if (tipo === "ABSOLUTO") setReajuste(paraCampo(Math.round((v - base) * 100) / 100));
     else setReajuste("");
   };
-  const ok = typeof valorNovo === "number";
+  const ok = typeof valorNovo === "number" || (permiteVazio && valorNovo === null);
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
       <DialogContent avisoAoSair className="rounded-sm sm:max-w-md">
@@ -182,7 +193,7 @@ export function ValorDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="valor-atual">Valor Atual</Label>
-            <Input id="valor-atual" value={comDuasCasas(atual)} readOnly className="rounded-sm bg-gray-50 text-right text-gray-700" />
+            <Input id="valor-atual" value={atual === null ? "" : comDuasCasas(atual)} placeholder="Em branco" readOnly className="rounded-sm bg-gray-50 text-right text-gray-700" />
           </div>
           <TipoReajuste
             tipo={tipo}
@@ -206,7 +217,7 @@ export function ValorDialog({
                 onBlur={() => typeof valorNovo === "number" && setNovo(comDuasCasas(valorNovo))}
                 className="rounded-sm text-right font-bold"
               />
-              {valorNovo === undefined ? <p className="text-xs text-red-700">Número inválido.</p> : null}
+              {valorNovo === undefined ? <p className="text-xs text-red-700">Número inválido.</p> : permiteVazio ? <p className="text-xs text-gray-500">Em branco, o mês fica sem valor.</p> : null}
             </div>
           </div>
           {mesesSeguintes.length ? (
@@ -237,7 +248,7 @@ export function ValorDialog({
           </Button>
           <Button type="button" className={botaoPrimario} disabled={!ok || gravando} onClick={() => {
               const r = lerNumero(reajuste);
-              onGravar(valorNovo as number, replicar, typeof r === "number" ? { modo: tipo, valor: r } : null);
+              (onGravar as GravarValor<number | null>)(valorNovo ?? null, replicar, typeof r === "number" ? { modo: tipo, valor: r } : null);
             }}
           >
             {gravando ? "Gravando…" : "Gravar"}

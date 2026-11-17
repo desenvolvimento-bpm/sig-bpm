@@ -199,9 +199,18 @@ const colunasDaReferencia = (r: ReferenciaDasAbas | undefined) => (r ? 12 : 0);
 
 /** A aba Quadro de Lotação no arquivo (11/11/2026): o nome, as linhas (da primeira à última, com as em branco) e as colunas de cada mês. */
 export type QuadroDoArquivo = { aba: string; primeira: number; ultima: number; doMes: (k: number, campo: 0 | 1 | 2) => string };
-/** A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, a coluna dela. */
-export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroDoArquivo {
-  const R = comReferencia ? 1 : 0;
+/**
+ * As colunas da referência na aba Quadro de Lotação, depois do Centro de Custo: os Colaboradores e (16/11/2026, pedido do Adão:
+ * na referência realizada) o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada colaborador.
+ */
+const colunasDaReferenciaDoQuadro = (comReferencia: boolean, comSalarios: boolean) => (comReferencia ? (comSalarios ? 4 : 1) : 0);
+
+/**
+ * A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, as
+ * colunas dela (com os salários, quatro).
+ */
+export function quadroDoArquivo(linhas: number, comReferencia: boolean, comSalarios = false): QuadroDoArquivo {
+  const R = colunasDaReferenciaDoQuadro(comReferencia, comSalarios);
   return { aba: NOME_DA_ABA.quadro, primeira: PRIMEIRA_LINHA, ultima: PRIMEIRA_LINHA + linhas + LINHAS_NOVAS - 1, doMes: (k, campo) => coluna(CAMPOS_DO_QUADRO.length + R + k * 4 + campo) };
 }
 
@@ -643,6 +652,11 @@ export type LinhaDoQuadroDaPlanilha = {
   meses: MesDaLinha[];
   /** A coluna da referência (11/11/2026): o QL Realizado ou os colaboradores do último mês do cenário de origem. */
   referencia?: number | null;
+  /**
+   * Os salários de cada colaborador da linha na referência realizada (16/11/2026): a média do Lançamento Inicial (o mesmo
+   * centro, tipo e função); nulos sem salário lá.
+   */
+  referenciaSalarios?: { salarioBruto: number; adicional: number } | null;
 };
 
 /**
@@ -658,8 +672,12 @@ export function abaDoQuadroDeLotacao(
   meses: string[],
   identificacao: string,
   listas: { unidades: string[] },
-  /** A coluna da referência (11/11/2026), depois do Centro de Custo: o rótulo e a explicação. */
-  referencia?: { rotulo: string; explicacao: string },
+  /**
+   * A coluna da referência (11/11/2026), depois do Centro de Custo: o rótulo e a explicação (o que ela traz: "traz os
+   * colaboradores…"; com os salários, "trazem…"). Com os salários (16/11/2026, na referência realizada), quatro colunas: os
+   * Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), como as de um mês.
+   */
+  referencia?: { rotulo: string; explicacao: string; comSalarios?: boolean },
   /** Os departamentos do arquivo (11/11/2026; os nomes): as linhas do cenário que a aba substitui na importação. */
   departamentos: string[] = DEPARTAMENTOS.map((d) => d.nome),
 ): AbaEscrita {
@@ -667,12 +685,16 @@ export function abaDoQuadroDeLotacao(
   const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoQuebra });
   const n = CAMPOS_DO_QUADRO.length;
   // A coluna de um campo do mês k (0 a 11): f = 0 Colaboradores, 1 Salário Bruto, 2 Insalubridade, 3 Salário Total.
-  const R = referencia ? 1 : 0;
+  const comSalarios = !!referencia?.comSalarios;
+  const R = colunasDaReferenciaDoQuadro(!!referencia, comSalarios);
   // 11/11/2026: sem o Código da Linha antes dos campos.
   const col = (k: number, f: number) => coluna(n + R + k * 4 + f);
   const cCusto = coluna(n + R + 48);
+  // O Salário Total (o da referência e o de cada mês): a soma do Salário Bruto e da Insalubridade / Periculosidade, em fórmula.
+  const somaDosSalarios = (bruto: string, adicional: string) => `IF(AND(${bruto}="",${adicional}=""),"",N(${bruto})+N(${adicional}))`;
   const formulas = (r: number) => ({
-    total: (k: number) => `IF(AND(${col(k, 1)}${r}="",${col(k, 2)}${r}=""),"",N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`,
+    total: (k: number) => somaDosSalarios(`${col(k, 1)}${r}`, `${col(k, 2)}${r}`),
+    totalDaReferencia: somaDosSalarios(`${coluna(n + 1)}${r}`, `${coluna(n + 2)}${r}`),
     custo: Array.from({ length: 12 }, (_, k) => `N(${col(k, 0)}${r})*(N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`).join("+"),
   });
   const vazio = (v: number) => (v ? v : null);
@@ -683,7 +705,11 @@ export function abaDoQuadroDeLotacao(
       {
         valor:
           "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
-          (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
+          (referencia
+            ? comSalarios
+              ? ` As colunas ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importam.`
+              : ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.`
+            : ""),
         estilo: ESTILO.informacao,
       },
     ],
@@ -691,7 +717,13 @@ export function abaDoQuadroDeLotacao(
     // Os rótulos dos meses e o Custo no Ano com a quebra de texto automática (11/11/2026, pedido do Adão).
     [
       ...CAMPOS_DO_QUADRO.map(([, c]) => cab(c)),
-      ...(referencia ? [{ valor: referencia.rotulo, estilo: ESTILO.cabecalhoDireitaQuebra }] : []),
+      // A referência com os salários (16/11/2026): "QL Realizado (10/2026): Salário Bruto (R$)" — sem o " · " dos meses, que a
+      // importação procura.
+      ...(referencia
+        ? comSalarios
+          ? DO_MES.map((d): Celula => ({ valor: `${referencia.rotulo}: ${d}`, estilo: ESTILO.cabecalhoDireitaQuebra }))
+          : [{ valor: referencia.rotulo, estilo: ESTILO.cabecalhoDireitaQuebra }]
+        : []),
       ...meses.flatMap((m) => DO_MES.map((d): Celula => ({ valor: `${m} · ${d}`, estilo: ESTILO.cabecalhoDireitaQuebra }))),
       { valor: COLUNA_CUSTO_ANUAL, estilo: ESTILO.cabecalhoDireitaQuebra },
     ],
@@ -705,6 +737,17 @@ export function abaDoQuadroDeLotacao(
       { valor: l.funcao },
       { valor: l.centro },
       ...(referencia ? [{ valor: l.referencia ?? null, estilo: ESTILO.itemNumero }] : []),
+      ...(comSalarios
+        ? [
+            { valor: l.referenciaSalarios ? l.referenciaSalarios.salarioBruto : null, estilo: ESTILO.itemNumero },
+            { valor: l.referenciaSalarios ? vazio(l.referenciaSalarios.adicional) : null, estilo: ESTILO.itemNumero },
+            {
+              valor: l.referenciaSalarios ? Math.round((l.referenciaSalarios.salarioBruto + l.referenciaSalarios.adicional) * 100) / 100 : null,
+              estilo: ESTILO.itemNumero,
+              formula: f.totalDaReferencia,
+            },
+          ]
+        : []),
       ...l.meses.flatMap((m, k): Celula[] => [
         { valor: vazio(m.colaboradores), estilo: ESTILO.itemNumero },
         { valor: vazio(m.salarioBruto), estilo: ESTILO.itemNumero },
@@ -734,7 +777,7 @@ export function abaDoQuadroDeLotacao(
   const cabe = (xs: string[]) => xs.length > 0 && xs.join(",").length <= 250 && !xs.some((x) => x.includes(","));
   return {
     nome: NOME_DA_ABA.quadro,
-    larguras: [...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...(referencia ? [15] : []), ...meses.flatMap(() => [13, 15, 17, 15]), 17],
+    larguras: [...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...(referencia ? (comSalarios ? [15, 15, 17, 15] : [15]) : []), ...meses.flatMap(() => [13, 15, 17, 15]), 17],
     linhas: linhasDaAba,
     linhaCabecalho: 5,
     rodape: `Premissas · ${NOME_DA_ABA.quadro}`,

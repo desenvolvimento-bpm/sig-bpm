@@ -776,8 +776,17 @@ export const cenariosController = {
   salvarManual(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const corpo = z.object({ nome: z.string().trim().min(1).max(200), valores: z.array(z.number().finite().nullable()).length(12) }).safeParse(request.body);
+    const corpo = z
+      .object({
+        nome: z.string().trim().min(1).max(200),
+        valores: z.array(z.number().finite().nullable()).length(12),
+        // A origem da gravação (16/11/2026: o modal Editar Valor), para o Histórico do cenário.
+        origem: z
+          .object({ tipo: z.enum(["MARCADOS", "VALOR"]), modo: z.enum(["PERCENTUAL", "ABSOLUTO", "DIGITADO", "REFERENCIA"]), reajuste: z.number().finite().nullable(), replicado: z.boolean() })
+          .optional(),
+      })
+      .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Valores inválidos." });
-    return responder(response, () => cenariosService.salvarManual(c, corpo.data.nome, corpo.data.valores, usuario(request)));
+    return responder(response, () => cenariosService.salvarManual(c, corpo.data.nome, corpo.data.valores, usuario(request), corpo.data.origem));
   },
 };

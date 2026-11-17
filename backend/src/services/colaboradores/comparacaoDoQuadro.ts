@@ -22,15 +22,17 @@ async function cenarioDaMarcacao(marcacao: MarcacaoCenario) {
 }
 
 /** Os colaboradores de cada centro em cada mês, na aba Quadro de Lotação do analítico; null sem linhas (ou num sintético). */
-export async function colaboradoresPorCentro(cenario: { id: string; tipo: string }) {
+export async function colaboradoresPorCentro(cenario: { id: string; tipo: string }, porFuncao = false) {
   if (cenario.tipo !== "ANALITICO") return null;
-  const linhas = await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: cenario.id }, select: { centroCustoId: true, meses: true } });
+  const linhas = await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: cenario.id }, select: { centroCustoId: true, funcaoId: true, meses: true } });
   if (!linhas.length) return null;
+  // Por centro ("centroId") ou, com `porFuncao` (16/11/2026: a aba Realizado por função), por centro e função ("centroId|funcaoId").
   const porCentro = new Map<string, number[]>();
   for (const l of linhas) {
-    const s = porCentro.get(l.centroCustoId) ?? Array<number>(12).fill(0);
+    const chave = porFuncao ? `${l.centroCustoId}|${l.funcaoId}` : l.centroCustoId;
+    const s = porCentro.get(chave) ?? Array<number>(12).fill(0);
     mesesDaLinha(l.meses).forEach((m, k) => (s[k] += m.colaboradores));
-    porCentro.set(l.centroCustoId, s);
+    porCentro.set(chave, s);
   }
   return porCentro;
 }

@@ -17,6 +17,8 @@ export type Campo = {
   obrigatorio?: boolean;
   somenteNaCriacao?: boolean;
   derivado?: boolean;
+  /** Num derivado, a soma destes outros campos, refeita no formulário enquanto se digita (16/11/2026: o Salário Total do Lançamento Inicial). */
+  soma?: string[];
   /** Informação-chave: não muda quando o registro tem movimentos. */
   travaComMovimento?: boolean;
   /** A lista mostra só as opções do valor escolhido neste outro campo. */

@@ -559,48 +559,86 @@ export const quadroService = {
 
   // ------------------------------------------------------------------------------------------------------ o realizado
   /**
-   * A aba Realizado: o quadro realizado da competência, por centro de custo — o inicial, as entradas, as saídas e o final,
-   * com o final por tipo (CLT, PJ, Aprendizes e Estagiários). Com a Comparação (09/11/2026, `marcacao`: o cenário marcado), cada centro traz os colaboradores do mês na
-   * aba Quadro de Lotação do cenário (nos analíticos com linhas; os centros só do cenário entram, com o realizado zero).
+   * A aba Realizado: o quadro realizado da competência, por centro de custo e função (16/11/2026, pedido do Adão: as funções,
+   * como no Lançamento Inicial; antes, só por centro) — o inicial, as entradas, as saídas e o final, com o final por tipo (CLT,
+   * PJ, Aprendizes e Estagiários). Com a Comparação (09/11/2026, `marcacao`: o cenário marcado), cada linha traz os
+   * colaboradores do mês com o mesmo centro e a mesma função na aba Quadro de Lotação do cenário (nos analíticos com linhas;
+   * as do cenário sem realizado entram com o realizado zero).
    */
   async realizado(anoMes: string, marcacao?: MarcacaoCenario) {
     const db = getPrismaClient();
     const c = await competencia(db, anoMes);
-    const quadros = await quadrosDoBanco(db);
+    // Os indicadores do mês e do ano pelo quadro por centro; as linhas pelo quadro por centro, tipo e função ("centro|tipo|função").
+    const [quadros, { quadros: porLinha }] = await Promise.all([quadrosDoBanco(db), quadrosRealizadosPorLinha(db)]);
     const q = quadros.find((x) => ordem(x) === ordem(c));
+    const ql = porLinha.find((x) => ordem(x) === ordem(c));
     const movs = await db.colaboradorMovimentacao.findMany({
       where: { competenciaId: c.id, status: "APROVADA" },
-      select: { centroCustoId: true, tipoMovimentacao: { select: { contagem: true } } },
+      select: { centroCustoId: true, funcaoId: true, tipoMovimentacao: { select: { contagem: true } } },
     });
     const cenario = marcacao ? await comparacaoDoQuadroService.cenarioDaMarcacao(marcacao) : null;
-    const doCenario = cenario ? await colaboradoresPorCentro(cenario) : null;
-    const ids = new Set<string>([
-      ...(q ? [...q.inicial.keys(), ...q.final.keys()] : []).map((k) => k.split("|")[0]),
-      ...movs.map((m) => m.centroCustoId),
-      ...[...(doCenario ?? new Map<string, number[]>())].filter(([, vs]) => vs[c.mes - 1]).map(([id]) => id),
-    ]);
+    const doCenario = cenario ? await colaboradoresPorCentro(cenario, true) : null;
+    // As contagens de cada linha ("centro|função"): o início e o fim do mês (no fim, também por tipo), as entradas e as saídas.
+    type Contagens = { inicial: number; final: number; entradas: number; saidas: number; porTipo: Record<string, number> };
+    const porChave = new Map<string, Contagens>();
+    const da = (chave: string) => {
+      let x = porChave.get(chave);
+      if (!x) porChave.set(chave, (x = { inicial: 0, final: 0, entradas: 0, saidas: 0, porTipo: {} }));
+      return x;
+    };
+    for (const [k, n] of ql?.inicial ?? new Map<string, number>()) {
+      const [centro, , funcao] = k.split("|");
+      da(`${centro}|${funcao ?? ""}`).inicial += n;
+    }
+    for (const [k, n] of ql?.final ?? new Map<string, number>()) {
+      const [centro, vinculo, funcao] = k.split("|");
+      const x = da(`${centro}|${funcao ?? ""}`);
+      x.final += n;
+      x.porTipo[vinculo] = (x.porTipo[vinculo] ?? 0) + n;
+    }
+    for (const m of movs) {
+      const x = da(`${m.centroCustoId}|${m.funcaoId}`);
+      if (m.tipoMovimentacao.contagem === "POSITIVA") x.entradas++;
+      else if (m.tipoMovimentacao.contagem === "NEGATIVA") x.saidas++;
+    }
+    for (const [k, vs] of doCenario ?? new Map<string, number[]>()) if (vs[c.mes - 1]) da(k);
+    const chaves = [...porChave.keys()];
     // Sem o recorte (13/11/2026, pedido do Adão): o Realizado mostra todos os centros.
-    const centros = await db.centroCusto.findMany({ where: { id: { in: [...ids] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } });
-    const contar = (quadro: Contagem | undefined, id: string, vinculo?: string) =>
-      [...(quadro ?? new Map()).entries()].filter(([k]) => k.startsWith(`${id}|`) && (!vinculo || k.endsWith(`|${vinculo}`))).reduce((a, [, n]) => a + n, 0);
-    const linhas = centros
-      .map((ct) => ({
-        centroCustoId: ct.id,
-        centroCusto: centroRotulo(ct),
-        departamento: ct.departamento,
-        atribuicao: ct.atribuicao === "DIRETA" ? "Direta" : ct.atribuicao === "INDIRETA" ? "Indireta" : null,
-        inicial: contar(q?.inicial, ct.id),
-        entradas: movs.filter((m) => m.centroCustoId === ct.id && m.tipoMovimentacao.contagem === "POSITIVA").length,
-        saidas: movs.filter((m) => m.centroCustoId === ct.id && m.tipoMovimentacao.contagem === "NEGATIVA").length,
-        final: contar(q?.final, ct.id),
-        clt: contar(q?.final, ct.id, "CLT"),
-        pj: contar(q?.final, ct.id, "PJ"),
-        aprendizes: contar(q?.final, ct.id, "APRENDIZ"),
-        estagiarios: contar(q?.final, ct.id, "ESTAGIARIO"),
-        cenario: doCenario ? (doCenario.get(ct.id)?.[c.mes - 1] ?? 0) : null,
-      }))
+    const [centros, funcoes] = await Promise.all([
+      db.centroCusto.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[0]))] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } }),
+      db.colaboradorFuncao.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[1]).filter(Boolean))] } }, select: { id: true, nome: true } }),
+    ]);
+    const centroDe = new Map(centros.map((x) => [x.id, x]));
+    const funcaoDe = new Map(funcoes.map((x) => [x.id, x.nome]));
+    const linhas = chaves
+      .flatMap((k) => {
+        const [centroCustoId, funcaoId] = k.split("|");
+        const ct = centroDe.get(centroCustoId);
+        if (!ct) return [];
+        const x = porChave.get(k)!;
+        return [
+          {
+            chave: k,
+            centroCustoId,
+            centroCusto: centroRotulo(ct),
+            funcaoId: funcaoId || null,
+            funcao: (funcaoId && funcaoDe.get(funcaoId)) || null,
+            departamento: ct.departamento,
+            atribuicao: ct.atribuicao === "DIRETA" ? "Direta" : ct.atribuicao === "INDIRETA" ? "Indireta" : null,
+            inicial: x.inicial,
+            entradas: x.entradas,
+            saidas: x.saidas,
+            final: x.final,
+            clt: x.porTipo.CLT ?? 0,
+            pj: x.porTipo.PJ ?? 0,
+            aprendizes: x.porTipo.APRENDIZ ?? 0,
+            estagiarios: x.porTipo.ESTAGIARIO ?? 0,
+            cenario: doCenario ? (doCenario.get(k)?.[c.mes - 1] ?? 0) : null,
+          },
+        ];
+      })
       .filter((l) => l.inicial || l.entradas || l.saidas || l.final || l.cenario)
-      .sort((a, b) => a.centroCusto.localeCompare(b.centroCusto, "pt-BR"));
+      .sort((a, b) => a.centroCusto.localeCompare(b.centroCusto, "pt-BR") || (a.funcao ?? "~").localeCompare(b.funcao ?? "~", "pt-BR"));
     return {
       competencia: { ano: c.ano, mes: c.mes, status: c.status },
       linhas,

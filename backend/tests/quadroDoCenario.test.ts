@@ -181,4 +181,32 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.quadro[0].meses, doze(2, 1_500));
   });
+
+  it("os salários na referência realizada (16/11/2026): quatro colunas depois do Centro de Custo, não se importam", () => {
+    const meses = ["JAN/26", "FEV/26", "MAR/26", "ABR/26", "MAI/26", "JUN/26", "JUL/26", "AGO/26", "SET/26", "OUT/26", "NOV/26", "DEZ/26"];
+    const linhas = [
+      { id: "a", unidade: "Matriz", tipo: "CLT", funcao: "Analista", centro: "1.01 - BPM", meses: doze(2, 1_500), referencia: 3, referenciaSalarios: { salarioBruto: 2_000, adicional: 400 } },
+      { id: "b", unidade: "Matriz", tipo: "PJ", funcao: "Analista", centro: "1.01 - BPM", meses: doze(1, 3_000), referencia: 1, referenciaSalarios: null },
+    ];
+    const aba = abaDoQuadroDeLotacao(linhas, meses, "teste", { unidades: ["Matriz"] }, { rotulo: "QL Realizado (11/2026)", explicacao: "trazem o realizado", comSalarios: true });
+    assert.deepEqual(
+      aba.linhas[4].slice(4, 9).map((c) => c.valor),
+      [
+        "QL Realizado (11/2026): Colaboradores",
+        "QL Realizado (11/2026): Salário Bruto (R$)",
+        "QL Realizado (11/2026): Insalubridade / Periculosidade (R$)",
+        "QL Realizado (11/2026): Salário Total (R$)",
+        "JAN/26 · Colaboradores",
+      ],
+    );
+    assert.deepEqual(aba.linhas[5].slice(4, 8).map((c) => c.valor), [3, 2_000, 400, 2_400]);
+    assert.equal(aba.linhas[5][7].formula, 'IF(AND(F6="",G6=""),"",N(F6)+N(G6))');
+    assert.deepEqual(aba.linhas[6].slice(4, 8).map((c) => c.valor), [1, null, null, null]);
+    assert.equal(aba.larguras?.length, 4 + 4 + 48 + 1);
+    // Os meses começam depois das quatro colunas da referência, também nas fórmulas dos centros.
+    assert.equal(quadroDoArquivo(2, true, true).doMes(0, 0), "I");
+    const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
+    assert.deepEqual(lido.erros, []);
+    assert.deepEqual([lido.quadro[0].meses, lido.quadro[1].meses], [doze(2, 1_500), doze(1, 3_000)]);
+  });
 });

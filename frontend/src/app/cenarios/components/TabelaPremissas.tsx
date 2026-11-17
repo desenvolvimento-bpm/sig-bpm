@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { BarraDeRolagem } from "@/components/shared/BarraDeRolagem";
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
+import { DestaqueFlutuante, useDestaqueFlutuante } from "@/components/shared/DestaqueFlutuante";
 import { Button } from "@/components/ui/button";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -61,6 +62,8 @@ export function TabelaPremissas({ id, dados, tabela, editavel }: { id: string; d
   return (
     <TabelaEditavel
       titulo={`${dados.nome} · ${tabela.titulo}`}
+      // O nome da tabela dentro do destaque (16/11/2026, pedido do Adão), como na aba Centros de Custo.
+      tituloNoDestaque
       meses={dados.meses}
       linhas={tabela.linhas}
       editavel={editavel}
@@ -84,7 +87,9 @@ export function TabelaPremissas({ id, dados, tabela, editavel }: { id: string; d
  * meses marcam valores, e "Reajustar Marcados" aplica um reajuste a todos; "Replicar Referências" (13/11/2026, nas tabelas com
  * a Média de Referência) leva a média de cada linha marcada aos meses marcados. As linhas de cálculo não se editam. Com
  * `tituloNoDestaque` (11/11/2026: a aba Centros de Custo), o título e o subtítulo ficam dentro do card de destaque, à
- * esquerda, e a marcação à direita, antes de "Reajustar Marcados"; com `semTitulo` (a aba Rateios), sem o título.
+ * esquerda, e a marcação à direita, antes de "Reajustar Marcados"; com `semTitulo` (a aba Rateios), sem o título. Ao rolar
+ * (16/11/2026), o destaque flutua sobre a tabela, logo abaixo dos rótulos presos (DestaqueFlutuante); com `envolver` (a aba
+ * Centros de Custo), quem usa a tabela monta o destaque e a tabela na tela (a cópia flutuante continua sobre a tabela).
  */
 export function TabelaEditavel({
   titulo,
@@ -101,6 +106,8 @@ export function TabelaEditavel({
   tituloNoDestaque = false,
   semTitulo = false,
   acaoDaLinha,
+  envolver,
+  chave,
 }: {
   titulo: string;
   subtitulo?: React.ReactNode;
@@ -120,6 +127,13 @@ export function TabelaEditavel({
   semTitulo?: boolean;
   /** Um botão depois da descrição da linha (13/11/2026: as Contas do Balancete das contas da aba Centros de Custo). */
   acaoDaLinha?: (l: LinhaDaPremissa) => React.ReactNode;
+  /**
+   * Monta o destaque e a tabela na tela (16/11/2026: a aba Centros de Custo, com o destaque acima da lista dos centros e a
+   * tabela ao lado dela). Sem ele, o destaque fica logo acima da tabela.
+   */
+  envolver?: (partes: { destaque: React.ReactNode; tabela: React.ReactNode }) => React.ReactNode;
+  /** O que a tabela mostra (o grupo de centros): ao mudar, a marcação recomeça (sem remontar a tabela nem o que a envolve). */
+  chave?: string;
 }) {
   const queryClient = useQueryClient();
   const [linhas, setLinhas] = useState<Set<string>>(new Set());
@@ -127,6 +141,15 @@ export function TabelaEditavel({
   const [reajuste, setReajuste] = useState(false);
   const [replicandoReferencias, setReplicandoReferencias] = useState(false);
   const [valor, setValor] = useState<{ l: LinhaDaPremissa; i: number } | null>(null);
+  const [chaveAtual, setChaveAtual] = useState(chave);
+  if (chave !== chaveAtual) {
+    setChaveAtual(chave);
+    setLinhas(new Set());
+    setMeses(new Set());
+    setReajuste(false);
+    setReplicandoReferencias(false);
+    setValor(null);
+  }
   const gravar = useMutation({
     mutationFn: ({ alteracoes, origem }: { alteracoes: Array<{ linha: string; mes: number; valor: number }>; origem: OrigemDaGravacao }) => aoGravar!(alteracoes, origem),
     onSuccess: (r) => {
@@ -292,32 +315,32 @@ export function TabelaEditavel({
       ) : null}
     </>
   );
-  return (
-    <section className="space-y-2">
-      {tituloNoDestaque ? (
-        // O título dentro do card de destaque, à esquerda, e a marcação à direita, antes de Reajustar Marcados (11/11/2026).
-        <div className="flex items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
-          <div className="min-w-0 flex-1">{cabecalhoDaTabela}</div>
-          {editavel ? (
-            <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
-              {marcacao}
-              {reajustar}
-            </div>
-          ) : null}
+  // O destaque: com o título dentro dele (as unidades, os centros, a depreciação e o extra-operacional), também sem a edição;
+  // sem o título, só a marcação (com a edição).
+  const destaque = tituloNoDestaque ? (
+    // O título dentro do card de destaque, à esquerda, e a marcação à direita, antes de Reajustar Marcados (11/11/2026).
+    <div className="flex items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+      <div className="min-w-0 flex-1">{cabecalhoDaTabela}</div>
+      {editavel ? (
+        <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+          {marcacao}
+          {reajustar}
         </div>
-      ) : (
-        <>
-          {semTitulo ? null : cabecalhoDaTabela}
-          {editavel ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
-              {marcacao}
-              {reajustar}
-            </div>
-          ) : null}
-        </>
-      )}
+      ) : null}
+    </div>
+  ) : editavel ? (
+    <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+      {marcacao}
+      {reajustar}
+    </div>
+  ) : null;
+  const { refOriginal, refArea, refFlutuante, flutuar, rotulos } = useDestaqueFlutuante(!!destaque);
+  const noLugar = destaque ? <div ref={refOriginal}>{destaque}</div> : null;
+  const tabela = (
+    <div ref={refArea}>
+      {destaque ? <DestaqueFlutuante refFlutuante={refFlutuante} flutuar={flutuar} rotulos={rotulos}>{destaque}</DestaqueFlutuante> : null}
       <div className="rounded-sm border border-gray-200 bg-white">
-        <div ref={topo} className="sticky top-[var(--topo-tabela,0px)] z-30 overflow-hidden">
+        <div ref={topo} data-topo-da-tabela className="sticky top-[var(--topo-tabela,0px)] z-30 overflow-hidden">
         <table className="tabela-sig table-fixed border-collapse [--topo-tabela:0px]" style={{ width: total, minWidth: "100%" }}>
           {colgroup}
           <thead>
@@ -373,6 +396,19 @@ export function TabelaEditavel({
         </div>
         <BarraDeRolagem area={area} />
       </div>
+    </div>
+  );
+  return (
+    <section className="space-y-2">
+      {tituloNoDestaque || semTitulo ? null : cabecalhoDaTabela}
+      {envolver ? (
+        envolver({ destaque: noLugar, tabela })
+      ) : (
+        <>
+          {noLugar}
+          {tabela}
+        </>
+      )}
       {reajuste ? (
         <ReajusteDialog
           valores={marcados}

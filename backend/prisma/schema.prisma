@@ -3202,6 +3202,15 @@ model ColaboradorCargaInicial {
   centroCustoId    String             @map("centro_custo_id")
   /// A linha da planilha importada (nulo nos registros incluídos pela tela).
   linhaArquivo     Int?               @map("linha_arquivo")
+  /// Os valores do colaborador (16/11/2026, pedido do Adão), em R$ por mês; nulos sem valor informado. O Salário Total
+  /// (Salário Bruto + Adicional) não se grava: o SIG calcula.
+  salarioBruto     Decimal?           @map("salario_bruto") @db.Decimal(14, 2)
+  /// O Adicional de Periculosidade / Insalubridade.
+  adicional        Decimal?           @db.Decimal(14, 2)
+  /// A Cesta Básica / Seguro de Vida / Vale Alimentação.
+  cestaBasica      Decimal?           @map("cesta_basica") @db.Decimal(14, 2)
+  planoSaude       Decimal?           @map("plano_saude") @db.Decimal(14, 2)
+  valeTransporte   Decimal?           @map("vale_transporte") @db.Decimal(14, 2)
   criadoEm         DateTime           @default(now()) @map("criado_em")
   atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
 

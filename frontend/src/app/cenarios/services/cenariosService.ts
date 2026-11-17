@@ -138,11 +138,17 @@ export type LinhaDoQuadroDoCenario = {
   centro: string;
   grupo: string | null;
   meses: MesDoQuadro[];
+  /** Os colaboradores da linha na referência do cenário (16/11/2026; nulo: a linha não está nela, ou sem referência). */
+  referencia: number | null;
+  /** Na referência realizada (16/11/2026), os salários de cada colaborador da linha (a média do Lançamento Inicial); nulos sem salário. */
+  referenciaSalarios: { salarioBruto: number; adicional: number } | null;
 };
 export type QuadroDoCenario = {
   ano: number;
   meses: Array<{ mes: number; rotulo: string }>;
   editavel: boolean;
+  /** A referência do cenário para o Quadro de Lotação (16/11/2026): o QL Realizado mais recente ou o último mês do cenário de origem. */
+  referencia: { rotulo: string; comSalarios: boolean } | null;
   linhas: LinhaDoQuadroDoCenario[];
   opcoes: {
     unidades: Array<{ id: string; nome: string }>;
@@ -460,8 +466,9 @@ export const cenariosService = {
   alterarLinhaDoQuadro: async (id: string, linhaId: string, dados: DadosDaLinhaDoQuadro) => (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`, dados)).data.data,
   excluirLinhaDoQuadro: async (id: string, linhaId: string) => (await api.delete<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`)).data.data,
   excluirLinhasDoQuadro: async (id: string, ids: string[]) => (await api.post<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/excluir`, { ids })).data.data,
-  gravarMesesDoQuadro: async (id: string, alteracoes: Array<{ linha: string; mes: number; campo: CampoDoMes; valor: number | null }>) =>
-    (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/meses`, { alteracoes })).data.data,
+  /** Grava os meses das linhas do Quadro de Lotação; a origem (16/11/2026: o modal Editar Valor) vai para o histórico. */
+  gravarMesesDoQuadro: async (id: string, alteracoes: Array<{ linha: string; mes: number; campo: CampoDoMes; valor: number | null }>, origem?: OrigemDaGravacao) =>
+    (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/meses`, { alteracoes, origem })).data.data,
   investimentos: async (id: string) => (await api.get<{ data: InvestimentosDoCenario }>(`/proxy/cenarios/${id}/investimentos`)).data.data,
   criarInvestimento: async (id: string, dados: DadosDoInvestimento) => (await api.post<{ data: InvestimentosDoCenario }>(`/proxy/cenarios/${id}/investimentos`, dados)).data.data,
   alterarInvestimento: async (id: string, investimentoId: string, dados: DadosDoInvestimento) =>
@@ -578,7 +585,8 @@ export const cenariosService = {
   gravarJustificativa: async (id: string, visao: number, linha: string, texto: string) => {
     await api.put(`/proxy/cenarios/${id}/justificativas`, { visao, linha, texto });
   },
-  salvarManual: async (id: string, nome: string, valores: Array<number | null>) => {
-    await api.put(`/proxy/cenarios/${id}/indicadores/manuais`, { nome, valores });
+  /** Grava os doze meses de um indicador manual; a origem (16/11/2026: o modal Editar Valor) vai para o Histórico. */
+  salvarManual: async (id: string, nome: string, valores: Array<number | null>, origem?: OrigemDaGravacao) => {
+    await api.put(`/proxy/cenarios/${id}/indicadores/manuais`, { nome, valores, origem });
   },
 };

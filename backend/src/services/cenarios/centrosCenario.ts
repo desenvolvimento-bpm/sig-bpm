@@ -14,8 +14,9 @@ import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
  *   Montagem (CSM) e a Complementar (na conta equivalente da CSC);
  * - nas despesas (DL, DT, DC e DA), Despesas e Extra.
  *
- * Os percentuais dos rateios saem das premissas (premissasCenario.ts): Produção pelo m³ produzido, Projeto pelo m³
- * produzido da venda Global, Metalurgia e Armadura pelo kg das linhas (o volume × a demanda por unidade) e
+ * Os percentuais dos rateios saem das premissas (premissasCenario.ts): Produção pelo m³ produzido, Projeto pela Liberação
+ * de Projetos: Matriz e Filial dos Indicadores Manuais (projetosCenario.ts, 16/11/2026; como no Fechamento Mensal, os
+ * Projetos Liberados), Metalurgia e Armadura pelo kg das linhas (o volume × a demanda por unidade) e
  * Acompanhamento pelos acompanhamentos das linhas de Serviços; numa chave sem base no mês, o percentual é zero (como no
  * fechamento: o valor dos grupos dela não entra).
  *
@@ -152,6 +153,7 @@ export type Percentuais = Map<string, number>;
 export const RATEIOS: Array<{ chave: string; destino: string; rotulo: string; base: string }> = [
   { chave: "PRODUCAO", destino: "MATRIZ", rotulo: "Produção: Matriz", base: "m³" },
   { chave: "PRODUCAO", destino: "FILIAL", rotulo: "Produção: Filial", base: "m³" },
+  // A base do Projeto: a Liberação de Projetos (16/11/2026), em m³.
   { chave: "PROJETO", destino: "MATRIZ", rotulo: "Projeto: Matriz", base: "m³" },
   { chave: "PROJETO", destino: "FILIAL", rotulo: "Projeto: Filial", base: "m³" },
   { chave: "METALURGIA", destino: "MATRIZ", rotulo: "Metalurgia: Matriz", base: "kg" },
