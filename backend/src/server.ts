@@ -1,6 +1,7 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { auditoriaEmSequencia } from "./services/auditoriaService.js";
+import { iniciarSyncCadastros } from "./jobs/cadastrosTotvsSyncJob.js";
 import { importacoesService } from "./services/importacoes/importacoesService.js";
 import { logger } from "./utils/logger.js";
 import { plural } from "./utils/plural.js";
@@ -20,6 +21,7 @@ const server = app.listen(env.PORT, () => {
   if (env.enableSwagger) {
     logger("info", `Swagger UI: http://localhost:${env.PORT}/api/docs`);
   }
+  iniciarSyncCadastros();
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
