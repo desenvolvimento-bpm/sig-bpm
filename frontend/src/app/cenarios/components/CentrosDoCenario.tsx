@@ -126,7 +126,8 @@ export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boole
  * As linhas da tabela Premissas do grupo (19/10/2026): o Quadro de Lotação (os Colaboradores Aprendizes, Estagiários, CLT e
  * PJ e o Total de Colaboradores, a soma — desde 12/11/2026, sempre calculados pela aba Quadro de Lotação, alimentada pela
  * Gestão de Colaboradores), os Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o
- * total do centro no fim.
+ * total do centro no fim. Desde 17/11/2026 (pedido do Adão), a conta Encargos e Benefícios vem sem os Benefícios Adicionais
+ * (a soma das duas linhas é o total da conta na DRE), e o Total do Centro os soma.
  */
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const { aprendizes, estagiarios, clt, pj } = dados.lotacao;
@@ -199,8 +200,10 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     valores: c.valores,
     gravados: c.gravados,
   }));
-  const total = Array.from({ length: 12 }, (_, k) => contas.reduce((s, c) => s + (c.valores[k] ?? 0), 0));
-  const totalReferencia = contas.some((c) => c.referencia !== null) ? contas.reduce((s, c) => s + (c.referencia ?? 0), 0) : null;
+  // Os Benefícios Adicionais (17/11/2026): fora da conta Encargos e Benefícios, entram no Total do Centro (como na DRE).
+  const beneficios = contas.some((c) => c.comBeneficios) ? dados.encargos.find((e) => e.item === "BENEFICIOS") : undefined;
+  const total = Array.from({ length: 12 }, (_, k) => contas.reduce((s, c) => s + (c.valores[k] ?? 0), 0) + (beneficios?.valores[k] ?? 0));
+  const totalReferencia = contas.some((c) => c.referencia !== null) ? contas.reduce((s, c) => s + (c.referencia ?? 0), 0) + (beneficios?.referencia ?? 0) : null;
   return [...lotacao, ...encargos, ...linhas, { chave: "TOTAL", secao: "TOTAL DO CENTRO", grupo: null, rotulo: "Total do Centro", und: "R$", tipo: "CALCULO", casas: 2, referencia: totalReferencia, valores: total, gravados: total.map(() => false) }];
 }
 

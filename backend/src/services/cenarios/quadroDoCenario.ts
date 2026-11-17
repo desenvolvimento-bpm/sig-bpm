@@ -9,14 +9,15 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  *
  * - cada linha é como a do Lançamento Inicial — a Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro
  *   de Custo (um dos centros dos grupos do cenário) — e tem, em cada mês, os Colaboradores e o Salário Bruto e a
- *   Insalubridade / Periculosidade de cada um (o Salário Total é a soma; a linha vale colaboradores × Salário Total);
+ *   Insalubridade / Periculosidade da linha (o Salário Total é a soma; desde 17/11/2026, pedido do Adão, os valores já são
+ *   os de todos os colaboradores da linha e não se multiplicam por eles);
  * - o grupo de centros com alguma linha conta por elas: os Colaboradores (a soma das linhas dos centros dele) e as
  *   Remunerações CLT e PJ, que não se digitam;
  * - Aprendizes, Estagiários, CLT e PJ (11/11/2026, pedido do Adão): os colaboradores se contam em quatro, pelo Tipo da
  *   linha — os Aprendizes (o Jovem Aprendiz), os Estagiários (os estagiários e os bolsistas, da Lei 11.788/2008), os CLT e
  *   os PJ; o Total de Colaboradores é a soma dos quatro;
  * - os Salários dos mesmos quatro (12/11/2026, pedido do Adão; antes, os dos aprendizes e os dos estagiários de cada mão de
- *   obra, pela atribuição do centro de cada linha): colaboradores × Salário Total das linhas de cada um. Todos vão para a mão
+ *   obra, pela atribuição do centro de cada linha): a soma do Salário Total das linhas de cada um. Todos vão para a mão
  *   de obra da atribuição do grupo (Direta: a MOD; Indireta ou sem atribuição: a MOI; a outra, quando o grupo da DRE só tem
  *   uma) — a outra mão de obra fica sem remunerações do quadro: as Remunerações CLT dela são os Salários dos Aprendizes, dos
  *   Estagiários e CLT, e as Remunerações PJ, os Salários PJ. O Fundo de Garantia: Aprendiz vale sobre os Salários dos
@@ -38,7 +39,7 @@ export type LinhaDoQuadro = {
 /** Os quatro tipos de colaboradores (11/11/2026), nas contagens e, desde 12/11/2026, nos salários. */
 export type TipoDeColaborador = "aprendizes" | "estagiarios" | "clt" | "pj";
 export const TIPOS_DE_COLABORADORES: TipoDeColaborador[] = ["aprendizes", "estagiarios", "clt", "pj"];
-/** Os Salários de um grupo (12/11/2026): de cada tipo, colaboradores × Salário Total das linhas, nos doze meses. */
+/** Os Salários de um grupo (12/11/2026): de cada tipo, a soma do Salário Total das linhas, nos doze meses. */
 export type SalariosDoGrupo = Record<TipoDeColaborador, number[]>;
 /**
  * O que um grupo com linhas recebe: os colaboradores de cada mês — Aprendizes, Estagiários, CLT e PJ (estes dois sem os
@@ -73,10 +74,10 @@ export function quadroDosGrupos(linhas: LinhaDoQuadro[], grupos: GrupoDoCenario[
       r.set(g.grupo, q);
     }
     q.linhas++;
-    // Os colaboradores e os salários pelo Tipo da linha.
+    // Os colaboradores e os salários pelo Tipo da linha (17/11/2026: o Salário Total já é o da linha, sem multiplicar pelos colaboradores).
     const tipo = tipoDaLinha(l);
     l.meses.forEach((m, k) => {
-      q.salarios[tipo][k] += m.colaboradores * salarioTotal(m);
+      q.salarios[tipo][k] += salarioTotal(m);
       q[tipo][k] += m.colaboradores;
     });
   }

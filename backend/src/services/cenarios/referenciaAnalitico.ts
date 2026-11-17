@@ -71,7 +71,7 @@ export type ReferenciaRealizada = {
   premissas: Array<{ unidade: UnidadePremissa; venda: Venda; chave: string; valor: number }>;
   /** Os grupos de centros de custo, por conta e mês. */
   centros: Array<{ grupo: string; codigo: string; mes: number; valor: number }>;
-  /** Os mesmos, sem as realocações aplicadas (14/10/2026: a média dos centros conta os meses com movimentação de cada um). */
+  /** Os mesmos, sem as realocações aplicadas (a Média de Referência dos centros sai deles: a soma ÷ os meses do período). */
   centrosProprios: Array<{ grupo: string; codigo: string; mes: number; valor: number }>;
   /** A depreciação (BASE) e o extra-operacional (EXTRA) das unidades, mês a mês ("u|conta"). */
   mensais: Array<{ venda: typeof VENDA_BASE | typeof VENDA_EXTRA; unidade: number; chave: string; mes: number; valor: number }>;
@@ -87,26 +87,24 @@ export type ReferenciaRealizada = {
 };
 
 /**
- * A média dos centros de custo na referência Média Replicada (14/10/2026): a soma de cada grupo e conta no período ÷ o
- * número de meses em que a conta teve movimentação no grupo (antes, ÷ todos os meses do período), nos doze meses. A
- * conta sem movimentação no período fica de fora.
+ * A Média de Referência dos centros de custo (o mês 0): a soma de cada grupo e conta no período ÷ `meses`, os meses da
+ * referência — também os meses sem valor (17/11/2026, pedido do Adão: a conta com valor num mês só, num período de 9 meses,
+ * fica com o valor ÷ 9; de 14/10 a 17/11/2026, ÷ só os meses com movimentação). A conta sem movimentação no período fica de fora.
  */
-export function mediaNosMesesComOcorrencia<T extends { mes: number; valor: number }>(xs: T[], chave: (x: T) => string): T[] {
-  const somas = new Map<string, { x: T; soma: number; meses: Set<number> }>();
+export function mediaNoPeriodo<T extends { mes: number; valor: number }>(xs: T[], chave: (x: T) => string, meses: number): T[] {
+  const somas = new Map<string, { x: T; soma: number; comValor: boolean }>();
   for (const x of xs) {
-    const s = somas.get(chave(x)) ?? { x, soma: 0, meses: new Set<number>() };
+    const s = somas.get(chave(x)) ?? { x, soma: 0, comValor: false };
     s.soma += x.valor;
-    if (Math.abs(x.valor) >= 0.005) s.meses.add(x.mes);
+    if (Math.abs(x.valor) >= 0.005) s.comValor = true;
     somas.set(chave(x), s);
   }
-  return [...somas.values()].flatMap(({ x, soma, meses }) => (meses.size ? Array.from({ length: 12 }, (_, k) => ({ ...x, mes: k + 1, valor: soma / meses.size })) : []));
+  return [...somas.values()].flatMap(({ x, soma, comValor }) => (comValor && meses > 0 ? [{ ...x, mes: 0, valor: soma / meses }] : []));
 }
 
-/** Os doze meses de uma movimentação na Média Replicada: a soma ÷ os meses com movimentação (14/10/2026). */
-export function mediaDosMeses(meses: number[]): number[] {
-  const com = meses.filter((v) => Math.abs(v) >= 0.005);
-  const media = com.length ? com.reduce((s, v) => s + v, 0) / com.length : 0;
-  return Array<number>(12).fill(media);
+/** A Média de Referência de uma movimentação fora dos padrões: a soma dos meses ÷ `meses`, os da referência (17/11/2026). */
+export function mediaDoPeriodo(valores: number[], meses: number): number {
+  return meses > 0 ? valores.reduce((s, v) => s + v, 0) / meses : 0;
 }
 
 const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });

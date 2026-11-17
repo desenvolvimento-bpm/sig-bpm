@@ -26,8 +26,8 @@ import { lerNumero, ValorDialog } from "./EdicaoDialogs";
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
 const CAMPOS: Array<{ campo: CampoDoMes; rotulo: string; dica: string; largura: number }> = [
   { campo: "colaboradores", rotulo: "Colab.", dica: "Colaboradores", largura: 72 },
-  { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$) de cada colaborador", largura: 108 },
-  { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$) de cada colaborador", largura: 112 },
+  { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$) da linha: o de todos os colaboradores dela", largura: 108 },
+  { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$) da linha: a de todos os colaboradores dela", largura: 112 },
 ];
 const LARGURA_TOTAL = 108;
 const LARGURA_CUSTO = 156;
@@ -54,7 +54,8 @@ const total = (m: MesDoQuadro) => m.salarioBruto + m.adicional;
 /**
  * A aba Quadro de Lotação das premissas de um cenário analítico (09/11/2026, etapa 4 da Gestão de Colaboradores): as
  * linhas como as do Lançamento Inicial (Unidade, Tipo, Função e Centro de Custo) e, em cada mês, quatro colunas — os
- * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um e o Salário Total (a soma). Clicar num valor
+ * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (17/11/2026, pedido do Adão: os de todos os
+ * colaboradores dela, sem multiplicar por eles) e o Salário Total (a soma). Clicar num valor
  * abre o modal Editar Valor (16/11/2026, pedido do Adão: o mesmo das demais abas, no lugar da digitação na tabela com
  * Gravar / Descartar), com o reajuste e a chave de replicar aos meses seguintes; cada gravação vai para o histórico. Como nas
  * tabelas das outras abas (16/11/2026), as caixas das linhas e dos meses marcam valores, e o Replicar Referências leva os
@@ -112,7 +113,8 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   });
   const semReferencia = linhasMarcadas.filter((l) => l.referencia === null).length;
   const todosOsMeses = mesesMarcados.size === meses.length;
-  const custoNoAno = (l: LinhaDoQuadroDoCenario) => l.meses.reduce((s, _, k) => s + efetivo(l, k).colaboradores * total(efetivo(l, k)), 0);
+  // 17/11/2026: o Salário Total já é o da linha (todos os colaboradores), sem multiplicar.
+  const custoNoAno = (l: LinhaDoQuadroDoCenario) => l.meses.reduce((s, _, k) => s + total(efetivo(l, k)), 0);
   const foraDosGrupos = dados.linhas.filter((l) => !l.grupo).length;
   // As colunas fixas: a caixa (com edição) e as dos cadastros.
   const esquerdas: number[] = [];
@@ -246,7 +248,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     </span>
                   </th>
                 ))}
-                <th rowSpan={2} className="border-l border-gray-300 px-3 py-2 text-right" title="Colaboradores × Salário Total, nos doze meses">
+                <th rowSpan={2} className="border-l border-gray-300 px-3 py-2 text-right" title="A soma do Salário Total dos doze meses">
                   Custo no Ano (R$)
                 </th>
                 {pode ? <th rowSpan={2} className="px-2 py-2" aria-label="Ações" /> : null}
@@ -355,14 +357,14 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   {meses.map((m) => {
                     const k = m.mes - 1;
                     const colaboradores = linhas.reduce((s, l) => s + efetivo(l, k).colaboradores, 0);
-                    const folha = linhas.reduce((s, l) => s + efetivo(l, k).colaboradores * total(efetivo(l, k)), 0);
+                    const folha = linhas.reduce((s, l) => s + total(efetivo(l, k)), 0);
                     return [
                       <td key={`${m.mes}c`} className="border-l border-gray-300 px-3 py-2 text-right">
                         {numero(colaboradores)}
                       </td>,
                       <td key={`${m.mes}b`} />,
                       <td key={`${m.mes}a`} />,
-                      <td key={`${m.mes}t`} className="px-3 py-2 text-right whitespace-nowrap" title="A folha do mês: colaboradores × Salário Total">
+                      <td key={`${m.mes}t`} className="px-3 py-2 text-right whitespace-nowrap" title="A folha do mês: a soma do Salário Total das linhas">
                         {reais(folha)}
                       </td>,
                     ];
@@ -450,7 +452,7 @@ function SubCabecalhos() {
           {c.rotulo}
         </th>
       ))}
-      <th className="px-2 py-1.5 text-right whitespace-nowrap" style={{ width: LARGURA_TOTAL }} title="Salário Total (R$): Salário Bruto + Insalubridade / Periculosidade, de cada colaborador">
+      <th className="px-2 py-1.5 text-right whitespace-nowrap" style={{ width: LARGURA_TOTAL }} title="Salário Total (R$): Salário Bruto + Insalubridade / Periculosidade da linha (todos os colaboradores dela)">
         Salário Total
       </th>
     </>
@@ -499,7 +501,7 @@ function CelulasDoMes({
 
 /**
  * A Nova Entrada e o Editar Linha do Quadro de Lotação: a Unidade, o Tipo, a Função e o Centro de Custo (dos
- * grupos do cenário); na nova, os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um, a partir
+ * grupos do cenário); na nova, os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha, a partir
  * do mês escolhido (os meses se editam depois na tabela).
  */
 function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados: Dados; linha: LinhaDoQuadroDoCenario | null; onFechar: () => void }) {
@@ -561,7 +563,7 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
           <DialogDescription>
             {linha
               ? "Os cadastros da linha; os colaboradores e os salários de cada mês se editam na tabela."
-              : "Como no Lançamento Inicial: a unidade, o tipo, a função e o centro de custo; e os colaboradores e os salários de cada um a partir do mês escolhido (os meses se editam depois na tabela)."}
+              : "Como no Lançamento Inicial: a unidade, o tipo, a função e o centro de custo; e os colaboradores e os salários da linha (os de todos os colaboradores dela) a partir do mês escolhido (os meses se editam depois na tabela)."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -602,7 +604,7 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
               {campo("Salário Bruto (R$)", "ql-bruto", bruto, setBruto)}
               {campo("Insalubridade / Periculosidade (R$)", "ql-adicional", adicional, setAdicional)}
               <p className="text-sm text-gray-700 sm:col-span-2">
-                Salário Total de cada colaborador: <span className="font-bold text-gray-900">R$ {reais(salarioTotal)}</span>
+                Salário Total da linha (todos os colaboradores): <span className="font-bold text-gray-900">R$ {reais(salarioTotal)}</span>
               </p>
             </>
           )}

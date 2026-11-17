@@ -55,10 +55,11 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.equal(g.linhas, 3);
     // 11/11/2026: os aprendizes à parte dos CLT.
     assert.deepEqual([g.aprendizes[0], g.estagiarios[0], g.clt[0], g.pj[0]], [2, 0, 3, 1]);
-    // Os Salários de cada tipo: colaboradores × (Salário Bruto + Insalubridade / Periculosidade).
-    assert.deepEqual([g.salarios.aprendizes[0], g.salarios.estagiarios[0], g.salarios.clt[0], g.salarios.pj[0]], [3_000, 0, 13_200, 8_000]);
+    // Os Salários de cada tipo: a soma do Salário Bruto + Insalubridade / Periculosidade das linhas (17/11/2026, pedido do
+    // Adão: os valores da linha já são os de todos os colaboradores dela; não se multiplicam por eles).
+    assert.deepEqual([g.salarios.aprendizes[0], g.salarios.estagiarios[0], g.salarios.clt[0], g.salarios.pj[0]], [1_500, 0, 4_400, 8_000]);
     // As Remunerações: CLT, os Aprendizes, os Estagiários e os CLT; PJ, os PJ — na mão de obra do grupo (Indireta: a MOI).
-    assert.deepEqual(remuneracoesDoQuadro(g.salarios, 0), { clt: 16_200, pj: 8_000 });
+    assert.deepEqual(remuneracoesDoQuadro(g.salarios, 0), { clt: 5_900, pj: 8_000 });
     assert.deepEqual(maosDeObraDoGrupo(CONTAS, "INDIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", false], ["CPP.MOI", true]]);
     assert.deepEqual(maosDeObraDoGrupo(CONTAS, "DIRETA").map((m) => [m.prefixo, m.principal]), [["CPP.MOD", true], ["CPP.MOI", false]]);
     assert.deepEqual((["APRENDIZ", "ESTAGIARIO", "CLT", "PJ"] as const).map((vinculo) => tipoDaLinha({ vinculo })), ["aprendizes", "estagiarios", "clt", "pj"]);
@@ -79,9 +80,10 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     // O total: a soma dos quatro, as onze pessoas das linhas.
     assert.equal(g.aprendizes[0] + g.estagiarios[0] + g.clt[0] + g.pj[0], 11);
     const s = g.salarios;
-    assert.deepEqual([s.aprendizes[0], s.estagiarios[0], s.clt[0], s.pj[0]], [3_000, 4_600, 20_000, 9_000]);
+    // Os salários das linhas, sem multiplicar pelos colaboradores (17/11/2026); os dois estagiários somam as duas linhas.
+    assert.deepEqual([s.aprendizes[0], s.estagiarios[0], s.clt[0], s.pj[0]], [1_500, 2_200, 5_000, 9_000]);
     const rem = remuneracoesDoQuadro(s, 0);
-    assert.deepEqual(rem, { clt: 3_000 + 4_600 + 20_000, pj: 9_000 });
+    assert.deepEqual(rem, { clt: 1_500 + 2_200 + 5_000, pj: 9_000 });
     // Os encargos: a base sem os estagiários, com o FGTS dos aprendizes a 2%.
     const r = encargosDoGrupo(
       CONTAS,
@@ -91,11 +93,11 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
       () => s.aprendizes[0],
       () => s.estagiarios[0],
     );
-    const esperado = encargosDaBase(3_000 + 20_000, 3_000, padrao);
+    const esperado = encargosDaBase(1_500 + 5_000, 1_500, padrao);
     assert.ok(Math.abs(r.get("CPP.MOI.ENCARGOS_E_BENEFICIOS")![0] - esperado) < 1e-9);
     // O mesmo que os encargos de cada um: o CLT com tudo, o aprendiz com o FGTS a 2%, o estagiário sem nada.
     const provisoes = 1 / 9 + 1 / 12;
-    const cadaUm = 20_000 * FATOR_PADRAO + 3_000 * (0.29 + 0.02 + provisoes + (0.29 + 0.02) * provisoes);
+    const cadaUm = 5_000 * FATOR_PADRAO + 1_500 * (0.29 + 0.02 + provisoes + (0.29 + 0.02) * provisoes);
     assert.ok(Math.abs(esperado - cadaUm) < 1e-9);
   });
 
@@ -109,6 +111,9 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.equal(aba.linhas[3][0].valor, "Departamentos do arquivo: Produção, Serviços");
     assert.deepEqual(aba.linhas[4].slice(0, 4).map((c) => c.valor), ["Unidade", "Tipo", "Função", "Centro de Custo"]);
     assert.deepEqual(aba.validacoes?.[0].lista, ["CLT", "PJ", "Aprendiz", "Estagiário"]);
+    // O Custo no Ano (17/11/2026): a soma do Salário Total dos doze meses, sem multiplicar pelos colaboradores.
+    assert.equal(aba.linhas[5].at(-1)?.valor, 12 * 1_500);
+    assert.equal(aba.linhas[5].at(-1)?.formula?.startsWith("N(F6)+N(G6)+N(J6)+N(K6)"), true);
     // Uma linha nova, preenchida na primeira linha em branco: só março.
     const nova = aba.linhas[5 + linhas.length];
     ["Matriz", "CLT", "Analista", "1.01"].forEach((v, k) => (nova[k] = { valor: v }));
@@ -135,7 +140,7 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     const rem = formulaDoQuadro({ centros: ["1.01"], tipo: "CLT", soma: "SALARIOS" }, q, 0);
     assert.equal(
       rem,
-      "SUMPRODUCT(((('Quadro de Lotação'!D$6:D$38=\"1.01\")+(LEFT('Quadro de Lotação'!D$6:D$38,7)=\"1.01 - \"))>0)*('Quadro de Lotação'!B$6:B$38=\"CLT\")*'Quadro de Lotação'!F$6:F$38*('Quadro de Lotação'!G$6:G$38+'Quadro de Lotação'!H$6:H$38))",
+      "SUMPRODUCT(((('Quadro de Lotação'!D$6:D$38=\"1.01\")+(LEFT('Quadro de Lotação'!D$6:D$38,7)=\"1.01 - \"))>0)*('Quadro de Lotação'!B$6:B$38=\"CLT\")*('Quadro de Lotação'!G$6:G$38+'Quadro de Lotação'!H$6:H$38))",
     );
     // Os aprendizes e os estagiários pelo Tipo (o Estagiário também sem o acento).
     assert.ok(formulaDoQuadro({ centros: ["1.01"], tipo: "APRENDIZ", soma: "COLABORADORES" }, q, 0).includes("('Quadro de Lotação'!B$6:B$38=\"Aprendiz\")"));

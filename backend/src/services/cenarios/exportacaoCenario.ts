@@ -4,7 +4,6 @@ import { estrutura } from "../dre/dreService.js";
 import { arquivoDeResultados, identificacaoLivre, type Bloco, type Formato } from "../relatorios/exportacaoRelatoriosService.js";
 import { CenarioError, cenariosService, rotuloVersao } from "./cenariosService.js";
 import { abaConsolidado, juntarOrigem, type OrigensDasContas } from "./consolidadoDosCentros.js";
-import { maosDeObraDoGrupo } from "./encargosCenario.js";
 
 type Usuario = NonNullable<Parameters<typeof cenariosService.obter>[1]>;
 
@@ -76,7 +75,7 @@ export const exportacaoCenarioService = {
           est: await estrutura(),
           informacoes: [
             `${nomeBase} · ${geracao}`,
-            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate; por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os Encargos e Benefícios (os percentuais) não entram; a conta Encargos e Benefícios, sim.",
+            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate; por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os percentuais dos Encargos e Benefícios não entram; a conta Encargos e Benefícios entra com os Benefícios Adicionais (nas abas, em linhas separadas).",
           ],
           rotulos: lista.meses.map((m) => m.rotulo),
           total: [0, lista.meses.length - 1],
@@ -96,7 +95,7 @@ type ContasDaAba = Array<{ codigo: string; linha: number; valores: number[] }>;
  * A aba de um grupo de centros (19/10/2026: como a tabela Premissas da tela): o Quadro de Lotação (Colaboradores CLT e PJ
  * e o Total de Colaboradores, em fórmula; no total, a média), os Encargos e Benefícios (os percentuais e os Benefícios
  * Adicionais) e as contas por atribuição, nos doze meses e no total. A conta Encargos e Benefícios vai em fórmula:
- * base × [(INSS + FGTS + Férias + Décimo Terceiro) + (INSS + FGTS) × (Férias + Décimo Terceiro)] + Benefícios Adicionais
+ * base × [(INSS + FGTS + Férias + Décimo Terceiro) + (INSS + FGTS) × (Férias + Décimo Terceiro)] (+ Benefícios Adicionais até 17/11/2026)
  * (20/10/2026: com a incidência sobre as provisões; a base = Remunerações CLT + Horas Extras; os benefícios, na mão de obra
  * da atribuição do grupo); os subtotais e o total somam as contas, também em fórmula. Desde 09/11/2026 (o Quadro de Lotação
  * do cenário), o FGTS em duas linhas (Aprendiz e CLT) e, nos grupos com linhas no Quadro de Lotação, os colaboradores e as
@@ -104,7 +103,9 @@ type ContasDaAba = Array<{ codigo: string; linha: number; valores: number[] }>;
  * quatro). Desde 12/11/2026 (pedido do Adão), os Salários de cada tipo (Aprendizes, Estagiários, CLT e PJ; antes, os dos
  * Aprendizes e dos Estagiários de cada mão de obra): na mão de obra principal do grupo, as Remunerações CLT são a soma dos
  * três primeiros e as PJ, os Salários PJ, em fórmula; os Encargos e Benefícios dela tiram da base os Salários dos
- * Estagiários e aplicam o FGTS Aprendiz aos Salários dos Aprendizes.
+ * Estagiários e aplicam o FGTS Aprendiz aos Salários dos Aprendizes. Desde 17/11/2026 (pedido do Adão), a conta Encargos e
+ * Benefícios da mão de obra da atribuição do grupo vai sem os Benefícios Adicionais (a soma das duas linhas é a conta na
+ * DRE): o subtotal da atribuição e o Total do Centro os somam, e o Consolidado soma as duas linhas na conta.
  */
 function abaDoCentro(
   grupo: string,
@@ -177,7 +178,7 @@ function abaDoCentro(
   // Os encargos e benefícios: os percentuais (em fração, no formato %; no total, a média) e os Benefícios Adicionais (R$).
   secao(
     "Encargos e Benefícios",
-    "base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º) + Benefícios Adicionais; base = Remunerações CLT + Horas Extras − Salários dos Estagiários",
+    "Conta Encargos e Benefícios = base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º); base = Remunerações CLT + Horas Extras − Salários dos Estagiários. Os Benefícios Adicionais ficam fora dela: a soma das duas linhas é a conta na DRE (o subtotal da atribuição e o Total do Centro os somam).",
   );
   const linhaDoItem = new Map<string, number>();
   for (const e of dados.encargos) {
@@ -199,13 +200,17 @@ function abaDoCentro(
     return `${folha}+${provisoes}+${folha}*${provisoes}`;
   };
 
+  // Os Benefícios Adicionais do grupo (17/11/2026): a linha deles nos Encargos e Benefícios.
+  const beneficiosDoGrupo = dados.encargos.find((e) => e.item === "BENEFICIOS") ?? null;
   // As contas por atribuição; a Encargos e Benefícios em fórmula, das linhas da mesma atribuição.
   const atribuicoes = [...new Set(dados.contas.map((x) => x.atribuicao))];
   const total = Array<number>(12).fill(0);
   const subtotais: number[] = [];
   for (const a of atribuicoes) {
     const contas = dados.contas.filter((x) => x.atribuicao === a);
-    const sub = Array.from({ length: 12 }, (_, k) => soma(contas.map((x) => x.valores[k])));
+    // Os Benefícios Adicionais (17/11/2026): fora da conta Encargos e Benefícios, somam no subtotal da atribuição dela.
+    const beneficios = contas.some((x) => x.comBeneficios) ? beneficiosDoGrupo : null;
+    const sub = Array.from({ length: 12 }, (_, k) => soma(contas.map((x) => x.valores[k])) + (beneficios?.valores[k] ?? 0));
     sub.forEach((v, k) => (total[k] += v));
     const rSub = proxima();
     subtotais.push(rSub);
@@ -213,7 +218,7 @@ function abaDoCentro(
     linhas.push([
       { valor: a, estilo: ESTILO.destaque },
       { valor: null, estilo: ESTILO.destaque },
-      ...sub.map((v, k) => num(v, true, `SUM(${cMes(k)}${primeira}:${cMes(k)}${ultima})`)),
+      ...sub.map((v, k) => num(v, true, `SUM(${cMes(k)}${primeira}:${cMes(k)}${ultima})${beneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}`)),
       num(soma(sub), true, `SUM(${cJan}${rSub}:${cDez}${rSub})`),
     ]);
     const linhaDaConta = new Map(contas.map((x, i) => [x.codigo, primeira + i]));
@@ -223,7 +228,6 @@ function abaDoCentro(
       const r = proxima();
       const rem = linhaDaConta.get(`${prefixo(x.codigo)}.REMUNERACOES_CLT`);
       const he = linhaDaConta.get(`${prefixo(x.codigo)}.HORAS_EXTRAS`);
-      const comBeneficios = beneficiosNaConta(dados, x.codigo);
       // Na mão de obra principal (12/11/2026: a que recebe as remunerações do Quadro de Lotação), os salários do grupo.
       const daPrincipal = !!dados.principal && prefixo(x.codigo) === dados.principal;
       // 09/11/2026: a diferença do FGTS dos aprendizes sobre os salários deles, com a incidência nas provisões.
@@ -243,7 +247,7 @@ function abaDoCentro(
             : ["aprendizes", "estagiarios", "clt"].map((t) => salario(t, k)).join("+");
       const formula = (k: number) =>
         x.calculada && !x.doQuadro
-          ? `(${rem ? `${cMes(k)}${rem}` : "0"}+${he ? `${cMes(k)}${he}` : "0"}${estagiarios(k)})*(${percentuais(k)})${aprendizes(k)}${comBeneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}`
+          ? `(${rem ? `${cMes(k)}${rem}` : "0"}+${he ? `${cMes(k)}${he}` : "0"}${estagiarios(k)})*(${percentuais(k)})${aprendizes(k)}`
           : remuneracao(k);
       linhas.push([
         { valor: null, estilo: ESTILO.item },
@@ -252,6 +256,8 @@ function abaDoCentro(
         num(soma(x.valores), false, `SUM(${cJan}${r}:${cDez}${r})`),
       ]);
       contasDaAba.push({ codigo: x.codigo, linha: r, valores: x.valores.map(arred) });
+      // Os Benefícios Adicionais (17/11/2026) somam na conta no Consolidado.
+      if (x.comBeneficios && beneficiosDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS")!, valores: beneficiosDoGrupo.valores.map(arred) });
     }
   }
   const rTotal = proxima();
@@ -264,10 +270,3 @@ function abaDoCentro(
   return { nome: grupo, larguras: [26, 44, ...meses.map(() => 13), 15], linhas, linhaCabecalho: cabecalho, rodape: `${cenario} · Centro de Custo ${grupo}`, paisagem: true, congelarPrimeiraColuna: true };
 }
 
-/**
- * A conta Encargos e Benefícios que leva os Benefícios Adicionais: a da mão de obra da atribuição do grupo (Direta: a MOD;
- * Indireta ou sem atribuição: a MOI; a outra, quando o grupo só tem uma), como no cálculo (encargosCenario.ts).
- */
-function beneficiosNaConta(dados: Awaited<ReturnType<typeof cenariosService.centro>>, codigo: string) {
-  return !!maosDeObraDoGrupo(dados.contas.map((x) => x.codigo), dados.grupo.atribuicao).find((m) => m.encargos === codigo)?.beneficios;
-}

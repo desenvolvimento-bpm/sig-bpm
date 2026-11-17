@@ -118,11 +118,15 @@ export type ContasDoCentro = {
   principal: string | null;
   /** Os Encargos e Benefícios (19/10/2026): os percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$. */
   encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$" }>;
-  /** `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026). */
-  contas: Array<SerieDoCentro & { codigo: string; descricao: string; atribuicao: string; calculada: boolean; doQuadro: boolean }>;
+  /**
+   * `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026).
+   * `comBeneficios` (17/11/2026): a conta Encargos e Benefícios que, na DRE, leva os Benefícios Adicionais; aqui vem sem eles
+   * (a soma das duas linhas é o total), e o Total do Centro os soma.
+   */
+  contas: Array<SerieDoCentro & { codigo: string; descricao: string; atribuicao: string; calculada: boolean; doQuadro: boolean; comBeneficios?: boolean }>;
 };
 
-/** Um mês de uma linha do Quadro de Lotação do cenário (09/11/2026): os colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um. */
+/** Um mês de uma linha do Quadro de Lotação do cenário (09/11/2026): os colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (17/11/2026: de todos os colaboradores dela). */
 export type MesDoQuadro = { colaboradores: number; salarioBruto: number; adicional: number };
 export type CampoDoMes = keyof MesDoQuadro;
 /** Uma linha da aba Quadro de Lotação: os cadastros (como no Lançamento Inicial), o grupo do centro (null: fora dos grupos) e os doze meses. */

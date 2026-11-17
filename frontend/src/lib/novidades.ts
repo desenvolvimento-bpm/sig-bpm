@@ -28,6 +28,27 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 17/11/2026, fim da tarde: a conta Encargos e Benefícios sem os Benefícios Adicionais nas Premissas, os salários do Quadro
+  // de Lotação dos cenários como o total da linha e as Médias de Referência sobre todos os meses da referência.
+  {
+    publicada: "2026-11-17T16:15",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na Referência pelo resultado realizado, cada Média de Referência (as contas dos centros de custo, as realocações, a depreciação base, o extra-operacional e os indicadores) é a soma do período ÷ todos os meses dele, também os meses sem valor: uma conta com valor num só mês de uma referência de 9 meses fica com esse valor ÷ 9. Vale nas próximas cargas da referência; para atualizar as médias de um cenário, carregue a referência de novo (com “Manter os Valores dos Meses”, os meses ficam como estão).",
+    ],
+  },
+  {
+    publicada: "2026-11-17T16:15",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Nos Centros de Custo, a conta Encargos e Benefícios mostra só o cálculo pelos percentuais, sem os Benefícios Adicionais: a soma das duas linhas dá o total da conta, que é o que vai para a DRE (na referência realizada, o realizado). Vale também na Média de Referência, no Total do Centro e no Exportar Premissas, inclusive nos meses do realizado.",
+      "No Quadro de Lotação, o Salário Bruto e a Insalubridade / Periculosidade de cada mês são os da linha inteira (todos os colaboradores dela): os Salários e as Remunerações dos Centros de Custo, o Custo no Ano e o Exportar Premissas não multiplicam mais esses valores pela quantidade de colaboradores.",
+    ],
+  },
   // 17/11/2026, à tarde: sem os salários e os benefícios no Lançamento Inicial e sem os salários na Referência do Quadro de Lotação.
   {
     publicada: "2026-11-17T12:55",

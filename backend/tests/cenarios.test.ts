@@ -10,7 +10,7 @@ import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leitu
 import { diasUteis, pascoa } from "../src/services/cenarios/calendario.js";
 import { calcularTabela, linhasDaTabela } from "../src/services/cenarios/premissasCenario.js";
 import { alocarCentros, contasDoGrupo, percentuaisDasBases, rateiosSemBase } from "../src/services/cenarios/centrosCenario.js";
-import { dividirPorLinhas, linhaDaTarefa, mediaDosMeses, mediaNosMesesComOcorrencia, vendaDaObra } from "../src/services/cenarios/referenciaAnalitico.js";
+import { dividirPorLinhas, linhaDaTarefa, mediaDoPeriodo, mediaNoPeriodo, vendaDaObra } from "../src/services/cenarios/referenciaAnalitico.js";
 import { quadroDoGrupo, quadrosDeLotacao } from "../src/services/cenarios/lotacaoCenario.js";
 import { basesDosProjetos } from "../src/services/cenarios/projetosCenario.js";
 import { grupoDaLotacao } from "../src/services/listas/lotacaoDosCentros.js";
@@ -240,21 +240,30 @@ describe("comparativo entre cenários", () => {
     assert.equal(aba.linhas[5][10].valor, 416.67);
     assert.equal(aba.linhas[5][10].formula, 'IF(OR(H6="",J6="",J6=0),"",(H6-IF(I6="",0,I6))/J6)');
   });
-  it("a média dos centros conta só os meses com movimentação de cada grupo e conta", () => {
-    const r = mediaNosMesesComOcorrencia(
+  it("a Média de Referência dos centros: a soma ÷ todos os meses da referência, também os sem valor (17/11/2026)", () => {
+    // Uma referência de 9 meses: a conta com valor num mês só fica com o valor ÷ 9.
+    const r = mediaNoPeriodo(
       [
         { grupo: "A", codigo: "X", mes: 1, valor: 100 },
         { grupo: "A", codigo: "X", mes: 3, valor: 200 },
-        { grupo: "B", codigo: "X", mes: 2, valor: 60 },
+        { grupo: "B", codigo: "X", mes: 2, valor: 90 },
         { grupo: "B", codigo: "Y", mes: 2, valor: 0 },
       ],
       (x) => `${x.grupo}|${x.codigo}`,
+      9,
     );
-    assert.equal(r.length, 24);
-    assert.equal(r.find((x) => x.grupo === "A" && x.mes === 7)!.valor, 150);
-    assert.equal(r.find((x) => x.grupo === "B" && x.mes === 12)!.valor, 60);
-    assert.deepEqual(mediaDosMeses([0, 30, 0, 90, 0, 0, 0, 0, 0, 0, 0, 0]), Array(12).fill(60));
-    assert.deepEqual(mediaDosMeses(Array(12).fill(0)), Array(12).fill(0));
+    // A conta sem movimentação (B|Y) fica de fora; as outras, no mês 0.
+    assert.deepEqual(
+      r.map((x) => [x.grupo, x.codigo, x.mes, x.valor]),
+      [
+        ["A", "X", 0, 300 / 9],
+        ["B", "X", 0, 10],
+      ],
+    );
+    // As movimentações fora dos padrões: a soma dos doze meses ÷ os meses da referência.
+    assert.equal(mediaDoPeriodo([0, 30, 0, 90, 0, 0, 0, 0, 0, 0, 0, 0], 9), 120 / 9);
+    assert.equal(mediaDoPeriodo(Array(12).fill(0), 9), 0);
+    assert.equal(mediaDoPeriodo([50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 0), 0);
   });
   it("a Variação Máxima na estrutura da DRE: sem a primeira ROL, com as atribuições e as contas; a variação do total vale para as contas", () => {
     const { linhas, verificadas } = totaisDaDRE([

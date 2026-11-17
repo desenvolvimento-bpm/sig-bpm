@@ -42,8 +42,10 @@ export function ConfiguracoesContent() {
                   extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
                   cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, aqui na Referência, depois do “Realocar”, para levar as médias aos
                   meses (“Apagar Valores”, ao lado, deixa os doze meses de todas as abas das premissas em branco; os dois pedem editar todas as
-                  abas das premissas e confirmam antes de gravar). Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. A média de cada conta dos centros de
-                  custo divide a soma do período só pelos meses em que a conta teve movimentação. Os avisos do que não coube aparecem embaixo. Marque
+                  abas das premissas e confirmam antes de gravar). Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. Cada Média de Referência do realizado (as contas
+                  dos centros de custo, as realocações, a depreciação base, o extra-operacional e os indicadores) é a soma do período ÷ os meses dele,
+                  também quando a linha não tem valor em todos: uma conta com valor num só mês de uma referência de 9 meses fica com esse valor ÷ 9 (nas
+                  premissas das unidades, o total do período ÷ o volume ou os dias úteis dele). Os avisos do que não coube aparecem embaixo. Marque
                   “Manter os Valores dos Meses” para trocar só as Médias de Referência: os doze meses do cenário (digitados ou importados), os
                   investimentos e as linhas do Quadro de Lotação ficam, e o Justificar? do Exportar Premissas passa a comparar os meses com as médias
                   novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das

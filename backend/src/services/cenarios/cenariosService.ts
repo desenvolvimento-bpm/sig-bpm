@@ -93,7 +93,7 @@ import {
   VENDA_BASE,
   VENDA_EXTRA,
 } from "./investimentosCenario.js";
-import { mediaDosMeses, mediaNosMesesComOcorrencia, referenciaDoRealizado } from "./referenciaAnalitico.js";
+import { mediaDoPeriodo, mediaNoPeriodo, referenciaDoRealizado } from "./referenciaAnalitico.js";
 import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realocacoesCenario.js";
 import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosReajustes, type IndiceDosReajustes, type ReajusteDoIndice } from "./reajustesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
@@ -787,7 +787,6 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
   const prem = new Map(premissas.map((p) => [`${p.unidade}|${p.venda}|${p.chave}|${p.mes}`, Number(p.valor)]));
   // Os meses da referência (11/11/2026): as mesmas chaves, nas tabelas da referência.
   const refP = (chave: string) => (fonte ? doze((mes) => fonte.prem.get(`${chave}|${mes}`)) : undefined);
-  const refC = (chave: string) => (fonte ? doze((mes) => fonte.cen.get(`${chave}|${mes}`)) : undefined);
   const refI = (nome: string) => (fonte ? doze((mes) => fonte.ind.get(`${nome}|${mes}`)) : undefined);
   const quadroDaReferencia = fonte?.linhasDoQuadro ? quadroDosGrupos(fonte.linhasDoQuadro, grupos) : null;
   for (const u of UNIDADES_PREMISSAS) {
@@ -890,6 +889,10 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
         referencia: fonte ? doze((mes) => daReferencia?.salarios[s.tipo][mes - 1]) : undefined,
       });
     const salario = (ref: (chave: string) => string, tipo: TipoDeColaborador) => `N(${ref(`L|${g.grupo}|${SALARIOS_DO_QUADRO.find((s) => s.tipo === tipo)!.sufixo}`)})`;
+    // A conta Encargos e Benefícios que leva os Benefícios Adicionais (17/11/2026, pedido do Adão): vai sem eles, e a linha
+    // dos Benefícios Adicionais soma nela no Consolidado (a DRE da conta é a soma das duas).
+    const contaDosBeneficios = maosDoGrupo.find((m) => m.beneficios)?.encargos ?? null;
+    const vendaDosBeneficios = itemDosEncargos("BENEFICIOS")!.venda;
     for (const i of ITENS_DOS_ENCARGOS) {
       const ler = (mes: number) => prem.get(`0|${i.venda}|${g.grupo}|${mes}`);
       add({
@@ -903,6 +906,7 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
         meses: doze(ler),
         percentual: i.und === "%",
         referencia: refP(`0|${i.venda}|${g.grupo}`),
+        ...(i.venda === vendaDosBeneficios && contaDosBeneficios ? { somaNaConta: contaDosBeneficios } : {}),
       });
     }
     const maos = new Map(maosDoGrupo.map((m) => [m.encargos, m]));
@@ -917,7 +921,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     );
     for (const l of contasDoGrupo(est, g)) {
       const atribuicao = totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "";
-      const ler = (mes: number) => cen.get(`${g.grupo}|${l.codigo}|${mes}`);
+      // Na conta dos Benefícios Adicionais (17/11/2026), o valor gravado menos eles (no cenário e na referência).
+      const semBeneficios = (v: number | undefined, beneficios: number | undefined) => (v === undefined || l.codigo !== contaDosBeneficios ? v : v - (beneficios ?? 0));
+      const ler = (mes: number) => semBeneficios(cen.get(`${g.grupo}|${l.codigo}|${mes}`), prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`));
       // A conta Encargos e Benefícios é calculada (19/10/2026): em fórmula, das Remunerações CLT, das Horas Extras e dos
       // Encargos e Benefícios do grupo; o mês em branco dos percentuais vale a Média de Referência (o padrão).
       const mo = maos.get(l.codigo);
@@ -926,13 +932,13 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
             const item = (x: string) => `IF(${ref(`E|${g.grupo}|${x}`)}="",${ref(`E|${g.grupo}|${x}`, true)},${ref(`E|${g.grupo}|${x}`)})`;
             // 20/10/2026: com o INSS e o FGTS também sobre as férias e o décimo terceiro.
             const [folha, provisoes] = [`(${item("INSS")}+${item("FGTS")})`, `(${item("FERIAS")}+${item("DECIMO_TERCEIRO")})`];
-            const beneficios = mo.beneficios ? `+N(${ref(`E|${g.grupo}|BENEFICIOS`)})` : "";
             // Os Salários dos Aprendizes e dos Estagiários do grupo (12/11/2026: as linhas dos Salários), só na mão de obra principal.
             // 09/11/2026: o FGTS Aprendiz sobre os salários dos aprendizes (a diferença para o FGTS CLT).
             const aprendizes = mo.principal ? `+(${item("FGTS_APRENDIZ")}-${item("FGTS")})*${salario(ref, "aprendizes")}*(1+${provisoes})` : "";
             // 11/11/2026: os salários dos estagiários saem da base (sem INSS, FGTS, férias com o terço e 13º).
             const estagiarios = mo.principal ? `-${salario(ref, "estagiarios")}` : "";
-            return `(N(${ref(`C|${g.grupo}|${mo.remuneracoes}`)})+N(${ref(`C|${g.grupo}|${mo.horasExtras}`)})${estagiarios})*(${folha}+${provisoes}+${folha}*${provisoes})${aprendizes}${beneficios}`;
+            // 17/11/2026: sem os Benefícios Adicionais (a linha deles fica à parte; a soma das duas é a conta na DRE).
+            return `(N(${ref(`C|${g.grupo}|${mo.remuneracoes}`)})+N(${ref(`C|${g.grupo}|${mo.horasExtras}`)})${estagiarios})*(${folha}+${provisoes}+${folha}*${provisoes})${aprendizes}`;
           }
         : remuneracaoDa.get(l.codigo);
       add({
@@ -946,7 +952,7 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
         meses: doze(ler),
         calculada: !!mo || remuneracaoDa.has(l.codigo),
         formula,
-        referencia: refC(`${g.grupo}|${l.codigo}`),
+        referencia: fonte ? doze((mes) => semBeneficios(fonte.cen.get(`${g.grupo}|${l.codigo}|${mes}`), fonte.prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`))) : undefined,
       });
     }
   }
@@ -1627,14 +1633,14 @@ export const cenariosService = {
     const periodo = meses.length === 1 ? meses[0] : `${meses[0]} a ${meses[meses.length - 1]}`;
     const realizados = await indicadoresService.listar(ano, fechadas[fechadas.length - 1].mes, true);
     const doze = Array.from({ length: 12 }, (_, k) => k + 1);
-    // Os indicadores realizados: mês a mês, os dos meses fechados; na média, a média simples dos meses do período com
-    // valor, nos doze meses (os que saem da DRE o cenário recalcula das contas médias).
+    // Os indicadores realizados: mês a mês, os dos meses fechados; na média, a soma dos meses do período ÷ os meses dele
+    // (17/11/2026: também os sem valor), nos doze meses (os que saem da DRE o cenário recalcula das contas médias).
     const noPeriodo = (k: number) => fechadas.some((f) => f.mes === k + 1);
     const indicadores = realizados.indicadores.flatMap((i) => {
       if (!media) return i.meses.flatMap((v, k) => (v === null || !Number.isFinite(v) || !noPeriodo(k) ? [] : [{ nome: i.nome, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(8)) }]));
       const vs = i.meses.filter((v, k): v is number => v !== null && Number.isFinite(v) && noPeriodo(k));
       if (!vs.length) return [];
-      const valor = new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / vs.length).toFixed(8));
+      const valor = new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / fechadas.length).toFixed(8));
       return doze.map((mes) => ({ nome: i.nome, mes, valor }));
     });
     // Nos analíticos, a média vai só para as Médias de Referência (15/10/2026).
@@ -1642,10 +1648,10 @@ export const cenariosService = {
     // As decisões de realocação das movimentações fora dos padrões ficam entre as cargas (14/10/2026).
     const anteriores = lerRealocacoes(c.realocacoes);
     const ref = await referenciaDoRealizado(ano, fechadas.map((f) => f.mes), anteriores.decisoes);
-    // Cada movimentação (15/10/2026): a média dos meses com movimentação vai para a Média de Referência do grupo (o mês
-    // 0); os meses, só no Mês a Mês (na média do período, os meses do cenário ficam em branco).
-    // Mantendo os meses (11/11/2026), as realocações também ficam só na média.
-    const movimentacoes = ref.movimentacoes.map(({ meses, ...m }) => ({ ...m, valores: media || manter ? Array<number>(12).fill(0) : meses, media: mediaDosMeses(meses)[0] }));
+    // Cada movimentação (15/10/2026): a soma dos meses ÷ os meses da referência (17/11/2026, pedido do Adão: também os sem
+    // valor) vai para a Média de Referência do grupo (o mês 0); os meses, só no Mês a Mês (na média do período, os meses do
+    // cenário ficam em branco). Mantendo os meses (11/11/2026), as realocações também ficam só na média.
+    const movimentacoes = ref.movimentacoes.map(({ meses, ...m }) => ({ ...m, valores: media || manter ? Array<number>(12).fill(0) : meses, media: mediaDoPeriodo(meses, fechadas.length) }));
     const realocacoes: Realocacoes = {
       ...anteriores,
       referencia: nomeArquivo,
@@ -1689,17 +1695,16 @@ export const cenariosService = {
           .map((x) => ({ cenarioId: id, unidade: x.unidade, venda: x.venda, chave: x.chave, mes: x.mes, valor: decimal(x.valor) }));
         await gravarEmLotes([...premissas, ...mensais], (lote) => tx.cenarioPremissa.createMany({ data: lote }));
         await tx.cenarioCentro.deleteMany({ where: { cenarioId: id, ...soMedias } });
-        // A Média de Referência dos centros (o mês 0; 15/10/2026): cada grupo e conta conta só os meses em que teve
-        // movimentação (14/10/2026), e as realocações aplicadas entram com a média delas (a mesma que o quadro das
-        // realocações soma e tira ao mudar a decisão). No Mês a Mês, também cada mês fechado no seu mês.
+        // A Média de Referência dos centros (o mês 0; 15/10/2026): a soma de cada grupo e conta ÷ os meses da referência
+        // (17/11/2026, pedido do Adão: também os sem valor; antes, só os com movimentação), e as realocações aplicadas entram com
+        // a média delas (a mesma que o quadro das realocações soma e tira ao mudar a decisão). No Mês a Mês, também cada mês
+        // fechado no seu mês.
         const somaDosCentros = new Map<string, { grupo: string; codigo: string; mes: number; valor: number }>();
         const naSoma = (x: { grupo: string; codigo: string; mes: number; valor: number }) => {
           const k = `${x.grupo}|${x.codigo}|${x.mes}`;
           somaDosCentros.set(k, { ...x, valor: (somaDosCentros.get(k)?.valor ?? 0) + x.valor });
         };
-        mediaNosMesesComOcorrencia(ref.centrosProprios, (x) => `${x.grupo}|${x.codigo}`)
-          .filter((x) => x.mes === 1)
-          .forEach((x) => naSoma({ ...x, mes: 0 }));
+        mediaNoPeriodo(ref.centrosProprios, (x) => `${x.grupo}|${x.codigo}`, fechadas.length).forEach(naSoma);
         for (const m of movimentacoes) {
           const a = ref.aplicadas.get(m.chave);
           if (a && m.media) naSoma({ grupo: a.grupo, codigo: a.conta, mes: 0, valor: m.media });
@@ -1740,11 +1745,11 @@ export const cenariosService = {
           );
         }
         await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, ...soMedias } });
-        // Os indicadores: a Média de Referência (o mês 0, a média dos meses do período com valor) e, no Mês a Mês, os
-        // meses (15/10/2026: antes, na média, os doze meses iguais a ela).
+        // Os indicadores: a Média de Referência (o mês 0: a soma dos meses do período ÷ os meses dele — 17/11/2026, pedido do
+        // Adão, também os sem valor) e, no Mês a Mês, os meses (15/10/2026: antes, na média, os doze meses iguais a ela).
         const medias = realizados.indicadores.flatMap((i) => {
           const vs = i.meses.filter((v, k): v is number => v !== null && Number.isFinite(v) && noPeriodo(k));
-          return vs.length ? [{ nome: i.nome, mes: 0, valor: new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / vs.length).toFixed(8)) }] : [];
+          return vs.length ? [{ nome: i.nome, mes: 0, valor: new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / fechadas.length).toFixed(8)) }] : [];
         });
         const semQuadros = [...medias, ...(media || manter ? [] : indicadores)].filter((v) => !QUADROS_DE_LOTACAO.has(v.nome));
         await gravarEmLotes(semQuadros, (lote) => tx.cenarioIndicador.createMany({ data: lote.map((v) => ({ cenarioId: id, ...v, origem: "IMPORTADO" as const })) }));
@@ -2348,7 +2353,9 @@ export const cenariosService = {
    * A tabela Premissas de um grupo de centros no cenário (13/10/2026; 19/10/2026: uma tabela só), com os doze meses: o
    * Quadro de Lotação (Colaboradores CLT e PJ; o Total de Colaboradores a tela soma), os Encargos e Benefícios (os
    * percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$) e as contas do grupo (a
-   * Encargos e Benefícios, calculada).
+   * Encargos e Benefícios, calculada). Desde 17/11/2026 (pedido do Adão), a conta Encargos e Benefícios que leva os
+   * Benefícios Adicionais (comBeneficios) vem sem eles — só o cálculo pelos percentuais —, para a soma das duas linhas dar o
+   * total; na DRE, a conta continua com eles, e o Total do Centro da tela os soma.
    */
   async centro(id: string, grupo: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
@@ -2370,6 +2377,10 @@ export const cenariosService = {
     const porLinha = new Map(gravados.map((x) => [`${x.linhaDREId}|${x.mes}`, Number(x.valor)]));
     const prem = new Map(premissas.map((x) => [`${x.venda}|${x.mes}`, Number(x.valor)]));
     const totais = est.filter((l) => l.tipo !== "ITEM");
+    // A conta que leva os Benefícios Adicionais (17/11/2026): mostrada sem eles (o valor gravado menos os do mês).
+    const vendaDosBeneficios = itemDosEncargos("BENEFICIOS")!.venda;
+    const contaDosBeneficios = maos.find((m) => m.beneficios)?.encargos ?? null;
+    const beneficiosDoMes = (mes: number) => prem.get(`${vendaDosBeneficios}|${mes}`) ?? 0;
     // Os percentuais vão em % (a premissa grava a fração).
     const serie = (venda: string, padrao: number | null, escala = 1) => ({
       referencia: (prem.get(`${venda}|0`) ?? padrao) === null ? null : (prem.get(`${venda}|0`) ?? padrao)! * escala,
@@ -2394,18 +2405,25 @@ export const cenariosService = {
       salarios: SALARIOS_DO_QUADRO.map((s) => ({ tipo: s.tipo, rotulo: s.rotulo, valores: q ? [...q.salarios[s.tipo]] : Array<number>(12).fill(0) })),
       principal: maos.find((m) => m.principal)?.prefixo ?? null,
       encargos: ITENS_DOS_ENCARGOS.map((i) => ({ item: i.item, rotulo: i.rotulo, und: i.und, ...serie(i.venda, i.padrao, i.und === "%" ? 100 : 1) })),
-      contas: contasDoGrupo(est, g).map((l) => ({
-        codigo: l.codigo,
-        descricao: l.descricao,
-        // A atribuição (Mão de Obra Direta…), pelo total dela (CPP.MOD…).
-        atribuicao: totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "",
-        // A Encargos e Benefícios é calculada (19/10/2026): não se digita; as Remunerações também, com o Quadro de Lotação (09/11/2026).
-        calculada: ehContaDeEncargos(l.codigo) || doQuadro.has(l.codigo),
-        doQuadro: doQuadro.has(l.codigo),
-        referencia: porLinha.get(`${l.id}|0`) ?? null,
-        valores: Array.from({ length: 12 }, (_, k) => porLinha.get(`${l.id}|${k + 1}`) ?? 0),
-        gravados: Array.from({ length: 12 }, (_, k) => porLinha.has(`${l.id}|${k + 1}`)),
-      })),
+      contas: contasDoGrupo(est, g).map((l) => {
+        const comBeneficios = l.codigo === contaDosBeneficios;
+        const menos = (mes: number) => (comBeneficios ? beneficiosDoMes(mes) : 0);
+        const referencia = porLinha.get(`${l.id}|0`);
+        return {
+          codigo: l.codigo,
+          descricao: l.descricao,
+          // A atribuição (Mão de Obra Direta…), pelo total dela (CPP.MOD…).
+          atribuicao: totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "",
+          // A Encargos e Benefícios é calculada (19/10/2026): não se digita; as Remunerações também, com o Quadro de Lotação (09/11/2026).
+          calculada: ehContaDeEncargos(l.codigo) || doQuadro.has(l.codigo),
+          doQuadro: doQuadro.has(l.codigo),
+          // A conta dos Benefícios Adicionais (17/11/2026): sem eles aqui; o Total do Centro os soma.
+          comBeneficios,
+          referencia: referencia === undefined ? null : referencia - menos(0),
+          valores: Array.from({ length: 12 }, (_, k) => (porLinha.get(`${l.id}|${k + 1}`) ?? 0) - menos(k + 1)),
+          gravados: Array.from({ length: 12 }, (_, k) => porLinha.has(`${l.id}|${k + 1}`)),
+        };
+      }),
     };
   },
 
@@ -3262,7 +3280,7 @@ export const cenariosService = {
           est: await estruturaDRE(),
           informacoes: [
             geracao,
-            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate; por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação não entra, e esta aba não se importa.",
+            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate; por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. A conta Encargos e Benefícios soma a linha dela e a dos Benefícios Adicionais (nas abas, separadas). O Quadro de Lotação não entra, e esta aba não se importa.",
           ],
           // Os meses da referência (11/11/2026), com ela, antes da Média de Referência; o Total soma os doze meses do cenário.
           rotulos: [...(referencia ? referencia.meses.map((m) => `${referencia.rotulo} · ${m}`) : []), "Média de Referência", ...meses],

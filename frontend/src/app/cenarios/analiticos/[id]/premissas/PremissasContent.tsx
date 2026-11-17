@@ -106,17 +106,18 @@ export function PremissasContent() {
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
               (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
-              Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
-              (colaboradores × Salário Total nos doze meses) e, na última linha, o Total: os colaboradores e a folha de cada mês. No destaque acima da tabela,
+              Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um) e o
+              Salário Total (a soma) —, com o Custo no Ano (a soma do Salário Total dos doze meses) e, na última linha, o Total: os colaboradores e a
+              folha de cada mês. No destaque acima da tabela,
               com o nome dela, busque as linhas pela função, pelo centro, pela unidade ou pelo tipo. Com a referência carregada (Configurações /
               Referência), a coluna da Referência, depois do Centro de Custo, traz os Colaboradores da linha nela: os do QL Realizado da competência
               mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
               linha não está na referência). Os salários não têm referência.
               {podeEditar
-                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários da linha a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
                 : null}{" "}
               O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
-              Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
+              Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (a soma do Salário Total das linhas, sem multiplicar pelos colaboradores) e as Remunerações, que não se digitam ali:
               todos vão para a mão de obra da atribuição do grupo (Direta, a MOD; Indireta ou sem atribuição, a MOI), com as Remunerações CLT = Salários
               dos Aprendizes + Salários dos Estagiários + Salários CLT e as Remunerações PJ = Salários PJ; a outra mão de obra fica sem remunerações
               daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
@@ -135,9 +136,10 @@ export function PremissasContent() {
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
               tabelas das unidades, em R$ por unidade; a depreciação, nos investimentos). A conta Encargos e Benefícios não se digita: é a base
               (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
-              Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais
-              (os Salários dos Aprendizes e dos Estagiários e os Benefícios Adicionais, só na mão de obra da atribuição do grupo) — o FGTS de cada um
-              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
+              Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) (os Salários dos
+              Aprendizes e dos Estagiários, só na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ
+              e os estagiários não têm encargos. Os Benefícios Adicionais ficam fora da conta: somados a ela (a da mão de obra da atribuição do
+              grupo), dão o total de encargos e benefícios, que é o que vai para a DRE — também na Média de Referência —, e o Total do Centro os soma. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
               Cadastros Gerais). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
@@ -185,7 +187,9 @@ export function PremissasContent() {
               custo, a depreciação, o extra-operacional e os indicadores) ou outro cenário analítico.
             </li>
             <li>
-              Todas as abas (menos Rateios) têm a coluna Média de Ref.: a média do realizado da referência. A referência realizada carrega só as médias:
+              Todas as abas (menos Rateios) têm a coluna Média de Ref.: a média do realizado da referência — a soma do período ÷ os meses dele, também
+              os sem valor (uma conta com valor num só mês de 9 fica com esse valor ÷ 9; nas premissas das unidades, o total do período ÷ o volume ou
+              os dias úteis dele). A referência realizada carrega só as médias:
               os meses do cenário ficam em branco (no Mês a Mês, os centros de custo, a depreciação, o extra-operacional e os indicadores trazem também cada mês fechado no seu mês). Mês em branco é mês sem valor (zero; nos Dias
               Úteis, os do calendário, em cinza).
             </li>
@@ -209,9 +213,10 @@ export function PremissasContent() {
               Estagiários, CLT e PJ, em fórmula sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e o
               Total de Colaboradores, a soma; as Remunerações CLT e PJ da mão de obra da atribuição do grupo, em fórmula sobre os Salários, e as da
               outra, zero: incluir ou mudar as linhas ou os salários da aba Quadro de Lotação muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
-              Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula (as linhas calculadas não se importam nem se replicam). A aba
+              Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula, sem os Benefícios Adicionais (a soma das duas linhas é a
+              conta na DRE, também nos meses da referência; no Consolidado, a conta soma as duas) — as linhas calculadas não se importam nem se replicam. A aba
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
-              em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total (em fórmula), o Custo no Ano em fórmula
+              em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade (os da linha) e o Salário Total (em fórmula), o Custo no Ano em fórmula
               e linhas em branco para as novas; com a referência, depois do Centro de Custo, os colaboradores da linha no QL Realizado da competência
               mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
               linhas em branco para os novos. No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
@@ -316,7 +321,7 @@ export function PremissasContent() {
             <p>
               A conta Encargos e Benefícios da mão de obra (direta e indireta) de cada grupo é calculada mês a mês, com o INSS e o FGTS também sobre
               as férias e o décimo terceiro: base × [INSS + FGTS CLT + Férias (+1/3) + Décimo Terceiro + (INSS + FGTS CLT) × (Férias + Décimo
-              Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + Benefícios Adicionais, com a base =
+              Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro), com a base =
               Remunerações CLT + Horas Extras − Salários dos Estagiários (sem aprendizes e com o padrão, 63,64% da base): o FGTS de cada colaborador
               sobre os seus salários, os aprendizes (o Tipo Aprendiz, na aba Quadro de Lotação: o Jovem Aprendiz, com o INSS, as Férias e o
               Décimo Terceiro do CLT) a 2% e os demais a 8%. Os estagiários e os bolsistas (o Tipo Estagiário; Lei 11.788/2008) não têm INSS,
@@ -326,8 +331,10 @@ export function PremissasContent() {
               em todos os cenários (29% — a confirmar com a contabilidade —, 2%, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
               Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo.
               Na referência realizada, os Benefícios Adicionais de cada mês fechado e a Média de Referência deles são a diferença entre os encargos
-              realizados do grupo e o cálculo com os percentuais padrão (negativa quando o realizado fica abaixo dele): assim, a conta calculada bate
-              com o realizado. A Média de Referência da conta continua a do realizado.
+              realizados do grupo e o cálculo com os percentuais padrão (negativa quando o realizado fica abaixo dele). Nas Premissas, a conta
+              Encargos e Benefícios aparece sem os Benefícios Adicionais (só o cálculo pelos percentuais), nos meses, na Média de Referência e nos
+              meses da referência do Exportar Premissas: a soma das duas linhas é o total da conta, que vai para a DRE e, na referência realizada,
+              é o realizado.
             </p>
             <p>
               A depreciação de cada unidade é a base digitada mais a dos investimentos: cada investimento deprecia (valor total − valor pós uso) ÷ vida útil

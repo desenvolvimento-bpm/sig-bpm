@@ -225,7 +225,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                 [
                   "MEDIA",
                   "Média do Período",
-                  `As Médias de Referência de um período (os centros de custo, cada conta só nos meses com movimentação)${manterMeses ? "; os meses do cenário ficam como estão." : ": os meses do cenário ficam em branco, para replicar as médias (Replicar Médias, abaixo) ou digitar."}`,
+                  `As Médias de Referência de um período (a soma de cada linha ÷ os meses dele, também os sem valor)${manterMeses ? "; os meses do cenário ficam como estão." : ": os meses do cenário ficam em branco, para replicar as médias (Replicar Médias, abaixo) ou digitar."}`,
                 ],
                 [
                   "MES_A_MES",

@@ -65,7 +65,7 @@ export type LinhaDaPlanilha = {
   /**
    * Nos grupos com linhas no Quadro de Lotação (11/11/2026, pedido do Adão): a soma da aba Quadro de Lotação do arquivo que a
    * linha é, em fórmula — os centros (os códigos) e o Tipo das linhas que entram e o que somar (os Colaboradores ou os
-   * salários, colaboradores × (Salário Bruto + Insalubridade / Periculosidade)).
+   * salários, Salário Bruto + Insalubridade / Periculosidade; desde 17/11/2026, sem multiplicar pelos colaboradores).
    */
   doQuadro?: { centros: string[]; tipo: "CLT" | "PJ" | "APRENDIZ" | "ESTAGIARIO"; soma: "COLABORADORES" | "SALARIOS" };
   /** A conta da DRE (a variação máxima do Comparativo); nula nas linhas sem conta (volumes, dias úteis, quadros). */
@@ -91,6 +91,11 @@ export type LinhaDaPlanilha = {
   justificativa: string | null;
   /** Os doze meses da referência do cenário (11/11/2026: o realizado ou o outro cenário); sem referência, ausente. */
   referencia?: Array<number | null>;
+  /**
+   * A conta da DRE em que a linha também soma no Consolidado (17/11/2026: os Benefícios Adicionais, na conta Encargos e
+   * Benefícios da mão de obra da atribuição do grupo, que vai sem eles).
+   */
+  somaNaConta?: string;
 };
 
 /** A aba das premissas de uma chave da planilha (a permissão de editar é a dela). */
@@ -211,8 +216,8 @@ export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroD
 /**
  * A fórmula de um mês (k) de uma linha calculada pela aba Quadro de Lotação (11/11/2026): a soma das linhas da aba dos centros
  * dela (o Centro de Custo é o código ou "código - nome", como o Exportar escreve) e do Tipo (CLT, PJ, Aprendiz ou
- * Estagiário), dos Colaboradores ou dos salários (colaboradores × (Salário Bruto + Insalubridade / Periculosidade)), como o
- * SIG calcula.
+ * Estagiário), dos Colaboradores ou dos salários (Salário Bruto + Insalubridade / Periculosidade: 17/11/2026, pedido do Adão,
+ * os valores da linha já são os de todos os colaboradores dela e não se multiplicam por eles), como o SIG calcula.
  */
 export function formulaDoQuadro(d: NonNullable<LinhaDaPlanilha["doQuadro"]>, q: QuadroDoArquivo, k: number): string {
   const aba = `'${q.aba.replace(/'/g, "''")}'`;
@@ -228,7 +233,7 @@ export function formulaDoQuadro(d: NonNullable<LinhaDaPlanilha["doQuadro"]>, q: 
   const doTipo = d.tipo === "ESTAGIARIO" ? `((${tipo}="Estagiário")+(${tipo}="Estagiario"))` : `(${tipo}=${texto(ROTULO_DO_TIPO[d.tipo])})`;
   const filtros = [centros, doTipo];
   const doMes = (campo: 0 | 1 | 2) => faixa(q.doMes(k, campo));
-  const valor = d.soma === "COLABORADORES" ? doMes(0) : `${doMes(0)}*(${doMes(1)}+${doMes(2)})`;
+  const valor = d.soma === "COLABORADORES" ? doMes(0) : `(${doMes(1)}+${doMes(2)})`;
   return `SUMPRODUCT(${filtros.join("*")}*${valor})`;
 }
 
@@ -281,7 +286,11 @@ export function abaDaPlanilha(
         {
           valor:
             "Preencha os meses e a Justificativa e importe o arquivo em Premissas / Importar Valores. Em branco, o mês fica sem valor. As colunas antes da Und. identificam a linha: não as altere (nem o nome desta aba). Justificar? é Sim quando o total dos doze meses passa da Variação Máxima em relação ao Total da Referência (a Média de Referência × 12; nos percentuais, a própria Média). A Média, o Total da Referência, a Variação Máxima e Justificar? não se importam." +
-            (referencia ? ` As colunas ${referencia.rotulo}, antes da Média, são os meses da referência do cenário (${referencia.descricao}) e também não se importam.` : ""),
+            (referencia ? ` As colunas ${referencia.rotulo}, antes da Média, são os meses da referência do cenário (${referencia.descricao}) e também não se importam.` : "") +
+            // 17/11/2026 (pedido do Adão): a conta Encargos e Benefícios sem os Benefícios Adicionais.
+            (aba === "centros"
+              ? " A conta Encargos e Benefícios é o cálculo pelos percentuais, sem os Benefícios Adicionais: a soma das duas linhas é o total da conta na DRE (também na Média de Referência e nos meses da referência)."
+              : ""),
           estilo: ESTILO.informacao,
         },
       ],
@@ -346,6 +355,8 @@ export function origensDaAba(origens: OrigensDasContas, aba: string, linhas: Lin
   linhas.forEach((l, i) => {
     const daReferencia = Array.from({ length: R }, (_, k) => l.referencia?.[k] ?? null);
     if (l.chave.startsWith("C|") && l.conta) juntarOrigem(origens, l.conta, { aba, linha: PRIMEIRA_LINHA + i, colunas, valores: [...daReferencia, l.media, ...l.meses] });
+    // Os Benefícios Adicionais (17/11/2026) somam na conta Encargos e Benefícios, que vai sem eles.
+    if (l.somaNaConta) juntarOrigem(origens, l.somaNaConta, { aba, linha: PRIMEIRA_LINHA + i, colunas, valores: [...daReferencia, l.media, ...l.meses] });
   });
 }
 
@@ -651,8 +662,8 @@ export type LinhaDoQuadroDaPlanilha = {
 /**
  * A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores): as linhas da aba do cenário, com a Unidade, o
  * Tipo, a Função e o Centro de Custo (pelo código, como no Lançamento Inicial) e, em cada mês, os
- * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada um e o Salário Total (a soma, em fórmula); no
- * fim, o Custo no Ano (colaboradores × Salário Total nos doze meses, em fórmula). Abaixo, linhas em branco para as linhas
+ * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (17/11/2026: os de todos os colaboradores dela) e o
+ * Salário Total (a soma, em fórmula); no fim, o Custo no Ano (a soma do Salário Total dos doze meses, em fórmula). Abaixo, linhas em branco para as linhas
  * novas. Sem o Código da Linha (11/11/2026, pedido do Adão): na importação, as linhas da aba substituem as do cenário nos
  * departamentos do arquivo (a linha 4, `departamentos`; sem eles, todos).
  */
@@ -676,7 +687,7 @@ export function abaDoQuadroDeLotacao(
   const cCusto = coluna(n + R + 48);
   const formulas = (r: number) => ({
     total: (k: number) => `IF(AND(${col(k, 1)}${r}="",${col(k, 2)}${r}=""),"",N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`,
-    custo: Array.from({ length: 12 }, (_, k) => `N(${col(k, 0)}${r})*(N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`).join("+"),
+    custo: Array.from({ length: 12 }, (_, k) => `N(${col(k, 1)}${r})+N(${col(k, 2)}${r})`).join("+"),
   });
   const vazio = (v: number) => (v ? v : null);
   const linhasDaAba: Celula[][] = [
@@ -685,7 +696,7 @@ export function abaDoQuadroDeLotacao(
     [
       {
         valor:
-          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade de cada um; o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
+          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um); o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
           (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
         estilo: ESTILO.informacao,
       },
@@ -714,7 +725,7 @@ export function abaDoQuadroDeLotacao(
         { valor: vazio(m.adicional), estilo: ESTILO.itemNumero },
         { valor: vazio(salarioTotal(m)), estilo: ESTILO.itemNumero, formula: f.total(k) },
       ]),
-      { valor: Math.round(l.meses.reduce((s, m) => s + m.colaboradores * salarioTotal(m), 0) * 100) / 100, estilo: ESTILO.itemNumero, formula: f.custo },
+      { valor: Math.round(l.meses.reduce((s, m) => s + salarioTotal(m), 0) * 100) / 100, estilo: ESTILO.itemNumero, formula: f.custo },
     ]);
   });
   for (let k = 0; k < LINHAS_NOVAS; k++) {

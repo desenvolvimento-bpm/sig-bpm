@@ -23,7 +23,7 @@ export type MovimentacaoForaDoPadrao = {
   total: number;
   /** Os valores que entram nos doze meses do cenário (mês a mês; zeros na média do período, 15/10/2026). */
   valores: number[];
-  /** O que entra na Média de Referência do grupo (o mês 0): a média dos meses com movimentação (15/10/2026). */
+  /** O que entra na Média de Referência do grupo (o mês 0): a soma dos meses ÷ os meses da referência (17/11/2026: também os sem valor). */
   media?: number;
   /** Os grupos de centros que podem recebê-la: os que têm a mesma atribuição e conta no grupo da DRE deles. */
   destinos: Array<{ grupo: string; conta: string; departamento: string }>;
