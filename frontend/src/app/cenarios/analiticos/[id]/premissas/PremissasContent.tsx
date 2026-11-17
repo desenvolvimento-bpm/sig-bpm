@@ -23,8 +23,9 @@ import { TabelaPremissas } from "../../../components/TabelaPremissas";
 import { cenariosService, NOME_DO_DEPARTAMENTO } from "../../../services/cenariosService";
 
 /**
- * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os rateios, os investimentos,
- * o extra-operacional e os indicadores manuais (os Reajustes ficam nas Configurações desde 12/11/2026).
+ * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os investimentos, o
+ * extra-operacional, os indicadores manuais e, por último (16/11/2026, pedido do Adão), os rateios, que saem das demais (os
+ * Reajustes ficam nas Configurações desde 12/11/2026).
  */
 const ABAS = [
   { chave: "1", rotulo: "Matriz" },
@@ -32,10 +33,10 @@ const ABAS = [
   { chave: "3", rotulo: "Serviços" },
   { chave: "quadro", rotulo: "Quadro de Lotação" },
   { chave: "centros", rotulo: "Centros de Custo" },
-  { chave: "rateios", rotulo: "Rateios" },
   { chave: "investimentos", rotulo: "Investimentos" },
   { chave: "extra", rotulo: "Extra-Operacional" },
   { chave: "manuais", rotulo: "Indicadores Manuais" },
+  { chave: "rateios", rotulo: "Rateios" },
 ];
 
 /**
@@ -86,7 +87,16 @@ export function PremissasContent() {
         }
         comoUsar={
           <ul>
-            <li>Escolha a unidade nas abas: Matriz e Filial têm uma tabela para a venda Global e outra, embaixo, para a Mercantil; Serviços, só a Global. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>
+              Escolha a unidade nas abas: Matriz e Filial têm uma tabela para a venda Global e outra, embaixo, para a Mercantil; Serviços, só a Global. O
+              nome de cada tabela (Matriz · Global, Matriz · Mercantil…) fica no destaque acima dela. Aparecem só as abas que o seu perfil lê (Controle de
+              Usuários / Perfis).
+            </li>
+            <li>
+              Ao rolar a tela, os rótulos de cada tabela ficam presos logo abaixo do título da tela e, um pouco abaixo deles, o destaque da tabela continua
+              à vista, flutuando sobre ela, com as mesmas funções (menos nas abas Indicadores Manuais e Rateios). Nas abas com mais de uma tabela, o
+              destaque que flutua é o da tabela cujos rótulos estão presos.
+            </li>
             <li>
               Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só o seu recorte: o Gestor, as abas e
               as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, os investimentos e os indicadores manuais, só os
@@ -97,10 +107,13 @@ export function PremissasContent() {
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
               (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade de cada colaborador e o Salário Total (a soma) —, com o Custo no Ano
-              (colaboradores × Salário Total nos doze meses) e, no rodapé, os colaboradores e a folha de cada mês. No destaque acima da tabela, busque as linhas pela
-              função, pelo centro, pela unidade ou pelo tipo, e mostre todos os meses ou um só.
+              (colaboradores × Salário Total nos doze meses) e, na última linha, o Total: os colaboradores e a folha de cada mês. No destaque acima da tabela,
+              com o nome dela, busque as linhas pela função, pelo centro, pela unidade ou pelo tipo. Com a referência carregada (Configurações /
+              Referência), a coluna da Referência, depois do Centro de Custo, traz os Colaboradores da linha nela: os do QL Realizado da competência
+              mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
+              linha não está na referência). Os salários não têm referência.
               {podeEditar
-                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, digite os valores de cada mês e clique em “Gravar” (ou “Descartar”). O menu Ações de cada linha edita os cadastros ou a exclui; para excluir várias, marque as caixas e clique em “Excluir Selecionadas”."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários de cada um a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
                 : null}{" "}
               O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
               Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (colaboradores × Salário Total) e as Remunerações, que não se digitam ali:
@@ -112,7 +125,7 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
-              estoque e de investimento não entram) e digite, à direita, na tabela Premissas do grupo (o Quadro de Lotação — os Colaboradores Aprendizes,
+              estoque e de investimento não entram; ela começa na altura dos rótulos da tabela) e digite, à direita, na tabela Premissas do grupo (o Quadro de Lotação — os Colaboradores Aprendizes,
               Estagiários, CLT e PJ, o Total de Colaboradores, a soma, e os Salários dos Aprendizes, dos Estagiários, CLT e PJ — vem da aba Quadro de
               Lotação e não se digita): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
@@ -124,15 +137,10 @@ export function PremissasContent() {
               (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
               Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) + os Benefícios Adicionais
               (os Salários dos Aprendizes e dos Estagiários e os Benefícios Adicionais, só na mão de obra da atribuição do grupo) — o FGTS de cada um
-              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
+              sobre os seus salários; as Remunerações PJ e os estagiários não têm encargos. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
               Cadastros Gerais). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
-            </li>
-            <li>
-              Na aba Rateios, a base de cada mês (das premissas) e o percentual de cada destino: Produção pelo m³ produzido; Projeto pelo m³ produzido da venda
-              Global; Metalurgia e Armadura pelo kg de cada linha (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos
-              Acompanhamentos por Dia das linhas de Serviços (× os dias úteis). Sem base no mês, o percentual é zero, e o valor dos grupos daquela chave não entra.
             </li>
             <li>
               Na aba Investimentos, em cima, a Depreciação Base de cada unidade mês a mês (digitada: o maquinário de produção na Matriz e na Filial, o de
@@ -151,9 +159,21 @@ export function PremissasContent() {
               marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”.
             </li>
             <li>
-              Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE
-              {podeEditar ? ": clique numa linha para digitar os doze meses (as células digitadas ficam em amarelo)" : ""}. Os quadros de lotação não
+              Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE, e a Liberação de Projetos: Matriz e a
+              Liberação de Projetos: Filial (em m³; a Liberação de Projetos: Total é a soma das duas e não se digita), a base do rateio de Projeto — gravá-las
+              recalcula a DRE do cenário
+              {podeEditar
+                ? ". Clique no valor de um mês para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”; em branco, o mês fica sem valor); os valores digitados ficam em amarelo"
+                : ""}
+              . Os quadros de lotação não
               se digitam: saem do Total de Colaboradores dos grupos de centros de custo.
+            </li>
+            <li>
+              Na aba Rateios, a última, a base de cada mês (das demais abas) e o percentual de cada destino: Produção pelo m³ produzido (abas Matriz e
+              Filial); Projeto pela Liberação de Projetos: Matriz e Filial (aba Indicadores Manuais), como no Fechamento Mensal; Metalurgia e Armadura pelo kg
+              de cada linha (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos Acompanhamentos por Dia das linhas
+              de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio (Cadastros Gerais), valem eles. Sem base no mês, o
+              percentual é zero, e o valor dos grupos daquela chave não entra (o aviso acima das abas diz em que meses).
             </li>
             <li>
               Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
@@ -243,7 +263,8 @@ export function PremissasContent() {
                 <li>
                   Para levar a Média de Referência aos meses: marque as premissas e os meses e clique em “Replicar Referências”, ao lado de “Reajustar
                   Marcados”. Depois da confirmação, cada premissa marcada recebe a Média de Ref. dela nos meses marcados; as sem a média ficam como estão.
-                  Também nas abas Centros de Custo, Investimentos (a Depreciação) e Extra-Operacional; a aba Rateios não tem a Média de Referência.
+                  Também nas abas Centros de Custo, Investimentos (a Depreciação), Extra-Operacional e Quadro de Lotação (os Colaboradores, pela coluna da
+                  Referência); a aba Rateios não tem a Média de Referência.
                 </li>
                 <li>Os valores em cinza-claro são os padrões (os dias úteis do calendário, ou zero), ainda não gravados. Cada gravação recalcula a DRE do cenário (tela Resultados) e fica no histórico (tela Reajustes).</li>
               </>

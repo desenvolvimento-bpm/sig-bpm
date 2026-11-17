@@ -156,8 +156,10 @@ export function CenarioResultadosContent() {
             {analitico ? null : (
               <li>
                 Na aba Indicadores Manuais, os quadros de lotação e os indicadores do Comercial e do Administrativo, que não saem da DRE: vêm da aba
-                das metas do arquivo importado. Com a permissão de editar a aba, clique numa linha para digitar os meses (as células digitadas ficam
-                em amarelo); sem ela, clique no indicador para ver o gráfico (no Tipo e com os Rótulos do Configurar Gráficos do Painel de Bordo).
+                das metas do arquivo importado. Com a permissão de editar a aba, clique no valor de um mês para editá-lo no mesmo modal da DRE (o
+                Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”; em branco, o mês fica sem valor): os
+                valores digitados ficam em amarelo, e cada gravação vai para o histórico (tela Reajustes). Clique no indicador para ver o gráfico (no
+                Tipo e com os Rótulos do Configurar Gráficos do Painel de Bordo).
                 Com o cenário marcado ou com a versão congelada, os Indicadores Manuais não se editam. O Painel de Bordo, aba Indicadores, mostra
                 todos os indicadores do cenário.
               </li>
@@ -197,7 +199,7 @@ export function CenarioResultadosContent() {
             {podeEditar ? (
               <>
                 <li>Edição (para quem edita a aba): nas abas Matriz, Filial, Serviços, Despesas e Extra e RN, só os valores mensais das contas se editam; os totais, os percentuais e os valores por m³ são calculados. O Consolidado soma as unidades e não se edita.</li>
-                <li>Para reajustar vários valores: marque as contas (a caixa de um total ou de uma atribuição marca as contas dele) e os meses (a caixa no rótulo de cada mês, ou “Marcar Todos os Meses”). Os valores marcados ficam contornados. Clique numa linha (ou em “Reajustar Marcados”) e informe o reajuste, percentual ou absoluto: ele vale para todos os marcados.</li>
+                <li>Para reajustar vários valores: marque as contas (a caixa de um total ou de uma atribuição marca as contas dele) e os meses (a caixa no rótulo de cada mês, ou “Marcar Todos os Meses”). Os valores marcados ficam contornados. Clique numa linha (ou em “Reajustar Marcados”) e informe o reajuste, percentual ou absoluto: ele vale para todos os marcados. Ao rolar a tela, o destaque com os valores marcados e os botões continua à vista, flutuando sobre a tabela, um pouco abaixo dos rótulos presos.</li>
                 <li>Para editar um valor: clique nele. O modal mostra o valor atual, o reajuste (percentual ou absoluto) e o valor recalculado, que também se digita direto. A chave “Replicar aos meses posteriores” copia o valor recalculado aos meses seguintes. Essa edição não olha as caixas marcadas.</li>
                 <li>Cada gravação recalcula os totais da unidade e o Consolidado e fica no histórico (tela Reajustes, na barra do topo). “Limpar Seleção” desmarca as contas e os meses. Com os meses anteriores recolhidos, os meses marcados e escondidos continuam marcados (a barra mostra quantos). Nome, descrição, visualização e a referência (arquivo ou resultado realizado) ficam na tela Configurações, na barra do topo.</li>
               </>

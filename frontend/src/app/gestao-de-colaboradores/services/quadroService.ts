@@ -66,8 +66,12 @@ export type NovaMovimentacao = {
 
 export type IndicadoresDoMes = { quadroDeLotacao: number; turnover: number | null; contratacoes: number; positivas: number; negativas: number };
 export type LinhaDoRealizado = {
+  /** O centro e a função ("centroId|funcaoId"): a linha (16/11/2026: o Realizado por função, como no Lançamento Inicial). */
+  chave: string;
   centroCustoId: string;
   centroCusto: string;
+  funcaoId: string | null;
+  funcao: string | null;
   departamento: string | null;
   atribuicao: string | null;
   inicial: number;
@@ -78,7 +82,7 @@ export type LinhaDoRealizado = {
   pj: number;
   aprendizes: number;
   estagiarios: number;
-  /** Com a Comparação (09/11/2026): os colaboradores do centro no mês, na aba Quadro de Lotação do cenário; null sem ela. */
+  /** Com a Comparação (09/11/2026): os colaboradores do centro e da função no mês, na aba Quadro de Lotação do cenário; null sem ela. */
   cenario: number | null;
 };
 type DaCompetencia = { competencia: { ano: number; mes: number; status: StatusCompetenciaQuadro } };

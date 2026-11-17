@@ -38,7 +38,7 @@ const TEXTOS: Record<TipoImportacaoColaboradores, { titulo: string; descricao: s
   "lancamento-inicial": {
     titulo: "Importar Lançamento Inicial",
     descricao:
-      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT, PJ, Aprendiz ou Estagiário), Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. Nada é importado antes de você confirmar, e uma linha inválida (um tipo, uma função ou um centro de custo não cadastrado) cancela a importação.",
+      "Escolha a competência e a planilha (.xlsx) com as colunas Unidade, Tipo (CLT, PJ, Aprendiz ou Estagiário), Função e Centro de Custo (o código ou o nome), um colaborador por linha: o quadro de lotação do início do mês. As outras colunas da planilha (como as de salário e de benefícios) não se importam. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. Nada é importado antes de você confirmar, e uma linha inválida (um tipo, uma função ou um centro de custo não cadastrado) cancela a importação.",
   },
 };
 

@@ -86,7 +86,12 @@ entra nos back-ups do TI.
   etiqueta pela compilação (`NEXT_PUBLIC_AMBIENTE=teste`).
 - A compilação do teste fica em `frontend/.next` (a do desenvolvimento, em `frontend/.next/dev`): as duas convivem.
 
-### A base teste Pré-Contestações (desde 16/11/2026)
+### A base teste Pré-Contestações (desativada)
+
+**Desativada em 16/11/2026, pedido do Adão:** o esquema `pre_contestacoes`, a compilação (`backend/dist-pre-contestacoes`,
+`frontend/.next-pre-contestacoes`) e a cópia dos arquivos (`backend/uploads-pre-contestacoes`) foram apagados. Ficam o
+back-up de 10/11/2026 (a pasta abaixo, que não se apaga nem se move), o `backend/.env.pre-contestacoes`, os comandos e os
+scripts da carga: para usá-la de novo, refaça a carga e gere (os passos abaixo).
 
 Um segundo teste (pedido do Adão), com os dados da produção de antes de processar as contestações: o back-up de
 10/11/2026 22:08 (`Backups/2026-11-10 back-up da produção (antes de processar as contestações)`, commit a3434c7), com
@@ -118,6 +123,10 @@ Roda com o mesmo código do teste, ao lado dele, sem mexer no teste, no desenvol
 - Levar ao código novo: as migrações no esquema `pre_contestacoes` (`DATABASE_URL="$(node tmp-teste/url-pre-contestacoes.mjs)"
   npx prisma migrate deploy`, na pasta backend), parar, `npm run pre-contestacoes:construir` e `npm run pre-contestacoes`.
 - Voltar aos dados de antes das contestações: apagar o esquema (`DROP SCHEMA pre_contestacoes CASCADE`) e repetir a carga.
+- Recriar depois da desativação: a carga acima (o esquema pelo `prisma migrate deploy` das migrações de a3434c7, sem as 5
+  linhas de `colaboradores_tipos_movimentacao`, o `carregar-esquema.mjs` com o back-up e as migrações de agora), uma nova cópia
+  da `backend/uploads-teste` em `backend/uploads-pre-contestacoes`, e `npm run pre-contestacoes:construir` e
+  `npm run pre-contestacoes`.
 
 De 15 a 20/10/2026 a ferramenta rodou no notebook em dois ambientes separados, com bancos separados.
 

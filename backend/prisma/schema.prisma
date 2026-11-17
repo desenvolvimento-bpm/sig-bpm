@@ -3109,6 +3109,219 @@ model ArquivoGeral {
   @@index([categoria, enviadoEm])
   @@map("arquivos_gerais")
 }
+
+// --------------------------------------------------------------------------------------------------------------------
+// Gestão de Colaboradores (06/11/2026, pedido do Adão; grupo Processos Administrativos do menu): os cadastros do Quadro
+// de Lotação — funções, tipos de movimentação e as classificações deles — e o Lançamento Inicial.
+
+/// As funções dos colaboradores permitidas no Quadro de Lotação, com as competências e as atividades. O nome não se repete
+/// (16/11/2026, pedido do Adão: sem as senioridades, só as funções contam).
+model ColaboradorFuncao {
+  id            String   @id @default(uuid())
+  nome          String   @unique
+  descricao     String?
+  competencias  String?
+  atividades    String?
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  cargaInicial  ColaboradorCargaInicial[]
+  movimentacoes ColaboradorMovimentacao[]
+  cenarios      CenarioLotacao[]
+  jornadas      ColaboradorJornada[]
+
+  @@map("colaboradores_funcoes")
+}
+
+/// Como a movimentação conta no Quadro de Lotação: soma (Admissão), subtrai (Desligamento) ou não muda (as vagas).
+enum ContagemMovimentacao {
+  POSITIVA
+  NEGATIVA
+  NULA
+}
+
+/// A aprovação da movimentação: automática ao registrar, ou manual, pelo gestor do centro de custo (Controle das Movimentações).
+enum AprovacaoMovimentacao {
+  AUTOMATICA
+  MANUAL
+}
+
+/// Os tipos de movimentação do Quadro de Lotação (a aba Movimentações dos Cadastros): Admissão, Reposição, Desligamento…
+model ColaboradorTipoMovimentacao {
+  id           String                @id @default(uuid())
+  nome         String                @unique
+  descricao    String?
+  contagem     ContagemMovimentacao
+  aprovacao    AprovacaoMovimentacao
+  ordem        Int                   @default(0)
+  ativo        Boolean               @default(true)
+  criadoEm     DateTime              @default(now()) @map("criado_em")
+  atualizadoEm DateTime              @updatedAt @map("atualizado_em")
+
+  classificacoes ColaboradorClassificacao[]
+  movimentacoes  ColaboradorMovimentacao[]
+
+  @@map("colaboradores_tipos_movimentacao")
+}
+
+/// As classificações de cada tipo de movimentação (os motivos padronizados de uma admissão, de um desligamento…).
+model ColaboradorClassificacao {
+  id                 String   @id @default(uuid())
+  tipoMovimentacaoId String   @map("tipo_movimentacao_id")
+  nome               String
+  descricao          String?
+  ativo              Boolean  @default(true)
+  criadoEm           DateTime @default(now()) @map("criado_em")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  tipoMovimentacao ColaboradorTipoMovimentacao @relation(fields: [tipoMovimentacaoId], references: [id])
+  movimentacoes    ColaboradorMovimentacao[]
+
+  @@unique([tipoMovimentacaoId, nome])
+  @@map("colaboradores_classificacoes")
+}
+
+/// O tipo do colaborador (16/11/2026, pedido do Adão: com o Aprendiz e o Estagiário, que eram senioridades). O Aprendiz é o
+/// Jovem Aprendiz (FGTS de 2% nos cenários); o Estagiário, os estagiários e os bolsistas da Lei 11.788/2008 (sem encargos).
+enum VinculoColaborador {
+  CLT
+  PJ
+  APRENDIZ
+  ESTAGIARIO
+}
+
+/// O Lançamento Inicial: o quadro de lotação do início de um mês (ano e mês, escolhidos na importação), um registro por
+/// colaborador. É o saldo inicial do indicador Quadro de Lotação; as movimentações contam a partir dele.
+model ColaboradorCargaInicial {
+  id               String             @id @default(uuid())
+  ano              Int
+  mes              Int
+  unidadeNegocioId String             @map("unidade_negocio_id")
+  vinculo          VinculoColaborador
+  funcaoId         String             @map("funcao_id")
+  centroCustoId    String             @map("centro_custo_id")
+  /// A linha da planilha importada (nulo nos registros incluídos pela tela).
+  linhaArquivo     Int?               @map("linha_arquivo")
+  /// Os valores do colaborador (16/11/2026, pedido do Adão), em R$ por mês; nulos sem valor informado. O Salário Total
+  /// (Salário Bruto + Adicional) não se grava: o SIG calcula.
+  salarioBruto     Decimal?           @map("salario_bruto") @db.Decimal(14, 2)
+  /// O Adicional de Periculosidade / Insalubridade.
+  adicional        Decimal?           @db.Decimal(14, 2)
+  /// A Cesta Básica / Seguro de Vida / Vale Alimentação.
+  cestaBasica      Decimal?           @map("cesta_basica") @db.Decimal(14, 2)
+  planoSaude       Decimal?           @map("plano_saude") @db.Decimal(14, 2)
+  valeTransporte   Decimal?           @map("vale_transporte") @db.Decimal(14, 2)
+  criadoEm         DateTime           @default(now()) @map("criado_em")
+  atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
+
+  unidadeNegocio UnidadeNegocio         @relation(fields: [unidadeNegocioId], references: [id])
+  funcao         ColaboradorFuncao      @relation(fields: [funcaoId], references: [id])
+  centroCusto    CentroCusto            @relation(fields: [centroCustoId], references: [id])
+
+  @@index([ano, mes])
+  @@map("colaboradores_carga_inicial")
+}
+
+/// O estado de uma competência do Quadro de Lotação: aberta recebe movimentações; fechada fica como está, até ser reaberta.
+enum StatusCompetenciaQuadro {
+  ABERTA
+  FECHADA
+}
+
+/// As competências do Quadro de Lotação (06/11/2026, etapa 2): próprias, abertas e fechadas fora do Fechamento Mensal.
+model ColaboradorCompetencia {
+  id            String                  @id @default(uuid())
+  ano           Int
+  mes           Int
+  status        StatusCompetenciaQuadro @default(ABERTA)
+  abertaEm      DateTime                @default(now()) @map("aberta_em")
+  abertaPorNome String?                 @map("aberta_por_nome")
+  fechadaEm     DateTime?               @map("fechada_em")
+  fechadaPorNome String?                @map("fechada_por_nome")
+  atualizadoEm  DateTime                @updatedAt @map("atualizado_em")
+
+  movimentacoes ColaboradorMovimentacao[]
+  jornadas      ColaboradorJornada[]
+
+  @@unique([ano, mes])
+  @@map("colaboradores_competencias")
+}
+
+/// A Jornada do Quadro de Lotação (13/11/2026, pedido do Adão): as horas extras realizadas e as faltas aferidas de cada linha
+/// do quadro realizado da competência (o centro de custo e a função), digitadas na aba Jornada.
+model ColaboradorJornada {
+  id                 String   @id @default(uuid())
+  competenciaId      String   @map("competencia_id")
+  centroCustoId      String   @map("centro_custo_id")
+  funcaoId           String   @map("funcao_id")
+  /// As horas extras em minutos (a tela mostra HH:MM).
+  horasExtrasMinutos Int      @default(0) @map("horas_extras_minutos")
+  /// As faltas em dias (com até duas casas: meio dia = 0,5).
+  faltasDias         Decimal  @default(0) @map("faltas_dias") @db.Decimal(8, 2)
+  atualizadoPorNome  String?  @map("atualizado_por_nome")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  competencia ColaboradorCompetencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
+  centroCusto CentroCusto            @relation(fields: [centroCustoId], references: [id], onDelete: Cascade)
+  funcao      ColaboradorFuncao      @relation(fields: [funcaoId], references: [id], onDelete: Cascade)
+
+  @@unique([competenciaId, centroCustoId, funcaoId])
+  @@map("colaboradores_jornada")
+}
+
+/// A situação da movimentação: as de aprovação manual nascem Pendentes; as automáticas, Aprovadas. Só as aprovadas contam.
+enum StatusMovimentacaoQuadro {
+  PENDENTE
+  APROVADA
+  REPROVADA
+}
+
+/// A origem de um desligamento.
+enum OrigemDesligamento {
+  INICIATIVA_EMPRESA
+  PEDIDO_COLABORADOR
+}
+
+/// As movimentações do Quadro de Lotação (06/11/2026, etapa 2): admissões, desligamentos, aberturas de vaga…, uma por
+/// colaborador ou vaga, na competência do mês da data.
+model ColaboradorMovimentacao {
+  id                 String                   @id @default(uuid())
+  competenciaId      String                   @map("competencia_id")
+  tipoMovimentacaoId String                   @map("tipo_movimentacao_id")
+  classificacaoId    String?                  @map("classificacao_id")
+  data               DateTime                 @db.Date
+  centroCustoId      String                   @map("centro_custo_id")
+  vinculo            VinculoColaborador
+  funcaoId           String                   @map("funcao_id")
+  motivo             String?
+  /// Só nos desligamentos (as movimentações de contagem negativa).
+  origem             OrigemDesligamento?
+  status             StatusMovimentacaoQuadro
+  /// A Abertura de Vaga gerada por um desligamento ("Gerar Vaga em Aberto"): o desligamento que a gerou.
+  geradaPorId        String?                  @map("gerada_por_id")
+  registradaPor      String?                  @map("registrada_por")
+  registradaPorNome  String?                  @map("registrada_por_nome")
+  registradaEm       DateTime                 @default(now()) @map("registrada_em")
+  decididaPorNome    String?                  @map("decidida_por_nome")
+  decididaEm         DateTime?                @map("decidida_em")
+  /// O motivo de uma reprovação.
+  justificativa      String?
+  atualizadoEm       DateTime                 @updatedAt @map("atualizado_em")
+
+  competencia      ColaboradorCompetencia      @relation(fields: [competenciaId], references: [id])
+  tipoMovimentacao ColaboradorTipoMovimentacao @relation(fields: [tipoMovimentacaoId], references: [id])
+  classificacao    ColaboradorClassificacao?   @relation(fields: [classificacaoId], references: [id])
+  centroCusto      CentroCusto                 @relation(fields: [centroCustoId], references: [id])
+  funcao           ColaboradorFuncao           @relation(fields: [funcaoId], references: [id])
+  geradaPor        ColaboradorMovimentacao?    @relation("VagaDoDesligamento", fields: [geradaPorId], references: [id], onDelete: Cascade)
+  vagasGeradas     ColaboradorMovimentacao[]   @relation("VagaDoDesligamento")
+
+  @@index([competenciaId])
+  @@index([status])
+  @@map("colaboradores_movimentacoes")
+}
+
 // -----------------------------------------------------------------------------
 // Fornecedores (FCFO) do TOTVS RM — espelho somente leitura, atualizado pela
 // sincronização (services/totvs/fornecedoresSync.ts). Não tem relação com as

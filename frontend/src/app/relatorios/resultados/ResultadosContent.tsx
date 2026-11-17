@@ -847,6 +847,13 @@ export function ResultadosContent() {
   const nasLinhas = visao === "linhas" || visao === "rateios_linhas";
   const { id: linhaEscolhida } = useLinhaEscolhida(ano ?? 0, ate ?? 0, nasLinhas && !!ano && !!ate, linha);
   const periodo = { ano, ate };
+  const comparacao = useComparaCom(ano ?? null);
+  // A comparação da tela no Exportar das unidades (16/11/2026, pedido do Adão): as linhas que entram sem o realizado são
+  // as que têm o orçado do cenário comparado (a Padrão ou a PROVA), e o arquivo traz as mesmas linhas da tela.
+  const daComparacao = {
+    ...(comparacao.comparaCom !== "ORCAMENTO_EMPRESARIAL" ? { comparaCom: comparacao.comparaCom } : {}),
+    ...(comparacao.prova ? { prova: comparacao.prova.map((c) => c.marcacao).join(",") } : {}),
+  };
   // O Exportar (14/10/2026: na altura do título, com as opções de todas as abas): o que está na tela (a visão, o centro,
   // o grupo sem centro ou a obra escolhidos) e os "todos" de cada aba que o perfil lê.
   const veObrasNaAba = comObras && le("obras");
@@ -869,12 +876,12 @@ export function ResultadosContent() {
               ? { chave: "atual", excel: "Linha Atual", pdf: "Linha Atual", params: { ...periodo, visao, linha: linhaEscolhida } }
               : null
           : visao && visao !== "impostos"
-            ? { chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { ...periodo, visao } }
+            ? { chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { ...periodo, visao, ...daComparacao } }
             : null;
   const opcoesExportar: OpcaoExportar[] = [
     ...(atual ? [atual] : []),
     // Todas as unidades pedem as seis abas; os centros, as obras e os sem centro, a deles.
-    ...(VISOES.slice(0, 6).every((v) => le(v.aba)) ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { ...periodo, escopo: "unidades" } }] : []),
+    ...(VISOES.slice(0, 6).every((v) => le(v.aba)) ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { ...periodo, escopo: "unidades", ...daComparacao } }] : []),
     ...(le("centros")
       ? [
           { chave: "centros", excel: "Todos os Centros de Custo (um por aba)", pdf: "Todos os Centros de Custo (um por página)", params: { ...periodo, escopo: "centros" } },
@@ -890,7 +897,6 @@ export function ResultadosContent() {
     ...(veObrasNaAba ? [{ chave: "obras", excel: "Todas as Obras (uma por aba)", pdf: "Todas as Obras (uma por página)", params: { ...periodo, escopo: "obras" } }] : []),
   ];
 
-  const comparacao = useComparaCom(ano ?? null);
   return (
     <div className="space-y-6">
       <CabecalhoDaTela
@@ -932,6 +938,8 @@ export function ResultadosContent() {
               rótulo preto trazem o orçado (valor, % e R$/m³): depois do mês de referência, o do mês; depois do total, o acumulado de janeiro até ele.
               Depois do orçado acumulado, a variação: Diferença (realizado − orçado), Atingimento (realizado ÷ orçado) e Eficiência (% realizado − %
               orçado, em pontos percentuais). Fora do Orçamento, as colunas trazem o nome da marcação (PREVISÃO AGO/26…). Sem cenário, zero.
+              Aparecem as linhas com o realizado em algum mês e as que têm o orçado diferente de zero no cenário comparado (na PROVA, em algum
+              deles); as zeradas nos dois ficam de fora.
             </li>
             <li>
               Na Comparação PROVA (dois a quatro dos cenários marcados), os cenários ficam lado a lado no lugar do orçado: depois do mês de referência,
@@ -997,7 +1005,8 @@ export function ResultadosContent() {
               “Exportar”, ao lado do período, baixa em Excel (todas as colunas) ou PDF (A4 deitada: cada mês com a participação embaixo, e o total com o %
               e o R$/m³) o que está na tela (a Visão, o Centro de Custo, o Sem Centro de Custo, a Linha ou a Obra Atual) e, de qualquer aba, todas as unidades,
               todos os centros de custo, todas sem centro de custo, todas as linhas e todas as obras (uma por aba ou por
-              página). Em Excel, também um arquivo por centro de
+              página). Nas unidades e no Consolidado, o arquivo traz as mesmas linhas da tela, pela comparação escolhida (o orçado não vai
+              ao arquivo). Em Excel, também um arquivo por centro de
               custo, num ZIP, com o departamento e o centro no nome de cada arquivo. Ainda em Excel, marque “Incluir a Aba Detalhes” antes de
               escolher a opção: no fim do arquivo (em cada arquivo, no ZIP) vem a aba Detalhes, como no Exportar dos extratos — os movimentos do
               balancete de cada aba exportada, item a item, em cada competência fechada (a emissão, o cliente ou fornecedor e o histórico), com a

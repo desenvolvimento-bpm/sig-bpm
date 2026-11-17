@@ -11,6 +11,7 @@ import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
 import { fatoresDasContas, resumoVazio } from "./reajustesCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
+import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -211,10 +212,11 @@ export type Leitor = (chave: string, mes: number) => number | undefined;
 /**
  * O cálculo de uma tabela: os valores de cada linha mês a mês (a premissa — a gravada ou o padrão — ou o cálculo), a
  * Média de Referência (a gravada; nos cálculos, a conta sobre as médias), as contas da DRE que ela gera e as bases dos
- * rateios dos centros de custo ("CHAVE|DESTINO": Produção pelo m³ produzido; Projeto pelo m³ da venda Global; Metalurgia
- * e Armadura pelo kg das linhas — o volume × a demanda por unidade; Acompanhamento pelos acompanhamentos de Serviços).
+ * rateios dos centros de custo ("CHAVE|DESTINO": Produção pelo m³ produzido; Metalurgia e Armadura pelo kg das linhas — o
+ * volume × a demanda por unidade; Acompanhamento pelos acompanhamentos de Serviços). A base do rateio de Projeto é a
+ * Liberação de Projetos dos Indicadores Manuais (projetosCenario.ts), e não sai das tabelas; a venda não muda o cálculo.
  */
-export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[], unidade: UnidadePremissa, ano: number, ler: Leitor, venda: Venda = "GLOBAL") {
+export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[], unidade: UnidadePremissa, ano: number, ler: Leitor, _venda: Venda = "GLOBAL") {
   const daUnidade = linhas.filter((l) => l.unidade === unidade);
   const meses = Array.from({ length: 12 }, (_, k) => k + 1);
   const valores = new Map<string, Array<number | null>>();
@@ -265,7 +267,7 @@ export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
         somar(C.PRODUCAO_M3, m, v);
         somar(C.EXPEDICAO_M3, m, v);
         base("PRODUCAO", destino, m, v);
-        if (venda === "GLOBAL") base("PROJETO", destino, m, v);
+        // A base do rateio de Projeto é a Liberação de Projetos dos Indicadores Manuais (projetosCenario.ts).
       } else if (l.unidade === 3 && l.codigo === "MONTAGEM") somar(C.MONTAGEM_M3, m, v);
       somar(C.METALURGIA_KG, m, metalurgia[m - 1]);
       base("METALURGIA", destino, m, metalurgia[m - 1]);
@@ -463,7 +465,7 @@ async function materializarQuadro(
  */
 export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   const cenario = await tx.cenario.findUniqueOrThrow({ where: { id: cenarioId }, select: { ano: true, reajustesAplicados: true, indicesDosReajustes: true, aplicacaoDosReajustes: true } });
-  const [est, linhas, gravadas, grupos, valoresCentros, investimentos, regras] = await Promise.all([
+  const [est, linhas, gravadas, grupos, valoresCentros, investimentos, regras, projetos] = await Promise.all([
     estrutura(),
     linhasDoCadastro(),
     tx.cenarioPremissa.findMany({ where: { cenarioId } }),
@@ -471,9 +473,12 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     tx.cenarioCentro.findMany({ where: { cenarioId }, include: { linhaDRE: { select: { codigo: true } } } }),
     tx.cenarioInvestimento.findMany({ where: { cenarioId } }),
     regrasDeRateio(tx),
+    tx.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
   ]);
   const porCodigo = new Map(est.map((l) => [l.codigo, l]));
   const { somas, bases, juntar } = calcularPremissas(est, linhas, cenario.ano, gravadas);
+  // A base do rateio de Projeto (16/11/2026): a Liberação de Projetos dos Indicadores Manuais.
+  for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
   // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
   const meses = valoresCentros.filter((x) => x.mes >= 1 && x.mes <= 12).map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
   // O Quadro de Lotação do cenário (09/11/2026): os colaboradores e as remunerações dos grupos com linhas, antes dos encargos.

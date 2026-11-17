@@ -248,6 +248,12 @@ type Props<T extends Indicador> = {
   comparados?: ComparadoNosIndicadores[];
   /** A lupa de um mês (06/11/2026: os apurados no Quadro de Lotação): o clique dela, ou nulo sem lupa. */
   lupa?: (i: T, k: number) => (() => void) | null;
+  /**
+   * Clicar no valor de um mês (16/11/2026: a edição dos Indicadores Manuais dos cenários, no modal Editar Valor das demais
+   * tabelas): `k` é o índice do mês em `meses`. As células dos meses ficam clicáveis; com `onClicar`, o resto da linha
+   * continua com ele (o gráfico).
+   */
+  onCelula?: (i: T, k: number) => void;
 };
 
 /**
@@ -269,6 +275,7 @@ export function TabelaIndicadores<T extends Indicador>({
   comReferencia,
   comparados,
   lupa,
+  onCelula,
 }: Props<T>) {
   const colunas = useMemo(() => {
     const indices = soUltimoMes ? [meses.length - 1] : meses.map((_, k) => k);
@@ -413,11 +420,22 @@ export function TabelaIndicadores<T extends Indicador>({
                         // O valor digitado (lançamentos manuais do cenário) num amarelo mais forte que o das linhas e o dos totais.
                         const fundo = emDestaque ? "bg-yellow-200" : fundoDoIndicador(i, estiloDa(c.chave));
                         const daLupa = mes >= 0 ? lupa?.(i, meses.findIndex((m) => m.mes === mes + 1)) : null;
+                        // O valor do mês que se edita (os Indicadores Manuais dos cenários), como nas tabelas das premissas.
+                        const editavel = mes >= 0 && !!onCelula;
                         return (
                           <td
                             key={c.chave}
-                            className={`px-4 py-1.5 text-right whitespace-nowrap ${tom} ${c.chave === "acumulado" ? "border-l border-gray-300" : ""} ${fundo} ${aoPassar}`}
-                            title={emDestaque ? dicaDoDestaque : undefined}
+                            className={`px-4 py-1.5 text-right whitespace-nowrap ${tom} ${c.chave === "acumulado" ? "border-l border-gray-300" : ""} ${fundo} ${aoPassar} ${editavel ? "cursor-pointer hover:bg-gray-100" : ""}`}
+                            title={editavel ? (emDestaque ? `${dicaDoDestaque}; clique para editar` : i.meses[meses.findIndex((m) => m.mes === mes + 1)] === null ? "Em branco; clique para editar" : "Editar o valor") : emDestaque ? dicaDoDestaque : undefined}
+                            onClick={
+                              editavel
+                                ? (e) => {
+                                    // Só a edição do valor (o clique na linha, como o gráfico, fica para o resto dela).
+                                    e.stopPropagation();
+                                    onCelula(i, meses.findIndex((m) => m.mes === mes + 1));
+                                  }
+                                : undefined
+                            }
                           >
                             {daLupa ? (
                               <button

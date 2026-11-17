@@ -12,6 +12,7 @@ import { calcularTabela, linhasDaTabela } from "../src/services/cenarios/premiss
 import { alocarCentros, contasDoGrupo, percentuaisDasBases, rateiosSemBase } from "../src/services/cenarios/centrosCenario.js";
 import { dividirPorLinhas, linhaDaTarefa, mediaDosMeses, mediaNosMesesComOcorrencia, vendaDaObra } from "../src/services/cenarios/referenciaAnalitico.js";
 import { quadroDoGrupo, quadrosDeLotacao } from "../src/services/cenarios/lotacaoCenario.js";
+import { basesDosProjetos } from "../src/services/cenarios/projetosCenario.js";
 import { grupoDaLotacao } from "../src/services/listas/lotacaoDosCentros.js";
 import { rateiosSemVolume } from "../src/services/dre/apuracaoUnidades.js";
 import { calcularInvestimentosEExtra, depreciacaoMensal, depreciacaoNosMeses } from "../src/services/cenarios/investimentosCenario.js";
@@ -90,6 +91,28 @@ describe("leitura do cenário sintético", () => {
     assert.equal(classe.get("Atingimento da MC Acumulada"), "IMPORTADO");
     const contagem = [...classe.values()].reduce<Record<string, number>>((m, c) => ({ ...m, [c]: (m[c] ?? 0) + 1 }), {});
     assert.deepEqual(contagem, { RESULTADO: 53, MANUAL: 33, CALCULADO: 25, IMPORTADO: 7 });
+  });
+
+  it("no analítico (16/11/2026), a Liberação de Projetos: Matriz e Filial são manuais e o Total, calculado; os quadros, calculados", () => {
+    const classe = new Map(ESTRUTURA_INICIAL_INDICADORES.map((i) => [i.nome, classificar(i, true)]));
+    assert.equal(classe.get("Liberação de Projetos: Matriz"), "MANUAL");
+    assert.equal(classe.get("Liberação de Projetos: Filial"), "MANUAL");
+    assert.equal(classe.get("Liberação de Projetos: Total"), "CALCULADO");
+    assert.equal(classe.get("Quadro de Lotação: MO Direta Matriz"), "CALCULADO");
+    assert.equal(classe.get("Atingimento da MC Acumulada"), "IMPORTADO");
+  });
+
+  it("as bases do rateio de Projeto são a Liberação de Projetos dos meses (o mês 0, a média, não entra)", () => {
+    const bases = basesDosProjetos([
+      { nome: "Liberação de Projetos: Matriz", mes: 0, valor: 999 },
+      { nome: "Liberação de Projetos: Matriz", mes: 1, valor: new Prisma.Decimal("300.5") },
+      { nome: "Liberação de Projetos: Filial", mes: 1, valor: 100 },
+      { nome: "Liberação de Projetos: Filial", mes: 12, valor: 50 },
+      { nome: "Venda: Total", mes: 1, valor: 7 },
+    ]);
+    assert.deepEqual(bases.get("PROJETO|MATRIZ"), [300.5, ...Array(11).fill(0)]);
+    assert.deepEqual(bases.get("PROJETO|FILIAL"), [100, ...Array(10).fill(0), 50]);
+    assert.equal(bases.size, 2);
   });
 
   it("a Metodologia com outros indicadores ([INDICADOR], 23/10/2026) é calculada no cenário; com Listas ou metas, importada", () => {
@@ -377,7 +400,7 @@ describe("premissas dos cenários analíticos (13/10/2026)", () => {
     assert.equal(Math.round(dre.get("DVV.GGV.COMISSOES_DE_REPRESENTANTES_E_TERCEIROS")![0]), 700 * 35);
   });
 
-  it("as bases dos rateios: produção e projeto (só Global) pelo m³; armadura e metalurgia pelo volume × kg por unidade; acompanhamentos por dia × dias úteis", () => {
+  it("as bases dos rateios: produção pelo m³ (o projeto não sai das tabelas); armadura e metalurgia pelo volume × kg por unidade; acompanhamentos por dia × dias úteis", () => {
     const MONTAGEM = { codigo: "MONTAGEM", nome: "Montagem", unidade: 3 as const, medida: "m³" };
     const FUNDACAO = { codigo: "FUNDAÇÃO", nome: "Fundação", unidade: 3 as const, medida: "m³" };
     const p: Record<string, number> = {
@@ -394,7 +417,8 @@ describe("premissas dos cenários analíticos (13/10/2026)", () => {
     const tabela = calcularTabela(EST, [ALVEOLARES], 2, 2026, ler, "GLOBAL");
     const global = tabela.bases;
     assert.equal(global.get("PRODUCAO|FILIAL")![0], 400);
-    assert.equal(global.get("PROJETO|FILIAL")![0], 400);
+    // A base do Projeto é a Liberação de Projetos dos Indicadores Manuais (16/11/2026; antes, o m³ da venda Global).
+    assert.equal(global.get("PROJETO|FILIAL"), undefined);
     // 400 m³ × 50 kg/m³ de armadura; × 3 kg/m³ de metalurgia, que também é a Produção da Metalurgia (kg) da Filial.
     assert.equal(global.get("ARMADURA|FILIAL")![0], 20_000);
     assert.equal(global.get("METALURGIA|FILIAL")![0], 1200);

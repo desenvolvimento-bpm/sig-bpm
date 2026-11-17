@@ -69,10 +69,11 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               // A aba Quadro de Lotação (09/11/2026, etapa 4 da Gestão de Colaboradores); os perfis com a aba Centros de Custo a herdaram.
               { codigo: "quadro", nome: "Quadro de Lotação" },
               { codigo: "centros", nome: "Centros de Custo" },
-              { codigo: "rateios", nome: "Rateios" },
               { codigo: "investimentos", nome: "Investimentos" },
               { codigo: "extra", nome: "Extra-Operacional" },
               { codigo: "manuais", nome: "Indicadores Manuais" },
+              // Os Rateios por último (16/11/2026, pedido do Adão), como na tela.
+              { codigo: "rateios", nome: "Rateios" },
             ],
           },
         ]

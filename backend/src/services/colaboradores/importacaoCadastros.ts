@@ -76,6 +76,8 @@ const COLUNAS: Record<TipoImportacaoColaboradores, Coluna[]> = {
     { chave: "tipo", rotulo: "Tipo", cabecalhos: ["TIPO"], obrigatoria: true },
     { chave: "funcao", rotulo: "Função", cabecalhos: ["FUNÇÃO", "FUNCAO"], obrigatoria: true },
     { chave: "centro", rotulo: "Centro de Custo", cabecalhos: ["CENTRO DE CUSTO", "CENTRO"], obrigatoria: true },
+    // Sem os valores do colaborador (17/11/2026, pedido do Adão): as colunas de salário e de benefícios da planilha, se houver,
+    // não se importam.
   ],
 };
 
@@ -247,12 +249,13 @@ export async function resolvedorDeColaboradores(db: Db) {
   };
 }
 
+/** A prévia do Lançamento Inicial: os cadastros de cada linha. */
 async function previaLancamentoInicial(db: Db, itens: Array<{ linha: number; valores: Record<string, string> }>) {
   const resolver = await resolvedorDeColaboradores(db);
   const gravar: Array<ColaboradorResolvido & { linhaArquivo: number }> = [];
   const linhas: LinhaDaPrevia[] = itens.map(({ linha, valores }) => {
     const r = resolver(valores as CamposDoColaborador);
-    if (!r.cadastros) return { linha, valores, situacao: "INVALIDA", motivo: r.motivos.join(" ") };
+    if (!r.cadastros || r.motivos.length) return { linha, valores, situacao: "INVALIDA", motivo: r.motivos.join(" ") };
     gravar.push({ ...r.cadastros, linhaArquivo: linha });
     return { linha, valores, situacao: "NOVA" };
   });

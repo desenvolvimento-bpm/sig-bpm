@@ -10,6 +10,8 @@ import { resultadosLinhaService } from "../resultadosLinha/resultadosLinhaServic
 import { detalhesDosResultados, type AbaDetalhada, type AlvoDosDetalhes } from "./detalhesDosResultados.js";
 import { plural } from "../../utils/plural.js";
 import { limparNome, nomeDoDepartamento, TIPO_ZIP, zipDeArquivos } from "../../lib/arquivosExportados.js";
+import type { Comparacao } from "../cenarios/indicadoresDoCenario.js";
+import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
 
 /**
  * Exportação dos relatórios em Excel e PDF, como a tela: os Resultados (uma
@@ -36,6 +38,12 @@ export type EscopoResultados =
   | { tipo: "linha"; id: string; rateios: boolean; unidades: number[] }
   | { tipo: "linhas"; rateios: boolean; unidades: number[] };
 export type Formato = "xlsx" | "pdf";
+/**
+ * A comparação da tela (16/11/2026): nas visões das unidades, as linhas que entram sem o realizado são as que têm o orçado
+ * do cenário comparado (ou de um dos da PROVA), como na tela; sem ela, o Orçamento Empresarial.
+ */
+export type ComparacaoDaTela = { comparaCom: Comparacao; prova: MarcacaoCenario[] };
+const SEM_COMPARACAO: ComparacaoDaTela = { comparaCom: "ORCAMENTO_EMPRESARIAL", prova: [] };
 
 // O que as visões e os centros de custo têm em comum (o orçado das visões não vai para a exportação).
 type Resultados = Pick<Awaited<ReturnType<typeof resultadosService.centros>>, "ano" | "ate" | "meses" | "linhas">;
@@ -81,10 +89,11 @@ const alvoDaVisao = (visao: number): AlvoDosDetalhes => ({ tipo: "unidades", uni
 const abaDetalhada = (b: Bloco): AbaDetalhada => ({ nome: b.nome, codigos: b.dados.linhas.map((l) => l.codigo), alvo: b.detalhe ?? null });
 
 // A exportação de Resultados é a tela de Resultados Empresariais: só as competências fechadas (11/10/2026).
-async function blocos(ano: number, ate: number | undefined, escopo: EscopoResultados, acesso: Acesso): Promise<Bloco[]> {
+async function blocos(ano: number, ate: number | undefined, escopo: EscopoResultados, acesso: Acesso, comparacao: ComparacaoDaTela = SEM_COMPARACAO): Promise<Bloco[]> {
+  const daVisao = (visao: 0 | 1 | 2 | 3 | 4 | 5) => resultadosService.unidade(ano, visao, ate, acesso, true, comparacao.comparaCom, comparacao.prova);
   if (escopo.tipo === "visao") {
     const v = VISOES.find((x) => x.visao === escopo.visao)!;
-    return [{ nome: v.nome, titulo: v.nome, dados: await resultadosService.unidade(ano, v.visao, ate, acesso, true), detalhe: alvoDaVisao(v.visao) }];
+    return [{ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) }];
   }
   if (escopo.tipo === "obra" || escopo.tipo === "obras") {
     const obras = escopo.tipo === "obra" ? [escopo.codigo] : (await resultadosService.listarObras(ano, ate, acesso, true)).obras.map((o) => o.codigo);
@@ -115,7 +124,7 @@ async function blocos(ano: number, ate: number | undefined, escopo: EscopoResult
     }
     return r;
   }
-  if (escopo.tipo === "unidades") return Promise.all(VISOES.map(async (v) => ({ nome: v.nome, titulo: v.nome, dados: await resultadosService.unidade(ano, v.visao, ate, acesso, true), detalhe: alvoDaVisao(v.visao) })));
+  if (escopo.tipo === "unidades") return Promise.all(VISOES.map(async (v) => ({ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) })));
   // Os centros, com o departamento de cada um (o do cadastro; com mais de um, todos) para o nome do arquivo.
   const lista = (await resultadosService.listarCentros(ano, ate, acesso, true)).grupos;
   const departamento = (g: string) => (lista.find((x) => x.grupo === g)?.departamentos ?? []).map(nomeDoDepartamento).join(" e ") || nomeDoDepartamento(null);
@@ -396,11 +405,14 @@ export function zipDosCentros(bs: Bloco[], id: Identificacao, sufixo: string, no
 }
 
 export const exportacaoRelatoriosService = {
-  /** `detalhes` (27/10/2026): no Excel, a aba Detalhes no fim (num arquivo por centro, em cada um). */
-  async resultados(ano: number, ate: number | undefined, escopo: EscopoResultados, formato: Formato, usuarioNome: string, acesso: Acesso = ACESSO_TOTAL, detalhes = false) {
+  /**
+   * `detalhes` (27/10/2026): no Excel, a aba Detalhes no fim (num arquivo por centro, em cada um). `comparacao` (16/11/2026):
+   * a da tela, para as visões das unidades trazerem as mesmas linhas dela.
+   */
+  async resultados(ano: number, ate: number | undefined, escopo: EscopoResultados, formato: Formato, usuarioNome: string, acesso: Acesso = ACESSO_TOTAL, detalhes = false, comparacao: ComparacaoDaTela = SEM_COMPARACAO) {
     if (escopo.tipo === "centrosArquivos" && formato !== "xlsx") throw new RelatorioError(400, "Um arquivo por centro de custo só sai em Excel.");
     // Sem `ate`, até o último mês apurado (como na tela).
-    const bs = await blocos(ano, ate, escopo.tipo === "centrosArquivos" ? { tipo: "centros" } : escopo, acesso);
+    const bs = await blocos(ano, ate, escopo.tipo === "centrosArquivos" ? { tipo: "centros" } : escopo, acesso, comparacao);
     if (bs.length === 0) throw new RelatorioError(404, escopo.tipo === "linhas" ? "Nenhuma linha para exportar." : escopo.tipo === "obras" ? "Nenhuma obra com lançamento para exportar." : escopo.tipo === "semCentros" ? "Nenhum movimento sem centro de custo para exportar." : "Nenhum centro de custo com valor para exportar.");
     const ultimo = bs[0].dados.ate;
     const id = await identificar(ano, ultimo, usuarioNome);

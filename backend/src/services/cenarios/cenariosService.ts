@@ -97,6 +97,7 @@ import { mediaDosMeses, mediaNosMesesComOcorrencia, referenciaDoRealizado } from
 import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realocacoesCenario.js";
 import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosReajustes, type IndiceDosReajustes, type ReajusteDoIndice } from "./reajustesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
+import { basesDosProjetos, LIBERACAO_TOTAL, LIBERACOES_DIGITADAS, ondeEstaoOsProjetos } from "./projetosCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
 import { copiarQuadro, linhasDoQuadro, mesesDaLinha, quadroDosGrupos, tipoDaLinha, type LinhaDoQuadro, type MesDaLinha, type TipoDeColaborador } from "./quadroDoCenario.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
@@ -572,8 +573,11 @@ type FontesDaReferencia = {
   cen: Map<string, number>;
   ind: Map<string, number>;
   linhasDoQuadro: LinhaDoQuadro[] | null;
-  /** A coluna da aba Quadro de Lotação: o QL Realizado da competência mais recente ou o último mês do cenário de origem. */
-  colunaDoQuadro: { rotulo: string; daLinha: (l: { unidadeNegocioId: string; vinculo: string; funcaoId: string; centroCustoId: string }) => number } | null;
+  /**
+   * A coluna da aba Quadro de Lotação: os colaboradores do QL Realizado da competência mais recente ou do último mês do cenário
+   * de origem (17/11/2026, pedido do Adão: só a quantidade de colaboradores, sem os salários na referência).
+   */
+  colunaDoQuadro: { rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number } | null;
 };
 
 /**
@@ -603,6 +607,34 @@ async function detalheDaReferencia(c: { id: string; ano: number; nomeArquivo: st
   return null;
 }
 
+type CadastrosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: string; funcaoId: string; centroCustoId: string };
+
+/**
+ * Os colaboradores de cada linha do Quadro de Lotação na referência do cenário (11/11/2026, a coluna da aba Quadro de Lotação
+ * do Exportar Premissas; 16/11/2026, também a coluna Colab. Ref. da tela e o Replicar Referências dela): da referência
+ * realizada, o QL Realizado da competência mais recente da Gestão de Colaboradores (pelo centro, o tipo e a função); de outro
+ * cenário, os colaboradores do último mês do Quadro de Lotação dele (pelos cadastros da linha). A linha que não está lá fica
+ * nula. Nula sem referência (ou sem o quadro dela). Só a quantidade de colaboradores (17/11/2026, pedido do Adão: sem os salários
+ * do Lançamento Inicial na referência).
+ */
+async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null): Promise<{ rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number | null } | null> {
+  if (!detalhe) return null;
+  const prisma = getPrismaClient();
+  if (detalhe.tipo === "CENARIO") {
+    const origem = await prisma.cenario.findUnique({ where: { id: detalhe.cenarioId }, select: { id: true, ano: true, tipo: true } });
+    if (!origem || origem.tipo !== "ANALITICO") return null;
+    const lotacao = await prisma.cenarioLotacao.findMany({ where: { cenarioId: origem.id }, select: { unidadeNegocioId: true, vinculo: true, funcaoId: true, centroCustoId: true, meses: true } });
+    const chave = (l: CadastrosDaLinhaDoQuadro) => `${l.unidadeNegocioId}|${l.vinculo}|${l.funcaoId}|${l.centroCustoId}`;
+    const doUltimo = new Map<string, number>();
+    for (const l of lotacao) doUltimo.set(chave(l), (doUltimo.get(chave(l)) ?? 0) + (mesesDaLinha(l.meses)[11]?.colaboradores ?? 0));
+    return { rotulo: `Colaboradores da Referência (${rotuloMes(origem.ano, 12)})`, daLinha: (l) => doUltimo.get(chave(l)) ?? null };
+  }
+  const ql = await quadroRealizadoMaisRecente(prisma);
+  if (!ql) return null;
+  const chave = (l: CadastrosDaLinhaDoQuadro) => chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId });
+  return { rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`, daLinha: (l) => ql.final.get(chave(l)) ?? null };
+}
+
 /**
  * Os meses da referência (11/11/2026). Do realizado: cada mês fechado do período calculado como a referência de um mês só
  * (a média de um mês é o realizado dele: as premissas das unidades, os centros com as realocações decididas, a depreciação
@@ -616,21 +648,17 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   if (!detalhe) return null;
   const prisma = getPrismaClient();
   const somar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
-  const chaveDaLinha = (l: { unidadeNegocioId: string; vinculo: string; funcaoId: string; centroCustoId: string }) =>
-    `${l.unidadeNegocioId}|${l.vinculo}|${l.funcaoId}|${l.centroCustoId}`;
   if (detalhe.tipo === "CENARIO") {
     const origem = await prisma.cenario.findUnique({ where: { id: detalhe.cenarioId }, select: { id: true, nome: true, versao: true, ano: true, tipo: true } });
     if (!origem || origem.tipo !== "ANALITICO") return null;
-    const [premissas, centros, indicadores, quadro, lotacao] = await Promise.all([
+    const [premissas, centros, indicadores, quadro, coluna] = await Promise.all([
       prisma.cenarioPremissa.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } } }),
       prisma.cenarioCentro.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
       prisma.cenarioIndicador.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } } }),
       linhasDoQuadro(prisma, origem.id),
-      prisma.cenarioLotacao.findMany({ where: { cenarioId: origem.id }, select: { unidadeNegocioId: true, vinculo: true, funcaoId: true, centroCustoId: true, meses: true } }),
+      // Os colaboradores do último mês do Quadro de Lotação de origem, pelos cadastros da linha.
+      colunaDoQuadroDe(detalhe),
     ]);
-    // Os colaboradores do último mês do Quadro de Lotação de origem, pelos cadastros da linha.
-    const doUltimo = new Map<string, number>();
-    for (const l of lotacao) somar(doUltimo, chaveDaLinha(l), mesesDaLinha(l.meses)[11]?.colaboradores ?? 0);
     return {
       rotulo: "Referência",
       meses: MESES_1_A_12.map((m) => rotuloMes(origem.ano, m)),
@@ -639,7 +667,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
       cen: new Map(centros.map((x) => [`${x.grupo}|${x.linhaDRE.codigo}|${x.mes}`, Number(x.valor)])),
       ind: new Map(indicadores.map((i) => [`${i.nome}|${i.mes}`, Number(i.valor)])),
       linhasDoQuadro: quadro,
-      colunaDoQuadro: { rotulo: `Colaboradores da Referência (${rotuloMes(origem.ano, 12)})`, daLinha: (l) => doUltimo.get(chaveDaLinha(l)) ?? 0 },
+      colunaDoQuadro: coluna ? { rotulo: coluna.rotulo, daLinha: (l) => coluna.daLinha(l) ?? 0 } : null,
     };
   }
   const { ano } = detalhe;
@@ -678,7 +706,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   // Quadro de Lotação do Fechamento Mensal): o QL Realizado do fim do mês, nos meses com a competência do Quadro de Lotação.
   for (const [mes, doMes] of await colaboradoresRealizados(ano, detalhe.meses, await gruposDoCadastro())) for (const [k, n] of doMes) prem.set(`0|${k}|${mes}`, n);
   // O QL Realizado da competência mais recente do Quadro de Lotação (Gestão de Colaboradores).
-  const ql = await quadroRealizadoMaisRecente(prisma);
+  const coluna = await colunaDoQuadroDe(detalhe);
   const periodo = detalhe.meses.length ? `${String(detalhe.meses[0]).padStart(2, "0")}${detalhe.meses.length > 1 ? ` a ${String(detalhe.meses[detalhe.meses.length - 1]).padStart(2, "0")}` : ""}` : "";
   return {
     rotulo: "Realizado",
@@ -688,12 +716,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
     cen,
     ind,
     linhasDoQuadro: null,
-    colunaDoQuadro: ql
-      ? {
-          rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`,
-          daLinha: (l) => ql.final.get(chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId })) ?? 0,
-        }
-      : null,
+    colunaDoQuadro: coluna ? { rotulo: coluna.rotulo, daLinha: (l) => coluna.daLinha(l) ?? 0 } : null,
   };
 }
 
@@ -2786,9 +2809,11 @@ export const cenariosService = {
   async quadro(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const [linhas, cad] = await Promise.all([
+    const [linhas, cad, referencia] = await Promise.all([
       getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO }),
       cadastrosDoQuadro(),
+      // Os colaboradores de cada linha na referência (16/11/2026): a coluna Colab. Ref. e o Replicar Referências da tela.
+      detalheDaReferencia(c).then(colunaDoQuadroDe),
     ]);
     // O recorte (12/11/2026): as linhas e os centros dos grupos dele.
     const r = recorteDoCenario(c, usuario);
@@ -2798,6 +2823,7 @@ export const cenariosService = {
       ano: c.ano,
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1) })),
       editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      referencia: referencia ? { rotulo: referencia.rotulo } : null,
       linhas: linhas.filter((l) => q.ve(l.centroCustoId)).map((l) => ({
         id: l.id,
         unidadeNegocioId: l.unidadeNegocioId,
@@ -2810,6 +2836,8 @@ export const cenariosService = {
         // O grupo do centro (null: fora dos grupos do cenário; a linha não conta).
         grupo: cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupo ?? null,
         meses: mesesDaLinha(l.meses),
+        // Os colaboradores da linha na referência (nulo: a linha não está nela, ou o cenário não tem referência).
+        referencia: referencia ? referencia.daLinha(l) : null,
       })),
       opcoes: { unidades: cad.unidades, funcoes: cad.funcoes, centros: cad.centros.filter((x) => q.ve(x.id)) },
     };
@@ -2997,15 +3025,18 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     const prisma = getPrismaClient();
-    const [est, linhas, gravadas, grupos, valores] = await Promise.all([
+    const [est, linhas, gravadas, grupos, valores, projetos] = await Promise.all([
       estruturaDRE(),
       linhasDoCadastro(),
       prisma.cenarioPremissa.findMany({ where: { cenarioId: id } }),
       gruposDoCadastro(),
       // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
       prisma.cenarioCentro.findMany({ where: { cenarioId: id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
+      prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(id), select: { nome: true, mes: true, valor: true } }),
     ]);
     const { bases } = calcularPremissas(est, linhas, c.ano, gravadas);
+    // A base do rateio de Projeto (16/11/2026): a Liberação de Projetos dos Indicadores Manuais.
+    for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
     // Os percentuais pelas regras de rateio do mês (14/10/2026; antes, só as bases das premissas).
     const percentuais = percentuaisPelasRegras(await regrasDeRateio(), c.ano, bases);
     // O recorte (12/11/2026): as chaves dos grupos de centros dele e, para o Gestor, os destinos dos departamentos dele.
@@ -4035,23 +4066,39 @@ export const cenariosService = {
     });
   },
 
-  /** Grava os lançamentos manuais de um indicador (os 12 meses; vazio apaga o mês). */
-  async salvarManual(id: string, nome: string, valores: Array<number | null>, usuario: Usuario) {
+  /**
+   * Grava os lançamentos manuais de um indicador (os 12 meses; vazio apaga o mês). Os meses que mudam vão para o Histórico do
+   * cenário (16/11/2026, com o modal Editar Valor: a origem diz o reajuste e se replicou), como as edições das premissas.
+   */
+  async salvarManual(id: string, nome: string, valores: Array<number | null>, usuario: Usuario, origem?: OrigemDaGravacao) {
     const c = await obterOuFalhar(id, usuario);
     // Nos sintéticos, os Indicadores Manuais são uma aba da tela Resultados (12/11/2026), como a DRE: valem a permissão da aba
     // (a rota confere), sem a Edição das Configurações; nos analíticos, ficam nas Premissas.
     exigirEditavel(c);
-    if (!MANUAIS.has(nome)) throw new CenarioError(400, `${nome} não é um lançamento manual: sai da DRE do cenário.`);
+    // A Liberação de Projetos: Matriz e Filial (16/11/2026): manuais nos analíticos, a base do rateio de Projeto.
+    const projeto = c.tipo === "ANALITICO" && LIBERACOES_DIGITADAS.has(nome);
+    if (c.tipo === "ANALITICO" && nome === LIBERACAO_TOTAL)
+      throw new CenarioError(400, `${nome} é a soma da Liberação de Projetos: Matriz e da Filial e não se digita.`);
+    if (!MANUAIS.has(nome) && !projeto) throw new CenarioError(400, `${nome} não é um lançamento manual: sai da DRE do cenário.`);
     if (c.tipo === "ANALITICO" && QUADROS_DE_LOTACAO.has(nome))
       throw new CenarioError(400, `${nome} sai do Quadro de Lotação dos centros de custo (Premissas / Centros de Custo) e não se digita.`);
     const prisma = getPrismaClient();
     // O recorte (12/11/2026): o indicador de um grupo dos departamentos dele.
     const recorte = recorteDoCenario(c, usuario);
-    if (recorte) {
-      const ind = await prisma.indicadorEstrutura.findFirst({ where: { nome }, select: { grupo: true } });
-      exigirNoRecorte(veDepartamentos(recorte, departamentosDoGrupoDoIndicador(ind?.grupo ?? "")));
-    }
+    const ind = await prisma.indicadorEstrutura.findFirst({ where: { nome }, select: { grupo: true } });
+    const departamentos = departamentosDoGrupoDoIndicador(ind?.grupo ?? "");
+    if (recorte) exigirNoRecorte(veDepartamentos(recorte, departamentos));
     const antes = await prisma.cenarioIndicador.findMany({ where: { cenarioId: id, nome, mes: { gte: 1 } }, orderBy: { mes: "asc" } });
+    // Os meses que mudam (o valor ou o em branco), para o Histórico.
+    const valorAntes = (mes: number) => {
+      const a = antes.find((x) => x.mes === mes);
+      return a ? Number(a.valor) : null;
+    };
+    const mudados = valores.flatMap((v, k) => {
+      const a = valorAntes(k + 1);
+      const igual = v === null ? a === null : a !== null && Math.abs(a - v) < 1e-9;
+      return igual ? [] : [{ mes: k + 1, antes: a, depois: v }];
+    });
     await prisma.$transaction(async (tx) => {
       // Só os meses: a Média de Referência (o mês 0) fica (15/10/2026).
       await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, nome, mes: { gte: 1 } } });
@@ -4064,7 +4111,9 @@ export const cenariosService = {
           return { cenarioId: id, nome, mes, valor: v!, origem: igual ? anterior.origem : "DIGITADO" };
         }),
       });
-    });
+      // A Liberação de Projetos muda os percentuais do rateio de Projeto: a DRE do cenário se recalcula.
+      if (projeto) await calcularAnalitico(tx, id);
+    }, { timeout: 300_000 });
     await auditar({
       usuarioId: usuario.id,
       usuarioNome: usuario.nome,
@@ -4075,5 +4124,24 @@ export const cenariosService = {
       depois: { nome, valores: valores.map((v, k) => ({ mes: k + 1, valor: v })) },
       metadados: { lancamentoManual: nome },
     });
+    if (mudados.length)
+      await prisma.cenarioReajuste.create({
+        data: {
+          cenarioId: id,
+          usuarioId: usuario.id || null,
+          usuarioNome: usuario.nome,
+          tipo: origem?.tipo ?? "VALOR",
+          modo: origem?.modo ?? "DIGITADO",
+          reajuste: origem?.reajuste ?? null,
+          replicado: !!origem?.replicado,
+          contas: [{ codigo: `I|${nome}`, descricao: `Indicadores Manuais · ${nome}` }],
+          meses: mudados.map((m) => m.mes),
+          valores: mudados.length,
+          somaAntes: mudados.reduce((s, m) => s + (m.antes ?? 0), 0),
+          somaDepois: mudados.reduce((s, m) => s + (m.depois ?? 0), 0),
+          descricao: "Indicadores Manuais",
+          alcance: trechos([{ d: departamentos }]),
+        },
+      });
   },
 };

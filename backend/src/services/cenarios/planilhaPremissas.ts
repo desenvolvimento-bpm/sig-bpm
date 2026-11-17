@@ -199,7 +199,10 @@ const colunasDaReferencia = (r: ReferenciaDasAbas | undefined) => (r ? 12 : 0);
 
 /** A aba Quadro de Lotação no arquivo (11/11/2026): o nome, as linhas (da primeira à última, com as em branco) e as colunas de cada mês. */
 export type QuadroDoArquivo = { aba: string; primeira: number; ultima: number; doMes: (k: number, campo: 0 | 1 | 2) => string };
-/** A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, a coluna dela. */
+/**
+ * A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, a coluna
+ * dela (só os colaboradores; 17/11/2026, pedido do Adão: sem os salários na referência).
+ */
 export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroDoArquivo {
   const R = comReferencia ? 1 : 0;
   return { aba: NOME_DA_ABA.quadro, primeira: PRIMEIRA_LINHA, ultima: PRIMEIRA_LINHA + linhas + LINHAS_NOVAS - 1, doMes: (k, campo) => coluna(CAMPOS_DO_QUADRO.length + R + k * 4 + campo) };
@@ -658,7 +661,7 @@ export function abaDoQuadroDeLotacao(
   meses: string[],
   identificacao: string,
   listas: { unidades: string[] },
-  /** A coluna da referência (11/11/2026), depois do Centro de Custo: o rótulo e a explicação. */
+  /** A coluna da referência (11/11/2026), depois do Centro de Custo, só com os colaboradores: o rótulo e a explicação. */
   referencia?: { rotulo: string; explicacao: string },
   /** Os departamentos do arquivo (11/11/2026; os nomes): as linhas do cenário que a aba substitui na importação. */
   departamentos: string[] = DEPARTAMENTOS.map((d) => d.nome),

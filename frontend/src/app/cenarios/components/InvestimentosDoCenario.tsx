@@ -5,12 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { DestaqueFlutuante, useDestaqueFlutuante } from "@/components/shared/DestaqueFlutuante";
 import { type ColunaExportavel, ExportarTabela } from "@/components/shared/ExportarTabela";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+import { TabelaLarga } from "@/app/relatorios/components/TabelaLarga";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type DadosDoInvestimento, type InvestimentoDoCenario, type InvestimentosDoCenario as Dados, NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO, type DepartamentoDoInvestimento } from "../services/cenariosService";
@@ -24,6 +26,23 @@ const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julh
 const reais = (v: number | null) => (v === null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const paraCampo = (v: number | null | undefined) => (v === null || v === undefined ? "" : v.toLocaleString("pt-BR", { maximumFractionDigits: 2 }));
 const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra" };
+/**
+ * As colunas da lista dos investimentos, com a largura de cada uma (16/11/2026: os rótulos presos ao rolar a página, como nas
+ * demais tabelas, numa tabela à parte com as mesmas larguras); a partir do Início, à direita.
+ */
+const COLUNAS_DA_LISTA: Array<{ rotulo: string; largura: number }> = [
+  { rotulo: "Nome de Referência", largura: 200 },
+  { rotulo: "Unidade", largura: 140 },
+  { rotulo: "Conta", largura: 260 },
+  { rotulo: "Departamento", largura: 150 },
+  { rotulo: "Descrição", largura: 280 },
+  { rotulo: "Condição de Pagamento", largura: 240 },
+  { rotulo: "Início", largura: 110 },
+  { rotulo: "Valor Total", largura: 150 },
+  { rotulo: "Valor Pós Uso", largura: 150 },
+  { rotulo: "Vida Útil", largura: 110 },
+  { rotulo: "Depreciação Mensal", largura: 160 },
+];
 
 /** O Departamento de um investimento na lista (12/11/2026): só em Despesas e Extra; sem ele, os cinco. */
 const departamentoDoInvestimento = (i: InvestimentoDoCenario) =>
@@ -87,6 +106,8 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
   const [aberto, setAberto] = useState<InvestimentoDoCenario | "novo" | null>(null);
   const [marcados, setMarcados] = useState<Set<string>>(() => new Set());
   const [excluindo, setExcluindo] = useState(false);
+  // O destaque da lista flutua sobre ela ao rolar (16/11/2026), como o da Depreciação.
+  const { refOriginal, refArea, refFlutuante, flutuar, rotulos } = useDestaqueFlutuante(!!consulta.data);
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar os investimentos.")} />;
   if (consulta.isPending) return <Carregando />;
   const dados = consulta.data;
@@ -116,12 +137,45 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
       }
       return novo;
     });
+  // O título e a descrição no card de destaque e, à direita dele, as funções da lista (12/11/2026, pedido do Adão), com o
+  // Exportar por último, como nas barras das telas.
+  const destaqueDaLista = (
+    <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+      <div className="min-w-0 flex-1">
+        <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">Investimentos</h2>
+        <p className="text-xs text-gray-600">Depreciação Mensal = (Valor Total − Valor Pós Uso) ÷ Vida Útil, a partir do Início.</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {pode ? (
+          <>
+            <Button type="button" className={botaoPrimario} onClick={() => setAberto("novo")}>
+              <Plus className="size-4" />
+              Novo Investimento
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-sm border-red-300 text-red-700 hover:bg-red-50"
+              disabled={!selecionados.length}
+              title={selecionados.length ? undefined : "Marque os investimentos na lista"}
+              onClick={() => setExcluindo(true)}
+            >
+              <Trash2 className="size-4" />
+              Excluir Selecionados
+            </Button>
+          </>
+        ) : null}
+        {/* O Exportar (30/10/2026): a lista dos investimentos. */}
+        <ExportarTabela titulo="Cenário · Investimentos" colunas={colunasDosInvestimentos} linhas={dados.investimentos} />
+      </div>
+    </div>
+  );
   return (
     <div className="space-y-8">
       {/* O título e a descrição no card de destaque, com as funções da tabela à direita (12/11/2026, pedido do Adão). */}
       <TabelaEditavel
         titulo="Depreciação"
-        subtitulo="A Depreciação Base de cada unidade (digitada) e, somada a ela, a dos investimentos da lista abaixo, a partir do início de cada um."
+        subtitulo="A Depreciação Base de cada unidade, somada com a depreciação dos investimentos listados abaixo."
         tituloNoDestaque
         meses={dados.meses}
         linhas={dados.depreciacao}
@@ -132,45 +186,15 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
         mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
       />
       <section className="space-y-2">
-        {/* O título e a descrição no card de destaque e, à direita dele, as funções da lista (12/11/2026, pedido do Adão), com o
-            Exportar por último, como nas barras das telas. */}
-        <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">Investimentos</h2>
-            <p className="text-xs text-gray-600">
-              Depreciação Mensal = (Valor Total − Valor Pós Uso) ÷ Vida Útil, a partir do Início.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {pode ? (
-              <>
-                <Button type="button" className={botaoPrimario} onClick={() => setAberto("novo")}>
-                  <Plus className="size-4" />
-                  Novo Investimento
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-sm border-red-300 text-red-700 hover:bg-red-50"
-                  disabled={!selecionados.length}
-                  title={selecionados.length ? undefined : "Marque os investimentos na lista"}
-                  onClick={() => setExcluindo(true)}
-                >
-                  <Trash2 className="size-4" />
-                  Excluir Selecionados
-                </Button>
-              </>
-            ) : null}
-            {/* O Exportar (30/10/2026): a lista dos investimentos. */}
-            <ExportarTabela titulo="Cenário · Investimentos" colunas={colunasDosInvestimentos} linhas={dados.investimentos} />
-          </div>
-        </div>
-        <div className="overflow-x-auto rounded-sm border border-gray-200 bg-white [--topo-tabela:0px]">
-          <table className="tabela-sig w-full min-w-max border-collapse text-sm">
-            <thead>
+        <div ref={refOriginal}>{destaqueDaLista}</div>
+        <div ref={refArea}>
+          <DestaqueFlutuante refFlutuante={refFlutuante} flutuar={flutuar} rotulos={rotulos}>{destaqueDaLista}</DestaqueFlutuante>
+          <TabelaLarga
+            larguras={[...(pode ? [40] : []), ...COLUNAS_DA_LISTA.map((c) => c.largura)]}
+            cabecalho={
               <tr className="border-b border-gray-300">
                 {pode ? (
-                  <th className="w-10 px-3 py-2">
+                  <th className="px-3 py-2">
                     <input
                       type="checkbox"
                       aria-label="Marcar todos os investimentos"
@@ -184,17 +208,17 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                     />
                   </th>
                 ) : null}
-                {["Nome de Referência", "Unidade", "Conta", "Departamento", "Descrição", "Condição de Pagamento", "Início", "Valor Total", "Valor Pós Uso", "Vida Útil", "Depreciação Mensal"].map((c, k) => (
-                  <th key={c} className={`px-3 py-2 text-xs font-bold ${k >= 6 ? "text-right" : "text-left"}`}>
-                    {c}
+                {COLUNAS_DA_LISTA.map((c, k) => (
+                  <th key={c.rotulo} className={`px-3 py-2 text-xs font-bold ${k >= 6 ? "text-right" : "text-left"}`}>
+                    {c.rotulo}
                   </th>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {dados.investimentos.length === 0 ? (
+            }
+            corpo={
+              dados.investimentos.length === 0 ? (
                 <tr>
-                  <td colSpan={pode ? 12 : 11} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={COLUNAS_DA_LISTA.length + (pode ? 1 : 0)} className="px-3 py-6 text-center text-gray-500">
                     Nenhum investimento no cenário.
                   </td>
                 </tr>
@@ -212,10 +236,12 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                         <input type="checkbox" aria-label={`Marcar ${i.nomeReferencia}`} className="accent-black" checked={marcados.has(i.id)} onChange={(e) => marcar([i.id], e.target.checked)} />
                       </td>
                     ) : null}
-                    <td className="px-3 py-1.5 font-medium whitespace-nowrap text-gray-900">{i.nomeReferencia}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{dados.contas.find((c) => c.unidade === i.unidade)?.rotulo}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
+                    <td className="truncate px-3 py-1.5 font-medium whitespace-nowrap text-gray-900" title={i.nomeReferencia}>
+                      {i.nomeReferencia}
+                    </td>
+                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
+                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{dados.contas.find((c) => c.unidade === i.unidade)?.rotulo}</td>
+                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
                     <td className="px-3 py-1.5 text-gray-900">{i.descricao}</td>
                     <td className="px-3 py-1.5 text-gray-600">{i.condicaoPagamento ?? "—"}</td>
                     <td className="px-3 py-1.5 text-right whitespace-nowrap">{MESES[i.inicio - 1]}</td>
@@ -225,9 +251,9 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                     <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">{reais(i.depreciacaoMensal)}</td>
                   </tr>
                 ))
-              )}
-            </tbody>
-          </table>
+              )
+            }
+          />
         </div>
       </section>
       {aberto ? <InvestimentoDialog id={id} dados={dados} investimento={aberto === "novo" ? null : aberto} onFechar={() => setAberto(null)} /> : null}

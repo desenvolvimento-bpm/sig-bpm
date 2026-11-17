@@ -57,6 +57,23 @@ const paraTela = (c: Campo, v: unknown) => {
   return c.tipo === "decimal" ? String(Number(Number(v).toFixed(6))).replace(".", ",") : String(v);
 };
 
+/** O número de um campo decimal como se digita ("5.200,50", "5200,5", "5200", "R$ 5.200"); vazio ou inválido: nulo. */
+function numeroDoCampo(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const t = String(v ?? "").replace(/R\$/gi, "").replace(/\s/g, "");
+  if (!t) return null;
+  const n = Number(t.includes(",") || /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "").replace(",", ".") : t);
+  return Number.isFinite(n) ? n : null;
+}
+/**
+ * O valor de um derivado com `soma` (16/11/2026: o Salário Total do Lançamento Inicial): a soma dos campos dele como estão no
+ * formulário, em duas casas; vazio sem nenhum valor.
+ */
+function valorDaSoma(c: Campo, valores: Record<string, unknown>) {
+  const ns = (c.soma ?? []).map((nome) => numeroDoCampo(valores[nome])).filter((n): n is number => n !== null);
+  return ns.length ? ns.reduce((a, b) => a + b, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+}
+
 /** As opções do campo: as do valor escolhido no campo que o filtra, quando há um (11/10/2026). */
 const opcoesVisiveis = (c: Campo, valores: Record<string, unknown>) =>
   c.filtradoPor ? (c.opcoes ?? []).filter((o) => !o.grupos || o.grupos.includes(String(valores[c.filtradoPor!] ?? ""))) : (c.opcoes ?? []);
@@ -257,7 +274,7 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
           <div key={c.nome} className={c.larguraInteira || c.tipo === "multipla" || c.tipo === "formula" || c.nome === "expressao" || c.nome === "definicao" ? "sm:col-span-2" : c.tipo === "booleano" ? "self-end" : ""}>
             <CampoForm
               c={c}
-              valor={valores[c.nome]}
+              valor={c.soma ? valorDaSoma(c, valores) : valores[c.nome]}
               editando={!!registro}
               comMovimento={!!travas?.campos.includes(c.nome)}
               opcoes={opcoesVisiveis(c, valores)}

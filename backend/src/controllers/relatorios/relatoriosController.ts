@@ -216,8 +216,14 @@ export const relatoriosController = {
     else return response.status(400).json({ error: "Visão inválida: use ?visao=0..5, ?grupo= ou ?escopo=unidades|centros." });
     // ?detalhes=1 (27/10/2026): no Excel, a aba Detalhes no fim, com os movimentos do balancete de cada aba.
     const detalhes = request.query.detalhes === "1";
+    // A comparação da tela (16/11/2026): nas visões das unidades, as linhas que entram pelo orçado são as do cenário que a
+    // tela compara (a Padrão ou a PROVA), para o arquivo trazer as mesmas linhas da tela.
+    const comparaCom = comparaComDe(request);
+    if (comparaCom === false) return response.status(400).json({ error: "Compara Com inválido" });
+    const prova = provaDe(request);
+    if (prova === false) return response.status(400).json({ error: "Comparação PROVA inválida" });
     return enviarArquivo(request, response, "resultados", () =>
-      exportacaoRelatoriosService.resultados(p.ano, p.ate, e, formato.data, request.user!.nome, acesso, detalhes),
+      exportacaoRelatoriosService.resultados(p.ano, p.ate, e, formato.data, request.user!.nome, acesso, detalhes, { comparaCom, prova }),
     );
   },
 

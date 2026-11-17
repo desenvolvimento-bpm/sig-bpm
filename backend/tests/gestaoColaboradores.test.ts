@@ -75,6 +75,17 @@ describe("Gestão de Colaboradores (06/11/2026)", () => {
     assert.throws(() => lerCompetencia(undefined), ImportacaoColaboradoresError);
   });
 
+  it("o Lançamento Inicial sem os valores do colaborador (17/11/2026): as colunas de salário e de benefícios da planilha não se importam", () => {
+    const arquivo = gerarXlsx([
+      aba("QL", [
+        ["Unidade", "Tipo", "Função", "Centro de Custo", "Salário Bruto (R$)", "ADICIONAL DE PERICULOSIDADE/INSALUBRIDADE", "Salário Total (R$)", "Cesta Basica / Seguro de Vida / Vale Alimentacao (R$)", "Plano de Saúde", "Vale-Transporte (R$)"],
+        ["Matriz", "CLT", "Soldador", "1.11.00000001", 3200.5, 640, 9999, "450,00", "R$ 320", null],
+      ]),
+    ]);
+    const { valores } = lerPlanilha(arquivo, "lancamento-inicial").itens[0];
+    assert.deepEqual(valores, { unidade: "Matriz", tipo: "CLT", funcao: "Soldador", centro: "1.11.00000001" });
+  });
+
   it("o quadro: o Lançamento Inicial no mês dele, só as aprovadas contam, e o final passa ao mês seguinte", () => {
     const carga = { ano: 2026, mes: 11, itens: [...Array(10)].map((_, i) => ({ centroCustoId: i < 6 ? "A" : "B", vinculo: (i < 8 ? "CLT" : "PJ") as "CLT" | "PJ" })) };
     const mov = (centroCustoId: string, contagem: "POSITIVA" | "NEGATIVA" | "NULA", status = "APROVADA", tipo = contagem === "POSITIVA" ? "Admissão" : contagem === "NEGATIVA" ? "Desligamento" : "Abertura de Vaga") => ({

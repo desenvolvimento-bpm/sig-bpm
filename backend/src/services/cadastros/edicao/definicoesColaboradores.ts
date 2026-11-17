@@ -213,11 +213,15 @@ const lancamentoInicial: DefinicaoCadastro = {
   explicacao: "Um colaborador do quadro de lotação do início da competência do Lançamento Inicial. Para trocar a competência, importe a planilha de novo.",
   // Com competências fechadas na Gestão de Colaboradores, o quadro inicial não muda (13/11/2026, pedido do Adão).
   trava: travaDoLancamentoInicial,
+  // A tabela com só as colunas do modal (16/11/2026, pedido do Adão): sem a Competência (no destaque acima da tabela). Sem os
+  // valores do colaborador (17/11/2026, pedido do Adão: os salários e os benefícios saíram da tela e da importação; as colunas do
+  // banco ficam, sem uso, até a migração que as tira).
   campos: [
-    { nome: "competencia", rotulo: "Competência", tipo: "texto", derivado: true, noFormulario: false, estreita: true },
+    { nome: "competencia", rotulo: "Competência", tipo: "texto", derivado: true, noFormulario: false, naTabela: false, estreita: true },
     { nome: "unidadeNegocioId", rotulo: "Unidade", tipo: "opcao", obrigatorio: true, opcoes: opcoesUnidades },
     { nome: "vinculo", rotulo: "Tipo", tipo: "opcao", obrigatorio: true, opcoes: async () => opcoesDe(ROTULO_VINCULO) },
-    { nome: "funcaoId", rotulo: "Função", tipo: "opcao", obrigatorio: true, opcoes: opcoesFuncoes },
+    // A Função com a largura das duas colunas do modal (16/11/2026, pedido do Adão).
+    { nome: "funcaoId", rotulo: "Função", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesFuncoes },
     { nome: "centroCustoId", rotulo: "Centro de Custo", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesCentros },
   ],
   async listar(db, busca) {

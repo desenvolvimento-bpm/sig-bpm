@@ -21,11 +21,13 @@ const numero = (chave: keyof LinhaDoRealizado, rotulo: string): Coluna<LinhaDoRe
   alinhamento: "direita",
   valor: (l) => l[chave] as number,
 });
-// O Departamento antes do Centro de Custo (13/11/2026, pedido do Adão).
+// O Departamento antes do Centro de Custo (13/11/2026, pedido do Adão) e a Função (16/11/2026, pedido do Adão: as linhas por centro e
+// função, como no Lançamento Inicial).
 const COLUNAS: Coluna<LinhaDoRealizado>[] = [
   { chave: "departamento", rotulo: "Departamento", valor: (l) => l.departamento },
   { chave: "centro", rotulo: "Centro de Custo", valor: (l) => l.centroCusto },
   { chave: "atribuicao", rotulo: "Atribuição", valor: (l) => l.atribuicao },
+  { chave: "funcao", rotulo: "Função", valor: (l) => l.funcao },
   numero("inicial", "Início do Mês"),
   numero("entradas", "Entradas"),
   numero("saidas", "Saídas"),
@@ -35,7 +37,7 @@ const COLUNAS: Coluna<LinhaDoRealizado>[] = [
   numero("aprendizes", "Aprendizes"),
   numero("estagiarios", "Estagiários"),
 ];
-/** As colunas da Comparação (09/11/2026): os colaboradores do centro na aba Quadro de Lotação do cenário e a diferença. */
+/** As colunas da Comparação (09/11/2026): os colaboradores do centro e da função na aba Quadro de Lotação do cenário e a diferença. */
 const DA_COMPARACAO: Coluna<LinhaDoRealizado>[] = [
   { chave: "cenario", rotulo: "Cenário", tipo: "numero", alinhamento: "direita", valor: (l) => l.cenario ?? 0 },
   { chave: "diferenca", rotulo: "Diferença", tipo: "numero", alinhamento: "direita", valor: (l) => l.final - (l.cenario ?? 0) },
@@ -43,7 +45,8 @@ const DA_COMPARACAO: Coluna<LinhaDoRealizado>[] = [
 const sinal = (v: number) => (v > 0 ? `+${v.toLocaleString("pt-BR")}` : v < 0 ? `−${Math.abs(v).toLocaleString("pt-BR")}` : "0");
 
 /**
- * A aba Realizado de uma competência do Quadro de Lotação (06/11/2026): o quadro do mês por centro de custo — o do início,
+ * A aba Realizado de uma competência do Quadro de Lotação (06/11/2026): o quadro do mês por centro de custo e função (16/11/2026,
+ * pedido do Adão: as funções, como no Lançamento Inicial) — o do início,
  * as entradas e as saídas aprovadas, o do fim (CLT, PJ, Aprendizes e Estagiários). Com a Comparação (09/11/2026), por centro, os colaboradores da aba
  * Quadro de Lotação do cenário escolhido (nos analíticos que a têm) e a diferença. Desde 12/11/2026 (pedido do Adão), sem os
  * cards dos indicadores (ficam no Painel de Bordo) e sem o aviso do cenário sem a aba Quadro de Lotação.
@@ -71,21 +74,25 @@ export function RealizadoContent() {
         aba="realizado"
         sobre={
           <p>
-            O Quadro de Lotação Realizado do mês, por departamento e centro de custo: os colaboradores do início do mês (o Lançamento Inicial, no mês dele, ou o fim da
+            O Quadro de Lotação Realizado do mês, por departamento, centro de custo e função (como no Lançamento Inicial): os colaboradores do início do mês (o Lançamento Inicial, no mês dele, ou o fim da
             competência anterior), as entradas (as movimentações aprovadas de contagem Positiva), as saídas (as de Negativa) e os do fim do mês, com os de cada
             tipo (CLT, PJ, Aprendizes e Estagiários).
-            Com a Comparação, por centro, os colaboradores do mês na aba Quadro de Lotação do cenário escolhido (nos cenários analíticos que a têm) e a
+            Com a Comparação, por centro e função, os colaboradores do mês na aba Quadro de Lotação do cenário escolhido (nos cenários analíticos que a têm) e a
             diferença. Os indicadores do mês (Quadro de Lotação, Turnover e Abertura de Vagas x Contratações) ficam no Painel de Bordo.
           </p>
         }
         comoUsar={
           <ul>
-            <li>Use os filtros nos rótulos das colunas; a linha Total soma as linhas filtradas.</li>
+            <li>
+              Cada linha é um centro de custo e uma função (as funções do Lançamento Inicial e das movimentações aprovadas), com o departamento e a atribuição
+              do centro. Use os filtros nos rótulos das colunas (por exemplo, o Centro de Custo, para ver as funções de um centro); a linha Total soma as linhas
+              filtradas.
+            </li>
             <li>
               “Comparação”, ao lado do título, escolhe o cenário marcado (Forecast, Orçamento, Anterior ou Vendido, nos Cenários Sintéticos e Analíticos) ou Sem
-              Comparação; a escolha fica guardada neste navegador e vale também no Painel de Bordo. Na tabela, as colunas Cenário (os colaboradores do centro no
-              mês, na aba Quadro de Lotação do cenário) e Diferença (Fim do Mês − Cenário) aparecem quando o cenário é analítico e tem linhas nessa aba; os
-              centros só do cenário entram com o realizado zero.
+              Comparação; a escolha fica guardada neste navegador e vale também no Painel de Bordo. Na tabela, as colunas Cenário (os colaboradores do centro e da
+              função no mês, na aba Quadro de Lotação do cenário) e Diferença (Fim do Mês − Cenário) aparecem quando o cenário é analítico e tem linhas nessa
+              aba; as linhas só do cenário entram com o realizado zero.
             </li>
             <li>A situação da competência (Aberta ou Fechada) fica à direita da barra do topo, e o mês, no caminho do topo.</li>
           </ul>
@@ -105,10 +112,11 @@ export function RealizadoContent() {
           emptyHint="O quadro começa no Lançamento Inicial (Cadastros Auxiliares) e muda com as movimentações aprovadas."
           columns={colunas.map((c) => c.rotulo)}
           renderRow={(l) => (
-            <tr key={l.centroCustoId} className="border-b border-gray-100 hover:bg-gray-50">
+            <tr key={l.chave} className="border-b border-gray-100 hover:bg-gray-50">
               <td className="px-4 py-2 text-sm">{l.departamento ?? <span className="text-gray-400">—</span>}</td>
               <td className="px-4 py-2 text-sm">{l.centroCusto}</td>
               <td className="px-4 py-2 text-sm">{l.atribuicao ?? <span className="text-gray-400">—</span>}</td>
+              <td className="px-4 py-2 text-sm">{l.funcao ?? <span className="text-gray-400">—</span>}</td>
               <td className="px-4 py-2 text-right text-sm">{l.inicial}</td>
               <td className="px-4 py-2 text-right text-sm">{l.entradas || <span className="text-gray-400">0</span>}</td>
               <td className="px-4 py-2 text-right text-sm">{l.saidas || <span className="text-gray-400">0</span>}</td>
@@ -128,7 +136,7 @@ export function RealizadoContent() {
           rodape={
             tabela.filtradas.length ? (
               <tr className="border-t border-gray-300 bg-gray-50 text-sm font-bold">
-                <td className="px-4 py-2" colSpan={3}>
+                <td className="px-4 py-2" colSpan={4}>
                   Total
                 </td>
                 <td className="px-4 py-2 text-right">{soma("inicial")}</td>

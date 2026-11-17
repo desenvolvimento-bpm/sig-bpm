@@ -28,6 +28,79 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 17/11/2026, à tarde: sem os salários e os benefícios no Lançamento Inicial e sem os salários na Referência do Quadro de Lotação.
+  {
+    publicada: "2026-11-17T12:55",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: [
+      "O Lançamento Inicial volta a ter só a Unidade, o Tipo, a Função e o Centro de Custo de cada colaborador: saem os salários da tabela e do modal, e a importação não lê mais as colunas de salário e de benefícios da planilha.",
+    ],
+  },
+  {
+    publicada: "2026-11-17T12:55",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "No Quadro de Lotação, a Referência mostra só a quantidade de colaboradores (Colab.), e o Replicar Referências leva só os Colaboradores. Os meses continuam com os colaboradores e os salários. O Exportar Premissas leva a mesma coluna da Referência.",
+    ],
+  },
+  // 17/11/2026: as Premissas dos analíticos (Liberação de Projetos, destaques, Quadro de Lotação com os salários da referência),
+  // os salários do Lançamento Inicial, o Exportar dos Resultados pela comparação da tela e o Testar Token das APIs (do TI).
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Nos Indicadores Manuais, a Liberação de Projetos da Matriz e da Filial: os meses digitados são a base do rateio de Projetos entre as duas unidades. O modal de edição dos indicadores passa a ser o mesmo Editar Valor das outras abas, com o reajuste e o histórico.",
+      "A aba Rateios passa a ser a última.",
+      "Os destaques das abas (menos Indicadores Manuais e Rateios) trazem o nome da tabela e acompanham a rolagem; o cabeçalho do Quadro de Lotação fica preso ao rolar, como nas outras abas. Nos Centros de Custo, a lista dos centros fica alinhada com os rótulos da tabela.",
+      "No Quadro de Lotação, clique num valor para editá-lo no modal Editar Valor. As caixas das linhas e dos meses, “Marcar Todos os Meses” e “Limpar Seleção” marcam os valores, e “Replicar Referências” leva a referência de cada linha marcada aos meses marcados. A busca ficou mais larga.",
+      "Com o QL Realizado como referência, as colunas da Referência do Quadro de Lotação trazem também o Salário Bruto, a Insalubridade / Periculosidade e o Salário Total de cada colaborador (a média do Lançamento Inicial com o mesmo centro, tipo e função). O Exportar Premissas leva as mesmas colunas.",
+    ],
+  },
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: ["Os destaques de Matriz, Filial, Serviços, Despesas e Extra e RN acompanham a rolagem da tabela."],
+  },
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: [
+      "No Lançamento Inicial, o Salário Bruto, o Salário Adicional (Peric. / Insal.) e o Salário Total (a soma dos dois, calculada) de cada colaborador, no modal e na tabela. A importação do Excel aceita também as colunas desses valores e os confere antes de gravar.",
+    ],
+  },
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: ["No Realizado, cada centro de custo aparece por função.", "Na Jornada, as ações de cada linha ficam no menu de três pontos."],
+  },
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Nas unidades, as linhas sem realizado aparecem só com o orçado diferente de zero no cenário comparado; as zeradas nos dois ficam de fora. O Exportar das unidades e do Consolidado traz as mesmas linhas da tela, pela comparação escolhida (a Padrão ou a PROVA).",
+    ],
+  },
+  {
+    publicada: "2026-11-17T09:00",
+    processo: "Central de Conectividade",
+    tela: "APIs",
+    rota: "/central-de-conectividade/biblioteca-de-apis",
+    itens: ["No exemplo em curl, o botão Testar pede o token com um login do SIG, para ver que a API responde. O login e a senha não são salvos."],
+  },
   // 16/11/2026: sem as senioridades (só as funções contam); o Tipo com Aprendiz e Estagiário.
   {
     publicada: "2026-11-16T10:00",

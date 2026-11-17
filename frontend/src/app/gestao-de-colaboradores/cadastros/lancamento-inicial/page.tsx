@@ -26,10 +26,14 @@ export default function LancamentoInicialPage() {
                 início desse mês.
               </li>
               <li>
-                A prévia confere cada linha com os cadastros: uma unidade, função ou centro de custo não cadastrado (ou inativo), ou um tipo fora dos quatro, torna a linha
-                inválida e cancela a importação; os rótulos da tabela da prévia filtram, como nas outras tabelas. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. A importação das Funções que exclui uma função usada aqui também apaga o Lançamento Inicial: importe-o de novo em seguida.
+                A prévia confere cada linha com os cadastros: uma unidade, função ou centro de custo não cadastrado (ou inativo) ou um tipo fora dos quatro torna a
+                linha inválida e cancela a importação. As outras colunas da planilha (como as de salário e de benefícios) não se importam. Os rótulos da tabela da
+                prévia filtram, como nas outras tabelas. A importação apaga o Lançamento Inicial anterior inteiro e grava as linhas da planilha. A importação das Funções que exclui uma função usada aqui também apaga o Lançamento Inicial: importe-o de novo em seguida.
               </li>
-              <li>Use Novo para incluir um colaborador no Lançamento Inicial já importado (na mesma competência).</li>
+              <li>
+                Use Novo para incluir um colaborador no Lançamento Inicial já importado (na mesma competência), com a unidade, o tipo, a função e o centro de custo. A
+                tabela traz as mesmas colunas do modal (a competência fica no destaque acima dela).
+              </li>
               <li>No menu Ações de cada linha, Editar muda o colaborador e Excluir o tira do Lançamento Inicial, depois da confirmação.</li>
               <li>
                 Com alguma competência fechada no Quadro de Lotação, o Lançamento Inicial não se edita: o Importar, o Novo e o menu Ações somem, e o destaque

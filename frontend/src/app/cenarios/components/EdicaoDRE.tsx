@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { DestaqueFlutuante, useDestaqueFlutuante } from "@/components/shared/DestaqueFlutuante";
 import { Button } from "@/components/ui/button";
 
 import { TabelaResultados } from "@/app/relatorios/resultados/ResultadosContent";
@@ -20,7 +21,8 @@ const botaoCinza = "rounded-sm border border-gray-200 bg-gray-100 px-3 py-1.5 te
 
 /**
  * Uma aba da DRE do cenário. Nas unidades, as contas se editam: a caixa de cada linha e de cada mês marca valores, e
- * clicar numa linha reajusta os marcados; clicar num valor edita aquele valor. O Consolidado só soma as unidades.
+ * clicar numa linha reajusta os marcados; clicar num valor edita aquele valor. O Consolidado só soma as unidades. Nas
+ * unidades, ao rolar (16/11/2026, pedido do Adão), o destaque da marcação flutua sobre a tabela, logo abaixo dos rótulos presos.
  */
 export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome: string }) {
   const queryClient = useQueryClient();
@@ -29,6 +31,7 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
   const [meses, setMeses] = useState<Set<number>>(new Set());
   const [reajuste, setReajuste] = useState<string | null>(null);
   const [valor, setValor] = useState<{ l: LinhaResultado; i: number } | null>(null);
+  const { refOriginal, refArea, refFlutuante, flutuar, rotulos } = useDestaqueFlutuante(!!consulta.data && visao !== 0);
   const gravar = useMutation({
     mutationFn: ({ alteracoes, origem }: { alteracoes: Array<{ linha: string; mes: number; valor: number }>; origem: OrigemDaGravacao }) =>
       cenariosService.gravarValores(id, visao, alteracoes, origem),
@@ -53,6 +56,33 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
   const erroGravar = gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar.") : null;
   const todosOsMeses = meses.size === dados.meses.length;
 
+  // O destaque da marcação, nas unidades (o Consolidado não se edita).
+  const destaque = consolidado ? null : (
+    <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
+      <span className="text-gray-700">
+        <span className="font-bold text-gray-900">{marcados.length}</span> {plural(marcados.length, "valor marcado", "valores marcados")} · {linhas.size} {plural(linhas.size, "conta", "contas")} × {meses.size} {plural(meses.size, "mês", "meses")}
+      </span>
+      <button type="button" className={botaoCinza} onClick={() => setMeses(todosOsMeses ? new Set() : new Set(dados.meses.map((_, i) => i)))}>
+        {todosOsMeses ? "Desmarcar os Meses" : "Marcar Todos os Meses"}
+      </button>
+      {linhas.size || meses.size ? (
+        <button
+          type="button"
+          className={botaoCinza}
+          onClick={() => {
+            setLinhas(new Set());
+            setMeses(new Set());
+          }}
+        >
+          Limpar Seleção
+        </button>
+      ) : null}
+      <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={marcados.length === 0} onClick={() => setReajuste(nome)}>
+        Reajustar Marcados
+      </Button>
+    </div>
+  );
+
   return (
     <div className="space-y-3">
       {consolidado ? (
@@ -61,64 +91,45 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
           Extra e RN.
         </p>
       ) : (
-        <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm">
-          <span className="text-gray-700">
-            <span className="font-bold text-gray-900">{marcados.length}</span> {plural(marcados.length, "valor marcado", "valores marcados")} · {linhas.size} {plural(linhas.size, "conta", "contas")} × {meses.size} {plural(meses.size, "mês", "meses")}
-          </span>
-          <button type="button" className={botaoCinza} onClick={() => setMeses(todosOsMeses ? new Set() : new Set(dados.meses.map((_, i) => i)))}>
-            {todosOsMeses ? "Desmarcar os Meses" : "Marcar Todos os Meses"}
-          </button>
-          {linhas.size || meses.size ? (
-            <button
-              type="button"
-              className={botaoCinza}
-              onClick={() => {
-                setLinhas(new Set());
-                setMeses(new Set());
-              }}
-            >
-              Limpar Seleção
-            </button>
-          ) : null}
-          <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={marcados.length === 0} onClick={() => setReajuste(nome)}>
-            Reajustar Marcados
-          </Button>
-        </div>
+        <div ref={refOriginal}>{destaque}</div>
       )}
-      <TabelaResultados
-        key={visao}
-        dados={dados}
-        titulo={`Resultados · ${nome}`}
-        visao={visao === 0 ? { consolidado: true } : { unidade: visao }}
-        nomeVisao={nome}
-        consultas={false}
-        doCenario
-        edicao={
-          consolidado
-            ? undefined
-            : {
-                editavel: (l) => editaveis.has(l.codigo),
-                linhasMarcadas: linhas,
-                mesesMarcados: meses,
-                onMarcarLinhas: (codigos, marcar) =>
-                  setLinhas((s) => {
-                    const n = new Set(s);
-                    for (const c of codigos) if (marcar) n.add(c);
-                    else n.delete(c);
-                    return n;
-                  }),
-                onMarcarMes: (i, marcar) =>
-                  setMeses((s) => {
-                    const n = new Set(s);
-                    if (marcar) n.add(i);
-                    else n.delete(i);
-                    return n;
-                  }),
-                onCelula: (l, i) => setValor({ l, i }),
-                onConta: (l) => setReajuste(`${nome} · ${l.descricao}`),
-              }
-        }
-      />
+      <div ref={refArea}>
+        {destaque ? <DestaqueFlutuante refFlutuante={refFlutuante} flutuar={flutuar} rotulos={rotulos}>{destaque}</DestaqueFlutuante> : null}
+        <TabelaResultados
+          key={visao}
+          dados={dados}
+          titulo={`Resultados · ${nome}`}
+          visao={visao === 0 ? { consolidado: true } : { unidade: visao }}
+          nomeVisao={nome}
+          consultas={false}
+          doCenario
+          edicao={
+            consolidado
+              ? undefined
+              : {
+                  editavel: (l) => editaveis.has(l.codigo),
+                  linhasMarcadas: linhas,
+                  mesesMarcados: meses,
+                  onMarcarLinhas: (codigos, marcar) =>
+                    setLinhas((s) => {
+                      const n = new Set(s);
+                      for (const c of codigos) if (marcar) n.add(c);
+                      else n.delete(c);
+                      return n;
+                    }),
+                  onMarcarMes: (i, marcar) =>
+                    setMeses((s) => {
+                      const n = new Set(s);
+                      if (marcar) n.add(i);
+                      else n.delete(i);
+                      return n;
+                    }),
+                  onCelula: (l, i) => setValor({ l, i }),
+                  onConta: (l) => setReajuste(`${nome} · ${l.descricao}`),
+                }
+          }
+        />
+      </div>
       {reajuste !== null ? (
         <ReajusteDialog
           valores={marcados}

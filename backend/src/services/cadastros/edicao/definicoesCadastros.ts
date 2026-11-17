@@ -48,6 +48,11 @@ export type Campo = {
   /** Calculado pelo sistema; a tela mostra, não edita. */
   derivado?: boolean;
   /**
+   * Num derivado, a soma destes outros campos, refeita no formulário enquanto se digita (16/11/2026: o Salário Total do
+   * Lançamento Inicial, o Salário Bruto mais o Salário Adicional).
+   */
+  soma?: string[];
+  /**
    * Informação-chave, que liga o cadastro a outras telas (o código do balancete, o nome com que as planilhas citam a
    * linha…): não muda quando o registro já tem movimentos (11/10/2026).
    */
