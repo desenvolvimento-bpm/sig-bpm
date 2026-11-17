@@ -1,0 +1,58 @@
+# SIG BPM no srv-docker (192.168.0.16). Quem escolhe o ambiente é o workflow de deploy, pelas variáveis:
+#   SIG_HOME      pasta do ambiente no servidor (tem o .env e a pasta dados/)   ex.: /opt/sig-bpm/producao
+#   SIG_AMBIENTE  nome do ambiente (vira a etiqueta da imagem)                  ex.: producao
+#   SIG_PORTA     porta das telas na rede                                       ex.: 3020
+#   COMPOSE_PROJECT_NAME  separa os contêineres de cada ambiente                 ex.: sig-bpm-producao
+# O banco é externo (PostgreSQL 192.168.0.40): nada de banco sobe aqui. O DATABASE_URL e os segredos ficam no
+# $SIG_HOME/.env do servidor, nunca no git. Passo a passo: DEPLOY-DOCKER.md.
+
+services:
+  backend:
+    build: .
+    image: sig-bpm:${SIG_AMBIENTE:?defina SIG_AMBIENTE}
+    working_dir: /app/backend
+    command: ["node", "dist/server.js"]
+    env_file: ${SIG_HOME:?defina SIG_HOME}/.env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      UPLOAD_DIR: /dados/uploads
+    volumes:
+      - ${SIG_HOME}/dados:/dados
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    image: sig-bpm:${SIG_AMBIENTE}
+    working_dir: /app/frontend
+    command: ["npx", "next", "start", "-p", "3000"]
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://backend:3001
+    ports:
+      - "${SIG_PORTA:?defina SIG_PORTA}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/',{redirect:'manual'}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  # Só para o deploy: aplica as migrações com a imagem nova, antes de trocar os contêineres.
+  migrate:
+    image: sig-bpm:${SIG_AMBIENTE}
+    profiles: ["ferramentas"]
+    working_dir: /app/backend
+    command: ["npx", "prisma", "migrate", "deploy"]
+    env_file: ${SIG_HOME}/.env
+    environment:
+      NODE_ENV: production

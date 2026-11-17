@@ -1,0 +1,85 @@
+name: Deploy (produção)
+
+# Dispara em todo push em main (merge de develop ou hotfix/*, já passou pelo CI e pela trava de origem em main).
+# Produção do SIG em Docker no srv-docker (192.168.0.16), porta 3020, banco sig_bpm (192.168.0.40).
+# Runner SELF-HOSTED no próprio servidor (label `srv-docker`); segredos em /opt/sig-bpm/producao/.env — nenhum secret
+# do GitHub é usado aqui. Passo a passo: DEPLOY-DOCKER.md.
+#
+# Ordem pensada para nunca deixar a produção quebrada:
+#   1. build da imagem nova (a versão antiga segue no ar);
+#   2. liga o modo de publicação (o SIG fica só para consulta) e faz o back-up do banco — sem back-up, para aqui;
+#   3. migrações — se falharem, para aqui e a versão antiga segue no ar (o back-up do passo 2 serve para voltar o banco);
+#   4. troca os contêineres e espera o healthcheck;
+#   5. desliga o modo de publicação (sempre, mesmo com erro).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-sig-producao
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, srv-docker]
+    timeout-minutes: 45
+    env:
+      SIG_HOME: /opt/sig-bpm/producao
+      SIG_AMBIENTE: producao
+      SIG_PORTA: "3020"
+      COMPOSE_PROJECT_NAME: sig-bpm-producao
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confere o ambiente do servidor
+        run: |
+          if [ ! -r "$SIG_HOME/.env" ]; then
+            echo "::error::$SIG_HOME/.env não existe ou não é legível pelo runner — ver DEPLOY-DOCKER.md §3."
+            exit 1
+          fi
+          mkdir -p "$SIG_HOME/dados/uploads" "$SIG_HOME/dados/backups"
+
+      - name: Build da imagem (a versão antiga segue no ar)
+        run: |
+          docker image inspect sig-bpm:producao >/dev/null 2>&1 && docker tag sig-bpm:producao sig-bpm:producao-anterior || true
+          docker compose build
+
+      - name: Modo de publicação (SIG só para consulta)
+        run: echo deploy > "$SIG_HOME/dados/.publicacao-em-andamento"
+
+      - name: Back-up do banco (pg_dump)
+        run: |
+          U=$(grep -m1 '^DATABASE_URL=' "$SIG_HOME/.env" | cut -d= -f2-)
+          B="$SIG_HOME/dados/backups/sig_bpm-$(date +%F-%H%M)-${GITHUB_SHA::7}.dump"
+          if ! docker run --rm postgres:15 pg_dump -Fc "$U" > "$B" || [ ! -s "$B" ]; then
+            rm -f "$B"
+            echo "::error::O back-up do banco falhou — deploy interrompido, a produção segue na versão anterior."
+            exit 1
+          fi
+          echo "Back-up: $B ($(du -h "$B" | cut -f1))"
+          ls -1t "$SIG_HOME"/dados/backups/sig_bpm-*.dump | tail -n +16 | xargs -r rm -f
+
+      # Se a migração falhar, o job para AQUI e a versão antiga continua no ar. Para voltar o banco, use o back-up acima
+      # (comando em DEPLOY-DOCKER.md §6).
+      - name: Migrações (prisma migrate deploy)
+        run: docker compose run --rm migrate
+
+      - name: Troca os contêineres (espera o healthcheck)
+        run: docker compose up -d --wait --wait-timeout 180 backend frontend
+
+      - name: Desliga o modo de publicação
+        if: always()
+        run: rm -f "$SIG_HOME/dados/.publicacao-em-andamento"
+
+      - name: Status
+        if: always()
+        run: |
+          docker compose ps
+          docker compose logs --tail 50 backend
+
+      - name: Limpeza (imagens soltas e cache de build acima de 15 GB)
+        if: always()
+        run: |
+          docker image prune -f
+          docker builder prune -f --max-used-space 15GB

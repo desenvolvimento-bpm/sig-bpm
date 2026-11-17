@@ -1,0 +1,44 @@
+name: Ensaio do deploy (porta 3040, banco de dev)
+
+# Temporário: testa o deploy pelo GitHub Actions no srv-docker sem tocar na produção (outra pasta, outra porta e o banco
+# sig_bpm_dev). Só roda em push na branch ensaio-deploy, que nunca vai para a main. Apagar depois da troca.
+on:
+  push:
+    branches: [ensaio-deploy]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-sig-ensaio
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, srv-docker]
+    timeout-minutes: 45
+    env:
+      SIG_HOME: /opt/sig-bpm/ensaio
+      SIG_AMBIENTE: ensaio
+      SIG_PORTA: "3040"
+      COMPOSE_PROJECT_NAME: sig-bpm-ensaio
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confere o ambiente do servidor
+        run: |
+          test -r "$SIG_HOME/.env" || { echo "::error::$SIG_HOME/.env não existe ou não é legível pelo runner."; exit 1; }
+          mkdir -p "$SIG_HOME/dados/uploads"
+
+      - name: Build da imagem
+        run: docker compose build
+
+      - name: Migrações (banco de dev)
+        run: docker compose run --rm migrate
+
+      - name: Sobe o ensaio (espera o healthcheck)
+        run: docker compose up -d --wait --wait-timeout 180 backend frontend
+
+      - name: Status
+        if: always()
+        run: |
+          docker compose ps
+          docker compose logs --tail 50 backend
