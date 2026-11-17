@@ -2,7 +2,7 @@ name: Deploy (produção)
 
 # Dispara em todo push em main (merge de develop ou hotfix/*, já passou pelo CI e pela trava de origem em main).
 # Produção do SIG em Docker no srv-docker (192.168.0.16), porta 3020, banco sig_bpm (192.168.0.40).
-# Runner SELF-HOSTED no próprio servidor (label `srv-docker`); segredos em /opt/sig-bpm/producao/.env — nenhum secret
+# Runner SELF-HOSTED no próprio servidor (label `srv-docker`); segredos em /root/dados/sig-bpm/.env — nenhum secret
 # do GitHub é usado aqui. Passo a passo: DEPLOY-DOCKER.md.
 #
 # Ordem pensada para nunca deixar a produção quebrada:
@@ -25,10 +25,10 @@ jobs:
     runs-on: [self-hosted, srv-docker]
     timeout-minutes: 45
     env:
-      SIG_HOME: /opt/sig-bpm/producao
+      SIG_HOME: /root/dados/sig-bpm
       SIG_AMBIENTE: producao
       SIG_PORTA: "3020"
-      COMPOSE_PROJECT_NAME: sig-bpm-producao
+      COMPOSE_PROJECT_NAME: sig-bpm
     steps:
       - uses: actions/checkout@v4
 

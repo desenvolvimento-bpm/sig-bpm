@@ -1,8 +1,8 @@
 # SIG BPM no srv-docker (192.168.0.16). Quem escolhe o ambiente é o workflow de deploy, pelas variáveis:
-#   SIG_HOME      pasta do ambiente no servidor (tem o .env e a pasta dados/)   ex.: /opt/sig-bpm/producao
+#   SIG_HOME      pasta do ambiente no servidor (tem o .env e a pasta dados/)   ex.: /root/dados/sig-bpm
 #   SIG_AMBIENTE  nome do ambiente (vira a etiqueta da imagem)                  ex.: producao
 #   SIG_PORTA     porta das telas na rede                                       ex.: 3020
-#   COMPOSE_PROJECT_NAME  separa os contêineres de cada ambiente                 ex.: sig-bpm-producao
+#   COMPOSE_PROJECT_NAME  nome do projeto e prefixo dos contêineres             ex.: sig-bpm → sig-bpm-backend e sig-bpm-frontend
 # O banco é externo (PostgreSQL 192.168.0.40): nada de banco sobe aqui. O DATABASE_URL e os segredos ficam no
 # $SIG_HOME/.env do servidor, nunca no git. Passo a passo: DEPLOY-DOCKER.md.
 
@@ -10,6 +10,7 @@ services:
   backend:
     build: .
     image: sig-bpm:${SIG_AMBIENTE:?defina SIG_AMBIENTE}
+    container_name: ${COMPOSE_PROJECT_NAME:?defina COMPOSE_PROJECT_NAME}-backend
     working_dir: /app/backend
     command: ["node", "dist/server.js"]
     env_file: ${SIG_HOME:?defina SIG_HOME}/.env
@@ -29,6 +30,7 @@ services:
 
   frontend:
     image: sig-bpm:${SIG_AMBIENTE}
+    container_name: ${COMPOSE_PROJECT_NAME}-frontend
     working_dir: /app/frontend
     command: ["npx", "next", "start", "-p", "3000"]
     environment:
