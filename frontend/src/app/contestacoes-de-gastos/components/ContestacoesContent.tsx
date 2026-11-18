@@ -206,7 +206,8 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
               os itens do movimento e clique em “Contestar Selecionados”. A contestação leva só o valor deles (o resto do movimento fica no centro e na
               conta de hoje), sem anteriores e posteriores; o Valor mostra o dos itens, com quantos são, e os itens contestados aparecem com o número da
               contestação no Itens do Ver Movimentos. Um item fica numa contestação só (a recusada o libera), e o movimento com itens contestados não se
-              contesta inteiro.
+              contesta inteiro. Só os itens da conta e do centro de custo do movimento se contestam assim: quando a nota ou a requisição foi lançada no
+              balancete em outra conta (como num pagamento a fornecedor), os itens ficam sem a caixa, com um aviso, e o movimento se contesta inteiro.
             </li>
             <li>
               A contestação vai para quem responde pelo centro de custo (o novo; sem centro novo, o do movimento): os usuários com Editar em Contestações

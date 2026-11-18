@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
 import { useAbaLembrada } from "@/hooks/useAbaLembrada";
@@ -17,6 +16,8 @@ import { MESES } from "../../competencias/[anoMes]/utils/formatacao";
 import { ConfigurarGraficos } from "../components/ConfigurarGraficos";
 import { ExportarRelatorio } from "../components/ExportarRelatorio";
 import { IndicadoresDoPainel } from "./IndicadoresDoPainel";
+import { BotaoRecolherGrupo, useGrupoRecolhido } from "./GrupoRecolhivel";
+import { ExportarVariacoes, VisaoVariacoes } from "./VisaoVariacoes";
 import { CopiarComoImagem } from "../components/CopiarComoImagem";
 import { SeletorComparaCom, useComparaCom } from "../components/ComparaCom";
 import type { CenarioDoProva } from "../components/cenariosDoProva";
@@ -523,32 +524,6 @@ export function CardDoPainel({
   );
 }
 
-/** Os grupos recolhidos do Painel de Bordo (21/10/2026), pelo título, guardados no navegador. */
-const CHAVE_DOS_RECOLHIDOS = "sig.painel.recolhidos";
-function lerRecolhidos(): Set<string> {
-  try {
-    return new Set(JSON.parse(window.localStorage.getItem(CHAVE_DOS_RECOLHIDOS) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-function useGrupoRecolhido(titulo: string): [boolean, () => void] {
-  const [recolhido, setRecolhido] = useState(() => (typeof window === "undefined" ? false : lerRecolhidos().has(titulo)));
-  const alternar = () => {
-    const novo = !recolhido;
-    setRecolhido(novo);
-    try {
-      const todos = lerRecolhidos();
-      if (novo) todos.add(titulo);
-      else todos.delete(titulo);
-      window.localStorage.setItem(CHAVE_DOS_RECOLHIDOS, JSON.stringify([...todos]));
-    } catch {
-      // Sem o armazenamento do navegador, vale só nesta tela.
-    }
-  };
-  return [recolhido, alternar];
-}
-
 /** As linhas dos cenários de um card com a Comparação PROVA (31/10/2026): os que o item traz, na ordem do PROVA. */
 const comparacoesDo = (i: ItemPainel, prova: CenarioDoProva[] | null | undefined) =>
   prova?.flatMap((c): ComparacaoDoCard[] => {
@@ -582,16 +557,7 @@ function Secao({
       {/* O nome do grupo e o mês de referência (13/10/2026; antes, em cada card): o mês em cinza; ao lado, o botão de copiar o grupo. Em 24 px (14/10/2026; antes, 16). */}
       <div className="mb-2 flex items-center gap-2">
         {/* Recolher e expandir o grupo (21/10/2026). */}
-        <button
-          type="button"
-          onClick={alternar}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-          title={recolhido ? "Expandir o grupo" : "Recolher o grupo"}
-          aria-label={recolhido ? `Expandir ${q.titulo}` : `Recolher ${q.titulo}`}
-          aria-expanded={!recolhido}
-        >
-          {recolhido ? <ChevronRight className="size-5" /> : <ChevronDown className="size-5" />}
-        </button>
+        <BotaoRecolherGrupo recolhido={recolhido} onAlternar={alternar} nome={q.titulo} />
         <h2 className="text-2xl font-bold tracking-wide text-gray-900 uppercase">
           {q.titulo}
           <span className="font-semibold text-gray-500"> · {rotuloMes}</span>
@@ -738,6 +704,8 @@ export function PainelContent() {
   const [aba, setAba] = useAbaLembrada("aba", pedida ?? "resultados");
   const { hasPermission } = usePermissions();
   const comIndicadores = hasPermission("relatorio_painel.indicadores:ler");
+  // A aba Variações (18/11/2026, pedido do Adão; antes, em Resultados), antes de Indicadores.
+  const comVariacoes = hasPermission("relatorio_painel.variacoes:ler");
   // O tipo dos gráficos (Barras ou Área), lembrado neste navegador; as cores dos sinais, as da Acessibilidade do menu do usuário.
   const [tipoGrafico, setTipoGrafico] = useTipoGrafico();
   const [comRotulos, setComRotulos] = useRotulosDosValores();
@@ -759,9 +727,27 @@ export function PainelContent() {
   const comparados = prova?.map((c) => ({ rotulo: c.rotulo, cor: c.cor, dica: `${c.rotulo}: ${c.cenario}` }));
   const dados = consulta.data;
   // A aba Indicadores (19/10/2026; antes, a tela Indicadores): o Exercício, o Período, os Rótulos e o Tipo do Configurar Gráficos valem nela.
-  const extras =
-    comIndicadores && ano && ate ? [{ chave: "indicadores", rotulo: "Indicadores", conteudo: <IndicadoresDoPainel ano={ano} ate={ate} tipo={tipoGrafico} comRotulos={comRotulos} comparaCom={comparacao.comparaCom} prova={prova} /> }] : [];
-  const naAbaIndicadores = comIndicadores && (aba === "indicadores" || (dados ? dados.abas.length === 0 : false));
+  // A aba Variações (18/11/2026): as maiores variações de cada departamento das unidades, em cards, com o Exercício, o
+  // Período e a Comparação da tela.
+  const comparacaoDasVariacoes = { comparaCom: comparacao.comparaCom, prova };
+  const extras = [
+    ...(comVariacoes && ano && ate
+      ? [
+          {
+            chave: "variacoes",
+            rotulo: "Variações",
+            conteudo: comparacao.pronta ? <VisaoVariacoes ano={ano} ate={ate} comparacao={comparacaoDasVariacoes} /> : <div className="h-64 animate-pulse rounded-sm bg-gray-100" />,
+          },
+        ]
+      : []),
+    ...(comIndicadores && ano && ate
+      ? [{ chave: "indicadores", rotulo: "Indicadores", conteudo: <IndicadoresDoPainel ano={ano} ate={ate} tipo={tipoGrafico} comRotulos={comRotulos} comparaCom={comparacao.comparaCom} prova={prova} /> }]
+      : []),
+  ];
+  // A aba de fora dos cards na tela: a escolhida ou, sem as abas dos cards (Resultados e Performance), a primeira delas.
+  const extraNaTela = extras.find((e) => e.chave === aba) ?? (dados && dados.abas.length === 0 ? extras[0] : undefined);
+  const naAbaIndicadores = extraNaTela?.chave === "indicadores";
+  const naAbaVariacoes = extraNaTela?.chave === "variacoes";
   const atual = dados?.abas.find((a) => a.chave === aba) ?? dados?.abas[0];
 
   return (
@@ -778,7 +764,7 @@ export function PainelContent() {
               Tipo dos gráficos; cada escolha vale na hora e também na aba Indicadores. O Tipo e os Rótulos ficam guardados neste navegador. As
               legendas (as cores das séries e os sinais) ficam antes do botão.
             </li>
-            <li>Troque entre as abas Resultados e Performance (os unitários) e Indicadores. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>Troque entre as abas Resultados e Performance (os unitários), Variações e Indicadores. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
             <li>Os itens (os cards), os quadros e a ordem deles vêm do cadastro Cadastros Gerais / Analítico / Painel de Bordo: nome, comportamento, grupo, quadro, Metodologia e formato.</li>
             <li>
               Na aba Indicadores, os indicadores do exercício mês a mês até o Período, com o acumulado e, nas colunas de
@@ -788,6 +774,33 @@ export function PainelContent() {
               SET/26…), lado a lado e na cor dele, como em Resultados, e o gráfico do indicador traz uma série por cenário. Na lista antes do rótulo Indicador (a seta), escolha Todos os Grupos ou um grupo; use os filtros nos rótulos das colunas;
               as colunas Indicador, Sent. e Und. ficam fixas. Clique num indicador para abrir o gráfico dele (o realizado e o orçado mês a mês e o
               acumulado), que o botão ao lado do nome copia como imagem. Nesta aba, “Exportar” baixa os indicadores em Excel ou PDF.
+            </li>
+            <li>
+              Na aba Variações, no alto, em destaque (e flutuante, abaixo do título, ao rolar a tela), o “Ordenar Por” escolhe a medida que define as três maiores variações: Diferença (a maior em
+              reais, para mais ou para menos), Atingimento (o mais longe de 100%) ou Eficiência (a maior em pontos percentuais); a escolha fica
+              guardada neste navegador. Ao lado, a legenda dos sinais: ▲ Melhor, ■ Até 5% Var. e ▼ Pior (nos custos e despesas, menor é melhor;
+              nas receitas financeiras, maior é melhor). Embaixo, cada unidade (Matriz, Filial, Serviços, Despesas e Extra e RN; só as que o seu
+              perfil lê em Resultados) com os departamentos dela — os grupos de custos e despesas da DRE, como Custos de Produção: Pré-Fabricados
+              (CPP) ou Despesas Administrativas (DA); as receitas, os impostos sobre elas e as Despesas Variáveis de Venda (DVV) ficam de fora. Cada
+              departamento tem três cards, na largura da tela, cada um com as três maiores variações lado a lado: Atual · SET/26 (Vs. Realizado de
+              JAN a AGO/26), contra a média dos meses fechados anteriores do exercício (a soma de cada conta ÷ os meses, também os meses sem valor
+              nela); Atual · SET/26 (Vs. o cenário da Comparação), no mês; e Acumulado · JAN a SET/26 (Vs. o cenário da Comparação), de janeiro ao
+              Período. Cada variação mostra, numa linha, a posição, a conta e a atribuição (∆1 · Cimento (Matérias Primas)); o Realizado em destaque, com o % sobre a receita líquida
+              (/RL); e, como nos cards PROVA, uma linha por comparado — a Média, com o quadradinho amarelo-ouro do Realizado e os meses dela entre
+              parênteses (Média (Jan. a Ago.)), o cenário da Comparação Padrão ou cada um da PROVA, com o quadradinho da cor dele — com o Comparado, a Diferença (realizado − comparado, em R$, com o ícone do sinal), o
+              Atingimento (realizado ÷ comparado, em %) e a Eficiência (o % realizado − o % comparado, em pontos percentuais; o % da Média é a soma
+              dos valores sobre a soma das bases) e a faixa na cor do sinal à direita. Na PROVA, as três maiores são as de maior medida contra algum
+              dos cenários. A lupa ao lado do valor realizado abre os gastos por conta e por item, como nas abas das unidades
+              de Resultados: no Atual, o extrato dos lançamentos de origem do mês — em cada lançamento, a conta abre o balancete com os movimentos,
+              e cada movimento, os itens —; no Acumulado, os meses da conta, e cada mês, o extrato dele. A seta antes do nome de cada unidade
+              recolhe e expande os cards dela, como nos grupos das abas Resultados e Performance; a escolha fica guardada no navegador. O botão logo
+              depois do nome de cada departamento (Custos de Produção, Despesas Administrativas…), o mesmo dos grupos das abas Resultados e
+              Performance, copia o nome e os cards dele como imagem (como estão na tela, sem as lupas), para colar num e-mail ou numa
+              apresentação; se o navegador não deixar copiar, a imagem é baixada. Valem as mesmas regras: sem o Acesso a Informações
+              Sensíveis, as contas de mão de obra não abrem; no recorte por departamento, só as dos seus departamentos. Em janeiro, sem meses
+              anteriores, o card Vs. Realizado mostra um aviso. Nesta aba, o “Exportar” baixa as variações de todas as unidades em Excel ou PDF, na
+              ordem escolhida (uma linha por comparado de cada card; cada conta com o Realizado, o Comparado, a Diferença, o Atingimento e a
+              Eficiência).
             </li>
             <li>
               Cada grupo (Consolidado, Produção: Matriz…) é uma seção, uma abaixo da outra, com um card por indicador, da largura da tela: em cima, o nome e, à direita dele, a Metodologia (a fórmula do item) e o comportamento entre parênteses (o mês de referência fica ao lado do nome
@@ -851,6 +864,13 @@ export function PainelContent() {
               percentual sob o resultado financeiro também é sobre a receita líquida (/RL), como os demais.
             </p>
             <p>
+              Na aba Variações, os valores são os das abas das unidades de Resultados (as competências fechadas): em cada departamento (os de
+              custos e despesas, menos as DVV), as contas que mais mudaram — no Atual, o mês contra a média realizada nos meses anteriores do
+              exercício e contra o cenário da Comparação (o da Padrão ou os da PROVA); no Acumulado, de janeiro ao mês contra o acumulado do
+              cenário —, pela Diferença, pelo Atingimento ou pela Eficiência, conforme o Ordenar Por. O sinal segue a regra dos cards: até 5% de
+              desvio, amarelo; senão, verde ou vermelho pelo lado bom do departamento.
+            </p>
+            <p>
               Nos quadros Consolidado, Produção: Matriz, Produção: Filial e Serviços, o card Custos de Produção (▪ CPV) traz o Custo do Produto
               Vendido da unidade (a linha CPV da DRE), entre a receita e a margem bruta, com o percentual sobre a receita líquida do quadro; quanto
               menor, melhor.
@@ -863,7 +883,8 @@ export function PainelContent() {
             <div className="flex flex-wrap items-center justify-end gap-4">
               {/* Na aba Indicadores, só as cores das séries (os sinais são dos cards). */}
               {/* Na Comparação PROVA (31/10/2026), as séries dos cenários dela, cada uma na cor dela, sem a etiqueta do comparado. */}
-              {naAbaIndicadores ? (
+              {/* Na aba Variações, nenhuma: a legenda dos sinais fica no destaque do Ordenar Por. */}
+              {naAbaVariacoes ? null : naAbaIndicadores ? (
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-gray-600">
                   <LegendaRealizadoOrcado tipo={tipoGrafico} comparados={comparados} />
                   {prova ? null : <EtiquetaDoComparado nome={dados?.cenarioOrcado} />}
@@ -894,6 +915,8 @@ export function PainelContent() {
                   padrao={`Indicadores ${ano}`}
                   opcoes={[{ chave: "todos", excel: "Todos os Indicadores", pdf: "Todos os Indicadores", params: { ano, ate } }]}
                 />
+              ) : naAbaVariacoes && comparacao.pronta ? (
+                <ExportarVariacoes ano={ano} ate={ate} comparacao={comparacaoDasVariacoes} />
               ) : null}
             </div>
           ) : null
@@ -915,7 +938,7 @@ export function PainelContent() {
       ) : (
         <CorpoDoPainel
           dados={dados}
-          aba={aba === "indicadores" ? aba : (atual?.chave ?? aba)}
+          aba={extraNaTela?.chave ?? atual?.chave ?? aba}
           onAba={setAba}
           extras={extras}
           tipo={tipoGrafico}

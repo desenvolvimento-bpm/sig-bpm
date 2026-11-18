@@ -24,6 +24,8 @@ export type LinhaResultado = {
   orcado?: { mes?: Celula; total: Celula } | null;
   /** Na Tabela PROVA dos Relatórios Executivos e na Comparação PROVA de Resultados (31/10/2026): o orçado de cada cenário, como o do comparado. */
   prova?: Partial<Record<MarcacaoComparavel, { mes: Celula; total: Celula }>>;
+  /** Nas visões das unidades (18/11/2026, a aba Variações): a linha que é a base do % (as bases vêm em `basesDoPercentual`). */
+  basePercentual?: string | null;
 };
 
 export type Resultados = {
@@ -37,6 +39,8 @@ export type Resultados = {
   comparado?: { nome: string; ano: number } | null;
   /** Nos Relatórios Executivos (31/10/2026, a Tabela PROVA): os cenários marcados que existem, na ordem do PROVA. */
   prova?: Array<{ marcacao: MarcacaoComparavel; rotulo: string; cenario: string }>;
+  /** Nas visões das unidades (18/11/2026, a aba Variações): o valor de cada base do % em cada mês (null: o mês não apurado). */
+  basesDoPercentual?: Record<string, Array<number | null>>;
   meses: MesRelatorio[];
   linhas: LinhaResultado[];
   grupo?: string;

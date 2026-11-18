@@ -306,7 +306,17 @@ export function BalanceteDialog({
         </DialogFooter>
         {vendoItens?.idMovimento ? (
           <ItensDoMovimentoDialog
-            movimento={{ idMovimento: vendoItens.idMovimento, emissao: vendoItens.emissao, cliForn: vendoItens.cliForn, historico: vendoItens.historico, valor: vendoItens.valor, conta: lancamento.conta.reduzido, centro: vendoItens.centroOriginal ? vendoItens.centroOriginal.codigoRM : vendoItens.codigoCentroCusto }}
+            movimento={{
+              idMovimento: vendoItens.idMovimento,
+              emissao: vendoItens.emissao,
+              cliForn: vendoItens.cliForn,
+              historico: vendoItens.historico,
+              valor: vendoItens.valor,
+              conta: lancamento.conta.reduzido,
+              centro: vendoItens.centroOriginal ? vendoItens.centroOriginal.codigoRM : vendoItens.codigoCentroCusto,
+              rotuloDaConta: contaDoBalancete || undefined,
+              rotuloDoCentro: (vendoItens.centroOriginal ? textoDe(vendoItens.centroOriginal) : centroTexto(vendoItens)) ?? undefined,
+            }}
             queryKey={["dre", anoMes, "balancete", "itens", filtro, vendoItens.id]}
             carregar={() => dreService.itensDoMovimento(anoMes, filtro, vendoItens.id)}
             onFechar={() => setVendoItens(null)}

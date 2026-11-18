@@ -960,7 +960,9 @@ export function ResultadosContent() {
               conta, a quantidade e os valores. Abre com os itens do centro de custo e da conta do movimento, que somam o valor dele; desmarque a caixa para
               ver o documento inteiro, com os do movimento em amarelo. Quem contesta marca os itens do movimento e clica em “Contestar Selecionados” (no
               rodapé, à direita): a contestação leva só o valor deles para o novo centro de custo e/ou a nova conta (o item já contestado mostra o número
-              da contestação). “Voltar aos Movimentos” (à esquerda) volta ao Balancete.
+              da contestação). Quando nenhum item está na conta e no centro de custo do movimento (a nota ou a requisição lançada no balancete em outra
+              conta, como num pagamento a fornecedor), os itens ficam sem a caixa, e um aviso diz onde eles estão: conteste o movimento inteiro no
+              Balancete. “Voltar aos Movimentos” (à esquerda) volta ao Balancete.
             </li>
             <li>
               “Regras de Rateio”, no canto de baixo do extrato, mostra as regras de rateio vigentes no mês: em cada chave (Projeto, Produção,

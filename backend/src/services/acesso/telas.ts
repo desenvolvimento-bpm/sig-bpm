@@ -137,8 +137,14 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "impostos", nome: "Impostos" },
         ],
       },
-      // Os Indicadores são uma aba do Painel de Bordo (19/10/2026; antes, uma tela).
-      { codigo: "relatorio_painel", nome: "Painel de Bordo", abas: [...PAINEL, { codigo: "indicadores", nome: "Indicadores" }] },
+      // Os Indicadores são uma aba do Painel de Bordo (19/10/2026; antes, uma tela). A aba Variações (18/11/2026, pedido do
+      // Adão), antes de Indicadores: as maiores variações de cada departamento das unidades, em cards, com os dados das abas
+      // das unidades de Resultados (cada usuário vê só as unidades que lê lá).
+      {
+        codigo: "relatorio_painel",
+        nome: "Painel de Bordo",
+        abas: [...PAINEL, { codigo: "variacoes", nome: "Variações" }, { codigo: "indicadores", nome: "Indicadores" }],
+      },
     ],
   },
   // As Contestações de Gastos (27/10/2026, pedido do Adão), logo acima do Fechamento Mensal, como no menu: a tela

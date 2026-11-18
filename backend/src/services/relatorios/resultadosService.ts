@@ -192,6 +192,13 @@ export const resultadosService = {
     const temOrcado = (o: typeof orcado) =>
       [...o.daVisao.total, ...o.daVisao.mes].filter(([, v]) => arredonda(v, 4) !== 0).map(([codigo]) => codigo);
     const comOrcado = new Set([orcado, ...doProva.map((c) => c.orcado)].flatMap(temOrcado));
+    const montadas = montar(linhas, visao, apurado, valores, consolidado, acesso, comOrcado);
+    // A base do % de cada linha e o valor dela em cada mês apurado (18/11/2026: a aba Variações, cujo % da média dos meses
+    // anteriores é a soma dos valores sobre a soma das bases, como o % do total).
+    const basePercentual = new Map(montadas.map((l) => [l.codigo, l.tipo === "SECAO" ? null : baseDoPercentual(visao, porCodigo.get(l.codigo)!)]));
+    const basesDoPercentual = Object.fromEntries(
+      [...new Set([...basePercentual.values()].filter((b): b is string => !!b))].map((b) => [b, consolidado.map((m, i) => (apurado[i] ? arredonda(m.get(b) ?? 0, 4) : null))]),
+    );
     return {
       ano,
       ate: ultimo,
@@ -201,8 +208,10 @@ export const resultadosService = {
       // O nome do comparado nos rótulos (21/10/2026): "Orçado" no Orçamento Empresarial; nos outros, o nome da marcação.
       rotuloComparado: rotuloDaComparacao(comparaCom, orcado.cenario),
       ...(prova.length ? { prova: doProva.map((c) => ({ marcacao: c.marcacao, rotulo: rotuloDaComparacao(c.marcacao), cenario: c.orcado.cenario!.nome })) } : {}),
-      linhas: montar(linhas, visao, apurado, valores, consolidado, acesso, comOrcado).map((l) => ({
+      basesDoPercentual,
+      linhas: montadas.map((l) => ({
         ...l,
+        basePercentual: basePercentual.get(l.codigo) ?? null,
         /** O orçado do mês de referência e o acumulado de janeiro até ele, com o % e o R$/m³ (zero sem o cenário ou sem a linha nele). */
         orcado: l.tipo === "SECAO" ? null : { mes: celulaOrcada(porCodigo.get(l.codigo)!, "mes"), total: celulaOrcada(porCodigo.get(l.codigo)!, "total") },
         ...(prova.length && l.tipo !== "SECAO"

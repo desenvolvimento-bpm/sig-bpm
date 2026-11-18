@@ -39,6 +39,9 @@ export type MovimentoDosItens = {
    */
   conta?: string | null;
   centro?: string | null;
+  /** A conta e o centro do movimento por extenso ("4038 · CORREIOS"), para o aviso dos itens de outra conta ou centro. */
+  rotuloDaConta?: string;
+  rotuloDoCentro?: string;
 };
 
 /** Os itens marcados para o Contestar Selecionados: cada um (a lista e o id), quantos, a soma e o valor no sinal do movimento. */
@@ -53,7 +56,9 @@ export type ItensSelecionados = { itens: Array<{ origem: Origem; id: string }>; 
  *
  * Contestar Selecionados (10/11/2026, pedido do Adão; só no modal Balancete, com `contestar`): uma caixa em cada item do
  * movimento, e o botão abre o Contestar só com os itens marcados — o valor deles muda de centro e/ou de conta. O item já numa
- * contestação de itens não recusada mostra o número dela, sem a caixa.
+ * contestação de itens não recusada mostra o número dela, sem a caixa. Sem nenhum item na conta e no centro do movimento
+ * (18/11/2026, pedido do Adão: a nota ou a requisição lançada no balancete em outra conta, como um pagamento a fornecedor), um
+ * aviso diz onde os itens estão e manda contestar o movimento inteiro no balancete.
  */
 export function ItensDoMovimentoDialog({
   movimento,
@@ -113,7 +118,22 @@ export function ItensDoMovimentoDialog({
       else n.delete(k);
       return n;
     });
-  const motivoDoBotao = contestar?.bloqueio ?? (escolhidos.length ? undefined : "Marque os itens do movimento a contestar");
+  // Nenhum item na conta e no centro do movimento (18/11/2026): os itens não se contestam aqui, e o aviso diz por quê.
+  const semItensDoMovimento = !!contestar && !contestar.bloqueio && todos.length > 0 && deste.length === 0;
+  const avisoSemItens = (() => {
+    if (!semItensDoMovimento) return null;
+    const foraDaConta = !!movimento.conta && !todos.some((i) => i.contaContabil === movimento.conta);
+    const foraDoCentro = !!movimento.centro && !todos.some((i) => i.codigoCentroCusto === movimento.centro);
+    const partes = [
+      foraDaConta ? `na conta ${[...new Set(todos.map(conta))].join(", ")}, não na conta do movimento no balancete (${movimento.rotuloDaConta ?? movimento.conta})` : null,
+      foraDoCentro ? `no centro de custo ${[...new Set(todos.map(centro))].join(", ")}, não no do movimento (${movimento.rotuloDoCentro ?? movimento.centro})` : null,
+    ].filter(Boolean);
+    const documento = !d?.requisicoes.length ? "desta nota fiscal" : !d.notas.length ? "desta requisição" : "destes documentos";
+    const um = todos.length === 1;
+    const onde = partes.length ? `${um ? "está" : "estão"} ${partes.join(" e ")}` : `não ${um ? "está" : "estão"} ao mesmo tempo na conta e no centro de custo do movimento`;
+    return `${um ? "O item" : "Os itens"} ${documento} ${onde}. Só os itens da conta e do centro de custo do movimento se contestam aqui: conteste o movimento inteiro no balancete (o botão Contestar da linha dele).`;
+  })();
+  const motivoDoBotao = contestar?.bloqueio ?? avisoSemItens ?? (escolhidos.length ? undefined : "Marque os itens do movimento a contestar");
 
   /** A primeira coluna: a caixa do item selecionável ou o número da contestação do item contestado. */
   const cabecalhoDaSelecao = (origem: Origem, itens: Array<ItemDaRequisicao | ItemDaNotaFiscal>) => {
@@ -127,7 +147,7 @@ export function ItensDoMovimentoDialog({
             type="checkbox"
             className="accent-black"
             aria-label="Marcar todos os itens do movimento"
-            title={contestar.bloqueio ?? (livres.length ? "Marcar todos os itens do movimento" : "Nenhum item do movimento a contestar")}
+            title={contestar.bloqueio ?? (livres.length ? "Marcar todos os itens do movimento" : (avisoSemItens ?? "Nenhum item do movimento a contestar"))}
             disabled={!livres.length}
             checked={todosMarcados}
             onChange={(e) => setMarcados((s) => {
@@ -184,7 +204,7 @@ export function ItensDoMovimentoDialog({
           <DialogDescription>
             {juntar(movimento.emissao ? dataCurta(movimento.emissao) : null, movimento.cliForn, movimento.historico)} · {moeda(movimento.valor)}. Os itens da requisição ou
             da nota fiscal com este ID (o IDENTIFICADOR das abas Requisições (Lista) e Notas Fiscais (Lista) importadas).
-            {contestar ? " Marque os itens do movimento e clique em Contestar Selecionados para contestar só eles." : ""}
+            {contestar && !avisoSemItens ? " Marque os itens do movimento e clique em Contestar Selecionados para contestar só eles." : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -197,6 +217,8 @@ export function ItensDoMovimentoDialog({
             {!recortado ? <p className="text-sm text-gray-700">Os itens {recorte} do movimento em amarelo.</p> : null}
           </div>
         ) : null}
+
+        {avisoSemItens ? <p className="shrink-0 rounded-sm border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900">{avisoSemItens}</p> : null}
 
         {consulta.isError ? (
           <p className="text-sm text-red-700">{mensagemDeErro(consulta.error, "Erro ao carregar os itens do movimento.")}</p>

@@ -28,6 +28,28 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 18/11/2026: o aviso dos itens de outra conta no modal Itens do Movimento.
+  {
+    publicada: "2026-11-18T20:25",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "No modal Itens do Movimento (o botão Itens do Balancete), quando nenhum item está na conta e no centro de custo do movimento — a nota ou a requisição lançada no balancete em outra conta, como num pagamento a fornecedor —, um aviso diz onde os itens estão e que o movimento se contesta inteiro, no botão Contestar do Balancete.",
+    ],
+  },
+  // 18/11/2026: a aba Variações dos Resultados Empresariais.
+  {
+    publicada: "2026-11-18T20:25",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "Nova aba Variações no Painel de Bordo, antes de Indicadores, em cards de destaque como os cards PROVA dos Relatórios Executivos: em cada unidade e em cada departamento dela (os grupos de custos e despesas da DRE, menos as Despesas Variáveis de Venda), três cards na largura da tela, cada um com as três contas de maiores variações — Atual · SET/26 (Vs. Realizado dos meses anteriores do exercício, a média deles), Atual · SET/26 (Vs. o cenário da Comparação) e Acumulado · JAN a SET/26 (Vs. o cenário da Comparação).",
+      "Cada variação mostra a posição, a conta e a atribuição (∆1 · Cimento (Matérias Primas)), o Realizado e uma linha por comparado (a Média, o cenário da Comparação Padrão ou cada um da PROVA, na cor dele) com o Comparado, a Diferença (R$), o Atingimento (%) e a Eficiência (p.p.), com o sinal dos cards (melhor, até 5% ou pior). No alto, o Ordenar Por escolhe a medida que define as três maiores.",
+      "A lupa ao lado do valor realizado abre os gastos por conta e por item, como nas abas das unidades de Resultados: no Atual, o extrato do mês (os lançamentos de origem, os movimentos de cada conta e os itens); no Acumulado, os meses da conta, e cada mês, o extrato dele. Cada unidade recolhe e expande, como os grupos das abas Resultados e Performance, e cada departamento tem o botão Copiar como Imagem dos cards dele; o Ordenar Por fica flutuante ao rolar a tela. O Exportar da aba baixa as variações em Excel ou PDF, na ordem escolhida.",
+    ],
+  },
   // 17/11/2026, fim da tarde: a conta Encargos e Benefícios sem os Benefícios Adicionais nas Premissas, os salários do Quadro
   // de Lotação dos cenários como o total da linha e as Médias de Referência sobre todos os meses da referência.
   {
