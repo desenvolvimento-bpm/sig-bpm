@@ -100,7 +100,19 @@ import {
 } from "./investimentosCenario.js";
 import { mediaDoPeriodo, mediaNoPeriodo, referenciaDoRealizado } from "./referenciaAnalitico.js";
 import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realocacoesCenario.js";
-import { aplicacaoDosReajustes, erroDosReajustes, fatoresDasContas, indicesDosReajustes, type IndiceDosReajustes, type ReajusteDoIndice } from "./reajustesCenario.js";
+import {
+  aplicacaoDosReajustes,
+  erroDosReajustes,
+  fatoresDasContas,
+  indicesDosReajustes,
+  daChave,
+  GRUPOS_POR_UNIDADE,
+  indicesDaLinha,
+  usosDosIndices,
+  type IndiceDosReajustes,
+  type IndicesDaConta,
+  type ReajusteDoIndice,
+} from "./reajustesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { basesDosProjetos, liberacaoTotal, LIBERACOES_DIGITADAS, ondeEstaoOsProjetos } from "./projetosCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
@@ -341,17 +353,59 @@ function linhasDosReajustes(est: Awaited<ReturnType<typeof estruturaDRE>>) {
   const ps = linhas.find((l) => l.linha.tipo === "SECAO" && l.linha.codigo.startsWith("PS."))?.linha.codigo;
   // Produção e Serviços (12/11/2026, pedido do Adão: aparece, como em Resultados Empresariais; antes, ficava fora): só para
   // leitura — os volumes não são contas que se reajustam.
-  return linhas.map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" && l.linha.codigo !== ps && l.acima[0] !== ps }));
+  const comConta = linhas.map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" && l.linha.codigo !== ps && l.acima[0] !== ps }));
+  // Os Custos de Produção (19/11/2026, pedido do Adão): um grupo de linhas da Matriz e um da Filial, no lugar do grupo CPP, com
+  // a unidade no código ("1|CPP…") e no nome do total ("CUSTOS DE PRODUÇÃO: MATRIZ (CPP)").
+  const grupoDe = (codigo: string) => codigo.split(".")[0];
+  const resultado: typeof comConta = [];
+  const feitos = new Set<string>();
+  for (const l of comConta) {
+    const g = grupoDe(l.linha.codigo);
+    const unidades = GRUPOS_POR_UNIDADE[g];
+    if (!unidades) {
+      resultado.push(l);
+      continue;
+    }
+    if (feitos.has(g)) continue;
+    feitos.add(g);
+    const doGrupo = comConta.filter((x) => grupoDe(x.linha.codigo) === g);
+    for (const u of unidades) {
+      for (const x of doGrupo) {
+        const nome = x.linha.tipo !== "ITEM" && x.nivel === 0 ? (/^(.*?):.*?(\([^)]*\))\s*$/.exec(x.linha.descricao) ?? null) : null;
+        resultado.push({
+          ...x,
+          linha: { ...x.linha, codigo: `${u.unidade}|${x.linha.codigo}`, descricao: nome ? `${nome[1]}: ${u.nome} ${nome[2]}` : x.nivel === 0 ? `${x.linha.descricao} · ${u.nome}` : x.linha.descricao },
+          acima: x.acima.map((a) => (grupoDe(a) === g ? `${u.unidade}|${a}` : a)),
+        });
+      }
+    }
+  }
+  return resultado;
 }
 
 type ComReajustes = { reajustesAplicados: boolean; indicesDosReajustes: unknown; aplicacaoDosReajustes: unknown };
 
-/** A soma das contas dadas na DRE gravada do cenário, nas unidades (o histórico do recálculo com os reajustes). */
-async function somaDasContas(tx: Prisma.TransactionClient, cenarioId: string, est: Awaited<ReturnType<typeof estruturaDRE>>, codigos: Set<string>) {
-  if (!codigos.size) return 0;
-  const ids = est.filter((l) => codigos.has(l.codigo)).map((l) => l.id);
-  const r = await tx.cenarioResultado.aggregate({ where: { cenarioId, visao: { in: [...UNIDADES] }, linhaDREId: { in: ids } }, _sum: { valor: true } });
-  return Number(r._sum.valor ?? 0);
+/**
+ * A soma das contas dadas na DRE gravada do cenário, nas unidades (o histórico do recálculo com os reajustes). As chaves são
+ * as da Aplicação dos Reajustes: o código (todas as unidades) ou "unidade|código" (19/11/2026: os Custos de Produção da Matriz
+ * e da Filial), só naquela unidade.
+ */
+async function somaDasContas(tx: Prisma.TransactionClient, cenarioId: string, est: Awaited<ReturnType<typeof estruturaDRE>>, chaves: Set<string>) {
+  if (!chaves.size) return 0;
+  const codigos = new Set([...chaves].map((c) => daChave(c).codigo));
+  const codigoDe = new Map(est.filter((l) => codigos.has(l.codigo)).map((l) => [l.id, l.codigo]));
+  const linhas = await tx.cenarioResultado.findMany({ where: { cenarioId, visao: { in: [...UNIDADES] }, linhaDREId: { in: [...codigoDe.keys()] } }, select: { linhaDREId: true, visao: true, valor: true } });
+  return linhas.reduce((s, r) => {
+    const codigo = codigoDe.get(r.linhaDREId)!;
+    return chaves.has(codigo) || chaves.has(`${r.visao}|${codigo}`) ? s + Number(r.valor) : s;
+  }, 0);
+}
+
+/** O nome de uma conta da Aplicação dos Reajustes no histórico: a descrição e, nos Custos de Produção, a unidade. */
+function nomeDaChave(chave: string, nome: Map<string, string>) {
+  const { codigo, unidade } = daChave(chave);
+  const descricao = nome.get(codigo) ?? codigo;
+  return unidade === null ? descricao : `${descricao} (${unidade === 1 ? "Matriz" : unidade === 2 ? "Filial" : `unidade ${unidade}`})`;
 }
 
 /**
@@ -385,7 +439,7 @@ async function calcularComReajustes(
           usuarioNome: usuario.nome,
           tipo: "RECALCULO",
           descricao: descricao(codigos.size),
-          contas: [...codigos].map((c) => ({ codigo: c, descricao: nome.get(c) ?? c })),
+          contas: [...codigos].map((c) => ({ codigo: daChave(c).codigo, descricao: nomeDaChave(c, nome) })),
           meses: [...reajustes.meses].sort((a, b) => a - b),
           valores: codigos.size ? reajustes.valores : 0,
           somaAntes: codigos.size ? somaAntes : null,
@@ -3999,8 +4053,8 @@ export const cenariosService = {
 
   /**
    * A aba Reajustes das Premissas do cenário analítico (11/11/2026, pedido do Adão): os Índices de Reajuste (com até
-   * quatro reajustes, o Valor (%) e o Inicia Em, e quantas contas usam cada um), as linhas da Aplicação dos Reajustes (o
-   * índice de cada conta) e se os reajustes estão aplicados na DRE.
+   * quatro reajustes, o Valor (%) e o Inicia Em, e quantas contas usam cada um), as linhas da Aplicação dos Reajustes (os
+   * índices de cada conta: o 1º e, desde 19/11/2026, o 2º) e se os reajustes estão aplicados na DRE.
    */
   async reajustesDasPremissas(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
@@ -4009,10 +4063,17 @@ export const cenariosService = {
     const chaves = new Set(indices.map((i) => i.chave));
     const aplicacao = aplicacaoDosReajustes(c);
     const linhas = linhasDosReajustes(await estruturaDRE());
+    const contas = new Set(linhas.filter((l) => l.conta).map((l) => l.linha.codigo));
+    // O 1º e o 2º índice de uma conta (os que ainda existem): nos Custos de Produção, os da conta na unidade (19/11/2026) ou,
+    // sem eles, os gravados antes para a conta.
+    const indiceDa = (codigo: string, k: 0 | 1) => {
+      const chave = contas.has(codigo) ? indicesDaLinha(aplicacao, codigo)?.[k] : null;
+      return chave && chaves.has(chave) ? chave : null;
+    };
+    // Quantas contas usam cada índice (no 1º ou no 2º; a da Matriz e a da Filial contam cada uma).
     const usos = new Map<string, number>();
-    for (const l of linhas) {
-      const chave = l.conta ? aplicacao[l.linha.codigo] : undefined;
-      if (chave && chaves.has(chave)) usos.set(chave, (usos.get(chave) ?? 0) + 1);
+    for (const codigo of contas) {
+      for (const chave of new Set([indiceDa(codigo, 0), indiceDa(codigo, 1)].filter((x): x is string => !!x))) usos.set(chave, (usos.get(chave) ?? 0) + 1);
     }
     return {
       ano: c.ano,
@@ -4027,7 +4088,8 @@ export const cenariosService = {
         descricao: l.linha.descricao,
         tipo: l.linha.tipo,
         verificada: l.conta,
-        indice: l.conta && chaves.has(aplicacao[l.linha.codigo] ?? "") ? aplicacao[l.linha.codigo] : null,
+        indice: indiceDa(l.linha.codigo, 0),
+        indice2: indiceDa(l.linha.codigo, 1),
       })),
     };
   },
@@ -4058,9 +4120,7 @@ export const cenariosService = {
       reajustes: i.reajustes.map((r) => ({ valor: r.valor, mes: r.mes })),
     }));
     const ficam = new Set(novos.map((i) => i.chave));
-    const aplicacao = aplicacaoDosReajustes(antes);
-    const usos = new Map<string, number>();
-    for (const chave of Object.values(aplicacao)) usos.set(chave, (usos.get(chave) ?? 0) + 1);
+    const usos = usosDosIndices(aplicacaoDosReajustes(antes));
     const emUso = atuais.filter((i) => !ficam.has(i.chave) && usos.has(i.chave));
     if (emUso.length) {
       throw new CenarioError(
@@ -4085,20 +4145,30 @@ export const cenariosService = {
   },
 
   /**
-   * Grava a Aplicação dos Reajustes (11/11/2026): o índice de cada conta (nulo: sem reajuste). Com os reajustes aplicados,
-   * a DRE se recalcula.
+   * Grava a Aplicação dos Reajustes (11/11/2026): os índices de cada conta — desde 19/11/2026 (pedido do Adão), até dois, o
+   * 1º e o 2º, que rodam nessa ordem; um só (o formato de antes) vale como o 1º; nulo: sem reajuste. Sem o 1º, o 2º vira o 1º;
+   * o mesmo índice nas duas colunas é recusado. Com os reajustes aplicados, a DRE se recalcula.
    */
-  async gravarAplicacaoDosReajustes(id: string, indices: Record<string, string | null>, usuario: Usuario) {
+  async gravarAplicacaoDosReajustes(id: string, indices: Record<string, string | null | [string | null, string | null]>, usuario: Usuario) {
     const antes = await obterOuFalhar(id, usuario);
     exigirQuemCriou(antes, usuario);
     exigirAnalitico(antes);
     exigirEditavel(antes);
-    const contas = new Set(linhasDosReajustes(await estruturaDRE()).filter((l) => l.conta).map((l) => l.linha.codigo));
+    const linhasDaDRE = linhasDosReajustes(await estruturaDRE()).filter((l) => l.conta);
+    // As chaves das contas (nos Custos de Produção, "unidade|código", 19/11/2026) e o nome de cada uma, com a unidade.
+    const nome = new Map(linhasDaDRE.map((l) => [daChave(l.linha.codigo).codigo, l.linha.descricao]));
+    const contas = new Map(linhasDaDRE.map((l) => [l.linha.codigo, nomeDaChave(l.linha.codigo, nome)]));
     const fora = Object.keys(indices).filter((k) => !contas.has(k));
     if (fora.length) throw new CenarioError(400, `Não são contas da DRE: ${fora.slice(0, 3).join(", ")}.`);
     const chaves = new Set(indicesDosReajustes(antes).map((i) => i.chave));
-    if (Object.values(indices).some((v) => v !== null && !chaves.has(v))) throw new CenarioError(400, "Um dos índices escolhidos não existe mais: atualize a tela (Premissas / Reajustes).");
-    const aplicacao = Object.fromEntries(Object.entries(indices).filter((e): e is [string, string] => e[1] !== null));
+    const aplicacao: Record<string, IndicesDaConta> = {};
+    for (const [codigo, valor] of Object.entries(indices)) {
+      const escolhidos = (Array.isArray(valor) ? valor : [valor]).filter((x): x is string => !!x);
+      if (!escolhidos.length) continue;
+      if (escolhidos.some((v) => !chaves.has(v))) throw new CenarioError(400, "Um dos índices escolhidos não existe mais: atualize a tela (Configurações / Reajustes).");
+      if (escolhidos.length > 1 && escolhidos[0] === escolhidos[1]) throw new CenarioError(400, `${contas.get(codigo)}: o 1º e o 2º Índice de Reajuste são o mesmo; escolha outro no 2º ou deixe-o em branco.`);
+      aplicacao[codigo] = [escolhidos[0], escolhidos[1] ?? null];
+    }
     const data = { aplicacaoDosReajustes: aplicacao };
     if (antes.reajustesAplicados) await calcularComReajustes(id, usuario, antes, data, (n) => `Aplicação dos Reajustes gravada, com os reajustes aplicados (${deContas(n)})`);
     else await getPrismaClient().cenario.update({ where: { id }, data });

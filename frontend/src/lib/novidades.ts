@@ -28,6 +28,27 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 16:25): os itens do movimento só dos documentos dele.
+  {
+    publicada: "2026-11-19T16:25",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Nos extratos, o botão Itens e o modal Itens do Movimento trazem só a requisição ou a nota fiscal do movimento: o documento com o mesmo número mas de outra data (como nos lançamentos da folha) não aparece mais.",
+    ],
+  },
+  // 19/11/2026 (publicada às 16:25): dois índices por conta nos Reajustes dos analíticos.
+  {
+    publicada: "2026-11-19T16:25",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Reajustes, a Aplicação dos Reajustes tem duas colunas, 1º Índice de Reajuste e 2º Índice de Reajuste: cada conta pode ter até dois índices, que rodam na ordem (o 2º sobre o valor já reajustado pelo 1º). Preencher Selecionados escolhe em qual coluna aplicar.",
+      "Os Custos de Produção aparecem em dois grupos de linhas, CUSTOS DE PRODUÇÃO: MATRIZ e CUSTOS DE PRODUÇÃO: FILIAL, cada um com os índices daquela unidade.",
+    ],
+  },
   // 19/11/2026 (publicada às 14:32): a aba Investimentos para todos os que a leem.
   {
     publicada: "2026-11-19T14:32",

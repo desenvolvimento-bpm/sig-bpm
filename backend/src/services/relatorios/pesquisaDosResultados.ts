@@ -3,7 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
 import { podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { contestacoesService } from "../contestacoes/contestacoesService.js";
-import { itensDoMovimentoService } from "../dre/itensDoMovimento.js";
+import { chaveDoMovimento, itensDoMovimentoService } from "../dre/itensDoMovimento.js";
 import { CENTRO_DE_OBRA } from "../dre/obrasService.js";
 import { rotuloDaLinha } from "./detalhesDosResultados.js";
 import { mesesDoExercicio, RelatorioError } from "./resultadosService.js";
@@ -137,7 +137,8 @@ export const pesquisaDosResultados = {
     const movimentos = vistos.slice(0, LIMITE);
     const [situacoes, itens] = await Promise.all([
       contestacoesService.doBalancete(movimentos.map((m) => m.id)),
-      itensDoMovimentoService.contar(movimentos.map((m) => m.idMovimento)),
+      // Os itens (desde 19/11/2026, os documentos com a data perto da emissão do movimento).
+      itensDoMovimentoService.contar(movimentos.map((m) => ({ idMovimento: m.idMovimento, emissao: m.emissao, ano: m.competencia.ano, mes: m.competencia.mes }))),
     ]);
     const aplicadas = new Map(
       (
@@ -178,7 +179,7 @@ export const pesquisaDosResultados = {
           emissao: m.emissao,
           historico: m.historico,
           idMovimento: m.idMovimento,
-          itens: m.idMovimento ? (itens.get(m.idMovimento) ?? 0) : 0,
+          itens: itens.get(chaveDoMovimento({ idMovimento: m.idMovimento, emissao: m.emissao, ano: m.competencia.ano, mes: m.competencia.mes })) ?? 0,
           valor: m.valorMovimento.toFixed(2),
           centroOriginal: m.centroCusto && m.codigoCentroCusto && m.centroCusto.codigoRM !== m.codigoCentroCusto ? { codigoRM: m.codigoCentroCusto, nome: m.nomeCentroCusto } : null,
           contestacaoAplicada: aplicada ? { numero: aplicada.numero, centro: !!aplicada.centroNovoId, conta: !!aplicada.contaNovaId } : null,

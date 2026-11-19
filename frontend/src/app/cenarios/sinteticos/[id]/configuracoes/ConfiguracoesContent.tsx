@@ -104,14 +104,17 @@ export function ConfiguracoesContent() {
                   Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro e
                   2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante). Use “Incluir Índice” para uma
                   linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a
-                  coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Aplicação dos Reajustes, cada conta da DRE escolhe um índice
-                  (Produção e Serviços aparece, recolhida em Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se
-                  reajustam); o de um total ou de uma atribuição vale para as contas abaixo dele, e “Preencher Selecionados” aplica um índice às contas
-                  marcadas; “Gravar Aplicação” grava os índices das contas.
+                  coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Aplicação dos Reajustes, cada conta da DRE escolhe até dois índices, nas
+                  colunas 1º Índice de Reajuste e 2º Índice de Reajuste (o 2º só depois do 1º e diferente dele; os Custos de Produção vêm em dois grupos de linhas, CUSTOS DE
+                  PRODUÇÃO: MATRIZ e CUSTOS DE PRODUÇÃO: FILIAL, cada um com os índices daquela unidade; Produção e Serviços aparece, recolhida em
+                  Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam); o de um total ou de uma
+                  atribuição vale para as contas abaixo dele, e “Preencher Selecionados” aplica um índice às contas marcadas, no 1º ou no 2º (o Limpar no
+                  1º faz o 2º passar a ser o 1º); “Gravar Aplicação” grava os índices das contas.
                 </li>
                 <li>
                   Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada conta
-                  com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; com eles aplicados, o botão vira “Remover Reajustes”, que faz o
+                  com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado — com dois índices, na ordem: o 1º sobre o valor das premissas e
+                  o 2º sobre o valor já reajustado pelo 1º; com eles aplicados, o botão vira “Remover Reajustes”, que faz o
                   inverso e volta aos valores das premissas — nunca duas vezes seguidas (grave a aplicação antes, se mudou). O aviso no topo da aba diz
                   se os reajustes estão aplicados. Com eles aplicados, a barra do cenário mostra a etiqueta Reajustes Aplicados, as abas das Premissas
                   (menos Indicadores Manuais) ficam bloqueadas para edição, “Importar Valores” sai da tela Premissas, a referência não se carrega,

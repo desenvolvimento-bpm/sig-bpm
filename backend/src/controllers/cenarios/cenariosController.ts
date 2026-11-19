@@ -737,11 +737,15 @@ export const cenariosController = {
     return responder(response, () => cenariosService.gravarIndicesDosReajustes(c, corpo.data.indices, usuario(request)));
   },
 
-  /** Grava a Aplicação dos Reajustes: { indices: { código da conta: chave do índice ou nulo } }. */
+  /**
+   * Grava a Aplicação dos Reajustes: { indices: { código da conta: [1º índice, 2º índice] } } (19/11/2026: até dois por conta;
+   * cada um, a chave ou nulo); a chave só (o formato de antes) vale como o 1º.
+   */
   gravarAplicacaoDosReajustes(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const corpo = z.object({ indices: z.record(z.string().max(200), z.string().max(20).nullable()) }).safeParse(request.body);
+    const chave = z.string().max(20).nullable();
+    const corpo = z.object({ indices: z.record(z.string().max(200), z.union([chave, z.tuple([chave, chave])])) }).safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: "Aplicação dos Reajustes inválida." });
     return responder(response, () => cenariosService.gravarAplicacaoDosReajustes(c, corpo.data.indices, usuario(request)));
   },

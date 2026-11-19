@@ -6,7 +6,7 @@ import { departamentoDaLinha, gestaoDoCentro, MENSAGEM_SENSIVEL, podeVerCentro, 
 import { auditar } from "../auditoriaService.js";
 import { classificacaoService } from "../classificacao/classificacaoService.js";
 import { manualNoSinalDoBalancete } from "../dre/apuracaoUnidades.js";
-import { itensDoMovimentoService, type ItensDoMovimento } from "../dre/itensDoMovimento.js";
+import { chaveDoMovimento, itensDoMovimentoService, type ItensDoMovimento } from "../dre/itensDoMovimento.js";
 import { lancamentosManuaisService } from "../lancamentosManuais/lancamentosManuaisService.js";
 
 /**
@@ -375,7 +375,14 @@ const paraOsLancamentos = (m: MovimentoDaContestacao) => ({ ...m, itens: m._coun
 async function apresentar(ls: Linha[], usuarioId: string) {
   const responsaveis = await responsaveisDosCentros(ls.map(centroAlvo));
   const ns = await nomes(ls.flatMap((c) => [c.respondidaPorId, c.justificadaPorId, c.validadaPorId]));
-  const itens = await itensDoMovimentoService.contar(ls.flatMap((c) => c.movimentos.map((m) => m.lancamentoContabil?.idMovimento)));
+  // Os itens de cada movimento (desde 19/11/2026, os documentos com a data perto da emissão dele).
+  const doMovimento = (m: { emissao: Date | null; competencia: { ano: number; mes: number }; lancamentoContabil: { idMovimento: string | null } | null }) => ({
+    idMovimento: m.lancamentoContabil?.idMovimento,
+    emissao: m.emissao,
+    ano: m.competencia.ano,
+    mes: m.competencia.mes,
+  });
+  const itens = await itensDoMovimentoService.contar(ls.flatMap((c) => c.movimentos.map(doMovimento)));
   return ls.map((c) => {
     const resp = responsaveis.get(centroAlvo(c)) ?? [];
     const manual = c.lancamentosManuais[0]?.competencia;
@@ -430,7 +437,7 @@ async function apresentar(ls: Linha[], usuarioId: string) {
         formaValidacao: m.formaValidacao,
         /** O ID do movimento no RM e quantos itens ele tem nas requisições e nas notas fiscais importadas. */
         idMovimento: m.lancamentoContabil?.idMovimento ?? null,
-        itens: m.lancamentoContabil?.idMovimento ? (itens.get(m.lancamentoContabil.idMovimento) ?? 0) : 0,
+        itens: m.lancamentoContabil?.idMovimento ? (itens.get(chaveDoMovimento(doMovimento(m))) ?? 0) : 0,
         /** A contestação de itens (10/11/2026): quantos itens do movimento e o valor dele inteiro (nulo na do movimento inteiro). */
         itensContestados: m._count.itens,
         valorDoMovimento: m.valorMovimento?.toFixed(2) ?? null,
@@ -672,7 +679,11 @@ async function itensEscolhidos(l: LancamentoDoMovimento, escolhidos: Array<{ ori
       throw new RegraContestacaoError(400, `O item ${[x.codigoProduto, x.descricaoItem].filter(Boolean).join(" ")} não é do movimento (do ID, do centro de custo e da conta dele no balancete).`);
     }
   }
-  const lista = await itensDoMovimentoService.listar(l.idMovimento);
+  const lista = await itensDoMovimentoService.listar({ idMovimento: l.idMovimento, emissao: l.emissao, ano: l.competencia.ano, mes: l.competencia.mes });
+  // Só os itens dos documentos do movimento (19/11/2026: a data perto da emissão dele).
+  const dosDocumentos = new Set([...lista.notas.map((n) => n.id), ...lista.requisicoes.map((r) => r.id)]);
+  const fora = todos.find((x) => !dosDocumentos.has(x.id));
+  if (fora) throw new RegraContestacaoError(400, `O item ${[fora.codigoProduto, fora.descricaoItem].filter(Boolean).join(" ")} não é do movimento (o documento dele é de outra data).`);
   const ja = (await marcarContestados(lista, contestadosDoMovimento(l.id), null)).find((c) => todos.some((x) => x.id === c.id));
   if (ja) throw new RegraContestacaoError(409, `Um item escolhido já está na contestação nº ${ja.numero} (${ROTULO_SITUACAO[ja.situacao].toLowerCase()}).`);
   const total = todos.reduce((s, x) => s.add(x.valorTotal), new Prisma.Decimal(0));
@@ -837,13 +848,19 @@ export const contestacoesService = {
   async itensDoMovimento(id: string, movimentoId: string, aba: AbaDaContestacao, u: UsuarioDaContestacao) {
     const c = await getPrismaClient().contestacao.findFirst({
       where: { AND: [{ id }, await ondeDaAba(aba, u)] },
-      select: { movimentos: { where: { id: movimentoId }, select: { id: true, lancamentoContabilId: true, lancamentoContabil: { select: { idMovimento: true } } } } },
+      select: {
+        movimentos: {
+          where: { id: movimentoId },
+          select: { id: true, lancamentoContabilId: true, lancamentoContabil: { select: { idMovimento: true, emissao: true, competencia: { select: { ano: true, mes: true } } } } },
+        },
+      },
     });
     if (!c) throw new RegraContestacaoError(404, "Contestação não encontrada.");
     const m = c.movimentos[0];
     if (!m) throw new RegraContestacaoError(404, "O movimento não está na contestação.");
     if (!m.lancamentoContabil?.idMovimento) throw new RegraContestacaoError(404, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)).");
-    const lista = await itensDoMovimentoService.listar(m.lancamentoContabil.idMovimento);
+    const l = m.lancamentoContabil;
+    const lista = await itensDoMovimentoService.listar({ idMovimento: l.idMovimento, emissao: l.emissao, ano: l.competencia.ano, mes: l.competencia.mes });
     const onde: Prisma.ContestacaoItemWhereInput = m.lancamentoContabilId ? { OR: [{ contestacaoMovimentoId: m.id }, contestadosDoMovimento(m.lancamentoContabilId)] } : { contestacaoMovimentoId: m.id };
     return { ...lista, contestados: await marcarContestados(lista, onde, m.id) };
   },

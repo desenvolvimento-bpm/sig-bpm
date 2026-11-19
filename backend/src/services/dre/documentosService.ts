@@ -3,7 +3,7 @@ import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
 import { MENSAGEM_SENSIVEL, podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { contestacoesService } from "../contestacoes/contestacoesService.js";
 import { CENTRO_DE_OBRA } from "./obrasService.js";
-import { itensDoMovimentoService } from "./itensDoMovimento.js";
+import { chaveDoMovimento, itensDoMovimentoService } from "./itensDoMovimento.js";
 import { RegraDREError } from "./dreService.js";
 
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
@@ -105,8 +105,10 @@ export const documentosService = {
     });
     const aplicada = new Map(aplicadas.map((x) => [x.id, x]));
     const situacoes = await contestacoesService.doBalancete(lancamentos.map((l) => l.id));
-    // Os itens de cada movimento (10/11/2026): pelo ID do RM, nas requisições e nas notas fiscais importadas.
-    const itens = await itensDoMovimentoService.contar(lancamentos.map((l) => l.idMovimento));
+    // Os itens de cada movimento (10/11/2026): pelo ID do RM, nas requisições e nas notas fiscais importadas (desde 19/11/2026,
+    // só as com a data perto da emissão dele).
+    const doMovimento = (l: { idMovimento: string | null; emissao: Date | null }) => ({ idMovimento: l.idMovimento, emissao: l.emissao, ano, mes });
+    const itens = await itensDoMovimentoService.contar(lancamentos.map(doMovimento));
     return {
       conta: conta ?? { reduzido: filtro.conta, descricao: "" },
       /** O balancete do mês é o detalhado (sem ele, cada linha é a soma da filial, do centro e da conta). */
@@ -124,7 +126,7 @@ export const documentosService = {
         historico: l.historico,
         /** O ID do movimento no RM (a coluna ID do Balancete (Lista)) e quantos itens ele tem nas listas importadas. */
         idMovimento: l.idMovimento,
-        itens: l.idMovimento ? (itens.get(l.idMovimento) ?? 0) : 0,
+        itens: itens.get(chaveDoMovimento(doMovimento(l))) ?? 0,
         valor: (parte ? parte.valorMovimento : l.valorMovimento).toFixed(2),
         // O centro do balancete, quando o que vale é outro (a contestação), e a conta que vale na DRE, quando é outra.
         centroOriginal: parte
@@ -160,11 +162,11 @@ export const documentosService = {
     const c = await competenciaDoBalancete(ano, mes, filtro, acesso);
     const l = await prisma.lancamentoContabil.findFirst({
       where: { id: lancamentoId, ...ondeDoBalancete(c.id, filtro) },
-      select: { idMovimento: true },
+      select: { idMovimento: true, emissao: true },
     });
     if (!l) throw new RegraDREError(404, "O movimento não está no balancete da conta.");
     if (!l.idMovimento) throw new RegraDREError(404, "O movimento não tem o ID do RM (a coluna ID do Balancete (Lista)).");
-    const lista = await itensDoMovimentoService.listar(l.idMovimento);
+    const lista = await itensDoMovimentoService.listar({ idMovimento: l.idMovimento, emissao: l.emissao, ano, mes });
     return { ...lista, contestados: await contestacoesService.itensContestados(lancamentoId, lista) };
   },
 };

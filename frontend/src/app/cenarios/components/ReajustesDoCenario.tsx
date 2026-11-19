@@ -40,7 +40,8 @@ const rotuloDoIndice = (i: IndiceDosReajustes, meses: Meses) =>
 /**
  * A aba Reajustes dos cenários analíticos (11/11/2026, pedido do Adão; 12/11/2026: nas Configurações): a cópia da aba Comparativo das
  * Configurações, sem o Cenário Comparado. Em cima, os Índices de Reajuste — cada um com até quatro reajustes, o Valor (%) e o
- * mês em que Inicia Em, cada um sobre os anteriores —; embaixo, a Aplicação dos Reajustes, o índice de cada conta da DRE.
+ * mês em que Inicia Em, cada um sobre os anteriores —; embaixo, a Aplicação dos Reajustes, os índices de cada conta da DRE
+ * (até dois, o 1º e o 2º Índice de Reajuste, desde 19/11/2026: rodam nessa ordem).
  * Os reajustes entram na DRE pelo botão do quadro de baixo, depois de “Gravar Aplicação”: “Aplicar Reajustes” ou, com eles
  * aplicados, “Remover Reajustes” (nunca duas vezes seguidas). Com eles aplicados, gravar um quadro recalcula a DRE, o
  * Recalcular dos Resultados os mantém, e as demais abas das Premissas (menos os Indicadores Manuais) e a referência ficam
@@ -162,7 +163,7 @@ function ListaDosIndices({ id, dados, podeEditar }: { id: string; dados: Reajust
           <h2 className={TITULO}>Índices de Reajuste</h2>
           <p className="mt-1 text-xs text-gray-600">
             Até quatro reajustes por índice: o Valor (%) e o mês em que ele Inicia Em; cada um vale sobre os anteriores, até o fim do exercício. Na
-            Aplicação dos Reajustes, abaixo, cada conta escolhe um índice; as contas sem índice não se reajustam.
+            Aplicação dos Reajustes, abaixo, cada conta escolhe até dois índices (o 1º e o 2º, nessa ordem); as contas sem índice não se reajustam.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -365,39 +366,62 @@ function GrupoDaLinha({
 }
 
 type LinhaDaAplicacao = ReajustesDasPremissas["linhas"][number];
+/** Os dois índices de uma conta na tela (19/11/2026): o 1º e o 2º; "" sem. */
+type Par = [string, string];
+/** A coluna do índice: 0, o 1º Índice de Reajuste; 1, o 2º. */
+type Coluna = 0 | 1;
+const ROTULO_DA_COLUNA = ["1º Índice de Reajuste", "2º Índice de Reajuste"] as const;
 
 /**
- * A Aplicação dos Reajustes (o quadro de baixo): como as Variações Máximas das Configurações, o índice de cada conta na
+ * O par de uma conta com a mudança numa coluna (19/11/2026): sem o 1º, o 2º sobe para o 1º; o mesmo índice nas duas fica só
+ * no 1º.
+ */
+function comMudanca(par: Par, coluna: Coluna, chave: string): Par {
+  const novo: Par = coluna === 0 ? [chave, par[1]] : [par[0], chave];
+  if (!novo[0] && novo[1]) return [novo[1], ""];
+  if (novo[0] && novo[0] === novo[1]) return [novo[0], ""];
+  return novo;
+}
+
+/**
+ * A Aplicação dos Reajustes (o quadro de baixo): como as Variações Máximas das Configurações, os índices de cada conta na
  * estrutura da DRE vigente (desde 12/11/2026, com Produção e Serviços, como em Resultados Empresariais, só para leitura: os volumes
- * não se reajustam). O índice de um total ou de uma
- * atribuição vale para as contas abaixo dele; “Preencher Selecionados” aplica um índice às contas marcadas.
+ * não se reajustam) — desde 19/11/2026 (pedido do Adão), até dois por conta, o 1º e o 2º Índice de Reajuste, que rodam nessa
+ * ordem (o 2º sobre o valor já reajustado pelo 1º). Os Custos de Produção vêm em dois grupos de linhas (19/11/2026), MATRIZ e
+ * FILIAL, com a unidade no código ("1|CPP…"): cada unidade com os seus índices. O índice de um total ou de uma atribuição vale
+ * para as contas abaixo dele; “Preencher Selecionados” aplica um índice às contas marcadas, na coluna escolhida.
  */
 function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasPremissas; podeEditar: boolean }) {
   const queryClient = useQueryClient();
   const indices = dados.indices;
   const verificadas = dados.linhas.filter((l) => l.verificada);
-  const [escolhas, setEscolhas] = useState<Record<string, string>>(() => Object.fromEntries(verificadas.map((l) => [l.codigo, l.indice ?? ""])));
+  const [escolhas, setEscolhas] = useState<Record<string, Par>>(() => Object.fromEntries(verificadas.map((l) => [l.codigo, [l.indice ?? "", l.indice2 ?? ""] as Par])));
   const [todos, setTodos] = useState("");
+  const [coluna, setColuna] = useState<Coluna>(0);
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
+  const escolhaDaConta = (codigo: string, k: Coluna) => escolhas[codigo]?.[k] ?? "";
   // PRODUÇÃO E SERVIÇOS (PS) também em Totais e em Atribuições, recolhida (12/11/2026, pedido do Adão: como em Resultados
   // Empresariais), só para leitura: os volumes não recebem índice.
   const niveis = useNiveisDRE(dados.linhas, "sig.cenarios.reajustes.nivel", undefined, "recolhida");
-  const mudou = verificadas.some((l) => (escolhas[l.codigo] ?? "") !== (l.indice ?? ""));
-  const comIndice = verificadas.filter((l) => !!escolhas[l.codigo]).length;
+  const mudou = verificadas.some((l) => escolhaDaConta(l.codigo, 0) !== (l.indice ?? "") || escolhaDaConta(l.codigo, 1) !== (l.indice2 ?? ""));
+  const comIndice = verificadas.filter((l) => !!escolhaDaConta(l.codigo, 0)).length;
+  const comDois = verificadas.filter((l) => !!escolhaDaConta(l.codigo, 1)).length;
   useAlteracoesPendentes(mudou);
   const rotulo = (chave: string) => {
     const i = indices.find((x) => x.chave === chave);
     return i ? rotuloDoIndice(i, dados.meses) : "";
   };
   const colunasExportadas: ColunaExportavel<LinhaDaAplicacao>[] = [
-    { chave: "linha", rotulo: "Linha da DRE", valor: (l) => l.descricao },
-    { chave: "indice", rotulo: "Índice de Reajuste", valor: (l) => (l.verificada && l.indice ? rotulo(l.indice) : "") },
+    // Nos Custos de Produção (19/11/2026), a unidade antes da conta: as contas se repetem nos grupos da Matriz e da Filial.
+    { chave: "linha", rotulo: "Linha da DRE", valor: (l) => (l.verificada && /^1\|/.test(l.codigo) ? `Matriz · ${l.descricao}` : l.verificada && /^2\|/.test(l.codigo) ? `Filial · ${l.descricao}` : l.descricao) },
+    { chave: "indice", rotulo: ROTULO_DA_COLUNA[0], valor: (l) => (l.verificada && l.indice ? rotulo(l.indice) : "") },
+    { chave: "indice2", rotulo: ROTULO_DA_COLUNA[1], valor: (l) => (l.verificada && l.indice2 ? rotulo(l.indice2) : "") },
   ];
   // As contas de um total ou de uma atribuição: o índice escolhido nele vale para todas elas.
   const contasDe = (l: LinhaDaAplicacao) => (l.verificada ? [l.codigo] : niveis.abaixo(l).filter((x) => x.verificada).map((x) => x.codigo));
-  // A lista do total ou da atribuição: o índice das contas dele, quando todas têm o mesmo; senão, em branco ("Vários").
-  const escolhaDe = (l: LinhaDaAplicacao) => {
-    const valores = [...new Set(contasDe(l).map((c) => escolhas[c] ?? ""))];
+  // A lista do total ou da atribuição, em cada coluna: o índice das contas dele, quando todas têm o mesmo; senão, em branco ("Vários").
+  const escolhaDe = (l: LinhaDaAplicacao, k: Coluna) => {
+    const valores = [...new Set(contasDe(l).map((c) => escolhaDaConta(c, k)))];
     return valores.length === 1 ? valores[0] : "";
   };
   const marcacaoDe = (codigos: string[]) => {
@@ -413,10 +437,16 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
       }
       return novo;
     });
-  const preencherMarcadas = (chave: string) => setEscolhas((atual) => ({ ...atual, ...Object.fromEntries([...marcadas].map((c) => [c, chave])) }));
-  const mudar = (l: LinhaDaAplicacao, chave: string) => setEscolhas((atual) => ({ ...atual, ...Object.fromEntries(contasDe(l).map((c) => [c, chave])) }));
+  const mudarContas = (codigos: string[], k: Coluna, chave: string) =>
+    setEscolhas((atual) => ({ ...atual, ...Object.fromEntries(codigos.map((c) => [c, comMudanca(atual[c] ?? ["", ""], k, chave)])) }));
+  const preencherMarcadas = (chave: string) => mudarContas([...marcadas], coluna, chave);
+  const mudar = (l: LinhaDaAplicacao, k: Coluna, chave: string) => mudarContas(contasDe(l), k, chave);
   const gravar = useMutation({
-    mutationFn: () => cenariosService.gravarAplicacaoDosReajustes(id, Object.fromEntries(verificadas.map((l) => [l.codigo, escolhas[l.codigo] || null]))),
+    mutationFn: () =>
+      cenariosService.gravarAplicacaoDosReajustes(
+        id,
+        Object.fromEntries(verificadas.map((l) => [l.codigo, [escolhaDaConta(l.codigo, 0) || null, escolhaDaConta(l.codigo, 1) || null] as [string | null, string | null]])),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios", id] });
       toast.success(dados.aplicados ? "Aplicação gravada; a DRE foi recalculada com os reajustes." : "Aplicação gravada.");
@@ -452,7 +482,9 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
         <div className="min-w-0">
           <h2 className={TITULO}>Aplicação dos Reajustes</h2>
           <p className="mt-1 text-xs text-gray-600">
-            O índice de reajuste de cada conta, na estrutura da DRE vigente (Produção e Serviços aparece só para leitura: os volumes não se reajustam). Contas sem índice não se reajustam.
+            Até dois índices de reajuste por conta, na estrutura da DRE vigente (Produção e Serviços aparece só para leitura: os volumes não se reajustam): o 1º
+            reajusta o valor das premissas e o 2º, o valor já reajustado pelo 1º. Os Custos de Produção têm um grupo de linhas da Matriz e um da Filial, cada
+            um com os seus índices. Contas sem índice não se reajustam.
           </p>
           {indices.length === 0 ? <p className="mt-1 text-xs font-medium text-red-700">Nenhum índice cadastrado: inclua os índices no quadro Índices de Reajuste, acima.</p> : null}
         </div>
@@ -468,6 +500,16 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
                   </option>
                 ))}
               </select>
+              {/* A coluna em que o Aplicar e o Limpar valem (19/11/2026): o 1º ou o 2º Índice de Reajuste. */}
+              <select
+                aria-label="Coluna do índice"
+                value={coluna}
+                onChange={(e) => setColuna(Number(e.target.value) as Coluna)}
+                className="h-9 rounded-sm border border-gray-300 bg-white px-2 text-sm"
+              >
+                <option value={0}>No 1º Índice</option>
+                <option value={1}>No 2º Índice</option>
+              </select>
               <Button
                 type="button"
                 variant="outline"
@@ -482,8 +524,8 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
                 type="button"
                 variant="outline"
                 className="rounded-sm"
-                disabled={![...marcadas].some((c) => !!escolhas[c])}
-                title={marcadas.size === 0 ? "Marque as contas que perdem o índice" : undefined}
+                disabled={![...marcadas].some((c) => !!escolhaDaConta(c, coluna))}
+                title={marcadas.size === 0 ? "Marque as contas que perdem o índice" : coluna === 0 ? "Sem o 1º índice, o 2º passa a ser o 1º" : undefined}
                 onClick={() => preencherMarcadas("")}
               >
                 Limpar
@@ -507,14 +549,16 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
                   Linha da DRE
                 </span>
               </th>
-              <th className="w-96 px-4 py-2.5 text-right text-xs font-bold text-gray-600">Índice de Reajuste</th>
+              {ROTULO_DA_COLUNA.map((r) => (
+                <th key={r} className="w-80 px-4 py-2.5 text-right text-xs font-bold text-gray-600">
+                  {r}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {niveis.linhas.filter(niveis.visivel).map((l) => {
               const contas = contasDe(l);
-              const escolha = escolhaDe(l);
-              const varias = !l.verificada && !escolha && contas.some((c) => escolhas[c]);
               return (
                 <tr key={l.codigo} className={`border-b border-gray-100 last:border-b-0 ${fundoDaLinha(l)}`}>
                   <td className={`py-1.5 pr-4 text-sm ${niveis.recuo(l)} ${l.tipo !== "ITEM" ? "font-bold text-gray-900" : "text-gray-700"}`}>
@@ -526,29 +570,48 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
                       </span>
                     </span>
                   </td>
-                  <td className="px-4 py-1.5 text-right">
-                    {contas.length ? (
-                      <select
-                        aria-label={`Índice de ${l.descricao}`}
-                        title={escolha ? rotulo(escolha) : l.verificada ? undefined : "O índice escolhido vale para todas as contas abaixo"}
-                        value={escolha}
-                        onChange={(e) => mudar(l, e.target.value)}
-                        disabled={!podeEditar}
-                        className="ml-auto h-8 w-full max-w-88 rounded-sm border border-gray-300 bg-white px-2 text-sm disabled:opacity-70"
-                      >
-                        <option value="">{varias ? "Vários" : "—"}</option>
-                        {indices.map((i) => (
-                          <option key={i.chave} value={i.chave}>
-                            {rotuloDoIndice(i, dados.meses)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-sm text-gray-400" title={/^(PS|P|S)\./.test(l.codigo) ? "Os volumes não se reajustam" : "Sem contas para reajustar"}>
-                        —
-                      </span>
-                    )}
-                  </td>
+                  {([0, 1] as const).map((k) => {
+                    const escolha = escolhaDe(l, k);
+                    const varias = !l.verificada && !escolha && contas.some((c) => escolhaDaConta(c, k));
+                    // O 2º só com o 1º (em alguma das contas) e sem repetir o 1º.
+                    const semPrimeiro = k === 1 && !contas.some((c) => escolhaDaConta(c, 0));
+                    const primeiro = k === 1 ? escolhaDe(l, 0) : "";
+                    return (
+                      <td key={k} className="px-4 py-1.5 text-right">
+                        {contas.length ? (
+                          <select
+                            aria-label={`${ROTULO_DA_COLUNA[k]} de ${l.descricao}`}
+                            title={
+                              semPrimeiro
+                                ? "Escolha o 1º índice antes"
+                                : escolha
+                                  ? rotulo(escolha)
+                                  : l.verificada
+                                    ? undefined
+                                    : "O índice escolhido vale para todas as contas abaixo"
+                            }
+                            value={escolha}
+                            onChange={(e) => mudar(l, k, e.target.value)}
+                            disabled={!podeEditar || semPrimeiro}
+                            className="ml-auto h-8 w-full max-w-72 rounded-sm border border-gray-300 bg-white px-2 text-sm disabled:opacity-70"
+                          >
+                            <option value="">{varias ? "Vários" : "—"}</option>
+                            {indices
+                              .filter((i) => i.chave !== primeiro)
+                              .map((i) => (
+                                <option key={i.chave} value={i.chave}>
+                                  {rotuloDoIndice(i, dados.meses)}
+                                </option>
+                              ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm text-gray-400" title={/^(PS|P|S)\./.test(l.codigo) ? "Os volumes não se reajustam" : "Sem contas para reajustar"}>
+                            —
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -560,7 +623,8 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
         <div className="flex items-center justify-end gap-3">
           <span className="text-xs text-gray-500">
             {marcadas.size ? `${marcadas.size} ${plural(marcadas.size, "conta marcada", "contas marcadas")} · ` : ""}
-            {comIndice} de {verificadas.length} {plural(verificadas.length, "conta", "contas")} com índice.
+            {comIndice} de {verificadas.length} {plural(verificadas.length, "conta", "contas")} com índice
+            {comDois ? ` (${comDois} com dois)` : ""}.
           </span>
           <Button type="button" className={botaoPrimario} disabled={!mudou || gravar.isPending} onClick={() => gravar.mutate()}>
             {gravar.isPending ? "Gravando…" : "Gravar Aplicação"}
@@ -584,7 +648,7 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
           titulo={aplicar ? "Aplicar Reajustes" : "Remover Reajustes"}
           descricao={
             aplicar
-              ? `A DRE do cenário passa a ter os reajustes: em ${contasDosReajustes}, cada mês a partir do Inicia Em de cada reajuste vira o valor × (1 + Valor), cada reajuste sobre os anteriores. As demais abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição, assim como a referência (Configurações / Referência); o Recalcular dos Resultados mantém os reajustes. Para tirá-los e voltar a editar, use “Remover Reajustes”.`
+              ? `A DRE do cenário passa a ter os reajustes: em ${contasDosReajustes}, cada mês a partir do Inicia Em de cada reajuste vira o valor × (1 + Valor), cada reajuste sobre os anteriores; com dois índices na conta, o 1º e depois o 2º, sobre o valor já reajustado pelo 1º. As demais abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição, assim como a referência (Configurações / Referência); o Recalcular dos Resultados mantém os reajustes. Para tirá-los e voltar a editar, use “Remover Reajustes”.`
               : `A DRE do cenário volta aos valores das premissas: em ${contasDosReajustes}, o inverso dos reajustes (o valor ÷ os mesmos fatores, de dezembro a janeiro), e as abas das Premissas voltam a ser editáveis. Para aplicá-los de novo, use “Aplicar Reajustes”.`
           }
           acao={aplicar ? "Aplicar Reajustes" : "Remover Reajustes"}

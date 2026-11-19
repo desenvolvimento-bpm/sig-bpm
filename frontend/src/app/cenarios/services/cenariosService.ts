@@ -355,8 +355,8 @@ export type ReajustesDasPremissas = {
   /** As contas que os reajustes mudam: sem nenhuma, não há o que aplicar. */
   contasComReajuste: number;
   indices: Array<IndiceDosReajustes & { contas: number }>;
-  /** As linhas da DRE (sem Produção e Serviços): `verificada`, a conta, que recebe o índice. */
-  linhas: Array<{ codigo: string; descricao: string; tipo: string; verificada: boolean; indice: string | null }>;
+  /** As linhas da DRE: `verificada`, a conta, que recebe os índices — o 1º (`indice`) e, desde 19/11/2026, o 2º (`indice2`). */
+  linhas: Array<{ codigo: string; descricao: string; tipo: string; verificada: boolean; indice: string | null; indice2: string | null }>;
 };
 /** Uma linha acima da variação máxima: os meses (o valor, o comparado e a variação em %; nula sem base) e a justificativa. */
 export type ItemJustificativa = {
@@ -594,7 +594,7 @@ export const cenariosService = {
   aplicarReajustes: async (id: string, aplicados: boolean) =>
     (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicados`, { aplicados })).data.data,
   /** O índice de cada conta (nulo: sem reajuste). */
-  gravarAplicacaoDosReajustes: async (id: string, indices: Record<string, string | null>) =>
+  gravarAplicacaoDosReajustes: async (id: string, indices: Record<string, [string | null, string | null]>) =>
     (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicacao`, { indices })).data.data,
   /** Grava as realocações das movimentações fora dos padrões (o grupo de cada conta, ou nulo). */
   gravarRealocacoes: async (id: string, decisoes: Record<string, string | null>) =>

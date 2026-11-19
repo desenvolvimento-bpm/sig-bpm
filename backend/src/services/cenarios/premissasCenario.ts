@@ -9,7 +9,7 @@ import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VE
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
-import { fatoresDasContas, resumoVazio } from "./reajustesCenario.js";
+import { fatoresDasContas, fatorNaUnidade, resumoVazio } from "./reajustesCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
 
@@ -511,7 +511,8 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     const u = Number(us);
     const l = porCodigo.get(codigo);
     if (!l || l.tipo !== "ITEM" || !l.unidades.includes(u)) continue;
-    const f = fatores.get(codigo);
+    // Nos Custos de Produção, o fator da conta na unidade (19/11/2026: um grupo da Matriz e um da Filial).
+    const f = fatorNaUnidade(fatores, codigo, u);
     lista.forEach((x, m) => {
       if (Math.abs(x) < 0.00005) return;
       const reajustado = f ? x * f[m] : x;
