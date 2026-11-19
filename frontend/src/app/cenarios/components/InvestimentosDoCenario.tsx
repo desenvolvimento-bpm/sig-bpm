@@ -30,19 +30,23 @@ const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "
  * As colunas da lista dos investimentos, com a largura de cada uma (16/11/2026: os rótulos presos ao rolar a página, como nas
  * demais tabelas, numa tabela à parte com as mesmas larguras); a partir do Início, à direita.
  */
-const COLUNAS_DA_LISTA: Array<{ rotulo: string; largura: number }> = [
+const COLUNAS_DA_LISTA: Array<{ rotulo: string; largura: number; direita?: boolean }> = [
   { rotulo: "Nome de Referência", largura: 200 },
   { rotulo: "Unidade", largura: 140 },
   { rotulo: "Conta", largura: 260 },
   { rotulo: "Departamento", largura: 150 },
   { rotulo: "Descrição", largura: 280 },
   { rotulo: "Condição de Pagamento", largura: 240 },
-  { rotulo: "Início", largura: 110 },
-  { rotulo: "Valor Total", largura: 150 },
-  { rotulo: "Valor Pós Uso", largura: 150 },
-  { rotulo: "Vida Útil", largura: 110 },
-  { rotulo: "Depreciação Mensal", largura: 160 },
+  { rotulo: "Início", largura: 110, direita: true },
+  { rotulo: "Valor Total", largura: 150, direita: true },
+  { rotulo: "Valor Pós Uso", largura: 150, direita: true },
+  { rotulo: "Vida Útil", largura: 110, direita: true },
+  { rotulo: "Depreciação Mensal", largura: 160, direita: true },
+  // Quem incluiu (19/11/2026, pedido do Adão: com recorte, cada um altera e exclui só os seus).
+  { rotulo: "Incluído Por", largura: 180 },
 ];
+/** O autor de um investimento na lista (os de antes do registro, sem ele). */
+const autorDoInvestimento = (i: InvestimentoDoCenario) => i.incluidoPor ?? "—";
 
 /** O Departamento de um investimento na lista (12/11/2026): só em Despesas e Extra; sem ele, os cinco. */
 const departamentoDoInvestimento = (i: InvestimentoDoCenario) =>
@@ -124,10 +128,13 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
     { chave: "valorPosUso", rotulo: "Valor Pós Uso", tipo: "numero", moeda: true, valor: (i) => Number(i.valorPosUso), texto: (i) => reais(i.valorPosUso) },
     { chave: "vidaUtil", rotulo: "Vida Útil (meses)", tipo: "numero", valor: (i) => i.vidaUtil },
     { chave: "depreciacao", rotulo: "Depreciação Mensal", tipo: "numero", moeda: true, valor: (i) => Number(i.depreciacaoMensal), texto: (i) => reais(i.depreciacaoMensal) },
+    { chave: "incluidoPor", rotulo: "Incluído Por", valor: (i) => autorDoInvestimento(i) },
   ];
-  // Só os marcados que ainda estão na lista.
-  const selecionados = dados.investimentos.filter((i) => marcados.has(i.id));
-  const todos = dados.investimentos.length > 0 && selecionados.length === dados.investimentos.length;
+  // Os que o usuário altera e exclui (19/11/2026): com recorte, só os que ele incluiu; os outros ficam sem a caixa e sem a edição.
+  const alteraveis = dados.investimentos.filter((i) => i.podeAlterar);
+  // Só os marcados que ainda estão na lista (e que ele altera).
+  const selecionados = alteraveis.filter((i) => marcados.has(i.id));
+  const todos = alteraveis.length > 0 && selecionados.length === alteraveis.length;
   const marcar = (ids: string[], marca: boolean) =>
     setMarcados((atual) => {
       const novo = new Set(atual);
@@ -203,16 +210,16 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                       aria-label="Marcar todos os investimentos"
                       className="accent-black"
                       checked={todos}
-                      disabled={!dados.investimentos.length}
+                      disabled={!alteraveis.length}
                       ref={(el) => {
                         if (el) el.indeterminate = selecionados.length > 0 && !todos;
                       }}
-                      onChange={() => marcar(dados.investimentos.map((i) => i.id), !todos)}
+                      onChange={() => marcar(alteraveis.map((i) => i.id), !todos)}
                     />
                   </th>
                 ) : null}
-                {COLUNAS_DA_LISTA.map((c, k) => (
-                  <th key={c.rotulo} className={`px-3 py-2 text-xs font-bold ${k >= 6 ? "text-right" : "text-left"}`}>
+                {COLUNAS_DA_LISTA.map((c) => (
+                  <th key={c.rotulo} className={`px-3 py-2 text-xs font-bold ${c.direita ? "text-right" : "text-left"}`}>
                     {c.rotulo}
                   </th>
                 ))}
@@ -226,34 +233,54 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                   </td>
                 </tr>
               ) : (
-                dados.investimentos.map((i) => (
-                  <tr
-                    key={i.id}
-                    className={`border-t border-gray-100 ${pode ? "cursor-pointer hover:bg-gray-100" : ""}`}
-                    onClick={pode ? () => setAberto(i) : undefined}
-                    title={pode ? "Editar ou excluir o investimento" : undefined}
-                  >
-                    {pode ? (
-                      // A caixa marca sem abrir a edição (o clique na linha abre).
-                      <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" aria-label={`Marcar ${i.nomeReferencia}`} className="accent-black" checked={marcados.has(i.id)} onChange={(e) => marcar([i.id], e.target.checked)} />
+                dados.investimentos.map((i) => {
+                  // Com recorte, só os que ele incluiu se editam (19/11/2026); os outros, só na lista.
+                  const edita = pode && i.podeAlterar;
+                  return (
+                    <tr
+                      key={i.id}
+                      className={`border-t border-gray-100 ${edita ? "cursor-pointer hover:bg-gray-100" : ""}`}
+                      onClick={edita ? () => setAberto(i) : undefined}
+                      title={
+                        edita
+                          ? "Editar ou excluir o investimento"
+                          : pode
+                            ? `Incluído ${i.incluidoPor ? `por ${i.incluidoPor}` : "antes do registro de quem inclui"}: você altera e exclui só os investimentos que incluiu.`
+                            : undefined
+                      }
+                    >
+                      {pode ? (
+                        // A caixa marca sem abrir a edição (o clique na linha abre).
+                        <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Marcar ${i.nomeReferencia}`}
+                            className="accent-black disabled:opacity-30"
+                            disabled={!i.podeAlterar}
+                            checked={i.podeAlterar && marcados.has(i.id)}
+                            onChange={(e) => marcar([i.id], e.target.checked)}
+                          />
+                        </td>
+                      ) : null}
+                      <td className="truncate px-3 py-1.5 font-medium whitespace-nowrap text-gray-900" title={i.nomeReferencia}>
+                        {i.nomeReferencia}
                       </td>
-                    ) : null}
-                    <td className="truncate px-3 py-1.5 font-medium whitespace-nowrap text-gray-900" title={i.nomeReferencia}>
-                      {i.nomeReferencia}
-                    </td>
-                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
-                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{dados.contasDosInvestimentos.find((c) => c.unidade === i.unidade)?.rotulo}</td>
-                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
-                    <td className="px-3 py-1.5 text-gray-900">{i.descricao}</td>
-                    <td className="px-3 py-1.5 text-gray-600">{i.condicaoPagamento ?? "—"}</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{MESES[i.inicio - 1]}</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorTotal)}</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorPosUso)}</td>
-                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{i.vidaUtil} meses</td>
-                    <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">{reais(i.depreciacaoMensal)}</td>
-                  </tr>
-                ))
+                      <td className="truncate px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
+                      <td className="truncate px-3 py-1.5 whitespace-nowrap">{dados.contasDosInvestimentos.find((c) => c.unidade === i.unidade)?.rotulo}</td>
+                      <td className="truncate px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
+                      <td className="px-3 py-1.5 text-gray-900">{i.descricao}</td>
+                      <td className="px-3 py-1.5 text-gray-600">{i.condicaoPagamento ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">{MESES[i.inicio - 1]}</td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorTotal)}</td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorPosUso)}</td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">{i.vidaUtil} meses</td>
+                      <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">{reais(i.depreciacaoMensal)}</td>
+                      <td className="truncate px-3 py-1.5 whitespace-nowrap text-gray-600" title={i.incluidoPor ?? undefined}>
+                        {autorDoInvestimento(i)}
+                      </td>
+                    </tr>
+                  );
+                })
               )
             }
           />

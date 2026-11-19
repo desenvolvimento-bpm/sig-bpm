@@ -175,6 +175,8 @@ model Usuario {
   paineisCompartilhados PainelDeBordoEditor[]
   /// A obra e a versão vendida escolhidas no Realizado por Obra (03/11/2026).
   realizadoObra RealizadoObraConfiguracao?
+  /// Os investimentos dos cenários analíticos que ele incluiu (19/11/2026).
+  investimentosIncluidos CenarioInvestimento[] @relation("InvestimentosIncluidos")
 
   @@map("usuarios")
 }
@@ -2489,11 +2491,16 @@ model CenarioInvestimento {
   /// O departamento de um investimento de Despesas e Extra (12/11/2026: Logística, Técnico, Comercial, Administrativo ou
   /// Extra-Operacional), para o Acesso às Informações Por Recorte; sem ele, é dos cinco. Nas demais unidades, nulo.
   departamento         DepartamentoAcesso?
+  /// Quem incluiu o investimento (19/11/2026, pedido do Adão): quem tem recorte só altera e exclui os que incluiu; o
+  /// Administrador, quem criou o cenário e quem não tem recorte alteram todos. Nulo nos de antes cuja inclusão o histórico
+  /// não diz (só esses alteram).
+  criadoPorId          String?  @map("criado_por_id")
   ordem                Int      @default(0)
   criadoEm             DateTime @default(now()) @map("criado_em")
   atualizadoEm         DateTime @updatedAt @map("atualizado_em")
 
-  cenario Cenario @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  cenario   Cenario  @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  criadoPor Usuario? @relation("InvestimentosIncluidos", fields: [criadoPorId], references: [id], onDelete: SetNull)
 
   @@unique([cenarioId, nomeReferencia])
   @@index([cenarioId])
@@ -3201,17 +3208,9 @@ model ColaboradorCargaInicial {
   vinculo          VinculoColaborador
   funcaoId         String             @map("funcao_id")
   centroCustoId    String             @map("centro_custo_id")
-  /// A linha da planilha importada (nulo nos registros incluídos pela tela).
+  /// A linha da planilha importada (nulo nos registros incluídos pela tela). Sem os valores (os salários e os benefícios,
+  /// fora do Lançamento Inicial desde 17/11/2026; as colunas saíram do banco em 19/11/2026).
   linhaArquivo     Int?               @map("linha_arquivo")
-  /// Os valores do colaborador (16/11/2026, pedido do Adão), em R$ por mês; nulos sem valor informado. O Salário Total
-  /// (Salário Bruto + Adicional) não se grava: o SIG calcula.
-  salarioBruto     Decimal?           @map("salario_bruto") @db.Decimal(14, 2)
-  /// O Adicional de Periculosidade / Insalubridade.
-  adicional        Decimal?           @db.Decimal(14, 2)
-  /// A Cesta Básica / Seguro de Vida / Vale Alimentação.
-  cestaBasica      Decimal?           @map("cesta_basica") @db.Decimal(14, 2)
-  planoSaude       Decimal?           @map("plano_saude") @db.Decimal(14, 2)
-  valeTransporte   Decimal?           @map("vale_transporte") @db.Decimal(14, 2)
   criadoEm         DateTime           @default(now()) @map("criado_em")
   atualizadoEm     DateTime           @updatedAt @map("atualizado_em")
 

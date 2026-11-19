@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 13:20): os investimentos de quem os incluiu.
+  {
+    publicada: "2026-11-19T13:20",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Investimentos, a coluna Incluído Por diz quem incluiu cada investimento. Quem tem recorte altera e exclui só os que incluiu, também pelo Importar Valores; o Administrador, quem criou o cenário e quem não tem recorte alteram e excluem todos.",
+    ],
+  },
   // 19/11/2026 (publicada às 12:45): o modal do Pesquisar e o Recolher / Expandir meses nos Indicadores do Painel de Bordo.
   {
     publicada: "2026-11-19T12:45",

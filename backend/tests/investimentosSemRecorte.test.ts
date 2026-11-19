@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { abasDoRecorte, departamentosDoInvestimento, recorteDoCenario, recorteDosInvestimentos, veAlteracao, veDepartamentos } from "../src/services/cenarios/recorteCenario.js";
+import {
+  abasDoRecorte,
+  alteraOInvestimento,
+  alteraTodosOsInvestimentos,
+  departamentosDoInvestimento,
+  foraDosSeusInvestimentos,
+  recorteDoCenario,
+  recorteDosInvestimentos,
+  veAlteracao,
+  veDepartamentos,
+} from "../src/services/cenarios/recorteCenario.js";
 
 /** Os investimentos da aba Investimentos sem o recorte para quem edita a aba (19/11/2026, pedido do Adão). */
 describe("os investimentos sem o recorte para quem edita a aba (19/11/2026)", () => {
@@ -42,5 +52,37 @@ describe("os investimentos sem o recorte para quem edita a aba (19/11/2026)", ()
     assert.equal(veAlteracao(r, base, grupos, semConta, true), false);
     assert.equal(veAlteracao(r, importacao, grupos, semConta, true), true);
     assert.equal(veAlteracao(r, comLinhaDeFora, grupos, semConta, true), false);
+  });
+});
+
+/** Com recorte, cada um altera e exclui só os investimentos que incluiu (19/11/2026, pedido do Adão). */
+describe("os investimentos de quem os incluiu (19/11/2026)", () => {
+  const cenario = { criadoPorId: "dono" };
+  const gestor = { id: "u1", recorte: { departamentos: ["COMERCIAL" as const], centros: null } };
+  const coordenador = { id: "u2", recorte: { departamentos: null, centros: ["c1"] } };
+  const contador = { id: "u3", recorte: null };
+  const doGestor = { criadoPorId: "u1" };
+  const deOutro = { criadoPorId: "u9" };
+  const semAutor = { criadoPorId: null };
+
+  it("com recorte, só os que incluiu", () => {
+    const todos = alteraTodosOsInvestimentos(cenario, gestor);
+    assert.equal(todos, false);
+    assert.equal(alteraOInvestimento(todos, doGestor, gestor), true);
+    assert.equal(alteraOInvestimento(todos, deOutro, gestor), false);
+    assert.equal(alteraOInvestimento(todos, semAutor, gestor), false, "os de antes, sem autor, não");
+    assert.equal(alteraTodosOsInvestimentos(cenario, coordenador), false);
+  });
+
+  it("o Administrador, quem criou o cenário e quem não tem recorte alteram todos", () => {
+    assert.equal(alteraTodosOsInvestimentos(cenario, { id: "a", admin: true, recorte: gestor.recorte }), true);
+    assert.equal(alteraTodosOsInvestimentos(cenario, { ...gestor, id: "dono" }), true);
+    assert.equal(alteraTodosOsInvestimentos(cenario, contador), true);
+    assert.equal(alteraOInvestimento(true, semAutor, contador), true);
+  });
+
+  it("a recusa diz quem incluiu", () => {
+    assert.match(foraDosSeusInvestimentos({ nomeReferencia: "Ponte", criadoPor: { nome: "Maiko" } }), /incluído por Maiko/);
+    assert.match(foraDosSeusInvestimentos({ nomeReferencia: "Ponte", criadoPor: null }), /antes do registro/);
   });
 });

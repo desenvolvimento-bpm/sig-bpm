@@ -61,6 +61,22 @@ export function recorteDosInvestimentos(
   return u.editaInvestimentos ? null : recorteDoCenario(c, u);
 }
 
+/**
+ * Quem altera e exclui todos os investimentos da lista (19/11/2026, pedido do Adão), com a edição da aba: o Administrador, quem
+ * criou o cenário e quem não tem recorte no perfil (qualquer que seja o Acesso às Informações do cenário); os demais (com recorte
+ * por departamento ou por centro de custo), só os que incluíram.
+ */
+export function alteraTodosOsInvestimentos(c: { criadoPorId: string | null }, u: { id: string; admin?: boolean; recorte?: RecorteDoUsuario | null }) {
+  return recorteDoPerfil(u) === null || (!!c.criadoPorId && c.criadoPorId === u.id);
+}
+
+/** O investimento que o usuário altera e exclui: qualquer um (`todos`, alteraTodosOsInvestimentos) ou um que ele incluiu. */
+export const alteraOInvestimento = (todos: boolean, i: { criadoPorId: string | null }, u: { id: string }) => todos || (!!u.id && i.criadoPorId === u.id);
+
+/** A recusa de um investimento que outro usuário incluiu (19/11/2026). */
+export const foraDosSeusInvestimentos = (i: { nomeReferencia: string; criadoPor?: { nome: string } | null }) =>
+  `O investimento ${i.nomeReferencia} foi incluído ${i.criadoPor ? `por ${i.criadoPor.nome}` : "antes do registro de quem inclui"}: com recorte, você altera e exclui só os investimentos que incluiu (o Administrador, quem criou o cenário e quem não tem recorte alteram todos).`;
+
 /** Algum dos departamentos está no recorte (o Coordenador não vê o que é só de departamento). */
 export const veDepartamentos = (r: Recorte | null, ds: Departamento[]) => !r || ds.some((d) => r.departamentos.has(d));
 

@@ -186,6 +186,9 @@ export type InvestimentoDoCenario = {
   depreciacaoMensal: number;
   /** O Departamento (12/11/2026): só nos de Despesas e Extra; sem ele, é dos cinco do patrimônio. */
   departamento: DepartamentoDoInvestimento | null;
+  /** Quem o incluiu (19/11/2026; nulo nos de antes sem o registro) e se o usuário o altera e exclui (com recorte, só os seus). */
+  incluidoPor: string | null;
+  podeAlterar: boolean;
 };
 /** O Departamento de um investimento de Despesas e Extra (12/11/2026). */
 export type DepartamentoDoInvestimento = "LOGISTICA" | "TECNICO" | "COMERCIAL" | "ADMINISTRATIVO" | "EXTRA_OPERACIONAL";
@@ -207,6 +210,8 @@ export type InvestimentosDoCenario = {
   /** As opções do Departamento (12/11/2026; as do recorte, ou todas para quem edita a aba) e se ele é obrigatório (quem só lê, por recorte). */
   departamentos: DepartamentoDoInvestimento[];
   exigeDepartamento: boolean;
+  /** Altera e exclui todos (19/11/2026): o Administrador, quem criou o cenário e quem não tem recorte. */
+  alteraTodos: boolean;
   depreciacao: LinhaDaPremissa[];
   investimentos: InvestimentoDoCenario[];
 };

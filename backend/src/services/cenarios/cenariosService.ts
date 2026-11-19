@@ -73,6 +73,9 @@ import {
   recorteDoCenario,
   recorteDoPerfil,
   recorteDosInvestimentos,
+  alteraOInvestimento,
+  alteraTodosOsInvestimentos,
+  foraDosSeusInvestimentos,
   recorteParaTela,
   trechoDaLinha,
   trechoDoGrupo,
@@ -2644,12 +2647,16 @@ export const cenariosService = {
     const prisma = getPrismaClient();
     const [base, lista] = await Promise.all([
       prisma.cenarioPremissa.findMany({ where: { cenarioId: id, venda: VENDA_BASE } }),
-      prisma.cenarioInvestimento.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] }),
+      prisma.cenarioInvestimento.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: { criadoPor: { select: { nome: true } } } }),
     ]);
-    const comValores = lista.map((i) => ({
+    // Quem incluiu cada um e se o usuário o altera (19/11/2026, pedido do Adão: com recorte, só os que ele incluiu).
+    const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
+    const comValores = lista.map(({ criadoPor, ...i }) => ({
       ...i,
       valorTotal: Number(i.valorTotal),
       valorPosUso: Number(i.valorPosUso),
+      incluidoPor: criadoPor?.nome ?? null,
+      podeAlterar: alteraOInvestimento(alteraTodos, i, usuario),
     }));
     const investimentos = comValores.filter((i) => veDepartamentos(ri, departamentosDoInvestimento(i)));
     const daDepreciacao = comValores.filter((i) => veDepartamentos(r, departamentosDoInvestimento(i)));
@@ -2680,6 +2687,7 @@ export const cenariosService = {
       // (quem edita a aba, desde 19/11/2026, como quem vê tudo: todas as opções, sem obrigação).
       departamentos: DEPARTAMENTOS_DO_PATRIMONIO.filter((d) => veDepartamentos(ri, [departamentoDoAcesso(d)])),
       exigeDepartamento: !!ri,
+      alteraTodos,
       depreciacao: linhas,
       investimentos: investimentos.map((i) => ({ ...i, depreciacaoMensal: depreciacaoMensal(i) })),
     };
@@ -2819,8 +2827,10 @@ export const cenariosService = {
     exigirEditavel(c);
     exigirSemReajustes(c);
     const prisma = getPrismaClient();
-    const atual = investimentoId ? await prisma.cenarioInvestimento.findFirst({ where: { id: investimentoId, cenarioId: id } }) : null;
+    const atual = investimentoId ? await prisma.cenarioInvestimento.findFirst({ where: { id: investimentoId, cenarioId: id }, include: { criadoPor: { select: { nome: true } } } }) : null;
     if (investimentoId && !atual) throw new CenarioError(404, "Investimento não encontrado.");
+    // Com recorte, só os que ele incluiu (19/11/2026, pedido do Adão).
+    if (atual && !alteraOInvestimento(alteraTodosOsInvestimentos(c, usuario), atual, usuario)) throw new CenarioError(403, foraDosSeusInvestimentos(atual));
     // O Departamento (12/11/2026): só nos de Despesas e Extra, um dos cinco do patrimônio. O recorte confere o de antes e o novo
     // (quem vê por recorte escolhe o Departamento de um investimento de Despesas e Extra); quem edita a aba (19/11/2026), sem o
     // recorte (recorteDosInvestimentos).
@@ -2858,7 +2868,8 @@ export const cenariosService = {
             departamento,
           };
           if (atual) await tx.cenarioInvestimento.update({ where: { id: atual.id }, data: valores });
-          else await tx.cenarioInvestimento.create({ data: { ...valores, cenarioId: id, ordem: await tx.cenarioInvestimento.count({ where: { cenarioId: id } }) } });
+          // Quem incluiu (19/11/2026): fica com ele, também quando outro o altera.
+          else await tx.cenarioInvestimento.create({ data: { ...valores, cenarioId: id, criadoPorId: usuario.id || null, ordem: await tx.cenarioInvestimento.count({ where: { cenarioId: id } }) } });
         }
         await calcularAnalitico(tx, id);
       },
@@ -2891,8 +2902,21 @@ export const cenariosService = {
     exigirEditavel(c);
     exigirSemReajustes(c);
     const prisma = getPrismaClient();
-    const lista = await prisma.cenarioInvestimento.findMany({ where: { cenarioId: id, id: { in: ids } }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] });
+    const lista = await prisma.cenarioInvestimento.findMany({
+      where: { cenarioId: id, id: { in: ids } },
+      orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
+      include: { criadoPor: { select: { nome: true } } },
+    });
     if (lista.length !== new Set(ids).size) throw new CenarioError(404, "Algum investimento não foi encontrado: atualize a tela.");
+    // Com recorte, só os que ele incluiu (19/11/2026, pedido do Adão).
+    const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
+    const alheios = lista.filter((i) => !alteraOInvestimento(alteraTodos, i, usuario));
+    if (alheios.length === 1) throw new CenarioError(403, foraDosSeusInvestimentos(alheios[0]));
+    if (alheios.length)
+      throw new CenarioError(
+        403,
+        `${alheios.length} dos investimentos marcados foram incluídos por outros usuários (${alheios.map((i) => i.nomeReferencia).join(", ").slice(0, 300)}): com recorte, você exclui só os investimentos que incluiu.`,
+      );
     exigirNoRecorte(lista.every((i) => veDepartamentos(recorteDosInvestimentos(c, usuario), departamentosDoInvestimento(i))));
     await prisma.$transaction(
       async (tx) => {
@@ -3418,7 +3442,9 @@ export const cenariosService = {
     for (const l of atuais) vezes.set(chaveDaDescricao(l.aba, l.descricao), (vezes.get(chaveDaDescricao(l.aba, l.descricao)) ?? 0) + 1);
     const porDescricao = new Map(atuais.filter((l) => vezes.get(chaveDaDescricao(l.aba, l.descricao)) === 1).map((l) => [chaveDaDescricao(l.aba, l.descricao), l]));
     // Os investimentos do cenário pelo Nome de Referência (sem diferença de maiúsculas).
-    const existentes = new Map((await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id } })).map((i) => [chaveDoNome(i.nomeReferencia), i]));
+    const existentes = new Map(
+      (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id }, include: { criadoPor: { select: { nome: true } } } })).map((i) => [chaveDoNome(i.nomeReferencia), i]),
+    );
     const lidos = lerArquivoDePremissas(arquivo, conteudo);
     // O Quadro de Lotação (09/11/2026): os cadastros pelos textos, como no Lançamento Inicial, e as linhas do cenário pelo
     // código (nos arquivos de antes) ou, desde 11/11/2026, substituídas nos departamentos do arquivo.
@@ -3556,6 +3582,8 @@ export const cenariosService = {
       const alterados: Array<InvestimentoLido & { id: string }> = [];
       // Os investimentos sem o recorte para quem edita a aba Investimentos (19/11/2026, recorteDosInvestimentos).
       const recorteDeles = recorteDosInvestimentos(c, usuario);
+      // Com recorte, só altera os que ele incluiu (19/11/2026, pedido do Adão).
+      const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
       for (const i of r.investimentos) {
         const atual = existentes.get(chaveDoNome(i.nomeReferencia));
         if (
@@ -3575,8 +3603,10 @@ export const cenariosService = {
           !iguais(Number(atual.valorTotal), i.valorTotal) ||
           !iguais(Number(atual.valorPosUso), i.valorPosUso) ||
           atual.vidaUtil !== i.vidaUtil
-        )
-          alterados.push({ ...i, id: atual.id });
+        ) {
+          if (!alteraOInvestimento(alteraTodos, atual, usuario)) r.erros.push(`${i.aba}, linha ${i.numero}: ${foraDosSeusInvestimentos(atual)}`);
+          else alterados.push({ ...i, id: atual.id });
+        }
       }
       if (r.investimentos.length) abasDasLinhas.add("investimentos");
       if (r.quadro.length || r.substituiQuadro) abasDasLinhas.add("quadro");
@@ -3688,8 +3718,15 @@ export const cenariosService = {
     const tocadas = [...new Set([...[...mudancas.values()].map((m) => m.chave), ...justificativas.keys()])].map((k) => porChave.get(k)!);
     exigirNoRecorte(tocadas.every((l) => veLinha(recorte, l, gruposPorNome)));
     const investimentosDeAntes = new Map(
-      (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id, id: { in: [...alterados.keys()] } } })).map((i) => [i.id, i]),
+      (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id, id: { in: [...alterados.keys()] } }, include: { criadoPor: { select: { nome: true } } } })).map((i) => [
+        i.id,
+        i,
+      ]),
     );
+    // Com recorte, só altera os que ele incluiu (19/11/2026, pedido do Adão).
+    const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
+    const alheio = [...investimentosDeAntes.values()].find((i) => !alteraOInvestimento(alteraTodos, i, usuario));
+    if (alheio) throw new CenarioError(403, foraDosSeusInvestimentos(alheio));
     // Os investimentos sem o recorte para quem edita a aba Investimentos (19/11/2026), com os trechos marcados (`i`).
     const recorteDeles = recorteDosInvestimentos(c, usuario);
     const trechosDosInvestimentos = [...novos, ...alterados.values()].flatMap((i) => {
@@ -3733,7 +3770,7 @@ export const cenariosService = {
         await aplicarMudancas(tx, id, [...mudancas.values()], est);
         for (const i of alterados.values()) await tx.cenarioInvestimento.update({ where: { id: i.id }, data: camposDoInvestimento(i) });
         const ordem = await tx.cenarioInvestimento.count({ where: { cenarioId: id } });
-        for (const [k, i] of novos.entries()) await tx.cenarioInvestimento.create({ data: { ...camposDoInvestimento(i), cenarioId: id, ordem: ordem + k } });
+        for (const [k, i] of novos.entries()) await tx.cenarioInvestimento.create({ data: { ...camposDoInvestimento(i), cenarioId: id, criadoPorId: usuario.id || null, ordem: ordem + k } });
         const camposDaLinha = (l: DadosDaLinhaDoQuadro) => ({ unidadeNegocioId: l.unidadeNegocioId, vinculo: l.vinculo, funcaoId: l.funcaoId, centroCustoId: l.centroCustoId });
         // As linhas que saem (11/11/2026: a aba que substitui; os meses vão junto).
         if (excluidasDoQuadro.size) await tx.cenarioLotacao.deleteMany({ where: { cenarioId: id, id: { in: [...excluidasDoQuadro] } } });

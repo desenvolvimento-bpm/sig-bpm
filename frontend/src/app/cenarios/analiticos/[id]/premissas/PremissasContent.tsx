@@ -115,8 +115,8 @@ export function PremissasContent() {
               Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só o seu recorte: o Gestor, as abas e
               as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, a depreciação, os investimentos e os indicadores
               manuais, só os deles); o Coordenador, só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e nos
-              Rateios. Quem edita a aba Investimentos vê, inclui, altera e exclui qualquer investimento da lista, com qualquer recorte (o Coordenador
-              também vê a aba), e as alterações deles no histórico; a Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
+              Rateios. Quem edita a aba Investimentos vê toda a lista e inclui investimentos de qualquer unidade e departamento, com qualquer recorte (o
+              Coordenador também vê a aba), e as alterações deles no histórico; com recorte, altera e exclui só os que incluiu. A Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
               Premissas e o Importar Valores ficam no recorte (no Importar Valores, os investimentos de quem edita a aba, não).
             </li>
             <li>
@@ -167,7 +167,7 @@ export function PremissasContent() {
               Cada uma tem o título e a descrição num card de destaque, com as funções dela à direita (na Depreciação, os valores marcados, “Marcar Todos
               os Meses”, “Reajustar Marcados” e “Replicar Referências”; nos Investimentos, os botões da lista e “Exportar”, que leva a lista em Excel ou PDF).
               {podeEditar
-                ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”."
+                ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”. A coluna Incluído Por diz quem incluiu cada um: o Administrador, quem criou o cenário e quem não tem recorte no perfil alteram e excluem todos; quem tem recorte, só os que incluiu (os outros ficam sem a caixa e não abrem; os incluídos antes do registro de quem inclui, sem autor, só os primeiros alteram), também no Importar Valores."
                 : null} Cada investimento
               tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas e Extra o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
               valor pós uso e a vida útil em meses; a lista mostra a depreciação mensal.
