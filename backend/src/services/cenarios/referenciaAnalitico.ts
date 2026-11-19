@@ -18,7 +18,9 @@ import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_METALURGIA, LIQUIDA_D
  * Os volumes saem das listas (a produção — em m³, com as pistas nas linhas de pistas —, a metalurgia em kg, a montagem
  * em m³, a armadura e os acompanhamentos), na venda da obra (o tipo de venda dela; sem ele, G… é Global e o resto
  * Mercantil; sem obra, pela receita da linha em cada venda). Em Serviços, a linha sem volume nas listas (Vedação,
- * Fundação, Capeamento, Telhamento…) vai por dia útil: a demanda diária fica 1 e os valores médios são por dia.
+ * Fundação, Capeamento, Telhamento…) vai por dia útil: os valores médios são por dia, e a Demanda Diária fica sem Média
+ * de Referência (19/11/2026, pedido do Adão; antes, 1): os meses levam a demanda das vendas, na unidade da linha, e os
+ * botões de replicar não a sobrescrevem com o dia útil.
  *
  * A receita de cada conta (Pré-Fabricado, Frete, Montagem e Complementar) é a da DRE realizada da unidade, dividida
  * entre as linhas e as vendas pela receita prévia (os itens trazem a linha e a venda); os impostos, os dos itens. Os
@@ -345,17 +347,17 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   };
   for (const u of UNIDADES_PREMISSAS) {
     for (const l of daUnidade(u)) {
-      const temValor = receitaDaLinha(l) !== 0 || [...custos].some(([k]) => k.startsWith(`${chave(l)}|`));
       const pistasDaLinha = qtdPistas.get(chave(l)) ?? 0;
       for (const venda of VENDAS_DA_UNIDADE[u]) {
         const b = base(l, venda);
-        if (porDia(l)) {
-          if (temValor && venda === "GLOBAL") add(u, venda, `DEMANDA:${l.codigo}`, 1);
-        } else if (l.medida === PISTAS && pistasDaLinha) {
-          // As pistas da venda na proporção do m³ dela.
-          add(u, venda, `DEMANDA:${l.codigo}`, (pistasDaLinha * (volumeTotal(l) ? b / volumeTotal(l) : 0)) / dias);
-          add(u, venda, `M3_PISTA:${l.codigo}`, volumeTotal(l) / pistasDaLinha);
-        } else add(u, venda, `DEMANDA:${l.codigo}`, b / dias);
+        // Por dia útil, a Demanda Diária fica sem Média de Referência (19/11/2026; antes, 1): ela não se replica.
+        if (!porDia(l)) {
+          if (l.medida === PISTAS && pistasDaLinha) {
+            // As pistas da venda na proporção do m³ dela.
+            add(u, venda, `DEMANDA:${l.codigo}`, (pistasDaLinha * (volumeTotal(l) ? b / volumeTotal(l) : 0)) / dias);
+            add(u, venda, `M3_PISTA:${l.codigo}`, volumeTotal(l) / pistasDaLinha);
+          } else add(u, venda, `DEMANDA:${l.codigo}`, b / dias);
+        }
         // A armadura e a metalurgia por unidade da linha: o kg do período ÷ o volume dele.
         const bt0 = baseTotal(l);
         if (LINHAS_COM_ARMADURA.has(l.codigo) && bt0) add(u, venda, `ARMADURA:${l.codigo}`, VENDAS_DA_UNIDADE[u].reduce((s, v) => s + porVenda(armadura, l, v), 0) / bt0);
@@ -492,7 +494,7 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const diarias = daUnidade(3).filter((l) => porDia(l) && (receitaDaLinha(l) !== 0 || [...custos].some(([k]) => k.startsWith(`${chave(l)}|`))));
   if (diarias.length)
     avisos.push(
-      `${diarias.map((l) => l.nome).join(", ")} (Serviços): sem volume nas listas, vão por dia útil — a Demanda Diária é 1 e os valores médios são por dia. Para usar a unidade da linha, troque a demanda e reajuste os valores na mesma proporção.`,
+      `${diarias.map((l) => l.nome).join(", ")} (Serviços): sem volume nas listas, os valores médios são por dia útil e a Demanda Diária fica sem Média de Referência (os botões de replicar não a levam). Digite a demanda e os valores dos meses na mesma unidade.`,
     );
 
   // As contas do realizado que o cenário não tem (fora das premissas, dos centros, da depreciação e do extra).

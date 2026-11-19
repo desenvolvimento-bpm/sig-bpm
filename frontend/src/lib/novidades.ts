@@ -28,6 +28,18 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 17:55): a aba Investimentos do Importar Valores substitui os investimentos de quem importa, e a
+  // Demanda Diária das linhas de Serviços por dia útil sem Média de Referência (de outra sessão).
+  {
+    publicada: "2026-11-19T17:55",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "No Importar Valores, a aba Investimentos substitui os seus investimentos: os que você incluiu e não estão no arquivo saem do cenário, e os do arquivo entram ou são atualizados. Os de outros usuários ficam. O Exportar Premissas leva todos os investimentos do cenário nessa aba.",
+      "Em Serviços, nas linhas sem volume nas listas do realizado (Vedação, Fundação, Capeamento, Telhamento), a Demanda Diária fica sem Média de Referência: o Replicar Médias e o Replicar Referências não a levam aos meses. Digite a demanda e os valores dos meses na mesma unidade.",
+    ],
+  },
   // 19/11/2026 (publicada às 16:25): os itens do movimento só dos documentos dele.
   {
     publicada: "2026-11-19T16:25",

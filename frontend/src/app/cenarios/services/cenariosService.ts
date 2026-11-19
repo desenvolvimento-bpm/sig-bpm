@@ -408,7 +408,16 @@ export type AnaliseDePremissas = {
   linhas: number;
   alteracoes: Array<{ chave: string; mes: number; valor: number | null; bloco: string }>;
   justificativas: Array<{ chave: string; texto: string | null; bloco: string }>;
-  investimentos: { novos: InvestimentoDaPlanilha[]; alterados: Array<InvestimentoDaPlanilha & { id: string }> };
+  /**
+   * Os investimentos novos e os alterados e, com a aba Investimentos (19/11/2026: ela substitui os de quem importa), os Nomes de
+   * Referência dela (`nomes`; null sem a aba) e os do usuário que saem (`excluidos`).
+   */
+  investimentos: {
+    novos: InvestimentoDaPlanilha[];
+    alterados: Array<InvestimentoDaPlanilha & { id: string }>;
+    excluidos: Array<{ id: string; nomeReferencia: string; descricao: string }>;
+    nomes: string[] | null;
+  };
   /**
    * As linhas da aba Quadro de Lotação (09/11/2026): as novas e as alteradas, já com os cadastros, e (11/11/2026: a aba substitui
    * as linhas do cenário nos departamentos do arquivo) as que saem.
@@ -418,8 +427,8 @@ export type AnaliseDePremissas = {
 export type LinhaDoQuadroDaPlanilha = Required<DadosDaLinhaDoQuadro> & { descricao: string };
 /** Os departamentos do Exportar Premissas (15/10/2026). */
 export const DEPARTAMENTOS_DAS_PREMISSAS = [
-  { chave: "PRODUCAO", nome: "Produção", detalhe: "Matriz, Filial, os centros de custo de produção e a depreciação e os investimentos da Matriz e da Filial" },
-  { chave: "SERVICOS", nome: "Serviços", detalhe: "Serviços, os centros de custo de serviços e a depreciação e os investimentos de Serviços" },
+  { chave: "PRODUCAO", nome: "Produção", detalhe: "Matriz, Filial, os centros de custo de produção e a depreciação da Matriz e da Filial" },
+  { chave: "SERVICOS", nome: "Serviços", detalhe: "Serviços, os centros de custo de serviços e a depreciação de Serviços" },
   { chave: "LOGISTICA", nome: "Logística", detalhe: "os centros de custo de logística" },
   { chave: "TECNICO", nome: "Técnico", detalhe: "os centros de custo técnicos" },
   { chave: "COMERCIAL", nome: "Comercial", detalhe: "os centros de custo comerciais" },
@@ -443,7 +452,9 @@ export const cenariosService = {
   /** O Importar Valores, passo 2: grava as mudanças das planilhas válidas. */
   importarPremissas: async (id: string, arquivos: Array<Pick<AnaliseDePremissas, "arquivo" | "alteracoes" | "justificativas" | "investimentos" | "quadro">>) =>
     (
-      await api.post<{ data: { valores: number; justificativas: number; investimentosNovos: number; investimentosAlterados: number; quadroNovas: number; quadroAlteradas: number; quadroExcluidas: number } }>(`/proxy/cenarios/${id}/premissas/importar`, {
+      await api.post<{
+        data: { valores: number; justificativas: number; investimentosNovos: number; investimentosAlterados: number; investimentosExcluidos: number; quadroNovas: number; quadroAlteradas: number; quadroExcluidas: number };
+      }>(`/proxy/cenarios/${id}/premissas/importar`, {
         arquivos: arquivos.map(({ arquivo, alteracoes, justificativas, investimentos, quadro }) => ({
           arquivo,
           alteracoes: alteracoes.map(({ chave, mes, valor }) => ({ chave, mes, valor })),
@@ -451,6 +462,7 @@ export const cenariosService = {
           investimentos: {
             novos: investimentos.novos.map(({ numero: _n, ...i }) => i),
             alterados: investimentos.alterados.map(({ numero: _n, ...i }) => i),
+            nomes: investimentos.nomes,
           },
           quadro: {
             novas: quadro.novas.map(({ descricao: _d, ...l }) => l),

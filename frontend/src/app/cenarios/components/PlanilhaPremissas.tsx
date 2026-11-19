@@ -186,8 +186,9 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <DialogTitle>Exportar Premissas</DialogTitle>
           <DialogDescription>
             O arquivo em Excel leva só o que é dos departamentos marcados. Logística, Técnico, Comercial, Administrativo e Extra-Operacional levam também a
-            depreciação e os investimentos de Despesas e Extra; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos
-            centros dos departamentos marcados. Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
+            depreciação de Despesas e Extra; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos centros dos
+            departamentos marcados. A aba Investimentos leva todos os investimentos do cenário: importada, ela substitui os seus (os seus que não
+            estiverem nela saem). Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
           </DialogDescription>
         </DialogHeader>
         {recorte?.porCentro ? (
@@ -250,6 +251,8 @@ export function BotaoImportarValores({ id }: { id: string }) {
 }
 
 type Item = { id: number; nome: string; estado: "analisando" | "pronto" | "erro"; analises: AnaliseDePremissas[]; erro?: string };
+/** O trecho da aba Investimentos (19/11/2026; o mesmo nome do servidor): em dois arquivos com ela, vale o escolhido. */
+const BLOCO_DOS_INVESTIMENTOS = "Investimentos (a lista)";
 
 /**
  * O Importar Valores (15/10/2026): a lista dos arquivos escolhidos (um ou vários, ou uma pasta), cada um conferido no
@@ -287,17 +290,20 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
   const [ignorar, setIgnorar] = useState<Set<string>>(() => new Set());
   const vencedor = new Map(repetidos.map((r) => [r.bloco, ignorar.has(r.bloco) ? r.em[0] : r.em[r.em.length - 1]]));
   const doVencedor = (i: number) => (x: { bloco: string }) => !vencedor.has(x.bloco) || vencedor.get(x.bloco) === i;
-  // O Quadro de Lotação que substitui as linhas (11/11/2026) é um trecho: em dois arquivos, vale o do arquivo escolhido.
+  // O Quadro de Lotação que substitui as linhas (11/11/2026) é um trecho: em dois arquivos, vale o do arquivo escolhido. A aba
+  // Investimentos também (19/11/2026: ela substitui os investimentos de quem importa).
   const semQuadro = { novas: [], alteradas: [], excluidas: [] };
+  const semInvestimentos = { novos: [], alterados: [], excluidos: [], nomes: null };
   const aImportar = validas.map((a, i) => ({
     ...a,
     alteracoes: a.alteracoes.filter(doVencedor(i)),
     justificativas: a.justificativas.filter(doVencedor(i)),
+    investimentos: doVencedor(i)({ bloco: BLOCO_DOS_INVESTIMENTOS }) ? a.investimentos : semInvestimentos,
     quadro: doVencedor(i)({ bloco: "Quadro de Lotação" }) ? a.quadro : semQuadro,
   }));
   const valores = aImportar.reduce((s, a) => s + a.alteracoes.length, 0);
   const justificativas = aImportar.reduce((s, a) => s + a.justificativas.length, 0);
-  const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length, 0);
+  const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length + a.investimentos.excluidos.length, 0);
   // As linhas do Quadro de Lotação (09/11/2026): as novas, as alteradas e (11/11/2026) as que saem.
   const doQuadro = aImportar.reduce((s, a) => s + a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length, 0);
   const analisando = itens.some((x) => x.estado === "analisando");
@@ -305,10 +311,10 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
     mutationFn: () => cenariosService.importarPremissas(id, aImportar),
     onSuccess: (r) => {
       invalidar(queryClient);
-      const inv = r.investimentosNovos + r.investimentosAlterados;
+      const inv = r.investimentosNovos + r.investimentosAlterados + r.investimentosExcluidos;
       const ql = r.quadroNovas + r.quadroAlteradas + r.quadroExcluidas;
       toast.success(
-        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")} e ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
+        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")}, ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")} e ${r.investimentosExcluidos} ${plural(r.investimentosExcluidos, "excluído", "excluídos")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
       );
       onFechar();
     },
@@ -321,8 +327,9 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
           <DialogDescription>
             Escolha os arquivos (ou uma pasta) gerados pelo Exportar Premissas: planilhas .xlsx ou o .zip de um arquivo por centro. Cada arquivo é
             conferido assim que entra na lista; os valores mensais, as justificativas e os investimentos se gravam só em “Importar” (em branco, o mês
-            fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. Na aba Investimentos, os com o Nome de
-            Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Nas outras abas, a
+            fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. A aba Investimentos substitui os seus
+            investimentos (os que você incluiu): os seus que não estão nela saem do cenário, os com o Nome de Referência de um investimento do cenário
+            são atualizados e os de nome novo entram na sequência dos que já existem; os de outros usuários ficam. Nas outras abas, a
             linha se acha pelas colunas que a descrevem (as antes da Und.). Na aba Quadro de Lotação, as linhas da planilha substituem as do cenário
             nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com outros valores são alteradas, as novas entram e as que não
             estão na planilha saem; um cadastro que não existe recusa o arquivo.
@@ -404,8 +411,10 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {!a.valido
                         ? "—"
-                        : a.investimentos.novos.length + a.investimentos.alterados.length
-                          ? `${a.investimentos.novos.length} ${plural(a.investimentos.novos.length, "novo", "novos")} · ${a.investimentos.alterados.length} ${plural(a.investimentos.alterados.length, "alterado", "alterados")}`
+                        : a.investimentos.novos.length + a.investimentos.alterados.length + a.investimentos.excluidos.length
+                          ? `${a.investimentos.novos.length} ${plural(a.investimentos.novos.length, "novo", "novos")} · ${a.investimentos.alterados.length} ${plural(a.investimentos.alterados.length, "alterado", "alterados")}${
+                              a.investimentos.excluidos.length ? ` · ${a.investimentos.excluidos.length} ${plural(a.investimentos.excluidos.length, "excluído", "excluídos")}` : ""
+                            }`
                           : "0"}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">

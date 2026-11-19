@@ -458,7 +458,10 @@ export const cenariosController = {
               arquivo: z.string().min(1).max(400),
               alteracoes: z.array(z.object({ chave: z.string().min(1).max(400), mes: z.number().int().min(1).max(12), valor: z.number().finite().nullable() })).max(200_000),
               justificativas: z.array(z.object({ chave: z.string().min(1).max(400), texto: z.string().max(2000).nullable() })).max(50_000),
-              investimentos: z.object({ novos: z.array(investimento).max(2000), alterados: z.array(investimento.extend({ id: idSchema })).max(2000) }).optional(),
+              // `nomes` (19/11/2026): com a aba Investimentos, os Nomes de Referência dela (os do usuário que não estão saem).
+              investimentos: z
+                .object({ novos: z.array(investimento).max(2000), alterados: z.array(investimento.extend({ id: idSchema })).max(2000), nomes: z.array(z.string().max(200)).max(5000).nullable().optional() })
+                .optional(),
               // O Quadro de Lotação (09/11/2026): as linhas novas e as alteradas, já conferidas na análise, e (11/11/2026: a aba
               // que substitui as linhas dos departamentos do arquivo) as que saem.
               quadro: z
@@ -477,7 +480,7 @@ export const cenariosController = {
     if (!corpo.success) return response.status(400).json({ error: "Dados inválidos." });
     const editaveis = abasDasPremissas(request, response, "editar");
     const abas = new Set(corpo.data.arquivos.flatMap((a) => [...a.alteracoes, ...a.justificativas].map((x) => abaDaChave(x.chave))));
-    if (corpo.data.arquivos.some((a) => (a.investimentos?.novos.length ?? 0) + (a.investimentos?.alterados.length ?? 0) > 0)) abas.add("investimentos");
+    if (corpo.data.arquivos.some((a) => (a.investimentos?.novos.length ?? 0) + (a.investimentos?.alterados.length ?? 0) > 0 || Array.isArray(a.investimentos?.nomes))) abas.add("investimentos");
     if (corpo.data.arquivos.some((a) => (a.quadro?.novas.length ?? 0) + (a.quadro?.alteradas.length ?? 0) + (a.quadro?.excluidas?.length ?? 0) > 0)) abas.add("quadro");
     if (abas.has(null)) return response.status(400).json({ error: "Há um Código de linha inválido." });
     const fora = [...abas].filter((a): a is AbaDasPremissas => !!a && !editaveis.includes(a));

@@ -408,6 +408,11 @@ export type ArquivoLido = {
    * substitui; null sem a aba ou no arquivo de antes (com o código).
    */
   substituiQuadro: Departamento[] | null;
+  /**
+   * O arquivo tem a aba Investimentos no padrão (19/11/2026, pedido do Adão): ela substitui os investimentos de quem importa —
+   * os dele que não estão nela saem do cenário.
+   */
+  comInvestimentos: boolean;
   abas: string[];
   erros: string[];
   avisos: string[];
@@ -484,7 +489,7 @@ export function abaDeInvestimentos(investimentos: InvestimentoDaPlanilha[], iden
     [
       {
         valor:
-          "Altere os investimentos ou inclua novos nas linhas em branco e importe o arquivo em Premissas / Importar Valores: com o Nome de Referência de um investimento do cenário, ele é atualizado; com um nome novo, é incluído (o nome não se repete no cenário). O Departamento vale só em Despesas e Extra (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; em branco, é dos cinco). A Depreciação Mensal é uma fórmula e não se importa.",
+          "Altere os investimentos, apague os que saem ou inclua novos nas linhas em branco e importe o arquivo em Premissas / Importar Valores: esta aba substitui os seus investimentos (os que você incluiu) — os seus que não estão aqui saem do cenário; com o Nome de Referência de um investimento do cenário, ele é atualizado; com um nome novo, é incluído (o nome não se repete no cenário). Os investimentos de outros usuários que você apagar daqui continuam no cenário. O Departamento vale só em Despesas e Extra (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; em branco, é dos cinco). A Depreciação Mensal é uma fórmula e não se importa.",
         estilo: ESTILO.informacao,
       },
     ],
@@ -551,6 +556,7 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
   const texto = (v: ValorCelula | undefined) => (v === null || v === undefined ? "" : String(v).trim());
   const nomes = new Set<string>();
   r.abas.push(nome);
+  r.comInvestimentos = true;
   for (const l of linhas.slice(i + 1)) {
     const c = l.celulas;
     if (iCampos.every((k) => k < 0 || texto(c[k]) === "")) continue;
@@ -842,7 +848,7 @@ const chaveSemAcento = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f
  * arquivos de antes, com ela —, a Investimentos e a Quadro de Lotação); as outras são ignoradas, com um aviso.
  */
 function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
-  const r: ArquivoLido = { arquivo, linhas: [], investimentos: [], quadro: [], substituiQuadro: null, abas: [], erros: [], avisos: [] };
+  const r: ArquivoLido = { arquivo, linhas: [], investimentos: [], quadro: [], substituiQuadro: null, comInvestimentos: false, abas: [], erros: [], avisos: [] };
   let abas: string[];
   try {
     abas = listarAbas(buffer);
@@ -919,10 +925,10 @@ export function lerArquivoDePremissas(arquivo: string, buffer: Uint8Array): Arqu
     try {
       itens = unzipSync(buffer);
     } catch {
-      return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O arquivo .zip não pôde ser aberto."], avisos: [], quadro: [], substituiQuadro: null }];
+      return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O arquivo .zip não pôde ser aberto."], avisos: [], quadro: [], substituiQuadro: null, comInvestimentos: false }];
     }
     const xlsx = Object.entries(itens).filter(([n]) => /\.xlsx$/i.test(n) && !n.startsWith("__MACOSX"));
-    if (!xlsx.length) return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O .zip não tem nenhuma planilha (.xlsx)."], avisos: [], quadro: [], substituiQuadro: null }];
+    if (!xlsx.length) return [{ arquivo, linhas: [], investimentos: [], abas: [], erros: ["O .zip não tem nenhuma planilha (.xlsx)."], avisos: [], quadro: [], substituiQuadro: null, comInvestimentos: false }];
     return xlsx.map(([n, b]) => lerXlsx(`${arquivo} › ${n.split("/").pop()}`, b));
   }
   return [lerXlsx(arquivo, buffer)];

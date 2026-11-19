@@ -169,6 +169,8 @@ function exigirAnalitico(c: { nome: string; tipo: string }) {
 /** Quem pede: `admin` é o Administrador (o perfil Administrador, 14/10/2026; antes, Editar no Controle de Usuários), que vê também os cenários particulares. */
 /** `recorte` (12/11/2026): o recorte do perfil (Departamento ou Centros de Custo), para o Acesso às Informações Por Recorte. */
 type Usuario = { id: string; nome: string; admin?: boolean; recorte?: RecorteDoUsuario | null };
+/** O trecho da aba Investimentos no Importar Valores (19/11/2026): em dois arquivos com ela, o usuário escolhe qual vale. */
+const BLOCO_DOS_INVESTIMENTOS = "Investimentos (a lista)";
 /** Uma parte da referência composta dos sintéticos (15/10/2026): a origem e os meses do cenário (`mesDe`–`mesAte`) que ela preenche. */
 export type ParteDaReferencia =
   | { tipo: "REALIZADO"; ano: number; modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; mesDe: number; mesAte: number }
@@ -3330,10 +3332,14 @@ export const cenariosService = {
     const fonte = await fontesDaReferencia(c);
     const referencia: ReferenciaDasAbas | undefined = fonte ? { rotulo: fonte.rotulo, meses: fonte.meses, descricao: fonte.descricao } : undefined;
     const linhas = (await linhasDaPlanilha(c, fonte)).filter((l) => abas.includes(l.aba) && dos(departamentosDaLinha(l, grupoDRE)) && veLinha(recorte, l, gruposPorNome));
+    // A aba Investimentos com todos os investimentos do cenário (19/11/2026: a lista não tem recorte, e a aba importada substitui
+    // os investimentos de quem importa — com só os dos departamentos marcados, os dele de outros departamentos sairiam).
     const investimentos = abas.includes("investimentos")
-      ? (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] }))
-          .filter((i) => dos(departamentosDoInvestimento(i)) && veDepartamentos(recorte, departamentosDoInvestimento(i)))
-          .map((i) => ({ ...i, valorTotal: Number(i.valorTotal), valorPosUso: Number(i.valorPosUso) }))
+      ? (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] })).map((i) => ({
+          ...i,
+          valorTotal: Number(i.valorTotal),
+          valorPosUso: Number(i.valorPosUso),
+        }))
       : null;
     // O Quadro de Lotação (09/11/2026): as linhas dos centros dos departamentos escolhidos (a de um centro fora dos grupos vai sempre).
     const quadroDaPlanilha = abas.includes("quadro")
@@ -3638,7 +3644,16 @@ export const cenariosService = {
           else alterados.push({ ...i, id: atual.id });
         }
       }
-      if (r.investimentos.length) abasDasLinhas.add("investimentos");
+      // A aba Investimentos substitui os investimentos de quem importa (19/11/2026, pedido do Adão): os dele que não estão nela
+      // saem do cenário (os de outros usuários ficam). Em dois arquivos com a aba, o usuário escolhe qual vale (um trecho).
+      const nomesDoArquivo = new Set(r.investimentos.map((i) => chaveDoNome(i.nomeReferencia)));
+      const excluidos = r.comInvestimentos
+        ? [...existentes.values()]
+            .filter((i) => !!usuario.id && i.criadoPorId === usuario.id && !nomesDoArquivo.has(chaveDoNome(i.nomeReferencia)))
+            .map((i) => ({ id: i.id, nomeReferencia: i.nomeReferencia, descricao: i.descricao }))
+        : [];
+      if (r.investimentos.length || r.comInvestimentos) abasDasLinhas.add("investimentos");
+      if (r.comInvestimentos) blocos.add(BLOCO_DOS_INVESTIMENTOS);
       if (r.quadro.length || r.substituiQuadro) abasDasLinhas.add("quadro");
       // O Quadro de Lotação que substitui (11/11/2026) é um trecho: em dois arquivos, o usuário escolhe qual vale.
       if (r.substituiQuadro) blocos.add(NOME_DA_ABA.quadro);
@@ -3654,10 +3669,10 @@ export const cenariosService = {
           `${desconhecidas.length} ${desconhecidas.length === 1 ? "linha que este cenário não tem foi ignorada" : "linhas que este cenário não tem foram ignoradas"} (as descrições não batem com as do cenário: ${desconhecidas.slice(0, 5).join("; ")}${desconhecidas.length > 5 ? "…" : ""}).`,
         );
       }
-      const semLinhas = r.linhas.length > 0 && r.linhas.length === desconhecidas.length && !r.investimentos.length && !r.quadro.length && !r.substituiQuadro;
+      const semLinhas = r.linhas.length > 0 && r.linhas.length === desconhecidas.length && !r.investimentos.length && !r.comInvestimentos && !r.quadro.length && !r.substituiQuadro;
       return {
         arquivo: r.arquivo,
-        valido: r.erros.length === 0 && (r.linhas.length > desconhecidas.length || r.investimentos.length > 0 || r.quadro.length > 0 || r.substituiQuadro !== null),
+        valido: r.erros.length === 0 && (r.linhas.length > desconhecidas.length || r.investimentos.length > 0 || r.comInvestimentos || r.quadro.length > 0 || r.substituiQuadro !== null),
         erros: semLinhas && !r.erros.length ? ["Nenhuma linha do arquivo é deste cenário (as descrições não batem com as do cenário)."] : r.erros,
         avisos,
         abas: r.abas,
@@ -3666,7 +3681,9 @@ export const cenariosService = {
         linhas: r.linhas.length - desconhecidas.length,
         alteracoes: [...alteracoes.values()],
         justificativas: [...justificativas.values()],
-        investimentos: { novos, alterados },
+        // `nomes` (19/11/2026): com a aba Investimentos, os Nomes de Referência dela — a gravação tira os do usuário que não
+        // estão em nenhuma (os `excluidos`, para a prévia).
+        investimentos: { novos, alterados, excluidos, nomes: r.comInvestimentos ? r.investimentos.map((i) => i.nomeReferencia) : null },
         quadro: { novas: novasDoQuadro, alteradas: alteradasDoQuadro, excluidas: excluidasDoQuadro },
       };
     });
@@ -3684,7 +3701,7 @@ export const cenariosService = {
       arquivo: string;
       alteracoes: MudancaDaPlanilha[];
       justificativas: Array<{ chave: string; texto: string | null }>;
-      investimentos?: { novos: DadosDoInvestimento[]; alterados: Array<DadosDoInvestimento & { id: string }> };
+      investimentos?: { novos: DadosDoInvestimento[]; alterados: Array<DadosDoInvestimento & { id: string }>; nomes?: string[] | null };
       quadro?: { novas: DadosDaLinhaDoQuadro[]; alteradas: Array<DadosDaLinhaDoQuadro & { id: string }>; excluidas?: Array<{ id: string }> };
     }>,
     usuario: Usuario,
@@ -3723,7 +3740,16 @@ export const cenariosService = {
       if (!contaDeDepreciacao(i.unidade)) throw new CenarioError(400, `Unidade inválida no investimento ${i.descricao}.`);
       if (i.valorPosUso > i.valorTotal) throw new CenarioError(400, `No investimento ${i.descricao}, o valor pós uso passa do valor total.`);
     }
-    const nInvestimentos = novos.length + alterados.size;
+    // A aba Investimentos substitui os investimentos de quem importa (19/11/2026, pedido do Adão): os dele que não estão em
+    // nenhum arquivo com a aba saem do cenário; os de outros usuários ficam.
+    const comAbaDeInvestimentos = arquivos.filter((a) => Array.isArray(a.investimentos?.nomes));
+    const nomesDosArquivos = new Set(comAbaDeInvestimentos.flatMap((a) => a.investimentos!.nomes!).map(chaveDoNome));
+    const excluidos = comAbaDeInvestimentos.length && usuario.id
+      ? (await getPrismaClient().cenarioInvestimento.findMany({ where: { cenarioId: id, criadoPorId: usuario.id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] })).filter(
+          (i) => !nomesDosArquivos.has(chaveDoNome(i.nomeReferencia)) && !alterados.has(i.id),
+        )
+      : [];
+    const nInvestimentos = novos.length + alterados.size + excluidos.length;
     // O Quadro de Lotação (09/11/2026): as linhas alteradas (a última vale), as novas e, desde 11/11/2026 (a aba que substitui
     // as linhas), as que saem, conferidas de novo.
     const novasDoQuadro = arquivos.flatMap((a) => a.quadro?.novas ?? []);
@@ -3758,11 +3784,14 @@ export const cenariosService = {
     const alheio = [...investimentosDeAntes.values()].find((i) => !alteraOInvestimento(alteraTodos, i, usuario));
     if (alheio) throw new CenarioError(403, foraDosSeusInvestimentos(alheio));
     // Os investimentos não têm recorte (19/11/2026): os trechos marcados (`i`), que todos veem no histórico.
-    const trechosDosInvestimentos = [...novos, ...alterados.values()].flatMap((i) => {
-      const antes = "id" in i ? investimentosDeAntes.get(i.id as string) : undefined;
-      const depois = { unidade: i.unidade, departamento: i.unidade === 4 ? (i.departamento ?? null) : null };
-      return [{ d: departamentosDoInvestimento(depois), i: true as const }, ...(antes ? [{ d: departamentosDoInvestimento(antes), i: true as const }] : [])];
-    });
+    const trechosDosInvestimentos = [
+      ...[...novos, ...alterados.values()].flatMap((i) => {
+        const antes = "id" in i ? investimentosDeAntes.get(i.id as string) : undefined;
+        const depois = { unidade: i.unidade, departamento: i.unidade === 4 ? (i.departamento ?? null) : null };
+        return [{ d: departamentosDoInvestimento(depois), i: true as const }, ...(antes ? [{ d: departamentosDoInvestimento(antes), i: true as const }] : [])];
+      }),
+      ...excluidos.map((i) => ({ d: departamentosDoInvestimento(i), i: true as const })),
+    ];
     const qDoImportar = nQuadro ? await recorteDoQuadro(recorte) : null;
     const linhasDeAntesDoQuadro = nQuadro
       ? await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: [...alteradasDoQuadro.keys(), ...excluidasDoQuadro] } }, select: { centroCustoId: true } })
@@ -3795,6 +3824,8 @@ export const cenariosService = {
     await prisma.$transaction(
       async (tx) => {
         await aplicarMudancas(tx, id, [...mudancas.values()], est);
+        // Os investimentos de quem importa que não estão na aba (19/11/2026).
+        if (excluidos.length) await tx.cenarioInvestimento.deleteMany({ where: { cenarioId: id, id: { in: excluidos.map((i) => i.id) } } });
         for (const i of alterados.values()) await tx.cenarioInvestimento.update({ where: { id: i.id }, data: camposDoInvestimento(i) });
         const ordem = await tx.cenarioInvestimento.count({ where: { cenarioId: id } });
         for (const [k, i] of novos.entries()) await tx.cenarioInvestimento.create({ data: { ...camposDoInvestimento(i), cenarioId: id, criadoPorId: usuario.id || null, ordem: ordem + k } });
@@ -3822,7 +3853,7 @@ export const cenariosService = {
     const meses = [...new Set([...mudancas.values()].map((m) => m.mes))].sort((a, b) => a - b);
     const nomes = arquivos.map((a) => a.arquivo);
     const doInvestimento = nInvestimentos
-      ? `, ${novos.length} ${novos.length === 1 ? "investimento novo" : "investimentos novos"} e ${alterados.size} ${alterados.size === 1 ? "alterado" : "alterados"}`
+      ? `, ${novos.length} ${novos.length === 1 ? "investimento novo" : "investimentos novos"}, ${alterados.size} ${alterados.size === 1 ? "alterado" : "alterados"} e ${excluidos.length} ${excluidos.length === 1 ? "excluído" : "excluídos"}`
       : "";
     const doQuadro = nQuadro
       ? `, ${novasDoQuadro.length} ${novasDoQuadro.length === 1 ? "linha nova" : "linhas novas"}, ${alteradasDoQuadro.size} ${alteradasDoQuadro.size === 1 ? "alterada" : "alteradas"} e ${excluidasDoQuadro.size} ${excluidasDoQuadro.size === 1 ? "excluída" : "excluídas"} no Quadro de Lotação`
@@ -3832,12 +3863,13 @@ export const cenariosService = {
     await prisma.cenarioReajuste.create({
       data: { cenarioId: id, usuarioId: usuario.id || null, usuarioNome: usuario.nome, tipo: "IMPORTACAO", descricao, valores: mudancas.size, meses, contas, alcance },
     });
-    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "IMPORTACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, premissas: "importar valores", arquivos: nomes, valores: mudancas.size, justificativas: justificativas.size, investimentosNovos: novos.length, investimentosAlterados: alterados.size, quadroNovas: novasDoQuadro.length, quadroAlteradas: alteradasDoQuadro.size, quadroExcluidas: excluidasDoQuadro.size } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "IMPORTACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, premissas: "importar valores", arquivos: nomes, valores: mudancas.size, justificativas: justificativas.size, investimentosNovos: novos.length, investimentosAlterados: alterados.size, investimentosExcluidos: excluidos.length, quadroNovas: novasDoQuadro.length, quadroAlteradas: alteradasDoQuadro.size, quadroExcluidas: excluidasDoQuadro.size } });
     return {
       valores: mudancas.size,
       justificativas: justificativas.size,
       investimentosNovos: novos.length,
       investimentosAlterados: alterados.size,
+      investimentosExcluidos: excluidos.length,
       quadroNovas: novasDoQuadro.length,
       quadroAlteradas: alteradasDoQuadro.size,
       quadroExcluidas: excluidasDoQuadro.size,

@@ -118,7 +118,7 @@ export function PremissasContent() {
               Rateios. A aba Investimentos é de todos os que a leem, com qualquer recorte (o Coordenador também): a lista inteira e as alterações
               dela no histórico; quem a edita inclui investimentos de qualquer unidade e departamento e, com recorte, altera e exclui só os que
               incluiu. A Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
-              Premissas e o Importar Valores ficam no recorte (no Importar Valores, os investimentos de quem edita a aba, não).
+              Premissas e o Importar Valores ficam no recorte (menos a aba Investimentos, que leva e importa a lista inteira).
             </li>
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
@@ -220,9 +220,9 @@ export function PremissasContent() {
             <li>
               “Exportar Premissas” abre o modal: marque os departamentos e escolha o tipo (Todas as Abas, com os centros de custo numa aba; Um Centro
               de Custo por Aba; ou Um Arquivo por Centro de Custo, num ZIP com um arquivo também para as demais abas). O arquivo leva só o que é dos
-              departamentos: Produção, a Matriz, a Filial, os centros de produção e a depreciação e os investimentos delas; Serviços, a aba Serviços, os
-              centros de serviços e a depreciação e os investimentos de Serviços; Logística, Técnico, Comercial e Administrativo, os centros do
-              departamento; Extra-Operacional, a aba Extra-Operacional — esses cinco com a depreciação e os investimentos de Despesas e Extra. Os
+              departamentos: Produção, a Matriz, a Filial, os centros de produção e a depreciação delas; Serviços, a aba Serviços, os centros de
+              serviços e a depreciação de Serviços; Logística, Técnico, Comercial e Administrativo, os centros do departamento; Extra-Operacional, a
+              aba Extra-Operacional — esses cinco com a depreciação de Despesas e Extra. Os
               indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz a descrição (as colunas antes da Und., que a identificam na importação: não as altere, nem o nome das abas; elas, a Und. e os rótulos ficam presos ao rolar a planilha — no Quadro de Lotação, os cadastros; nos Investimentos, até a Descrição), a unidade, os doze meses da
               referência do cenário (com ela: Realizado, o resultado realizado de cada mês do período; Referência, os meses do outro cenário — não se
               importam), a Média de Referência, o Total da Referência (a média × 12; nos percentuais, como os Encargos e Benefícios, a própria média), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
@@ -236,8 +236,10 @@ export function PremissasContent() {
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
               em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade (os da linha) e o Salário Total (em fórmula), o Custo no Ano em fórmula
               e linhas em branco para as novas; com a referência, depois do Centro de Custo, os colaboradores da linha no QL Realizado da competência
-              mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz a lista, com a Unidade e a Conta em listas suspensas, a Condição de Pagamento e a Depreciação Mensal em fórmula, e
-              linhas em branco para os novos. No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
+              mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz todos os investimentos do cenário (qualquer departamento), com a Unidade e a Conta em listas suspensas, a Condição de
+              Pagamento e a Depreciação Mensal em fórmula, e linhas em branco para os novos; no Importar Valores, ela substitui os seus investimentos (os
+              que você incluiu): os seus que não estão nela saem do cenário, os outros entram ou são atualizados pelo Nome de Referência, e os de outros
+              usuários ficam (com recorte, alterá-los é recusado). No um centro de custo por aba, a primeira aba, Consolidado, traz a DRE das contas dos centros: cada
               conta somada em todas as abas dos centros (em fórmulas, que acompanham os valores das abas; também os meses da referência), para conferir com a DRE do cenário; o
               total bate, e a parte dos rateios que vai para Serviços está, na DRE, nas contas da CSM ou da CSC.
             </li>
@@ -245,8 +247,10 @@ export function PremissasContent() {
               “Importar Valores” abre a lista dos arquivos: escolha planilhas do Exportar Premissas (ou o ZIP) ou uma pasta com elas. Cada arquivo é
               conferido no padrão (as descrições, a Média de Referência, os doze meses e a Justificativa; cada linha se acha pelas descrições) e mostra quantos valores, justificativas e
               investimentos mudam. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade…) aparece em mais de um arquivo, o
-              quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último). Na aba Investimentos, os com o
-              Nome de Referência de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem. Na aba Quadro
+              quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último). A aba Investimentos substitui os
+              seus investimentos (os que você incluiu): os seus que não estão nela saem do cenário (a prévia mostra quantos), os com o Nome de Referência
+              de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem; os de outros usuários ficam. Em
+              dois arquivos com a aba Investimentos, o quadro dos repetidos pede qual vale. Na aba Quadro
               de Lotação, as linhas da planilha substituem as do cenário nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com
               outros valores são alteradas, as novas entram e as que não estão na planilha saem (a prévia mostra quantas; os cadastros conferidos
               como no Lançamento Inicial: uma unidade, função ou centro de custo que não existe, ou um tipo fora de CLT, PJ, Aprendiz e Estagiário,
@@ -306,7 +310,8 @@ export function PremissasContent() {
               Em Serviços, as linhas de Montagem e Vedação levam à receita de montagem e aos custos da CSM; as demais, à receita complementar e à CSC. A
               Média de Referência é a média realizada da referência do cenário (Configurações / Referência / Resultado Realizado): o total do período ÷ o
               volume da linha — o m³ produzido, o m³ montado na Montagem e o kg na Metálica; as linhas de Serviços sem volume nas
-              listas vão por dia útil (a demanda diária fica 1). A demanda diária é o volume do período ÷ os dias úteis dele, e os doze meses começam
+              listas têm os valores por dia útil e a demanda diária sem Média de Referência (—), para os botões de replicar não a levarem: digite a
+              demanda e os valores dos meses na mesma unidade. A demanda diária é o volume do período ÷ os dias úteis dele, e os doze meses começam
               iguais às médias.
               A mão de obra direta e indireta, os gastos gerais diretos e indiretos e as despesas vêm dos centros de custo; a depreciação, dos investimentos; o imposto de
               renda, a contribuição social e o resultado financeiro, do extra-operacional.
