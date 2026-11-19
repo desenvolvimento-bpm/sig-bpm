@@ -60,8 +60,9 @@ type Retrato = Record<string, { rotulo: string; n: number; soma: string; ultima?
 /** O retrato das entradas da apuração (exportado em 15/10/2026: a troca do balancete detalhado nos meses apurados). */
 /**
  * As listas obrigatórias para fechar (17/10/2026): os arquivos de todo mês, na ordem da aba Em Vigor das Importações. A
- * DRE do Comercial e o saldo inicial do estoque são opcionais. A regra vale para todo fechamento daqui em diante; o que
- * já está fechado fica como está.
+ * DRE do Comercial e o saldo inicial do estoque são opcionais e, desde 19/11/2026 (pedido do Adão: outubro, sem saídas,
+ * não fechava — a aba sem linhas do mês não deixa importação), também as Devoluções e as Saídas. A regra vale para todo
+ * fechamento daqui em diante; o que já está fechado fica como está.
  */
 const LISTAS_OBRIGATORIAS: Array<[TipoImportacao, string]> = [
   ["BALANCETE", "Balancete"],
@@ -74,8 +75,6 @@ const LISTAS_OBRIGATORIAS: Array<[TipoImportacao, string]> = [
   ["MONTAGEM", "Montagem"],
   ["ACOMPANHAMENTO", "Acompanhamento"],
   ["MEDICAO", "Medições"],
-  ["DEVOLUCAO", "Devoluções"],
-  ["SAIDA", "Saídas"],
   // 19/10/2026: o quadro de lotação por centro de custo (JAN–AGO/2026 entraram pela carga retroativa).
   ["QUADRO_LOTACAO", "Quadro de Lotação"],
   ["INDICADORES_ADMIN", "Indicadores do Administrativo"],

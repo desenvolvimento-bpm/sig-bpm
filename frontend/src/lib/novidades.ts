@@ -28,6 +28,14 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 19:18): as Devoluções e as Saídas opcionais para fechar.
+  {
+    publicada: "2026-11-19T19:18",
+    processo: "Fechamento Mensal",
+    tela: "Importações",
+    rota: "/competencias/0000-00/importar",
+    itens: ["As Devoluções e as Saídas passam a ser opcionais para fechar a competência (marcadas como Opcional na aba Em Vigor): o mês sem devoluções ou sem saídas fecha sem elas."],
+  },
   // 19/11/2026 (publicada às 17:55): a aba Investimentos do Importar Valores substitui os investimentos de quem importa, e a
   // Demanda Diária das linhas de Serviços por dia útil sem Média de Referência (de outra sessão).
   {

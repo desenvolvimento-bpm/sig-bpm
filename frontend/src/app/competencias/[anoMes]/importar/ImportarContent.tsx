@@ -33,6 +33,8 @@ const botaoPrimario = "bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font
  */
 const TIPOS_DO_MES = ["BALANCETE", "PROJETO", "PRODUCAO", "PRODUCAO_PISTA", "PRODUCAO_ARMADURA", "PRODUCAO_METALURGIA", "EXPEDICAO", "MONTAGEM", "ACOMPANHAMENTO", "MEDICAO", "DEVOLUCAO", "SAIDA", "QUADRO_LOTACAO", "INDICADORES_ADMIN", "INDICADORES_COMERCIAL", "REQUISICOES", "NOTAS_FISCAIS", "CREDITOS_IMPOSTOS"];
 const TIPOS_EVENTUAIS = ["DRE_COMERCIAL", "ESTOQUE_INICIAL"];
+/** Os opcionais para o fechamento: os eventuais e, desde 19/11/2026 (pedido do Adão), as Devoluções e as Saídas. */
+const TIPOS_OPCIONAIS = ["DEVOLUCAO", "SAIDA", ...TIPOS_EVENTUAIS];
 
 const ESTILO_STATUS: Record<StatusImportacao, { classe: string; rotulo: string }> = {
   PROCESSANDO: { classe: "border-blue-200 bg-blue-50 text-blue-700", rotulo: "Processando" },
@@ -190,7 +192,8 @@ export function ImportarContent() {
             <li>Na aba Em Vigor, clique numa linha para abrir o relatório: linhas aceitas, recusadas e avisos.</li>
             <li>
               A aba Em Vigor mostra sempre todos os tipos, também os não importados. Para fechar a competência, todos precisam estar importados, menos os
-              marcados como Opcional (a DRE do Comercial e, na primeira competência do SIG, a única em que aparece, o saldo inicial do estoque); os que faltam aparecem nos motivos do Fechar Competência, na tela Resultados. O
+              marcados como Opcional (as Devoluções, as Saídas, a DRE do Comercial e, na primeira competência do SIG, a única em que aparece, o saldo
+              inicial do estoque); os que faltam aparecem nos motivos do Fechar Competência, na tela Resultados. O
               arquivo recusado por não ter registros do mês (o mês sem movimento daquela lista) aparece como Sem Registros no Mês e conta como entregue.
             </li>
             <li>A aba Histórico guarda todas as importações, inclusive as recusadas e as substituídas.</li>
@@ -254,7 +257,7 @@ export function ImportarContent() {
                     <td className="px-4 text-sm font-medium whitespace-nowrap text-gray-900">
                       {ROTULO_TIPO[tipo] ?? tipo}
                       {/* Os opcionais para o fechamento (17/10/2026). */}
-                      {TIPOS_EVENTUAIS.includes(tipo) ? <span className="ml-1.5 text-xs font-normal text-gray-500">(Opcional)</span> : null}
+                      {TIPOS_OPCIONAIS.includes(tipo) ? <span className="ml-1.5 text-xs font-normal text-gray-500">(Opcional)</span> : null}
                     </td>
                     {/* O nome do arquivo ocupa a largura que sobra e corta o resto, sem alargar a tabela. */}
                     <td className="w-full px-4 text-sm text-gray-900">
