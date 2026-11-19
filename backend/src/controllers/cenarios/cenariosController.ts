@@ -57,8 +57,6 @@ const usuario = (request: Request) => {
     nome: request.user!.nome,
     admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR,
     recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
-    // Quem edita a aba Investimentos das Premissas (19/11/2026, pedido do Adão): a lista dos investimentos sem o recorte.
-    editaInvestimentos: (request.user!.permissions ?? []).includes("cenarios_analiticos_premissas.investimentos:editar"),
   };
 };
 

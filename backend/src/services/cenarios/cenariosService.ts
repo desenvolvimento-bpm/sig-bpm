@@ -72,7 +72,6 @@ import {
   gruposDoRecorte,
   recorteDoCenario,
   recorteDoPerfil,
-  recorteDosInvestimentos,
   alteraOInvestimento,
   alteraTodosOsInvestimentos,
   foraDosSeusInvestimentos,
@@ -157,8 +156,7 @@ function exigirAnalitico(c: { nome: string; tipo: string }) {
 
 /** Quem pede: `admin` é o Administrador (o perfil Administrador, 14/10/2026; antes, Editar no Controle de Usuários), que vê também os cenários particulares. */
 /** `recorte` (12/11/2026): o recorte do perfil (Departamento ou Centros de Custo), para o Acesso às Informações Por Recorte. */
-/** `editaInvestimentos` (19/11/2026): edita a aba Investimentos das Premissas dos analíticos (a lista sem o recorte). */
-type Usuario = { id: string; nome: string; admin?: boolean; recorte?: RecorteDoUsuario | null; editaInvestimentos?: boolean };
+type Usuario = { id: string; nome: string; admin?: boolean; recorte?: RecorteDoUsuario | null };
 /** Uma parte da referência composta dos sintéticos (15/10/2026): a origem e os meses do cenário (`mesDe`–`mesAte`) que ela preenche. */
 export type ParteDaReferencia =
   | { tipo: "REALIZADO"; ano: number; modo: "MES_A_MES" | "MEDIA"; de?: number; ate?: number; mesDe: number; mesAte: number }
@@ -1197,7 +1195,7 @@ export const cenariosService = {
     const cenarios = (await getPrismaClient().cenario.findMany({ where: { tipo }, orderBy: [{ ano: "desc" }, { criadoEm: "desc" }] })).filter((c) => alcanca(c, usuario));
     const [doCenario, linhas, daFamilia] = await Promise.all([conteudo(cenarios.map((c) => c.id)), estrutura(), familias()]);
     const resumos = await Promise.all(cenarios.map((c) => resumoDoCenario(c.id, linhas)));
-    return cenarios.map((c, k) => ({ ...c, ...doCenario(c.id), ...daFamilia(c), resultados: resumos[k], podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), recorte: recorteParaTela(recorteDoCenario(c, usuario), !!usuario.editaInvestimentos) }));
+    return cenarios.map((c, k) => ({ ...c, ...doCenario(c.id), ...daFamilia(c), resultados: resumos[k], podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), recorte: recorteParaTela(recorteDoCenario(c, usuario)) }));
   },
 
   async obter(id: string, usuario: Usuario = SISTEMA) {
@@ -1205,7 +1203,7 @@ export const cenariosService = {
     // Nos analíticos (14/10/2026): os rateios sem regra no exercício e se as regras mudaram depois do último cálculo.
     const regras = c.tipo === "ANALITICO" ? await regrasDeRateio() : null;
     const rateios = regras ? { avisos: avisosDosRateios(regras, mesesDoAno(c.ano)), desatualizados: c.rateiosAssinatura !== assinaturaDasRegras(regras) } : null;
-    return { ...c, ...(await conteudo([id]))(id), ...(await familias())(c), podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), recorte: recorteParaTela(recorteDoCenario(c, usuario), !!usuario.editaInvestimentos), rateios };
+    return { ...c, ...(await conteudo([id]))(id), ...(await familias())(c), podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), recorte: recorteParaTela(recorteDoCenario(c, usuario)), rateios };
   },
 
   /**
@@ -2092,8 +2090,8 @@ export const cenariosService = {
     const recorte = recorteDoCenario(c, usuario);
     const grupos = recorte ? new Map((await gruposDoCadastro()).map((g) => [g.grupo, g])) : new Map();
     const unidadeDaConta = (conta: string) => CONTAS_DEPRECIACAO.find((d) => d.conta === conta)?.unidade ?? null;
-    // Quem edita a aba Investimentos (19/11/2026) vê as alterações da lista dos investimentos, como vê a lista inteira.
-    const rs = recorte ? todas.filter((x) => veAlteracao(recorte, x, grupos, unidadeDaConta, !!usuario.editaInvestimentos)) : todas;
+    // As alterações da lista dos investimentos (19/11/2026), todos as veem, como veem a lista inteira.
+    const rs = recorte ? todas.filter((x) => veAlteracao(recorte, x, grupos, unidadeDaConta)) : todas;
     const porCodigo = new Map(est.map((l) => [l.codigo, l]));
     return rs.map(({ alcance: _alcance, ...r }) => ({
       ...r,
@@ -2640,10 +2638,8 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     // O recorte (12/11/2026): a depreciação base das unidades dos departamentos dele e a dos investimentos deles. A lista dos
-    // investimentos (19/11/2026, pedido do Adão), sem o recorte para quem edita a aba (recorteDosInvestimentos).
+    // investimentos (19/11/2026, pedido do Adão), sem o recorte: a aba é de todos os que a leem.
     const r = recorteDoCenario(c, usuario);
-    const ri = recorteDosInvestimentos(c, usuario);
-    exigirNoRecorte(!r || abasDoRecorte(r, !!usuario.editaInvestimentos)!.includes("investimentos"));
     const prisma = getPrismaClient();
     const [base, lista] = await Promise.all([
       prisma.cenarioPremissa.findMany({ where: { cenarioId: id, venda: VENDA_BASE } }),
@@ -2658,7 +2654,7 @@ export const cenariosService = {
       incluidoPor: criadoPor?.nome ?? null,
       podeAlterar: alteraOInvestimento(alteraTodos, i, usuario),
     }));
-    const investimentos = comValores.filter((i) => veDepartamentos(ri, departamentosDoInvestimento(i)));
+    const investimentos = comValores;
     const daDepreciacao = comValores.filter((i) => veDepartamentos(r, departamentosDoInvestimento(i)));
     const contas = CONTAS_DEPRECIACAO.filter((d) => veDepartamentos(r, departamentosDaUnidade(d.unidade)));
     const linhas = contas.flatMap((d) => {
@@ -2682,11 +2678,9 @@ export const cenariosService = {
       editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
       // As contas da Depreciação (as do recorte) e as da lista dos investimentos (19/11/2026: todas, para quem edita a aba).
       contas,
-      contasDosInvestimentos: CONTAS_DEPRECIACAO.filter((d) => veDepartamentos(ri, departamentosDaUnidade(d.unidade))),
-      // O Departamento dos investimentos de Despesas e Extra (12/11/2026): as opções do recorte; quem vê por recorte o escolhe
-      // (quem edita a aba, desde 19/11/2026, como quem vê tudo: todas as opções, sem obrigação).
-      departamentos: DEPARTAMENTOS_DO_PATRIMONIO.filter((d) => veDepartamentos(ri, [departamentoDoAcesso(d)])),
-      exigeDepartamento: !!ri,
+      contasDosInvestimentos: CONTAS_DEPRECIACAO,
+      // O Departamento dos investimentos de Despesas e Extra (12/11/2026): os cinco do patrimônio, sem obrigação (sem ele, é dos cinco).
+      departamentos: DEPARTAMENTOS_DO_PATRIMONIO,
       alteraTodos,
       depreciacao: linhas,
       investimentos: investimentos.map((i) => ({ ...i, depreciacaoMensal: depreciacaoMensal(i) })),
@@ -2831,17 +2825,9 @@ export const cenariosService = {
     if (investimentoId && !atual) throw new CenarioError(404, "Investimento não encontrado.");
     // Com recorte, só os que ele incluiu (19/11/2026, pedido do Adão).
     if (atual && !alteraOInvestimento(alteraTodosOsInvestimentos(c, usuario), atual, usuario)) throw new CenarioError(403, foraDosSeusInvestimentos(atual));
-    // O Departamento (12/11/2026): só nos de Despesas e Extra, um dos cinco do patrimônio. O recorte confere o de antes e o novo
-    // (quem vê por recorte escolhe o Departamento de um investimento de Despesas e Extra); quem edita a aba (19/11/2026), sem o
-    // recorte (recorteDosInvestimentos).
+    // O Departamento (12/11/2026): só nos de Despesas e Extra, um dos cinco do patrimônio. A lista não tem recorte (19/11/2026).
     const departamento = dados && dados.unidade === 4 ? (dados.departamento ?? null) : null;
     if (departamento && !DEPARTAMENTOS_DO_PATRIMONIO.includes(departamento)) throw new CenarioError(400, "Departamento inválido para um investimento de Despesas e Extra.");
-    const r = recorteDosInvestimentos(c, usuario);
-    if (atual) exigirNoRecorte(veDepartamentos(r, departamentosDoInvestimento(atual)));
-    if (dados) {
-      if (r && dados.unidade === 4 && !departamento) throw new CenarioError(400, "Escolha o Departamento do investimento de Despesas e Extra.");
-      exigirNoRecorte(veDepartamentos(r, departamentosDoInvestimento({ unidade: dados.unidade, departamento })));
-    }
     if (dados) {
       if (!contaDeDepreciacao(dados.unidade)) throw new CenarioError(400, "Unidade inválida.");
       if (dados.valorPosUso > dados.valorTotal) throw new CenarioError(400, "O valor pós uso não pode passar do valor total.");
@@ -2917,7 +2903,6 @@ export const cenariosService = {
         403,
         `${alheios.length} dos investimentos marcados foram incluídos por outros usuários (${alheios.map((i) => i.nomeReferencia).join(", ").slice(0, 300)}): com recorte, você exclui só os investimentos que incluiu.`,
       );
-    exigirNoRecorte(lista.every((i) => veDepartamentos(recorteDosInvestimentos(c, usuario), departamentosDoInvestimento(i))));
     await prisma.$transaction(
       async (tx) => {
         await tx.cenarioInvestimento.deleteMany({ where: { cenarioId: id, id: { in: ids } } });
@@ -3580,19 +3565,10 @@ export const cenariosService = {
       // com um nome novo, um novo.
       const novos: InvestimentoLido[] = [];
       const alterados: Array<InvestimentoLido & { id: string }> = [];
-      // Os investimentos sem o recorte para quem edita a aba Investimentos (19/11/2026, recorteDosInvestimentos).
-      const recorteDeles = recorteDosInvestimentos(c, usuario);
-      // Com recorte, só altera os que ele incluiu (19/11/2026, pedido do Adão).
+      // Os investimentos não têm recorte (19/11/2026); com recorte, só altera os que ele incluiu (pedido do Adão).
       const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
       for (const i of r.investimentos) {
         const atual = existentes.get(chaveDoNome(i.nomeReferencia));
-        if (
-          recorteDeles &&
-          (!veDepartamentos(recorteDeles, departamentosDoInvestimento(i)) || (atual && !veDepartamentos(recorteDeles, departamentosDoInvestimento(atual))) || (i.unidade === 4 && !i.departamento))
-        ) {
-          r.erros.push(`${i.aba}, linha ${i.numero}: o investimento ${i.nomeReferencia} fica fora do seu recorte${i.unidade === 4 && !i.departamento ? " (escolha o Departamento dele)" : ""}.`);
-          continue;
-        }
         if (!atual) novos.push(i);
         else if (
           (atual.departamento ?? null) !== i.departamento ||
@@ -3727,13 +3703,10 @@ export const cenariosService = {
     const alteraTodos = alteraTodosOsInvestimentos(c, usuario);
     const alheio = [...investimentosDeAntes.values()].find((i) => !alteraOInvestimento(alteraTodos, i, usuario));
     if (alheio) throw new CenarioError(403, foraDosSeusInvestimentos(alheio));
-    // Os investimentos sem o recorte para quem edita a aba Investimentos (19/11/2026), com os trechos marcados (`i`).
-    const recorteDeles = recorteDosInvestimentos(c, usuario);
+    // Os investimentos não têm recorte (19/11/2026): os trechos marcados (`i`), que todos veem no histórico.
     const trechosDosInvestimentos = [...novos, ...alterados.values()].flatMap((i) => {
       const antes = "id" in i ? investimentosDeAntes.get(i.id as string) : undefined;
       const depois = { unidade: i.unidade, departamento: i.unidade === 4 ? (i.departamento ?? null) : null };
-      if (recorteDeles && depois.unidade === 4 && !depois.departamento) throw new CenarioError(400, `Escolha o Departamento do investimento ${i.nomeReferencia}.`);
-      exigirNoRecorte(veDepartamentos(recorteDeles, departamentosDoInvestimento(depois)) && (!antes || veDepartamentos(recorteDeles, departamentosDoInvestimento(antes))));
       return [{ d: departamentosDoInvestimento(depois), i: true as const }, ...(antes ? [{ d: departamentosDoInvestimento(antes), i: true as const }] : [])];
     });
     const qDoImportar = nQuadro ? await recorteDoQuadro(recorte) : null;

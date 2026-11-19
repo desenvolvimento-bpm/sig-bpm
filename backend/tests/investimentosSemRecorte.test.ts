@@ -8,36 +8,26 @@ import {
   departamentosDoInvestimento,
   foraDosSeusInvestimentos,
   recorteDoCenario,
-  recorteDosInvestimentos,
   veAlteracao,
   veDepartamentos,
 } from "../src/services/cenarios/recorteCenario.js";
 
-/** Os investimentos da aba Investimentos sem o recorte para quem edita a aba (19/11/2026, pedido do Adão). */
-describe("os investimentos sem o recorte para quem edita a aba (19/11/2026)", () => {
+/** A lista dos investimentos sem o recorte, para todos os que leem a aba (19/11/2026, pedido do Adão). */
+describe("os investimentos sem o recorte (19/11/2026)", () => {
   const cenario = { tipo: "ANALITICO", acessoInformacoes: "POR_RECORTE", criadoPorId: "outro" };
   const gestor = { id: "u1", recorte: { departamentos: ["COMERCIAL" as const], centros: null } };
   const coordenador = { id: "u2", recorte: { departamentos: null, centros: ["c1"] } };
-  const naMatriz = { unidade: 1, departamento: null };
-  const doComercial = { unidade: 4, departamento: "COMERCIAL" as const };
 
-  it("quem edita vê a lista inteira; quem só lê, a do recorte; a Depreciação segue o recorte", () => {
-    assert.equal(recorteDosInvestimentos(cenario, { ...gestor, editaInvestimentos: true }), null);
-    const soLe = recorteDosInvestimentos(cenario, gestor);
-    assert.equal(veDepartamentos(soLe, departamentosDoInvestimento(naMatriz)), false);
-    assert.equal(veDepartamentos(soLe, departamentosDoInvestimento(doComercial)), true);
-    // A Depreciação usa o recorte do cenário, que não muda para quem edita.
-    assert.notEqual(recorteDoCenario(cenario, { ...gestor, editaInvestimentos: true } as typeof gestor), null);
-  });
-
-  it("a aba Investimentos aparece para quem edita, também para o Coordenador", () => {
-    const r = recorteDoCenario(cenario, coordenador);
-    assert.equal(abasDoRecorte(r)!.includes("investimentos"), false);
-    assert.equal(abasDoRecorte(r, true)!.includes("investimentos"), true);
+  it("a aba Investimentos aparece para todos, também para o Coordenador; a Depreciação segue o recorte", () => {
+    assert.equal(abasDoRecorte(recorteDoCenario(cenario, coordenador))!.includes("investimentos"), true);
     assert.equal(abasDoRecorte(recorteDoCenario(cenario, gestor))!.includes("investimentos"), true);
+    // A Depreciação: só as unidades dos departamentos do recorte.
+    const r = recorteDoCenario(cenario, gestor);
+    assert.equal(veDepartamentos(r, departamentosDoInvestimento({ unidade: 1, departamento: null })), false);
+    assert.equal(veDepartamentos(r, departamentosDoInvestimento({ unidade: 4, departamento: "COMERCIAL" })), true);
   });
 
-  it("no histórico, quem edita vê as alterações da lista; a Depreciação Base e as linhas seguem o recorte", () => {
+  it("no histórico, todos veem as alterações da lista; a Depreciação Base e as linhas seguem o recorte", () => {
     const r = recorteDoCenario(cenario, gestor);
     const grupos = new Map();
     const semConta = () => null;
@@ -46,12 +36,11 @@ describe("os investimentos sem o recorte para quem edita a aba (19/11/2026)", ()
     const base = { tipo: "VALOR", descricao: "Investimentos · Depreciação Base", contas: [], alcance: [{ d: ["PRODUCAO"] }] };
     const importacao = { tipo: "IMPORTACAO", descricao: "Importar Valores", contas: [], alcance: [{ d: ["COMERCIAL"] }, { d: ["PRODUCAO"], i: true }] };
     const comLinhaDeFora = { ...importacao, alcance: [{ d: ["PRODUCAO"] }, { d: ["PRODUCAO"], i: true }] };
-    assert.equal(veAlteracao(r, novo, grupos, semConta), false, "quem só lê não vê");
-    assert.equal(veAlteracao(r, novo, grupos, semConta, true), true);
-    assert.equal(veAlteracao(r, antigo, grupos, semConta, true), true, "as de antes, pela descrição");
-    assert.equal(veAlteracao(r, base, grupos, semConta, true), false);
-    assert.equal(veAlteracao(r, importacao, grupos, semConta, true), true);
-    assert.equal(veAlteracao(r, comLinhaDeFora, grupos, semConta, true), false);
+    assert.equal(veAlteracao(r, novo, grupos, semConta), true);
+    assert.equal(veAlteracao(r, antigo, grupos, semConta), true, "as de antes, pela descrição");
+    assert.equal(veAlteracao(r, base, grupos, semConta), false);
+    assert.equal(veAlteracao(r, importacao, grupos, semConta), true);
+    assert.equal(veAlteracao(r, comLinhaDeFora, grupos, semConta), false);
   });
 });
 

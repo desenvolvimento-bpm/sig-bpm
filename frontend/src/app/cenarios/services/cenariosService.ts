@@ -207,9 +207,8 @@ export type InvestimentosDoCenario = {
   /** As contas da Depreciação (as do recorte) e as da lista dos investimentos (19/11/2026: todas, para quem edita a aba). */
   contas: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: string; conta: string; rotulo: string }>;
   contasDosInvestimentos: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: string; conta: string; rotulo: string }>;
-  /** As opções do Departamento (12/11/2026; as do recorte, ou todas para quem edita a aba) e se ele é obrigatório (quem só lê, por recorte). */
+  /** As opções do Departamento (12/11/2026): os cinco do patrimônio (sem ele, é dos cinco). */
   departamentos: DepartamentoDoInvestimento[];
-  exigeDepartamento: boolean;
   /** Altera e exclui todos (19/11/2026): o Administrador, quem criou o cenário e quem não tem recorte. */
   alteraTodos: boolean;
   depreciacao: LinhaDaPremissa[];

@@ -307,10 +307,8 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
   const [nome, setNome] = useState(investimento?.nomeReferencia ?? "");
   // As unidades da lista (19/11/2026): todas para quem edita a aba Investimentos, qualquer que seja o recorte.
   const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? dados.contasDosInvestimentos[0]?.unidade ?? 1);
-  // O Departamento dos investimentos de Despesas e Extra (12/11/2026): quem vê por recorte o escolhe entre os dele.
-  const [departamento, setDepartamento] = useState<DepartamentoDoInvestimento | "">(
-    investimento?.departamento ?? (dados.exigeDepartamento && dados.departamentos.length === 1 ? dados.departamentos[0] : ""),
-  );
+  // O Departamento dos investimentos de Despesas e Extra (12/11/2026; sem ele, é dos cinco).
+  const [departamento, setDepartamento] = useState<DepartamentoDoInvestimento | "">(investimento?.departamento ?? "");
   const [descricao, setDescricao] = useState(investimento?.descricao ?? "");
   const [condicao, setCondicao] = useState(investimento?.condicaoPagamento ?? "");
   const [inicio, setInicio] = useState(investimento?.inicio ?? 1);
@@ -320,7 +318,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
   const [excluir, setExcluir] = useState(false);
   const n = { total: lerNumero(total), posUso: lerNumero(posUso), vida: lerNumero(vida) };
   const valido =
-    !!nome.trim() && !!descricao.trim() && (unidade !== 4 || !dados.exigeDepartamento || !!departamento) && typeof n.total === "number" && n.total > 0 && (n.posUso === null || (typeof n.posUso === "number" && n.posUso >= 0)) && typeof n.vida === "number" && n.vida >= 1 && Number.isInteger(n.vida);
+    !!nome.trim() && !!descricao.trim() && typeof n.total === "number" && n.total > 0 && (n.posUso === null || (typeof n.posUso === "number" && n.posUso >= 0)) && typeof n.vida === "number" && n.vida >= 1 && Number.isInteger(n.vida);
   const mensal = typeof n.total === "number" && typeof n.vida === "number" && n.vida > 0 ? (n.total - (n.posUso ?? 0)) / n.vida : null;
   const gravar = useMutation({
     mutationFn: (apagar: boolean) => {
@@ -395,7 +393,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="inv-departamento">Departamento</Label>
               <select id="inv-departamento" value={departamento} onChange={(e) => setDepartamento(e.target.value as DepartamentoDoInvestimento | "")} className={classeSelect}>
-                {dados.exigeDepartamento ? <option value="">Escolha o departamento</option> : <option value="">Todos os Departamentos de Despesas e Extra</option>}
+                <option value="">Todos os Departamentos de Despesas e Extra</option>
                 {dados.departamentos.map((d) => (
                   <option key={d} value={d}>
                     {NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[d]}

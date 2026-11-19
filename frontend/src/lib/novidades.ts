@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 14:32): a aba Investimentos para todos os que a leem.
+  {
+    publicada: "2026-11-19T14:32",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Investimentos aparece para todos os que a leem, com a lista inteira, qualquer que seja o recorte (também com o recorte por centro de custo). A Depreciação continua no recorte de cada um.",
+    ],
+  },
   // 19/11/2026 (publicada às 13:20): os investimentos de quem os incluiu.
   {
     publicada: "2026-11-19T13:20",

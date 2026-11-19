@@ -115,8 +115,9 @@ export function PremissasContent() {
               Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só o seu recorte: o Gestor, as abas e
               as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, a depreciação, os investimentos e os indicadores
               manuais, só os deles); o Coordenador, só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e nos
-              Rateios. Quem edita a aba Investimentos vê toda a lista e inclui investimentos de qualquer unidade e departamento, com qualquer recorte (o
-              Coordenador também vê a aba), e as alterações deles no histórico; com recorte, altera e exclui só os que incluiu. A Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
+              Rateios. A aba Investimentos é de todos os que a leem, com qualquer recorte (o Coordenador também): a lista inteira e as alterações
+              dela no histórico; quem a edita inclui investimentos de qualquer unidade e departamento e, com recorte, altera e exclui só os que
+              incluiu. A Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
               Premissas e o Importar Valores ficam no recorte (no Importar Valores, os investimentos de quem edita a aba, não).
             </li>
             <li>
@@ -365,8 +366,8 @@ export function PremissasContent() {
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
           <span className="font-medium text-gray-900">Acesso Por Recorte.</span>{" "}
           {recorte.porCentro
-            ? "Você vê só os grupos de centros de custo com algum centro seu: o Quadro de Lotação, os Centros de Custo e os Rateios deles."
-            : `Você vê só as premissas ${recorte.departamentos.length === 1 ? "do departamento" : "dos departamentos"} ${recorte.departamentos.map((d) => NOME_DO_DEPARTAMENTO[d] ?? d).join(", ")}.`}
+            ? "Você vê só os grupos de centros de custo com algum centro seu (o Quadro de Lotação, os Centros de Custo e os Rateios deles) e a lista inteira dos Investimentos."
+            : `Você vê só as premissas ${recorte.departamentos.length === 1 ? "do departamento" : "dos departamentos"} ${recorte.departamentos.map((d) => NOME_DO_DEPARTAMENTO[d] ?? d).join(", ")} e a lista inteira dos Investimentos.`}
         </p>
       ) : null}
       <Abas rotulo="Unidade das premissas" ativa={aba} onMudar={setAba} abas={abas} />
