@@ -28,6 +28,107 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 19/11/2026 (publicada às 12:45): o modal do Pesquisar e o Recolher / Expandir meses nos Indicadores do Painel de Bordo.
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: "/relatorios/painel",
+    itens: [
+      "Na aba Indicadores, ao lado da lista dos grupos, o botão de Recolher / Expandir os meses, como em Resultados: recolhidos, ficam o mês do Período (com o orçado dele) e os acumulados.",
+      "Na aba Indicadores, ao rolar a tabela para o lado na Comparação PROVA, a faixa dos grupos (Produção, Serviços…) não aparece mais por baixo das colunas fixas.",
+    ],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: ["O modal do Pesquisar abre com metade da altura da tela, e a lista dos fornecedores e clientes (ou das contas) cabe inteira nele; com os resultados, ele cresce."],
+  },
+  // 19/11/2026 (publicada às 12:45): o Total e a Média nas Premissas e os Centros de Custo nos Resultados dos analíticos.
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Depois dos doze meses, as colunas Total e Média em todas as abas, menos nos Indicadores Manuais e nos Rateios: nos valores e nas quantidades, o Total soma os meses e a Média é o Total ÷ 12; nos colaboradores, os dois são a média do ano; nas taxas e nos percentuais (R$/m³, kg/m³, %…), a média dos meses com valor. No Quadro de Lotação, o Total e a Média têm as quatro colunas de cada mês (no lugar do Custo no Ano).",
+      "Na aba Investimentos, quem tem a edição da aba inclui, altera e exclui qualquer investimento, de qualquer unidade e departamento, independente do recorte (também pelo Importar Valores), e vê as alterações deles no Histórico. A Depreciação continua no recorte de cada um.",
+    ],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "A aba Centros de Custo, depois das unidades, como a de Resultados Empresariais: a lista dos grupos de centros com valor no cenário e, ao lado, a DRE do escolhido, mês a mês (as contas, as atribuições e o total do grupo, com o % e o R$/m³). No Exportar, também o Centro de Custo Atual.",
+    ],
+  },
+  // 19/11/2026 (publicada às 12:45): os nomes dos indicadores e dos cards do Painel de Bordo se editam.
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cadastros Gerais",
+    tela: "Analítico",
+    rota: "/cadastros/estrutura-indicadores",
+    itens: [
+      "O nome dos Indicadores se edita: ao gravar, depois de confirmar, ele muda de uma vez nos valores importados e digitados, nas metas, nos cenários, nas fórmulas e nos cards dos Relatórios Executivos e dos Painéis de Bordo. O sistema conhece cada indicador pelo ID, e não pelo nome.",
+      "As importações recusam o nome antigo de um indicador renomeado e dizem o nome novo: mude o nome nas planilhas antes de importar.",
+      "O nome dos itens do Painel de Bordo (também o grupo, o quadro e a abreviação) muda junto nos cards dos Relatórios Executivos e dos Painéis de Bordo.",
+    ],
+  },
+  // 18/11/2026, à noite (publicada em 19/11/2026, às 12:45): os pedidos do Adão depois da publicação das Variações.
+  {
+    publicada: "2026-11-19T12:45",
+    processo: TODO_O_SIG,
+    itens: [
+      "No menu do usuário, logo abaixo da Acessibilidade, a opção Zoom: Menor (85%), Padrão (100%) ou Máximo (125%) — o tamanho dos textos e dos objetos das telas, para os monitores de resolução maior. A escolha fica guardada neste navegador.",
+      "No menu lateral, os Resultados Vendidos (em desenvolvimento) ficam na Apuração dos Resultados, logo depois do Realizado por Obra; o grupo Criação de Cenários saiu.",
+    ],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/departamentos",
+    itens: ["A aba Departamentos vem antes da aba Linhas."],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cadastros Auxiliares",
+    tela: "Gestão de Colaboradores",
+    rota: "/gestao-de-colaboradores/cadastros/lancamento-inicial",
+    itens: [
+      "No Lançamento Inicial, os quadros de destaque Por Unidade e Por Departamento, acima da tabela (os colaboradores e o percentual de cada um, com os filtros da tabela), no lugar dos destaques do quadro do início e da competência fechada.",
+    ],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Gestão de Colaboradores",
+    tela: "Quadro de Lotação",
+    rota: "/gestao-de-colaboradores/quadro-de-lotacao",
+    itens: ["Na aba Realizado, os quadros de destaque Por Unidade e Por Departamento, acima da tabela: os colaboradores do fim do mês e o percentual de cada um, com os filtros da tabela."],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "À direita do título, a situação do salvamento, como nos Relatórios Executivos: Salvando…, Salvo às 14:32 ou Não Salvo (cada alteração se salva ao ser confirmada). O aviso dos rateios sem base saiu das Premissas e fica só nos Resultados do cenário.",
+    ],
+  },
+  {
+    publicada: "2026-11-19T12:45",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No Pesquisar, a lista com busca traz todos os fornecedores e clientes (ou as contas de resultado) com movimentos no período: digite para filtrar e escolha — a pesquisa já começa, só com os movimentos do escolhido.",
+      "Na aba Sem Centros de Custo, o Balancete de um lançamento sem centro de custo mostra só os movimentos da conta sem centro (antes, vinham também os dos outros centros).",
+    ],
+  },
   // 18/11/2026: o aviso dos itens de outra conta no modal Itens do Movimento.
   {
     publicada: "2026-11-18T20:25",

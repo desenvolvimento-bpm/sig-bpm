@@ -8,6 +8,7 @@ import { gruposDoCadastro, type GrupoDoCenario } from "../cenarios/centrosCenari
 import type { Acesso } from "../acesso/acesso.js";
 import { podeVerCentro } from "../acesso/recorteDepartamento.js";
 import { colaboradoresPorCentro, comparacaoDoQuadroService, NOMES_DOS_INDICADORES } from "./comparacaoDoQuadro.js";
+import { departamentoEUnidade } from "./departamentoEUnidade.js";
 
 /**
  * O recorte (13/11/2026, pedido do Adão): quem tem recorte por departamento ou por centro de custo só vê e decide, na aba
@@ -569,7 +570,7 @@ export const quadroService = {
     const db = getPrismaClient();
     const c = await competencia(db, anoMes);
     // Os indicadores do mês e do ano pelo quadro por centro; as linhas pelo quadro por centro, tipo e função ("centro|tipo|função").
-    const [quadros, { quadros: porLinha }] = await Promise.all([quadrosDoBanco(db), quadrosRealizadosPorLinha(db)]);
+    const [quadros, { quadros: porLinha, unidadeDaChave }, du] = await Promise.all([quadrosDoBanco(db), quadrosRealizadosPorLinha(db), departamentoEUnidade(db)]);
     const q = quadros.find((x) => ordem(x) === ordem(c));
     const ql = porLinha.find((x) => ordem(x) === ordem(c));
     const movs = await db.colaboradorMovimentacao.findMany({
@@ -605,11 +606,29 @@ export const quadroService = {
     const chaves = [...porChave.keys()];
     // Sem o recorte (13/11/2026, pedido do Adão): o Realizado mostra todos os centros.
     const [centros, funcoes] = await Promise.all([
-      db.centroCusto.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[0]))] } }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } }),
+      db.centroCusto.findMany({
+        where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[0]))] } },
+        select: { id: true, codigoRM: true, nomeRM: true, departamento: true, departamentoSigla: true, atribuicao: true },
+      }),
       db.colaboradorFuncao.findMany({ where: { id: { in: [...new Set(chaves.map((k) => k.split("|")[1]).filter(Boolean))] } }, select: { id: true, nome: true } }),
     ]);
     const centroDe = new Map(centros.map((x) => [x.id, x]));
     const funcaoDe = new Map(funcoes.map((x) => [x.id, x.nome]));
+    // A unidade de cada linha (18/11/2026, os quadros de destaque): a dos colaboradores do Lançamento Inicial no centro e na função
+    // (a mais comum entre os tipos) ou, sem eles, no centro; a linha só das movimentações, sem a unidade.
+    const contagemDaUnidade = new Map<string, Map<string, number>>();
+    for (const [k, unidadeId] of unidadeDaChave) {
+      const [centro, , funcao] = k.split("|");
+      for (const chave of [`${centro}|${funcao ?? ""}`, centro]) {
+        const m = contagemDaUnidade.get(chave) ?? new Map<string, number>();
+        m.set(unidadeId, (m.get(unidadeId) ?? 0) + 1);
+        contagemDaUnidade.set(chave, m);
+      }
+    }
+    const maisComum = (chave: string) => {
+      const m = contagemDaUnidade.get(chave);
+      return m ? [...m].sort((a, b) => b[1] - a[1])[0][0] : null;
+    };
     const linhas = chaves
       .flatMap((k) => {
         const [centroCustoId, funcaoId] = k.split("|");
@@ -625,6 +644,11 @@ export const quadroService = {
             funcao: (funcaoId && funcaoDe.get(funcaoId)) || null,
             departamento: ct.departamento,
             atribuicao: ct.atribuicao === "DIRETA" ? "Direta" : ct.atribuicao === "INDIRETA" ? "Indireta" : null,
+            ...((): { departamentoDoCadastro: string | null; ordemDoDepartamento: number | null; unidade: string | null; ordemDaUnidade: number | null } => {
+              const d = du.departamento(ct);
+              const u = du.unidade(maisComum(k) ?? maisComum(centroCustoId));
+              return { departamentoDoCadastro: d?.nome ?? null, ordemDoDepartamento: d?.ordem ?? null, unidade: u?.nome ?? null, ordemDaUnidade: u?.ordem ?? null };
+            })(),
             inicial: x.inicial,
             entradas: x.entradas,
             saidas: x.saidas,
@@ -749,6 +773,8 @@ export const quadroService = {
       anos,
       meses: doAno.map((q) => ({ mes: q.mes, ...indicadoresDoMes(q), porTipo: q.porTipo })),
       sentidos: Object.fromEntries(Object.entries(NOMES_DOS_INDICADORES).map(([chave, nome]) => [chave, sentidoDe.get(nome) ?? "="])) as Record<keyof typeof NOMES_DOS_INDICADORES, string>,
+      // Os nomes atuais no cadastro (19/11/2026: os nomes se editam), os títulos dos cards e das linhas.
+      nomes: { ...NOMES_DOS_INDICADORES } as Record<keyof typeof NOMES_DOS_INDICADORES, string>,
     };
   },
 };

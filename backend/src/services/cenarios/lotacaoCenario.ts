@@ -1,3 +1,4 @@
+import { IND, IndicadoresPeloId, nomeDo } from "../relatorios/indicadoresDoSistema.js";
 import type { GrupoDoCenario } from "./centrosCenario.js";
 
 /**
@@ -34,25 +35,33 @@ export const VENDAS_LOTACAO = [VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_ESTAGIARIO,
 
 type Local = "Matriz" | "Filial" | "Montagem";
 type Atribuicao = "Direta" | "Indireta";
-const nomeQuadro = (a: Atribuicao | "Geral", l: Local | "Total") => `Quadro de Lotação: MO ${a} ${l}`;
-export const QUADRO_TOTAL = "Quadro de Lotação Total";
+/** Os quadros por atribuição e local, pelo ID (19/11/2026; antes, o nome montado pela atribuição e pelo local). */
+const IDS_DOS_QUADROS: Record<Atribuicao | "Geral", Record<Local | "Total", string>> = {
+  Direta: { Matriz: IND.QL_DIRETA_MATRIZ, Filial: IND.QL_DIRETA_FILIAL, Total: IND.QL_DIRETA_TOTAL, Montagem: IND.QL_DIRETA_MONTAGEM },
+  Indireta: { Matriz: IND.QL_INDIRETA_MATRIZ, Filial: IND.QL_INDIRETA_FILIAL, Total: IND.QL_INDIRETA_TOTAL, Montagem: IND.QL_INDIRETA_MONTAGEM },
+  Geral: { Matriz: IND.QL_GERAL_MATRIZ, Filial: IND.QL_GERAL_FILIAL, Total: IND.QL_GERAL_TOTAL, Montagem: IND.QL_GERAL_MONTAGEM },
+};
+/** O nome atual do quadro da atribuição no local. */
+const nomeQuadro = (a: Atribuicao | "Geral", l: Local | "Total") => nomeDo(IDS_DOS_QUADROS[a][l]);
+/** O nome atual do Quadro de Lotação Total. */
+export const quadroTotal = () => nomeDo(IND.QUADRO_TOTAL);
 
-/** Os indicadores de quadro de lotação que o analítico calcula pelos centros. */
-export const QUADROS_DE_LOTACAO = new Set([
-  ...(["Direta", "Indireta", "Geral"] as const).flatMap((a) => (["Matriz", "Filial", "Total", "Montagem"] as const).map((l) => nomeQuadro(a, l))),
-  QUADRO_TOTAL,
+/** Os indicadores de quadro de lotação que o analítico calcula pelos centros (os nomes atuais). */
+export const QUADROS_DE_LOTACAO = new IndicadoresPeloId(() => [
+  ...(["Direta", "Indireta", "Geral"] as const).flatMap((a) => (["Matriz", "Filial", "Total", "Montagem"] as const).map((l) => IDS_DOS_QUADROS[a][l])),
+  IND.QUADRO_TOTAL,
 ]);
 
 /** Onde o grupo entra no quadro de lotação: o local e a atribuição (sem um deles, só no Quadro de Lotação Total). */
 export function quadroDoGrupo(g: Pick<GrupoDoCenario, "grupoDRE" | "balde" | "unidade" | "atribuicao">): { local: Local | null; atribuicao: Atribuicao | null; descricao: string } {
   const atribuicao: Atribuicao | null = g.atribuicao === "DIRETA" ? "Direta" : g.atribuicao === "INDIRETA" ? "Indireta" : null;
   const local: Local | null = g.grupoDRE === "CSM" ? "Montagem" : g.grupoDRE === "CPP" ? (g.balde === "MATRIZ" ? "Matriz" : g.balde === "FILIAL" ? "Filial" : g.unidade === 2 ? "Filial" : "Matriz") : null;
-  if (!local || !atribuicao) return { local: null, atribuicao: null, descricao: `${QUADRO_TOTAL} (${!local ? "despesas" : "sem atribuição"})` };
+  if (!local || !atribuicao) return { local: null, atribuicao: null, descricao: `${quadroTotal()} (${!local ? "despesas" : "sem atribuição"})` };
   const curto = (x: string) => x.replace("Quadro de Lotação: ", "");
   return {
     local,
     atribuicao,
-    descricao: `${[nomeQuadro(atribuicao, local), nomeQuadro("Geral", local), ...(local === "Montagem" ? [] : [nomeQuadro(atribuicao, "Total"), nomeQuadro("Geral", "Total")])].map(curto).join(", ")} e ${QUADRO_TOTAL}`,
+    descricao: `${[nomeQuadro(atribuicao, local), nomeQuadro("Geral", local), ...(local === "Montagem" ? [] : [nomeQuadro(atribuicao, "Total"), nomeQuadro("Geral", "Total")])].map(curto).join(", ")} e ${quadroTotal()}`,
   };
 }
 
@@ -73,7 +82,7 @@ export function quadrosDeLotacao(grupos: Array<Pick<GrupoDoCenario, "grupo" | "g
     const q = quadroDoGrupo(g);
     valores.forEach((v, k) => {
       if (!v) return;
-      somar(QUADRO_TOTAL, k, v);
+      somar(quadroTotal(), k, v);
       if (!q.local || !q.atribuicao) return;
       somar(nomeQuadro(q.atribuicao, q.local), k, v);
       somar(nomeQuadro("Geral", q.local), k, v);

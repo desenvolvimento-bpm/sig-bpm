@@ -8,7 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { podeSair } from "@/lib/alteracoesPendentes";
 import { useTema, type Tema } from "@/lib/tema";
 import { useAcessibilidade, type Acessibilidade } from "@/lib/acessibilidade";
-import { Bell, Eye, GraduationCap, House, KeyRound, LogOut, Palette } from "lucide-react";
+import { useZoom, ZOOMS } from "@/lib/zoom";
+import { Bell, Eye, GraduationCap, House, KeyRound, LogOut, Palette, ZoomIn } from "lucide-react";
 
 import {
   Avatar,
@@ -95,6 +96,7 @@ export function AppHeader() {
     if (user) setTelaInicial(lerTelaInicial(user.id));
   }, [user]);
   const [acessibilidade, escolherAcessibilidade] = useAcessibilidade();
+  const [zoom, escolherZoom] = useZoom();
   const { hasPermission } = usePermissions();
   const processos = processosAcessiveis(hasPermission);
   const etapas = etapasDoMes(hasPermission, user?.acesso);
@@ -259,6 +261,31 @@ export function AppHeader() {
                     className={`px-1.5 py-0.5 text-xs outline-none focus-visible:bg-gray-100 ${acessibilidade === a.valor ? "bg-bpm-primary font-bold text-black" : "text-gray-700 hover:bg-gray-100"}`}
                   >
                     {a.rotulo}
+                  </button>
+                ))}
+              </span>
+            </div>
+            {/*
+              O Zoom (18/11/2026, pedido do Adão), logo abaixo da Acessibilidade: o tamanho das telas — Menor (85%), Padrão (100%) ou
+              Máximo (125%), guardado neste navegador (lib/zoom.ts).
+            */}
+            <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-sm">
+              <span className="flex items-center gap-1.5">
+                <ZoomIn className="size-4 shrink-0" />
+                Zoom
+              </span>
+              <span className="flex overflow-hidden rounded-sm border border-gray-300" role="radiogroup" aria-label="Zoom">
+                {ZOOMS.map((z) => (
+                  <button
+                    key={z.valor}
+                    type="button"
+                    role="radio"
+                    aria-checked={zoom === z.valor}
+                    title={z.dica}
+                    onClick={() => escolherZoom(z.valor)}
+                    className={`px-1.5 py-0.5 text-xs outline-none focus-visible:bg-gray-100 ${zoom === z.valor ? "bg-bpm-primary font-bold text-black" : "text-gray-700 hover:bg-gray-100"}`}
+                  >
+                    {z.rotulo}
                   </button>
                 ))}
               </span>

@@ -66,7 +66,10 @@ export function BalanceteDialog({
   const filtro = {
     linha,
     conta: lancamento.conta.reduzido,
-    ...(soDoLancamento ? { centro: lancamento.centro?.codigoRM ?? null, filial: lancamento.filial, adotada: (lancamento.contaAdotada ?? lancamento.conta).reduzido } : {}),
+    // O lançamento sem centro de custo (18/11/2026, a aba Sem Centros de Custo): só os movimentos sem centro, e não os de todos os centros.
+    ...(soDoLancamento
+      ? { centro: lancamento.centro?.codigoRM ?? null, ...(lancamento.centro ? {} : { semCentro: true }), filial: lancamento.filial, adotada: (lancamento.contaAdotada ?? lancamento.conta).reduzido }
+      : {}),
   };
   const consulta = useQuery({ queryKey: ["dre", anoMes, "balancete", filtro], queryFn: () => dreService.balancete(anoMes, filtro) });
   const d = consulta.data;
@@ -231,7 +234,7 @@ export function BalanceteDialog({
           </DialogTitle>
           <DialogDescription>
             {rotuloMes ?? anoMes}
-            {soDoLancamento ? ` · Filial ${lancamento.filial}${temCentro ? ` · ${lancamento.centro!.codigoRM} · ${lancamento.centro!.nome ?? ""}` : ""}` : " · todas as filiais e centros de custo"}. Os
+            {soDoLancamento ? ` · Filial ${lancamento.filial}${temCentro ? ` · ${lancamento.centro!.codigoRM} · ${lancamento.centro!.nome ?? ""}` : lancamento.centro ? "" : " · sem centro de custo"}` : " · todas as filiais e centros de custo"}. Os
             movimentos da conta no balancete do mês (aba Balancete (Lista) do LISTAS REALIZADO (RESULTADOS)): a emissão, o cliente ou fornecedor e o histórico de
             cada um{comId ? "; o botão Itens abre os itens da requisição ou da nota fiscal com o ID do movimento" : ""}.
             {lancamento.contaAdotada ? ` Na DRE, a conta é a ${lancamento.contaAdotada.reduzido}.` : ""}
@@ -302,7 +305,7 @@ export function BalanceteDialog({
             Voltar ao Extrato
           </Button>
           {/* O balancete da conta em Excel (24/10/2026): o lançamento numa aba e os movimentos, no recorte da caixa, em outra. */}
-          <ExportarExtrato anoMes={anoMes} linha={linha} visao={visao} recorte={{ conta: lancamento.conta.reduzido, ...(soDoLancamento ? { centro: lancamento.centro?.codigoRM ?? null, filial: lancamento.filial } : {}) }} />
+          <ExportarExtrato anoMes={anoMes} linha={linha} visao={visao} recorte={{ conta: lancamento.conta.reduzido, ...(soDoLancamento ? { centro: lancamento.centro?.codigoRM ?? null, semCentro: !lancamento.centro, filial: lancamento.filial } : {}) }} />
         </DialogFooter>
         {vendoItens?.idMovimento ? (
           <ItensDoMovimentoDialog

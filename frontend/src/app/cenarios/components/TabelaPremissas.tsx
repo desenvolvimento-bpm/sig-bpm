@@ -16,8 +16,8 @@ import { botaoPrimario } from "./CenarioDialog";
 import { ReajusteDialog, ValorDialog } from "./EdicaoDialogs";
 import { plural } from "@/lib/texto";
 
-/** As larguras das colunas (a premissa, a unidade, a Média de Referência e os meses): as mesmas nos rótulos e no corpo. */
-const LARGURA = { premissa: 340, und: 92, referencia: 116, mes: 104 };
+/** As larguras das colunas (a premissa, a unidade, a Média de Referência, os meses, o Total e a Média): as mesmas nos rótulos e no corpo. */
+const LARGURA = { premissa: 340, und: 92, referencia: 116, mes: 104, total: 116 };
 
 /** Os botões da barra de marcação, como os da edição da DRE dos sintéticos. */
 const botaoCinza = "rounded-sm border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-gray-200";
@@ -29,8 +29,51 @@ function formatar(v: number | null, l: Pick<LinhaDaPremissa, "casas" | "und">) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 }
 
+/**
+ * A unidade de uma taxa ou de um percentual (19/11/2026): R$/m³, kg/m³, m³/dia, %/ROB, % — a soma dos meses não tem
+ * sentido; o Total mostra a média, como os percentuais no Exportar dos centros.
+ */
+export const ehTaxa = (und: string) => und.includes("/") || und.startsWith("%");
+
+/**
+ * O Total e a Média dos doze meses de uma linha (19/11/2026, pedido do Adão): nos valores e nas quantidades, o Total é a soma
+ * dos meses e a Média, o Total ÷ os doze meses; nos colaboradores, os dois são a média do ano (a soma ÷ 12, como os quadros de
+ * lotação no Exportar dos centros); nas taxas e nos percentuais, os dois são a média dos meses com valor. O mês em branco (a
+ * premissa sem valor gravado) não conta; sem nenhum mês com valor, sem Total nem Média.
+ */
+export function totalEMedia(valores: Array<number | null>, und: string, emBranco: (i: number) => boolean = () => false): { total: number | null; media: number | null } {
+  const comValor = valores.flatMap((v, i) => (v === null || v === undefined || emBranco(i) ? [] : [v]));
+  if (!comValor.length) return { total: null, media: null };
+  const soma = comValor.reduce((s, v) => s + v, 0);
+  if (ehTaxa(und)) {
+    const media = soma / comValor.length;
+    return { total: media, media };
+  }
+  if (und === "colab.") {
+    const media = soma / valores.length;
+    return { total: media, media };
+  }
+  return { total: soma, media: soma / valores.length };
+}
+
+/** O Total mostra a média (as taxas, os percentuais e os colaboradores)? */
+const totalEhMedia = (und: string) => ehTaxa(und) || und === "colab.";
+
 /** A linha em negrito: a marcada (19/10/2026) ou, sem a marca, os cálculos em R$ (os totais). */
 const negrito = (l: LinhaDaPremissa) => l.negrito ?? (l.tipo === "CALCULO" && l.und === "R$");
+
+/** O Total e a Média da linha, depois dos meses (19/11/2026), no estilo dela; a Média com uma casa ao menos (fora dos R$). */
+function CelulasDoTotal({ l }: { l: LinhaDaPremissa }) {
+  const { total, media } = totalEMedia(l.valores, l.und, (i) => l.tipo === "PREMISSA" && !l.gravados[i] && !l.valores[i]);
+  const classe = `px-3 py-1.5 text-right text-sm whitespace-nowrap bg-gray-50 ${negrito(l) ? "font-bold text-gray-900" : "text-gray-700"}`;
+  const casasDaMedia = { ...l, casas: l.und === "R$" ? l.casas : Math.max(l.casas, 1) };
+  return (
+    <>
+      <td className={`${classe} border-l border-gray-300`}>{formatar(total, totalEhMedia(l.und) ? casasDaMedia : l)}</td>
+      <td className={classe}>{formatar(media, casasDaMedia)}</td>
+    </>
+  );
+}
 
 /** A caixa de marcar, com o estado "alguns" (indeterminado) dos subtítulos. */
 function Caixa({ marcada, alguns, rotulo, onMudar }: { marcada: boolean; alguns?: boolean; rotulo: string; onMudar: (marcar: boolean) => void }) {
@@ -108,6 +151,7 @@ export function TabelaEditavel({
   acaoDaLinha,
   envolver,
   chave,
+  comTotais = true,
 }: {
   titulo: string;
   subtitulo?: React.ReactNode;
@@ -134,6 +178,8 @@ export function TabelaEditavel({
   envolver?: (partes: { destaque: React.ReactNode; tabela: React.ReactNode }) => React.ReactNode;
   /** O que a tabela mostra (o grupo de centros): ao mudar, a marcação recomeça (sem remontar a tabela nem o que a envolve). */
   chave?: string;
+  /** As colunas Total e Média depois dos meses (19/11/2026; sem elas, a aba Rateios). */
+  comTotais?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [linhas, setLinhas] = useState<Set<string>>(new Set());
@@ -182,12 +228,12 @@ export function TabelaEditavel({
     });
   const todosOsMeses = meses.size === mesesDaTabela.length;
   const erroGravar = gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar.") : null;
-  const colunas = (comReferencia ? 3 : 2) + mesesDaTabela.length;
+  const colunas = (comReferencia ? 3 : 2) + mesesDaTabela.length + (comTotais ? 2 : 0);
   // Como a tabela de Indicadores: os rótulos ficam presos logo abaixo do título da tela, numa tabela própria que acompanha
   // a rolagem lateral do corpo, e a barra de rolagem fica no pé da janela.
   const topo = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
-  const total = LARGURA.premissa + LARGURA.und + (comReferencia ? LARGURA.referencia : 0) + LARGURA.mes * mesesDaTabela.length;
+  const total = LARGURA.premissa + LARGURA.und + (comReferencia ? LARGURA.referencia : 0) + LARGURA.mes * mesesDaTabela.length + (comTotais ? 2 * LARGURA.total : 0);
   const colgroup = (
     <colgroup>
       <col style={{ width: LARGURA.premissa }} />
@@ -196,6 +242,12 @@ export function TabelaEditavel({
       {mesesDaTabela.map((m) => (
         <col key={m.mes} style={{ width: LARGURA.mes }} />
       ))}
+      {comTotais ? (
+        <>
+          <col style={{ width: LARGURA.total }} />
+          <col style={{ width: LARGURA.total }} />
+        </>
+      ) : null}
     </colgroup>
   );
 
@@ -269,6 +321,7 @@ export function TabelaEditavel({
             </td>
           );
         })}
+        {comTotais ? <CelulasDoTotal l={l} /> : null}
       </tr>,
     );
   }
@@ -374,6 +427,19 @@ export function TabelaEditavel({
                   </span>
                 </th>
               ))}
+              {comTotais ? (
+                <>
+                  <th
+                    className="border-l border-gray-300 px-3 py-2 text-right text-xs font-bold whitespace-nowrap"
+                    title="A soma dos doze meses; nos colaboradores, a média do ano; nas taxas e nos percentuais, a média dos meses com valor"
+                  >
+                    Total
+                  </th>
+                  <th className="px-3 py-2 text-right text-xs font-bold whitespace-nowrap" title="O Total ÷ os doze meses; nas taxas e nos percentuais, a média dos meses com valor">
+                    Média
+                  </th>
+                </>
+              ) : null}
             </tr>
           </thead>
         </table>

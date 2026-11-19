@@ -10,7 +10,8 @@ import { ABA_DRE_COMERCIAL, interpretarDreComercial } from "./dreComercial/leiau
 import { DEFINICOES_LISTAS } from "./listas/definicoesListas.js";
 import { DEFINICOES_LISTAS_RECEITA } from "./listas/definicoesListasReceita.js";
 import { localizarCabecalho } from "./listas/leituraListas.js";
-import { DEFINICOES_INDICADORES, atualizarNomesDasMetas, lerIndicadores, type TipoIndicadores } from "./indicadores/leituraIndicadores.js";
+import { carregarNomesDoSistema } from "../relatorios/indicadoresDoSistema.js";
+import { DEFINICOES_INDICADORES, atualizarNomesDasMetas, lerIndicadores, recusaPorNomesAntigos, type TipoIndicadores } from "./indicadores/leituraIndicadores.js";
 import { ABA_LOTACAO, lerLotacao, ROTULO_LOTACAO } from "./lotacao/leituraLotacao.js";
 import { escolherAba } from "./statusImportacao.js";
 import { DEFINICOES_DOCUMENTOS, lerDocumentos, type TipoDocumentos } from "./documentos/leituraDocumentos.js";
@@ -106,6 +107,9 @@ const indicadores: Tipo[] = (Object.keys(DEFINICOES_INDICADORES) as TipoIndicado
       if (l.motivo.includes("não tem a coluna")) return null;
       throw new AbaInvalida(l.motivo);
     }
+    // Os nomes antigos de indicadores renomeados (19/11/2026) recusam a aba.
+    const antigos = recusaPorNomesAntigos(l.rejeicoes);
+    if (antigos) throw new AbaInvalida(antigos);
     if (l.valores.length === 0) return null;
     return {
       registros: l.valores.length,
@@ -302,6 +306,7 @@ export async function analisarArquivo(
 ) {
   // Os nomes dos indicadores do cadastro, para a aba das metas.
   await atualizarNomesDasMetas();
+  await carregarNomesDoSistema();
   let nomes: string[];
   try {
     nomes = listarAbas(conteudo);

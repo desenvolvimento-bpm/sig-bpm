@@ -2,7 +2,8 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { DEFINICOES_INDICADORES } from "../importacoes/indicadores/leituraIndicadores.js";
 import { LINHAS_TOTAIS } from "../volumes/totaisOperacao.js";
 import { compilarFormula, DEPARTAMENTOS_DO_QUADRO, formulaPorExtenso, type Item } from "./formulaIndicador.js";
-import { acumular, CALCULOS_SISTEMA, type DadosDoMes, type Indicador, type Parte } from "./indicadores.js";
+import { acumular, calculoDoSistema, type DadosDoMes, type Indicador, type Parte } from "./indicadores.js";
+import { IndicadoresPeloId } from "./indicadoresDoSistema.js";
 import { acumularMeta } from "./metasOrcamento.js";
 
 /**
@@ -26,8 +27,8 @@ export const TOTALIZADORES_DAS_LISTAS: Array<{ codigo: string; rotulo: string }>
   ...Object.entries(TOTAIS_SINTETICOS).map(([codigo, t]) => ({ codigo, rotulo: `${t.rotulo} (${t.medida})` })),
 ];
 
-/** Os indicadores do Comercial e do Administrativo (importados ou digitados nas Listas). */
-export const INDICADORES_DAS_LISTAS = [...DEFINICOES_INDICADORES.INDICADORES_COMERCIAL.nomes, ...DEFINICOES_INDICADORES.INDICADORES_ADMIN.nomes];
+/** Os indicadores do Comercial e do Administrativo (importados ou digitados nas Listas), pelo ID (os nomes atuais, 19/11/2026). */
+export const INDICADORES_DAS_LISTAS = new IndicadoresPeloId(() => [...(DEFINICOES_INDICADORES.INDICADORES_COMERCIAL.ids ?? []), ...(DEFINICOES_INDICADORES.INDICADORES_ADMIN.ids ?? [])]);
 
 /**
  * A Metodologia que vale: sem itens (e fora do cálculo do sistema), o item Valor Registrado ([REGISTRADO], 09/11/2026) — o
@@ -155,6 +156,8 @@ function valorDoItem(m: DadosDoMes, i: Item, irmaos: Map<string, Indicador> | un
 }
 
 export type LinhaEstruturaIndicador = {
+  /** O ID do cadastro (19/11/2026: o cálculo do sistema pelo ID; sem ele, pelo nome atual). */
+  id?: string;
   grupo: string;
   numero: string;
   nome: string;
@@ -171,7 +174,7 @@ export function montarIndicador(r: LinhaEstruturaIndicador, irmaos?: Map<string,
   const base = { grupo: r.grupo, numero: r.numero, nome: r.nome, sentido: r.sentido, unidade: r.unidade, metodologia: r.descricao ?? "" };
   const formula = formulaEfetiva(r);
   if (r.modo === "SISTEMA" || !formula) {
-    const s = CALCULOS_SISTEMA[r.nome];
+    const s = calculoDoSistema(r);
     return { ...base, acumulado: s?.acumulado ?? "ACUM", calculo: s?.calculo ?? (() => ({ valor: null })) };
   }
   const f = compilarFormula(formula);

@@ -208,14 +208,19 @@ const paramsDoDetalhe = (linha: string, visao: VisaoDetalhe) => ({
           : {}),
 });
 
+/**
+ * O recorte do modal Balancete: a linha, a conta e, com a caixa marcada, o centro e a filial do lançamento. `semCentro`
+ * (18/11/2026): o lançamento sem centro de custo (a aba Sem Centros de Custo), e o balancete só com os movimentos sem centro.
+ */
+export type FiltroDoBalancete = { linha: string; conta: string; centro?: string | null; filial?: number | null; adotada?: string | null; semCentro?: boolean };
+
 export const dreService = {
-  /** As requisições e as notas fiscais de uma conta no mês (o extrato de uma conta): a linha (o recorte), a conta e, quando vêm, o centro e a filial. */
   /** O balancete de uma conta no mês (15/10/2026; antes, as requisições e as notas fiscais). */
-  balancete: async (anoMes: string, filtro: { linha: string; conta: string; centro?: string | null; filial?: number | null; adotada?: string | null }): Promise<BalanceteDaConta> => {
+  balancete: async (anoMes: string, filtro: FiltroDoBalancete): Promise<BalanceteDaConta> => {
     const params = {
       linha: filtro.linha,
       conta: filtro.conta,
-      ...(filtro.centro ? { centro: filtro.centro } : {}),
+      ...(filtro.centro ? { centro: filtro.centro } : filtro.semCentro ? { semCentro: "1" } : {}),
       ...(filtro.filial ? { filial: filtro.filial } : {}),
       // A conta que vale na DRE (27/10/2026), no balancete do lançamento.
       ...(filtro.adotada ? { adotada: filtro.adotada } : {}),
@@ -225,11 +230,11 @@ export const dreService = {
   },
 
   /** Os itens de um movimento do balancete (10/11/2026), no recorte do modal Balancete. */
-  itensDoMovimento: async (anoMes: string, filtro: { linha: string; conta: string; centro?: string | null; filial?: number | null; adotada?: string | null }, lancamento: string): Promise<ItensDoMovimento> => {
+  itensDoMovimento: async (anoMes: string, filtro: FiltroDoBalancete, lancamento: string): Promise<ItensDoMovimento> => {
     const params = {
       linha: filtro.linha,
       conta: filtro.conta,
-      ...(filtro.centro ? { centro: filtro.centro } : {}),
+      ...(filtro.centro ? { centro: filtro.centro } : filtro.semCentro ? { semCentro: "1" } : {}),
       ...(filtro.filial ? { filial: filtro.filial } : {}),
       ...(filtro.adotada ? { adotada: filtro.adotada } : {}),
       lancamento,
@@ -246,11 +251,13 @@ export const dreService = {
    * O extrato em Excel (24/10/2026): as abas Movimentações e Detalhes. Com `recorte` (o modal Balancete), só a conta do
    * balancete e, quando vêm, o centro e a filial do lançamento.
    */
-  exportarExtrato: (anoMes: string, linha: string, visao: VisaoDetalhe, recorte?: { conta: string; centro?: string | null; filial?: number | null }) =>
+  exportarExtrato: (anoMes: string, linha: string, visao: VisaoDetalhe, recorte?: { conta: string; centro?: string | null; filial?: number | null; semCentro?: boolean }) =>
     api.get<Blob>(`/proxy/competencias/${anoMes}/dre/detalhe/exportar`, {
       params: {
         ...paramsDoDetalhe(linha, visao),
-        ...(recorte ? { conta: recorte.conta, ...(recorte.centro ? { centro: recorte.centro } : {}), ...(recorte.filial ? { filial: recorte.filial } : {}) } : {}),
+        ...(recorte
+          ? { conta: recorte.conta, ...(recorte.centro ? { centro: recorte.centro } : recorte.semCentro ? { semCentro: "1" } : {}), ...(recorte.filial ? { filial: recorte.filial } : {}) }
+          : {}),
       },
       responseType: "blob",
     }),

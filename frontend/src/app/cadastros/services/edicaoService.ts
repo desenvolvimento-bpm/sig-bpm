@@ -67,8 +67,11 @@ export type TesteDaFormula = {
   acumulado?: number | null;
   unidade?: string;
 };
-/** O efeito de uma alteração que classifica: o que foi reclassificado e o que precisa ser reapurado. */
-export type Efeito = { reclassificadas: string[]; apuradasPorReapurar: string[] };
+/**
+ * O efeito de uma alteração que classifica: o que foi reclassificado e o que precisa ser reapurado; e o aviso da gravação
+ * (19/11/2026: a troca do nome de um indicador ou de um card, com o que ela atualizou).
+ */
+export type Efeito = { reclassificadas: string[]; apuradasPorReapurar: string[]; aviso?: string | null };
 
 const base = (entidade: string) => `/proxy/cadastros/edicao/${entidade}`;
 
@@ -98,6 +101,7 @@ export function sugestoesDoErro(error: unknown): Sugestao[] {
 /** O aviso depois de gravar um cadastro que classifica ou um Cadastro da Controladoria (17/10/2026: pede reapurar). */
 export function textoDoEfeito(e: Efeito) {
   const partes = [];
+  if (e.aviso) partes.push(e.aviso);
   if (e.reclassificadas.length) partes.push(`Reclassificadas: ${e.reclassificadas.join(", ")}.`);
   if (e.apuradasPorReapurar.length) partes.push(`Reapure antes de fechar: ${e.apuradasPorReapurar.join(", ")}.`);
   return partes.join(" ");

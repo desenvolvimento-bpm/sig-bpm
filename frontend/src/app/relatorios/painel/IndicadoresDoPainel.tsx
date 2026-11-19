@@ -61,6 +61,8 @@ export function IndicadoresDoPainel({
         dicaDoClique="Ver o gráfico do indicador"
         iconeDoClique={ChartColumn}
         comOrcado
+        // O Recolher / Expandir os meses (19/11/2026), como em Resultados.
+        comBotaoDosMeses
         rotuloDoOrcado={dados.rotuloComparado}
         comparados={comparados}
         lupa={(i, k) => (i.apurados?.[k] ? () => setLupa({ mes: dados.meses[k].mes, indicador: i.nome }) : null)}

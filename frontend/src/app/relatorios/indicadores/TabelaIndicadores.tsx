@@ -18,6 +18,7 @@ import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFilt
 import type { Coluna } from "@/lib/filtrosDeTabela";
 
 import { ROTULO_DO_ORCADO } from "../../competencias/[anoMes]/dre/components/NiveisDRE";
+import { BotaoMeses, useMesesRecolhidos } from "../components/MesesRecolhidos";
 import { ESTILOS_NOS_INDICADORES, type EstiloNosIndicadores } from "../components/cenariosDoProva";
 import { formato, type Indicador, type MarcacaoComparavel, type MesRelatorio } from "../services/relatoriosService";
 
@@ -254,6 +255,12 @@ type Props<T extends Indicador> = {
    * continua com ele (o gráfico).
    */
   onCelula?: (i: T, k: number) => void;
+  /**
+   * O botão de Recolher / Expandir os meses anteriores (19/11/2026, pedido do Adão: o Painel de Bordo de Resultados
+   * Empresariais, como em Resultados / Consolidado), ao lado da lista dos grupos: recolhidos, só o último mês (com o orçado
+   * dele) e os acumulados; a escolha é a mesma das tabelas de Resultados, guardada neste navegador.
+   */
+  comBotaoDosMeses?: boolean;
 };
 
 /**
@@ -276,12 +283,16 @@ export function TabelaIndicadores<T extends Indicador>({
   comparados,
   lupa,
   onCelula,
+  comBotaoDosMeses = false,
 }: Props<T>) {
+  // Os meses anteriores recolhidos (19/11/2026), com o botão: só o último mês fica, antes dos acumulados.
+  const [mesesRecolhidos, alternarMeses] = useMesesRecolhidos();
+  const recolhe = comBotaoDosMeses && mesesRecolhidos && !soUltimoMes && meses.length > 1;
   const colunas = useMemo(() => {
-    const indices = soUltimoMes ? [meses.length - 1] : meses.map((_, k) => k);
+    const indices = soUltimoMes || recolhe ? [meses.length - 1] : meses.map((_, k) => k);
     const doComparado = comparado ? { rotulo: "Comparado Acum." } : null;
     return montarColunas<T>(meses, indices, !soUltimoMes, (!!comOrcado || !!comparado) && !soUltimoMes, doComparado, !!comReferencia, rotuloDoOrcado, comparados);
-  }, [meses, soUltimoMes, comOrcado, comparado, comReferencia, rotuloDoOrcado, comparados]);
+  }, [meses, soUltimoMes, recolhe, comOrcado, comparado, comReferencia, rotuloDoOrcado, comparados]);
   // O grupo escolhido na lista antes do rótulo Indicador (13/10/2026); um grupo que a tabela não tem vale Todos.
   const [grupoEscolhido, setGrupo] = useState(TODOS_OS_GRUPOS);
   const grupos = useMemo(() => [...new Set(indicadores.map((i) => i.grupo))], [indicadores]);
@@ -347,8 +358,9 @@ export function TabelaIndicadores<T extends Indicador>({
               {},
               {
                 indicador: (
-                  <span className="mr-2 inline-flex">
+                  <span className="mr-2 inline-flex items-center gap-1.5">
                     <SeletorGrupo grupos={grupos} grupo={grupo} onEscolher={setGrupo} />
+                    {comBotaoDosMeses && !soUltimoMes && meses.length > 1 ? <BotaoMeses recolhido={recolhe} onAlternar={alternarMeses} /> : null}
                   </span>
                 ),
               },
@@ -379,12 +391,17 @@ export function TabelaIndicadores<T extends Indicador>({
                   <Fragment key={i.nome}>
                     {!anterior || anterior.grupo !== i.grupo ? (
                       // O nome do grupo no tamanho dos departamentos da DRE / Resultados (15/10/2026; de 14/10/2026, 21 px).
+                      // As três colunas fixas numa célula presa, com o nome (19/11/2026: sem ela, ao rolar para o lado — na
+                      // Comparação PROVA, com mais colunas —, a faixa das colunas que rolam aparecia por baixo das fixas).
                       <tr className="border-y border-gray-300">
-                        {faixas.map((f, n) => (
-                          <td key={n} colSpan={f.n} className={`${f.estilo ? f.estilo.faixa : FAIXA_DO_REALIZADO} px-3 py-2 text-sm font-bold text-gray-900 uppercase`}>
-                            {n === 0 ? <span className="sticky left-3">{nomeDoGrupo(i.grupo)}</span> : null}
-                          </td>
-                        ))}
+                        <td colSpan={3} className={`sticky left-0 z-10 ${FAIXA_DO_REALIZADO} px-3 py-2 text-sm font-bold text-gray-900 uppercase`}>
+                          {nomeDoGrupo(i.grupo)}
+                        </td>
+                        {faixas.map((f, n) => {
+                          // A primeira faixa (a do realizado) começa nas colunas fixas: sem elas, o resto dela.
+                          const colunasDaFaixa = n === 0 ? f.n - 3 : f.n;
+                          return colunasDaFaixa > 0 ? <td key={n} colSpan={colunasDaFaixa} className={`${f.estilo ? f.estilo.faixa : FAIXA_DO_REALIZADO} px-3 py-2`} /> : null;
+                        })}
                       </tr>
                     ) : null}
                     <tr

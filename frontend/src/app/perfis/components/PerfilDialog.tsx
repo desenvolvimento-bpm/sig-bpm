@@ -44,8 +44,8 @@ function Caixa({ rotulo, chaves, acao, nivel, onMarcar, desabilitada }: { rotulo
 
 /**
  * Tipo de usuário: nome, situação, recortes e as permissões por tela e por aba (14/10/2026; antes, por grupo de telas
- * do menu): os processos sob o título do grupo do menu (Análises Gerenciais, Criação de Cenários, Apuração dos Resultados,
- * Processos Auxiliares, Controladoria). Cada processo abre nas telas dele, e cada tela com abas nas abas; o processo com uma
+ * do menu): os processos sob o título do grupo do menu (Análises Gerenciais, Apuração dos Resultados, Processos
+ * Auxiliares, Controladoria). Cada processo abre nas telas dele, e cada tela com abas nas abas; o processo com uma
  * tela só, de mesmo nome e sem abas (os Relatórios Executivos e os Painéis e Apresentações, 12/11/2026), fica numa linha.
  * A caixa do processo ou da tela marca (ou desmarca) tudo o que está abaixo; o
  * traço mostra que só parte está marcada. Marcar "Editar" marca também "Ler"; desmarcar "Ler" desmarca "Editar"; a aba

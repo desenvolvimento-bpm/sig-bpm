@@ -5,7 +5,8 @@ import { ArquivoInvalidoError, lerAba } from "../../../lib/xlsx.js";
 import { logger } from "../../../utils/logger.js";
 import { caminhoDoArquivo } from "../arquivosImportados.js";
 import { escolherAba, recusarImportacao, registrarProgresso } from "../statusImportacao.js";
-import { DEFINICOES_INDICADORES, atualizarNomesDasMetas, lerIndicadores, type TipoIndicadores } from "./leituraIndicadores.js";
+import { carregarNomesDoSistema } from "../../relatorios/indicadoresDoSistema.js";
+import { DEFINICOES_INDICADORES, atualizarNomesDasMetas, lerIndicadores, recusaPorNomesAntigos, type TipoIndicadores } from "./leituraIndicadores.js";
 
 class ArquivoRecusado extends Error {}
 
@@ -27,8 +28,13 @@ export async function processarIndicadores(importacaoId: string): Promise<void> 
     const aba = lerAba(await readFile(caminhoDoArquivo(importacao.hashArquivo)), escolherAba([def.aba]));
     await registrarProgresso(importacaoId, 40);
     await atualizarNomesDasMetas();
+    // Os nomes atuais e os antigos dos indicadores (19/11/2026), lidos de novo antes de cada importação.
+    await carregarNomesDoSistema();
     const leitura = lerIndicadores(tipo, aba.linhas, importacao.competencia.ano, importacao.competencia.mes);
     if (!leitura.ok) throw new ArquivoRecusado(leitura.motivo);
+    // A linha com o nome antigo de um indicador renomeado recusa o arquivo inteiro: o arquivo muda antes de importar.
+    const antigos = recusaPorNomesAntigos(leitura.rejeicoes);
+    if (antigos) throw new ArquivoRecusado(antigos);
     if (leitura.valores.length === 0) throw new ArquivoRecusado(`A aba "${aba.nome}" não tem nenhum indicador com valor no mês.`);
 
     await prisma.$transaction(async (tx) => {

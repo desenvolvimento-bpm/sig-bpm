@@ -1,4 +1,5 @@
 import { acumular, type Indicador, type Parte } from "./indicadores.js";
+import { atualDe, originalDe } from "./indicadoresDoSistema.js";
 
 /**
  * O acumulado das metas do orçamento, como a coluna Y da aba Metas do SIG BPM
@@ -16,6 +17,9 @@ import { acumular, type Indicador, type Parte } from "./indicadores.js";
  * - margem das vendas: a venda do tipo; mix ampliado: a venda total;
  * - turnover: o quadro de lotação total;
  * - GME 4 (11/10/2026): a demanda gerada pela venda total; a expedida pela expedição total — como o realizado.
+ *
+ * As regras valem pelos nomes originais dos indicadores (os de 19/11/2026, indicadoresDoSistema.ts), e as bases saem com os
+ * nomes atuais: a troca do nome não muda a meta acumulada.
  */
 type Peso = string | { componentes: Array<[nome: string, peso: string]> };
 
@@ -46,6 +50,13 @@ function pesoDaMeta(nome: string): Peso | null {
   return null;
 }
 
+/** O peso com os nomes atuais das bases (as regras usam os originais). */
+function comNomesAtuais(peso: Peso | null): Peso | null {
+  if (!peso) return null;
+  if (typeof peso === "string") return atualDe(peso);
+  return { componentes: peso.componentes.map(([n, p]) => [atualDe(n), atualDe(p)]) };
+}
+
 /**
  * O acumulado da meta de um indicador nos meses dados (cada mês: as metas importadas dele, por nome; null sem
  * importação). O indicador vem do cadastro; só o modo (último mês ou acumulado) importa aqui.
@@ -57,7 +68,7 @@ export function acumularMeta(
 ): number | null {
   if (!indicador) return null;
   const nome = indicador.nome;
-  const peso = pesoDaMeta(nome);
+  const peso = comNomesAtuais(pesoDaMeta(originalDe(nome)));
   const partes = meses.map((m): Parte | null => {
     if (!m) return null;
     if (peso && typeof peso === "object") return { valor: null, componentes: peso.componentes.map(([n, p]) => ({ valor: m.get(n) ?? null, peso: m.get(p) ?? 0 })) };

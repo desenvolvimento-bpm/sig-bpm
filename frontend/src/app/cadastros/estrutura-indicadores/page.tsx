@@ -48,7 +48,19 @@ export default function EstruturaIndicadoresPage() {
                 Um indicador não pode usar a si mesmo, nem por outro (A usa B, que usa A): o cadastro recusa o ciclo. Nos cenários, o indicador que usa
                 outros é calculado com os valores deles no cenário (os importados, com as metas).
               </li>
-              <li>O Nome de um indicador com metas em cenários, valores importados ou digitados, usado no Painel de Bordo ou na Metodologia de outro indicador, não muda, e o indicador não se exclui: inative-o.</li>
+              <li>
+                O Nome se edita: ao gravar, depois de confirmar, ele muda de uma vez em tudo o que usa o indicador — os valores importados e
+                digitados, as metas, os cenários (também as justificativas das Premissas), as fórmulas dos indicadores e dos cards do Painel de
+                Bordo e os cards dos Relatórios Executivos e dos Painéis de Bordo —, e a mensagem diz o que mudou. Se algo ficasse com o nome
+                antigo, nada se grava. O sistema conhece cada indicador pelo ID, e não pelo nome. O nome não pode ter | [ ou ], nem ser o de
+                outro indicador (nem com diferença só de maiúsculas, acentos ou espaços).
+              </li>
+              <li>
+                As importações recusam o nome antigo de um indicador renomeado (as abas Indicadores (Admin.) e Indicadores (Comercial), a aba das
+                metas da planilha dos cenários e o Importar Valores das Premissas): mude o nome nas planilhas antes de importar. A mensagem da recusa
+                diz o nome novo.
+              </li>
+              <li>Um indicador com metas em cenários, valores importados ou digitados, usado no Painel de Bordo ou na Metodologia de outro indicador, não se exclui: inative-o.</li>
               <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
             </ul>
           }

@@ -1,5 +1,6 @@
 import { COD } from "./basesResultados.js";
 import { L } from "./estruturaInicialIndicadores.js";
+import { IND, idPeloNome, nomeDo } from "./indicadoresDoSistema.js";
 
 /**
  * Os indicadores de resultado. Desde 11/10/2026, o catálogo (grupo, numeração, nome, comportamento, unidade, fórmula e
@@ -73,7 +74,14 @@ export type Indicador = {
 /** a ÷ b; sem divisor (zero ou sem dado), sem valor. */
 const divide = (a: number, b: number) => (Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : null);
 const finito = (x: number) => (Number.isFinite(x) ? x : null);
-const lotacao = (m: DadosDoMes, quadro: string) => m.importado(`Quadro de Lotação: ${quadro}`) ?? NaN;
+/** Os quadros de lotação que as eficiências da operação usam, pelo ID (19/11/2026; antes, o nome montado pelo quadro). */
+const QUADROS = {
+  "MO Direta": { Matriz: IND.QL_DIRETA_MATRIZ, Filial: IND.QL_DIRETA_FILIAL, Total: IND.QL_DIRETA_TOTAL },
+  "MO Indireta": { Matriz: IND.QL_INDIRETA_MATRIZ, Filial: IND.QL_INDIRETA_FILIAL, Total: IND.QL_INDIRETA_TOTAL },
+  "MO Geral": { Matriz: IND.QL_GERAL_MATRIZ, Filial: IND.QL_GERAL_FILIAL, Total: IND.QL_GERAL_TOTAL },
+} as const;
+type Quadro = keyof typeof QUADROS;
+const lotacao = (m: DadosDoMes, id: string) => m.importado(nomeDo(id)) ?? NaN;
 
 /** Volume (ou receita) por colaborador do quadro; o acumulado pondera pelo volume (ou pela receita), como a planilha. */
 const porColaborador =
@@ -87,11 +95,12 @@ const receitaProducao = (u: number) => (m: DadosDoMes) => m.dre(u, COD.RLPF);
 
 /** Eficiência da operação da Matriz e da Filial juntas: o acumulado pondera os acumulados de cada uma pela receita (célula Q100 da aba Realizado). */
 const operacaoTotal =
-  (quadro: string): Calculo =>
+  (quadro: Quadro): Calculo =>
   (m) => {
-    const matriz = porColaborador(receitaProducao(1), (x) => lotacao(x, `${quadro} Matriz`), 1000)(m);
-    const filial = porColaborador(receitaProducao(2), (x) => lotacao(x, `${quadro} Filial`), 1000)(m);
-    const total = porColaborador((x) => x.dre(1, COD.RLPF) + x.dre(2, COD.RLPF), (x) => lotacao(x, `${quadro} Total`), 1000)(m);
+    const q = QUADROS[quadro];
+    const matriz = porColaborador(receitaProducao(1), (x) => lotacao(x, q.Matriz), 1000)(m);
+    const filial = porColaborador(receitaProducao(2), (x) => lotacao(x, q.Filial), 1000)(m);
+    const total = porColaborador((x) => x.dre(1, COD.RLPF) + x.dre(2, COD.RLPF), (x) => lotacao(x, q.Total), 1000)(m);
     return { valor: total.valor, componentes: [matriz, filial].map((p) => ({ valor: p.valor, peso: p.peso ?? 0 })) };
   };
 
@@ -103,46 +112,54 @@ const operacaoTotal =
 const sobreCapacidade = (volume: (m: DadosDoMes) => number | null, peso: (m: DadosDoMes) => number | null): Calculo => (m) => {
   const p = peso(m);
   if (p === null || !Number.isFinite(p)) return { valor: null };
-  return { valor: divide(volume(m) ?? NaN, m.meta?.("Produção (Vol.): Total") ?? NaN), peso: p };
+  return { valor: divide(volume(m) ?? NaN, m.meta?.(nomeDo(IND.PRODUCAO_TOTAL)) ?? NaN), peso: p };
 };
 
 /**
  * GME 8 (linhas 114 e 115): o realizado de janeiro até o mês sobre o orçado do mesmo período (as metas importadas,
  * pelo nome do indicador); o acumulado é o do último mês.
  */
-const atingimentoAcumulado = (nome: string, realizado: (m: DadosDoMes) => number | null): Calculo => (m) => {
+const atingimentoAcumulado = (id: string, realizado: (m: DadosDoMes) => number | null): Calculo => (m) => {
   if (realizado(m) === null) return { valor: null };
   const meses = [...(m.anteriores ?? []), m];
   const soma = meses.reduce((s, x) => s + (realizado(x) ?? 0), 0);
+  const nome = nomeDo(id);
   const orcado = meses.reduce((s, x) => s + (x.meta?.(nome) ?? 0), 0);
   return { valor: divide(soma, orcado) };
 };
 
 /**
  * Os indicadores com a conta no código (modo SISTEMA). Desde 23/10/2026, a Metodologia os expressa (o Acumulado no Ano dos
- * itens e a Fórmula do Acumulado), e o cadastro passou a usá-la; o modo fica para voltar atrás.
+ * itens e a Fórmula do Acumulado), e o cadastro passou a usá-la; o modo fica para voltar atrás. Pelo ID do indicador
+ * (19/11/2026): a troca do nome não os desliga.
  */
-export const CALCULOS_SISTEMA: Record<string, { calculo: Calculo; acumulado: "ACUM" | "ATUAL" }> = {
-  "Eficiência da Operação: MO Direta Total": { calculo: operacaoTotal("MO Direta"), acumulado: "ACUM" },
-  "Eficiência da Operação: MO Indireta Total": { calculo: operacaoTotal("MO Indireta"), acumulado: "ACUM" },
-  "Eficiência da Operação: MO Geral Total": { calculo: operacaoTotal("MO Geral"), acumulado: "ACUM" },
-  "Média Móvel da Demanda Gerada": {
-    calculo: sobreCapacidade((m) => m.importado("Demanda (Vol.): Total (Fabricação)"), (m) => m.importado("Venda: Total")),
+const CALCULOS_PELO_ID: Record<string, { calculo: Calculo; acumulado: "ACUM" | "ATUAL" }> = {
+  [IND.EFICIENCIA_OPERACAO_DIRETA_TOTAL]: { calculo: operacaoTotal("MO Direta"), acumulado: "ACUM" },
+  [IND.EFICIENCIA_OPERACAO_INDIRETA_TOTAL]: { calculo: operacaoTotal("MO Indireta"), acumulado: "ACUM" },
+  [IND.EFICIENCIA_OPERACAO_GERAL_TOTAL]: { calculo: operacaoTotal("MO Geral"), acumulado: "ACUM" },
+  [IND.MEDIA_DEMANDA_GERADA]: {
+    calculo: sobreCapacidade((m) => m.importado(nomeDo(IND.DEMANDA_FABRICACAO)), (m) => m.importado(nomeDo(IND.VENDA_TOTAL))),
     acumulado: "ACUM",
   },
-  "Média Móvel da Demanda Expedida": {
+  [IND.MEDIA_DEMANDA_EXPEDIDA]: {
     calculo: sobreCapacidade((m) => finito(m.dre(0, L.EXPEDICAO)), (m) => finito(m.dre(0, L.EXPEDICAO))),
     acumulado: "ACUM",
   },
-  "Atingimento do FCOL Acumulado": {
-    calculo: atingimentoAcumulado("Fluxo de Caixa Operacional Líquido", (m) => m.importado("Fluxo de Caixa Operacional Líquido")),
+  [IND.ATINGIMENTO_FCOL]: {
+    calculo: atingimentoAcumulado(IND.FCOL, (m) => m.importado(nomeDo(IND.FCOL))),
     acumulado: "ATUAL",
   },
-  "Atingimento da MC Acumulada": {
-    calculo: atingimentoAcumulado("Margem de Contribuição (MC): Total", (m) => finito(m.dre(0, L.MC))),
+  [IND.ATINGIMENTO_MC]: {
+    calculo: atingimentoAcumulado(IND.MC_TOTAL, (m) => finito(m.dre(0, L.MC))),
     acumulado: "ATUAL",
   },
 };
+
+/** O cálculo do sistema do indicador (pelo ID; sem ele, pelo nome atual), ou nulo. */
+export function calculoDoSistema(indicador: { id?: string | null; nome: string }) {
+  const id = indicador.id && CALCULOS_PELO_ID[indicador.id] ? indicador.id : idPeloNome(indicador.nome);
+  return id ? (CALCULOS_PELO_ID[id] ?? null) : null;
+}
 
 /** O acumulado dos meses (as partes de cada mês, em ordem; null no mês sem dado). */
 export function acumular(i: Pick<Indicador, "acumulado" | "reavaliar" | "porFormula">, partes: Array<Parte | null>): number | null {

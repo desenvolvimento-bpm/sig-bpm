@@ -67,6 +67,8 @@ const filtroDoBalanceteSchema = z.object({
   filial: z.coerce.number().int().min(1).max(99).optional(),
   // A conta que vale na DRE (27/10/2026): com a reclassificação ou a contestação, a do lançamento do extrato.
   adotada: z.string().trim().max(50).optional(),
+  // O lançamento do extrato sem centro de custo (18/11/2026): só os movimentos sem um centro do cadastro.
+  semCentro: z.enum(["1", "true"]).optional(),
 });
 
 export const dreController = {
@@ -148,10 +150,15 @@ export const dreController = {
     const q = linhaEVisaoDoDetalhe(request);
     if ("erro" in q) return response.status(400).json({ error: q.erro });
     const r = z
-      .object({ conta: z.string().trim().min(1).max(50).optional(), centro: z.string().trim().max(50).optional(), filial: z.coerce.number().int().min(1).max(99).optional() })
+      .object({
+        conta: z.string().trim().min(1).max(50).optional(),
+        centro: z.string().trim().max(50).optional(),
+        filial: z.coerce.number().int().min(1).max(99).optional(),
+        semCentro: z.enum(["1", "true"]).optional(),
+      })
       .safeParse(request.query);
     if (!r.success) return response.status(400).json({ error: "Conta, centro de custo ou filial inválidos." });
-    const recorte = r.data.conta ? { conta: r.data.conta, centro: r.data.centro || null, filial: r.data.filial ?? null } : undefined;
+    const recorte = r.data.conta ? { conta: r.data.conta, centro: r.data.centro || null, filial: r.data.filial ?? null, semCentro: !!r.data.semCentro } : undefined;
     try {
       const x = await exportarExtrato(c.ano, c.mes, q.linha, q.visao, request.user!.acesso, recorte);
       await auditar({
@@ -178,7 +185,12 @@ export const dreController = {
     const q = filtroDoBalanceteSchema.safeParse(request.query);
     if (!q.success) return response.status(400).json({ error: "Dados inválidos." });
     return responder(response, () =>
-      documentosService.listar(c.ano, c.mes, { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null }, request.user!.acesso),
+      documentosService.listar(
+        c.ano,
+        c.mes,
+        { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null, semCentro: !!q.data.semCentro },
+        request.user!.acesso,
+      ),
     );
   },
 
@@ -192,7 +204,7 @@ export const dreController = {
       documentosService.itens(
         c.ano,
         c.mes,
-        { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null },
+        { linha: q.data.linha, conta: q.data.conta, centro: q.data.centro || null, filial: q.data.filial ?? null, adotada: q.data.adotada || null, semCentro: !!q.data.semCentro },
         q.data.lancamento,
         request.user!.acesso,
       ),

@@ -4,6 +4,7 @@ import { ROTULO_DO_TIPO } from "../../colaboradores/tiposDoColaborador.js";
 import { travaDoLancamentoInicial } from "../../colaboradores/travaDoLancamentoInicial.js";
 import type { DefinicaoCadastro, Opcao, Valores } from "./definicoesCadastros.js";
 import { RegraCadastroError } from "./erroCadastro.js";
+import { departamentoEUnidade } from "../../colaboradores/departamentoEUnidade.js";
 
 /**
  * Os cadastros da Gestão de Colaboradores (06/11/2026, pedido do Adão; a tela Cadastros dos Processos Administrativos), na
@@ -225,13 +226,29 @@ const lancamentoInicial: DefinicaoCadastro = {
     { nome: "centroCustoId", rotulo: "Centro de Custo", tipo: "opcao", obrigatorio: true, larguraInteira: true, opcoes: opcoesCentros },
   ],
   async listar(db, busca) {
-    const itens = await db.colaboradorCargaInicial.findMany({
-      orderBy: [{ centroCusto: { codigoRM: "asc" } }, { funcao: { nome: "asc" } }, { linhaArquivo: "asc" }],
-      include: { funcao: { select: { nome: true } }, centroCusto: { select: { codigoRM: true, nomeRM: true } } },
-    });
+    const [itens, du] = await Promise.all([
+      db.colaboradorCargaInicial.findMany({
+        orderBy: [{ centroCusto: { codigoRM: "asc" } }, { funcao: { nome: "asc" } }, { linhaArquivo: "asc" }],
+        include: { funcao: { select: { nome: true } }, centroCusto: { select: { codigoRM: true, nomeRM: true, departamento: true, departamentoSigla: true } } },
+      }),
+      departamentoEUnidade(db),
+    ]);
     return itens
       .filter((i) => contem(busca, i.funcao.nome, i.centroCusto.nomeRM, i.centroCusto.codigoRM, ROTULO_VINCULO[i.vinculo]))
-      .map(({ funcao: _f, centroCusto: _c, ...i }) => ({ ...i, competencia: mesAno(i.ano, i.mes), emUso: null }));
+      .map(({ funcao: _f, centroCusto, ...i }) => {
+        // O departamento (do cadastro Departamentos, pelo grupo da DRE do centro) e a unidade, para os quadros de destaque (18/11/2026).
+        const d = du.departamento(centroCusto);
+        const u = du.unidade(i.unidadeNegocioId);
+        return {
+          ...i,
+          competencia: mesAno(i.ano, i.mes),
+          emUso: null,
+          departamentoDoCadastro: d?.nome ?? null,
+          ordemDoDepartamento: d?.ordem ?? null,
+          unidade: u?.nome ?? null,
+          ordemDaUnidade: u?.ordem ?? null,
+        };
+      });
   },
   ler: async (db, id) => {
     const i = await db.colaboradorCargaInicial.findUnique({ where: { id } });

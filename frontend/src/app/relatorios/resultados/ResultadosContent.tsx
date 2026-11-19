@@ -916,7 +916,8 @@ export function ResultadosContent() {
               referência dos cenários analíticos: os das contas de mão de obra direta e indireta e de gastos gerais diretos, indiretos e comerciais
               (os de obra, nos centros 1.98 e 1.99, também entram). A lista à esquerda traz Produção (Matriz e Filial), Despesas Variáveis de Venda
               (Matriz e Filial), Serviços, Logística, Técnico, Comercial e Administrativo — só os que têm lançamento no período —, pelo departamento
-              da conta na DRE e, na Produção e na DVV, pela filial do lançamento. Clique no valor de um mês para ver os lançamentos. Os Gastos Gerais
+              da conta na DRE e, na Produção e na DVV, pela filial do lançamento. Clique no valor de um mês para ver os lançamentos; no Balancete de um lançamento sem centro de custo, só os movimentos da
+              conta sem centro (os dos outros centros ficam de fora; desmarque a caixa para ver todos). Os Gastos Gerais
               Variáveis ficam de fora (nos cenários, vêm das premissas). “Exportar” baixa o grupo na tela ou todos (um por aba no Excel, um por página no PDF); o Coordenador não vê a aba.
             </li>
             <li>Em Obras, cada obra mostra a DRE dos lançamentos dos centros de obra (1.98 e 1.99) mês a mês, como a aba Obras da tela Resultados do Fechamento Mensal, com o % sobre a receita da própria obra (a ROB nas receitas e nos impostos, a ROL no resto). Nas receitas, como na DRE das unidades: as contas de Reconhecimento do CPV ficam de fora (no centro da obra, elas anulam o faturamento, porque a DRE reconhece a receita na produção); a receita prévia de frete da obra sai da Receita Bruta do Pré-Fabricado e vai à de Frete; a complementar sai da de Montagem e vai à Complementar. No alto, Produção e Serviços (PS): os volumes da obra nas Listas Operacionais (Produção, Expedição, Montagem e Acompanhamento, pelo número da obra), que dão também o R$/m³ da obra. No recorte por departamento ou por centro de custo, só as linhas que o usuário alcança (o Coordenador, com a opção de ver as obras no cadastro, as da gestão dele). “Exportar” baixa a obra na tela ou todas (uma por aba no Excel, uma por página no PDF).</li>
@@ -989,9 +990,10 @@ export function ResultadosContent() {
               mostra “Rateio”: contesta-se na linha de origem. A lupa ao lado de cada campo abre a lista inteira — os centros de custo (o departamento, a atribuição e o balde) e as Contas de Resultado (a linha e o grupo da DRE, o departamento, a atribuição e o balde) —, e clicar num item o escolhe. No canto de baixo do modal, “Regras de Rateio” mostra as regras vigentes no mês do movimento: como cada balde se divide entre as unidades.
             </li>
             <li>
-              “Pesquisar”, antes do “Exportar”, abre o modal Pesquisar nos Resultados Empresariais: escolha Fornecedor ou Cliente (digite ao menos três
-              letras do nome) ou Conta de Resultado (a lista do plano de contas, com busca pelo código ou pelo nome; vale a conta da DRE, com a
-              reclassificação e a contestação) e clique em Pesquisar. Vêm os movimentos do balancete das competências fechadas do exercício até o mês
+              “Pesquisar”, antes do “Exportar”, abre o modal Pesquisar nos Resultados Empresariais: escolha Fornecedor ou Cliente ou Conta de Resultado
+              e, na lista, o fornecedor ou cliente ou a conta (a lista traz todos os que têm movimentos no período e o seu perfil vê; digite para
+              filtrar pelo nome, ou pelo código da conta; vale a conta da DRE, com a reclassificação e a contestação). A escolha já pesquisa (o botão
+              Pesquisar repete a pesquisa), só com os movimentos do fornecedor ou cliente (pelo nome exato) ou da conta escolhidos. Vêm os movimentos do balancete das competências fechadas do exercício até o mês
               escolhido, só os que o seu perfil vê (os departamentos, os centros de custo e as informações sensíveis, como no Balancete): o Mês, o Centro
               de Custo, a Atribuição, a Conta do DRE (a linha), a Conta de Resultado (na pesquisa por fornecedor) ou o Fornecedor/Cliente (na pesquisa
               por conta) e o Valor, com a soma; passe o mouse na linha para ver a emissão, a filial e o histórico. Os rótulos das colunas filtram. Na

@@ -1,13 +1,20 @@
 import type { getPrismaClient } from "../../config/prisma.js";
 import { ESTRUTURA_INICIAL_INDICADORES } from "./estruturaInicialIndicadores.js";
+import { idPeloOriginal } from "./indicadoresDoSistema.js";
 
-/** Grava os indicadores da carga inicial que ainda não estão no cadastro (pelo nome); os já cadastrados ficam como estão. */
+/**
+ * Grava os indicadores da carga inicial que ainda não estão no cadastro (pelo nome ou, desde 19/11/2026, pelo ID da tabela
+ * do sistema: o renomeado não volta com o nome antigo); os já cadastrados ficam como estão. Os novos, com o ID da tabela.
+ */
 export async function carregarEstruturaIndicadores(prisma: ReturnType<typeof getPrismaClient>) {
-  const existentes = new Set((await prisma.indicadorEstrutura.findMany({ select: { nome: true } })).map((i) => i.nome));
+  const cadastrados = await prisma.indicadorEstrutura.findMany({ select: { id: true, nome: true } });
+  const existentes = new Set(cadastrados.map((i) => i.nome));
+  const ids = new Set(cadastrados.map((i) => i.id));
   let criados = 0;
   for (const [i, ind] of ESTRUTURA_INICIAL_INDICADORES.entries()) {
-    if (existentes.has(ind.nome)) continue;
-    await prisma.indicadorEstrutura.create({ data: { ...ind, ordem: i + 1 } });
+    const id = idPeloOriginal(ind.nome);
+    if (existentes.has(ind.nome) || (id && ids.has(id))) continue;
+    await prisma.indicadorEstrutura.create({ data: { ...ind, ...(id ? { id } : {}), ordem: i + 1 } });
     criados++;
   }
   return { total: ESTRUTURA_INICIAL_INDICADORES.length, criados };
@@ -25,16 +32,20 @@ export type MudancaNaEstrutura = { nome: string; campo: "novo" | "ordem" | "nume
 export async function sincronizarEstruturaIndicadores(prisma: ReturnType<typeof getPrismaClient>, grupo: string, simular: boolean) {
   const atuais = await prisma.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
   const porNome = new Map(atuais.map((i) => [i.nome, i]));
-  const daCarga = new Set(ESTRUTURA_INICIAL_INDICADORES.map((i) => i.nome));
+  // Pelo ID da tabela do sistema também (19/11/2026): o renomeado é o mesmo indicador.
+  const porId = new Map(atuais.map((i) => [i.id, i]));
+  const daCargaAtual = (nome: string) => porNome.get(nome) ?? porId.get(idPeloOriginal(nome) ?? "");
+  const daCarga = new Set(ESTRUTURA_INICIAL_INDICADORES.flatMap((i) => [i.nome, daCargaAtual(i.nome)?.nome ?? i.nome]));
   const mudancas: MudancaNaEstrutura[] = [];
   // As gravações do Prisma só rodam no $transaction (são preguiçosas): na simulação, nada vai ao banco.
   const gravar = [];
   for (const [k, ind] of ESTRUTURA_INICIAL_INDICADORES.entries()) {
     const ordem = k + 1;
-    const atual = porNome.get(ind.nome);
+    const atual = daCargaAtual(ind.nome);
     if (!atual) {
       mudancas.push({ nome: ind.nome, campo: "novo", para: `${ind.grupo} ${ind.numero} (ordem ${ordem})` });
-      gravar.push(prisma.indicadorEstrutura.create({ data: { ...ind, ordem } }));
+      const id = idPeloOriginal(ind.nome);
+      gravar.push(prisma.indicadorEstrutura.create({ data: { ...ind, ...(id ? { id } : {}), ordem } }));
       continue;
     }
     const dados: { ordem?: number; numero?: string } = {};

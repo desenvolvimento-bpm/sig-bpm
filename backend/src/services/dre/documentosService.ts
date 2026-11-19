@@ -8,7 +8,12 @@ import { RegraDREError } from "./dreService.js";
 
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 
-type FiltroDoBalancete = { linha: string; conta: string; centro: string | null; filial: number | null; adotada?: string | null };
+/**
+ * O recorte do balancete: a linha, a conta e, quando vêm, o centro e a filial. `semCentro` (18/11/2026, pedido do Adão: os
+ * extratos da aba Sem Centros de Custo mostravam os movimentos da conta em todos os centros): o lançamento do extrato não tem
+ * centro, e o balancete traz só os movimentos sem um centro do cadastro.
+ */
+type FiltroDoBalancete = { linha: string; conta: string; centro: string | null; filial: number | null; adotada?: string | null; semCentro?: boolean };
 
 /** A competência do balancete, depois de conferir que o usuário vê os movimentos da conta no recorte pedido (o do extrato). */
 async function competenciaDoBalancete(ano: number, mes: number, filtro: FiltroDoBalancete, acesso: Acesso) {
@@ -48,7 +53,9 @@ const ondeDoBalancete = (competenciaId: string, filtro: FiltroDoBalancete) => ({
           { partesRedistribuidas: { some: { centroCusto: { codigoRM: filtro.centro } } } },
         ],
       }
-    : {}),
+    : filtro.semCentro
+      ? { redistribuicaoId: null, centroCustoId: null }
+      : {}),
   ...(filtro.filial ? { filial: filtro.filial } : {}),
 });
 

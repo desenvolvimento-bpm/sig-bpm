@@ -3,8 +3,17 @@ import { env } from "./config/env.js";
 import { auditoriaEmSequencia } from "./services/auditoriaService.js";
 import { iniciarSyncCadastros } from "./jobs/cadastrosTotvsSyncJob.js";
 import { importacoesService } from "./services/importacoes/importacoesService.js";
+import { carregarNomesDoSistema } from "./services/relatorios/indicadoresDoSistema.js";
 import { logger } from "./utils/logger.js";
 import { plural } from "./utils/plural.js";
+
+// Os nomes atuais dos indicadores que o código conhece pelo ID (19/11/2026), antes de atender: sem eles, os originais.
+try {
+  const fora = await carregarNomesDoSistema();
+  if (fora.length) logger("warn", `${fora.length} ${plural(fora.length, "indicador do sistema não está", "indicadores do sistema não estão")} nesta base pelo ID: ficam com o nome original`);
+} catch (error) {
+  logger("error", "Falha ao ler os nomes dos indicadores", { error: error instanceof Error ? error.message : String(error) });
+}
 
 const server = app.listen(env.PORT, () => {
   logger("info", `Backend BPM rodando na porta ${env.PORT}`);

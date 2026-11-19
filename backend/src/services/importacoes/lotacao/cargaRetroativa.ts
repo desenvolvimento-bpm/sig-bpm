@@ -4,6 +4,7 @@ import { access, mkdir, writeFile } from "node:fs/promises";
 import { getPrismaClient } from "../../../config/prisma.js";
 import { lerAba } from "../../../lib/xlsx.js";
 import { auditar } from "../../auditoriaService.js";
+import { IND, nomeDo } from "../../relatorios/indicadoresDoSistema.js";
 import { caminhoDoArquivo, diretorioUploads } from "../arquivosImportados.js";
 import { ABA_LOTACAO, lerLotacao } from "./leituraLotacao.js";
 import { gravarLotacaoDoMes, resumoDaLotacao } from "./processarLotacao.js";
@@ -74,7 +75,7 @@ export async function carregarLotacaoRetroativa(opcoes: {
     }
     const resumo = resumoDaLotacao(aba.nome, leitura);
     const indicador = await prisma.indicadorImportado.findFirst({
-      where: { competenciaId: competencia.id, nome: "Quadro de Lotação Total", importacao: { status: "CONCLUIDA", substituidaEm: null } },
+      where: { competenciaId: competencia.id, nome: nomeDo(IND.QUADRO_TOTAL), importacao: { status: "CONCLUIDA", substituidaEm: null } },
       select: { valor: true },
     });
     const anteriores = await prisma.importacao.count({ where: { competenciaId: competencia.id, tipo: "QUADRO_LOTACAO", status: "CONCLUIDA", substituidaEm: null } });

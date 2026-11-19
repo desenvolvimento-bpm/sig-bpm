@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BuscaNaLista } from "@/components/shared/BuscaNaLista";
+import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { atualizarCompetencia } from "@/lib/atualizarCompetencia";
 import { iniciaisMaiusculas } from "@/lib/texto";
 
@@ -23,6 +24,7 @@ import {
   textoDoEfeito,
   type Campo,
   type DefinicaoCadastro,
+  type Efeito,
   type Registro,
   type Sugestao,
   type TesteDaFormula,
@@ -196,6 +198,10 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
     Object.fromEntries(def.campos.map((c) => [c.nome, paraTela(c, registro ? registro[c.nome] : (c.padrao ?? (c.tipo === "booleano" ? true : undefined)))])),
   );
   const [confirmaExclusao, setConfirmaExclusao] = useState(false);
+  // A troca do nome de um indicador ou de um card (19/11/2026): confirmada antes, com o que ela atualiza.
+  const [confirmaNome, setConfirmaNome] = useState(false);
+  const camposDaTroca = entidade === "estrutura-indicadores" ? ["nome"] : entidade === "painel-bordo" ? ["grupo", "quadro", "nome", "sigla"] : [];
+  const trocaONome = !!registro && camposDaTroca.some((c) => String(valores[c] ?? "").trim().replace(/\s+/g, " ") !== String(registro[c] ?? ""));
   // A gravação recusada com as correções possíveis (24/10/2026: a conta que nenhuma aba de resultado lê).
   const [recusa, setRecusa] = useState<{ mensagem: string; sugestoes: Sugestao[] } | null>(null);
   const travas = registro?.__travas;
@@ -227,7 +233,7 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
     });
     setRecusa(null);
   };
-  const concluir = (msg: string, efeito?: { reclassificadas: string[]; apuradasPorReapurar: string[] }) => {
+  const concluir = (msg: string, efeito?: Efeito) => {
     const extra = efeito ? textoDoEfeito(efeito) : "";
     toast.success(`${msg}${extra ? ` ${extra}` : ""}`);
     atualizarCompetencia(queryClient);
@@ -242,6 +248,7 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
     },
     onSuccess: (r) => concluir(registro ? `${def.titulo} atualizado.` : `${def.titulo} criado.`, r),
     onError: (e) => {
+      setConfirmaNome(false);
       const sugestoes = sugestoesDoErro(e);
       if (sugestoes.length) setRecusa({ mensagem: mensagemDeErro(e, "Não foi possível gravar."), sugestoes });
       else toast.error(mensagemDeErro(e, "Não foi possível gravar."));
@@ -379,13 +386,38 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
           <Button
             type="button"
             disabled={salvar.isPending}
-            onClick={() => salvar.mutate()}
+            onClick={() => (trocaONome ? setConfirmaNome(true) : salvar.mutate())}
             className="bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font-bold text-black shadow-sm"
           >
             {salvar.isPending ? "Gravando…" : "Gravar"}
           </Button>
         </div>
       </DialogFooter>
+      {confirmaNome && registro ? (
+        <ConfirmacaoDialog
+          titulo="Trocar o Nome"
+          descricao={
+            entidade === "estrutura-indicadores" ? (
+              <>
+                O indicador passa a se chamar <strong>{String(valores.nome ?? "").trim()}</strong> (antes, {String(registro.nome)}). O nome também muda nos valores
+                importados e digitados, nas metas, nos cenários, nas fórmulas dos indicadores e dos cards e nos cards dos Relatórios Executivos e dos Painéis de
+                Bordo, tudo de uma vez. As importações recusam o nome antigo: mude o nome nas planilhas antes de importar.
+              </>
+            ) : (
+              <>
+                O card passa a se chamar <strong>{String(valores.nome ?? "").trim()}</strong> (antes, {String(registro.nome)}). Os cards dos Relatórios Executivos e
+                dos Painéis de Bordo que o mostram são atualizados de uma vez.
+              </>
+            )
+          }
+          acao="Trocar"
+          acaoPendente="Trocando…"
+          destrutiva={false}
+          pendente={salvar.isPending}
+          onConfirmar={() => salvar.mutate()}
+          onFechar={() => setConfirmaNome(false)}
+        />
+      ) : null}
     </>
   );
 }

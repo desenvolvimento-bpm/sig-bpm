@@ -72,7 +72,9 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
   const [comRotulos, setComRotulos] = useRotulosDosValores();
   const [cores] = useCoresDoPainel();
 
-  const linhas: LinhaDoIndicador[] = INDICADORES_DO_QUADRO.flatMap((ind) => {
+  // Os títulos com os nomes atuais dos indicadores no cadastro (19/11/2026: os nomes se editam).
+  const indicadores = INDICADORES_DO_QUADRO.map((ind) => ({ ...ind, nome: painel.data?.nomes?.[ind.chave] ?? ind.nome }));
+  const linhas: LinhaDoIndicador[] = indicadores.flatMap((ind) => {
     const real: LinhaDoIndicador = {
       chave: ind.chave,
       nome: ind.nome,
@@ -177,7 +179,7 @@ export function PainelDoQuadro({ aba }: { aba: "resultados" | "indicadores" }) {
       ) : aba === "resultados" ? (
         // Os cards padrão (12/11/2026), um embaixo do outro.
           <div className="space-y-3">
-            {INDICADORES_DO_QUADRO.map((ind) => (
+            {indicadores.map((ind) => (
               <CardDoPainel
                 key={ind.chave}
                 i={itemDoCard(ind, meses, mes, cenario?.indicadores[ind.chave] ?? null, painel.data?.sentidos[ind.chave] ?? "=")}

@@ -57,6 +57,8 @@ const usuario = (request: Request) => {
     nome: request.user!.nome,
     admin: request.user!.perfil.codigo === CODIGO_ADMINISTRADOR,
     recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
+    // Quem edita a aba Investimentos das Premissas (19/11/2026, pedido do Adão): a lista dos investimentos sem o recorte.
+    editaInvestimentos: (request.user!.permissions ?? []).includes("cenarios_analiticos_premissas.investimentos:editar"),
   };
 };
 
@@ -165,6 +167,21 @@ export const cenariosController = {
   recalcular(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.recalcular(c, usuario(request))) : undefined;
+  },
+
+  /** A aba Centros de Custo dos Resultados (19/11/2026): os grupos de centros com valor no cenário. */
+  centrosDosResultados(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.centrosDosResultados(c, usuario(request))) : undefined;
+  },
+
+  /** A DRE de um grupo de centros no cenário (?grupo=, o nome da Controladoria; 19/11/2026). */
+  resultadosDoCentro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const grupo = z.string().trim().min(1).max(200).safeParse(request.query.grupo);
+    if (!grupo.success) return response.status(400).json({ error: "Grupo de centros de custo inválido." });
+    return responder(response, () => cenariosService.resultadosDoCentro(c, grupo.data, usuario(request)));
   },
 
   /** As contas de um grupo de centros (?grupo=, o nome da Controladoria). */

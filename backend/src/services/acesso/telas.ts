@@ -80,7 +80,13 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
       : []),
     // Os Indicadores Manuais dos sintéticos (12/11/2026, pedido do Adão: uma aba da tela Resultados, depois das visões; os
     // perfis com a aba nas Configurações a herdaram); nos analíticos, nas Premissas.
-    { codigo: `${base}_resultados`, nome: "Resultados", abas: analitico ? UNIDADES : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }] },
+    // A aba Centros de Custo dos analíticos (19/11/2026, pedido do Adão), depois das unidades; os perfis que leem a tela a
+    // herdaram (as migrações 20261119100000 e 20261119110000), e cada um vê só os grupos do seu recorte.
+    {
+      codigo: `${base}_resultados`,
+      nome: "Resultados",
+      abas: analitico ? [...UNIDADES, { codigo: "centros", nome: "Centros de Custo" }] : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }],
+    },
     // A aba Indicadores no Painel de Bordo, depois de Performance (19/10/2026; antes, a tela Indicadores e, por um dia, a
     // aba Metas; a chave continua `metas`): todos os indicadores do cenário.
     { codigo: `${base}_painel`, nome: "Painel de Bordo", abas: [...PAINEL, { codigo: "metas", nome: "Indicadores" }] },
@@ -313,6 +319,8 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
         codigo: "cadastro_controladoria",
         nome: "Controladoria",
         abas: [
+          // Os Departamentos (11/11/2026, pedido do Adão): a ordem, a unidade e o departamento; antes das Linhas desde 18/11/2026.
+          { codigo: "departamentos", nome: "Departamentos" },
           { codigo: "linhas", nome: "Linhas" },
           { codigo: "estrutura_dre", nome: "Estrutura da DRE" },
           { codigo: "regras_rateio", nome: "Regras de Rateio" },
@@ -320,8 +328,6 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "redistribuicoes", nome: "Redistribuições de Gastos" },
           // A Alocação nas Linhas (26/10/2026): os custos sem tarefa nas linhas, para a etapa Linhas da apuração.
           { codigo: "alocacao_linhas", nome: "Alocação nas Linhas" },
-          // Os Departamentos (11/11/2026, pedido do Adão): a ordem, a unidade e o departamento.
-          { codigo: "departamentos", nome: "Departamentos" },
         ],
       },
       {

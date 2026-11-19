@@ -24,7 +24,7 @@ export function ExportarExtrato({
   anoMes: string;
   linha: string;
   visao: VisaoDetalhe;
-  recorte?: { conta: string; centro?: string | null; filial?: number | null };
+  recorte?: { conta: string; centro?: string | null; filial?: number | null; semCentro?: boolean };
 }) {
   const [gerando, setGerando] = useState(false);
   async function baixar() {

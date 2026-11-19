@@ -111,14 +111,22 @@ export const relatoriosController = {
     const p = periodo(request, response);
     if (!p) return;
     const tipo = z.enum(["fornecedor", "conta"]).safeParse(request.query.tipo);
-    const termo = z.string().trim().min(1).max(120).safeParse(request.query.termo);
+    // O termo como veio: o nome do fornecedor ou cliente escolhido na lista vale pelo nome exato (18/11/2026).
+    const termo = z.string().min(1).max(300).safeParse(request.query.termo);
     if (!tipo.success || !termo.success) return response.status(400).json({ error: "Pesquisa inválida" });
-    if (tipo.data === "fornecedor" && termo.data.length < 3) return response.status(400).json({ error: "Digite ao menos três letras do fornecedor ou cliente." });
     return responder(response, () => pesquisaDosResultados.pesquisar(p.ano, p.ate, tipo.data, termo.data, request.user!.acesso));
   },
   /** As contas de resultado da lista do Pesquisar (o plano de contas). */
-  async contasDaPesquisa(_request: Request, response: Response) {
-    return responder(response, () => pesquisaDosResultados.contas());
+  async contasDaPesquisa(request: Request, response: Response) {
+    const p = periodo(request, response);
+    if (!p) return;
+    return responder(response, () => pesquisaDosResultados.contas(p.ano, p.ate, request.user!.acesso));
+  },
+  /** Os fornecedores e clientes da lista do Pesquisar (18/11/2026): os dos movimentos do período que o usuário vê. */
+  async fornecedoresDaPesquisa(request: Request, response: Response) {
+    const p = periodo(request, response);
+    if (!p) return;
+    return responder(response, () => pesquisaDosResultados.fornecedores(p.ano, p.ate, request.user!.acesso));
   },
 
   /** A aba Impostos (Créditos de Impostos, 03/11/2026): os créditos de impostos de cada mês fechado do exercício, até ?ate=. */

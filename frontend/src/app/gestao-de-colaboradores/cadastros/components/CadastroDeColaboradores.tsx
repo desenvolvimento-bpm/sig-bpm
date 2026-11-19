@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { plural } from "@/lib/texto";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, EllipsisVertical, FileUp, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,25 +21,11 @@ import { EditarRegistroDialog } from "@/app/cadastros/components/EditarRegistroD
 import { colunaDoCampo, ehNumero, formatar, textoDoCampo } from "@/app/cadastros/components/ListaCadastroContent";
 import { edicaoService, mensagemDeErro, type Registro } from "@/app/cadastros/services/edicaoService";
 
-import { emLista, ROTULO_DO_TIPO, ROTULO_DO_TIPO_PLURAL, TIPOS_DO_COLABORADOR } from "../../services/tiposDoColaborador";
+import { QuadrosPorDepartamentoEUnidade } from "../../components/QuadrosPorDepartamentoEUnidade";
 import type { TipoImportacaoColaboradores } from "../services/colaboradoresService";
 import { ImportarColaboradoresDialog } from "./ImportarColaboradoresDialog";
 
 const ACOES: Coluna<Registro> = { chave: "acoes", rotulo: "Ações", semFiltro: true, classe: "w-20" };
-
-/** A competência e os totais do Lançamento Inicial (o de cada Tipo que tem colaboradores), no destaque acima da tabela. */
-function ResumoDaCarga({ lista }: { lista: Registro[] }) {
-  const porTipo = TIPOS_DO_COLABORADOR.map((t) => [t, lista.filter((r) => r.vinculo === t).length] as const)
-    .filter(([, n]) => n > 0)
-    .map(([t, n]) => `${n} ${plural(n, ROTULO_DO_TIPO[t], ROTULO_DO_TIPO_PLURAL[t])}`);
-  return (
-    <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
-      Quadro do início de <span className="font-medium text-gray-900">{String(lista[0].competencia ?? "")}</span>: {lista.length}{" "}
-      {plural(lista.length, "colaborador", "colaboradores")}
-      {porTipo.length ? ` (${emLista(porTipo)})` : ""}.
-    </p>
-  );
-}
 
 type Props = {
   /** A entidade da edição genérica (colaboradores-funcoes…). */
@@ -56,8 +41,8 @@ type Props = {
   /** A aba que importa planilha (Funções e Lançamento Inicial). */
   importar?: TipoImportacaoColaboradores;
   /**
-   * O Lançamento Inicial: sem a caixa Apenas Ativas e sem Inativar (os registros não se inativam), com a competência e os
-   * totais acima da tabela.
+   * O Lançamento Inicial: sem a caixa Apenas Ativas e sem Inativar (os registros não se inativam), com os quadros de destaque
+   * por Unidade e por Departamento acima da tabela (18/11/2026).
    */
   lancamentoInicial?: boolean;
 };
@@ -67,7 +52,7 @@ type Props = {
  * (nas abas que importam planilha) e o Novo na altura do título; na última coluna, o menu Ações — Editar, Inativar (ou
  * Reativar) e Excluir, que só vale no registro sem uso em outras telas (o motivo aparece ao passar o mouse). Com a trava
  * do cadastro (13/11/2026: o Lançamento Inicial com competências fechadas na Gestão de Colaboradores), sem o Importar, o
- * Novo e o menu Ações, e o motivo num destaque acima da tabela.
+ * Novo e o menu Ações (desde 18/11/2026, pedido do Adão, sem o destaque do motivo e sem o do quadro do início).
  */
 export function CadastroDeColaboradores({ entidade, aba, rota, titulo, descricao, comoUsar, oRegistro, importar, lancamentoInicial }: Props) {
   const semAtivo = lancamentoInicial;
@@ -140,12 +125,17 @@ export function CadastroDeColaboradores({ entidade, aba, rota, titulo, descricao
       onPaginaChange={tabela.setPagina}
       carregando={def.isPending || lista.isPending}
       aviso={
-        trava || (lancamentoInicial && lista.data?.length) ? (
-          <div className="space-y-2">
-            {lancamentoInicial && lista.data?.length ? <ResumoDaCarga lista={lista.data} /> : null}
-            {/* A trava do cadastro, no destaque padrão com a borda vermelha. */}
-            {trava ? <p className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-2 text-sm text-gray-700">{trava}</p> : null}
-          </div>
+        // Os quadros de destaque por Unidade e por Departamento (18/11/2026), com os registros da tabela (com os filtros dela).
+        lancamentoInicial && tabela.filtradas.length ? (
+          <QuadrosPorDepartamentoEUnidade
+            itens={tabela.filtradas.map((r) => ({
+              unidade: typeof r.unidade === "string" ? r.unidade : null,
+              ordemDaUnidade: typeof r.ordemDaUnidade === "number" ? r.ordemDaUnidade : null,
+              departamento: typeof r.departamentoDoCadastro === "string" ? r.departamentoDoCadastro : null,
+              ordemDoDepartamento: typeof r.ordemDoDepartamento === "number" ? r.ordemDoDepartamento : null,
+              quantidade: 1,
+            }))}
+          />
         ) : null
       }
     >

@@ -200,7 +200,11 @@ export const relatoriosService = {
   /** O Pesquisar (11/11/2026): os movimentos de um fornecedor ou cliente, ou de uma conta, no período e no recorte do usuário. */
   pesquisar: async (ano: number, ate: number | undefined, tipo: TipoDaPesquisa, termo: string) =>
     (await api.get<{ data: ResultadoDaPesquisa }>("/proxy/relatorios/resultados/pesquisa", { params: { ...periodo(ano, ate), tipo, termo } })).data.data,
-  contasDaPesquisa: async () => (await api.get<{ data: Array<{ reduzido: string; descricao: string }> }>("/proxy/relatorios/resultados/pesquisa/contas")).data.data,
+  /** As listas do Pesquisar (18/11/2026): as contas e os fornecedores e clientes dos movimentos do período que o usuário vê. */
+  contasDaPesquisa: async (ano: number, ate: number | undefined) =>
+    (await api.get<{ data: Array<{ reduzido: string; descricao: string }> }>("/proxy/relatorios/resultados/pesquisa/contas", { params: periodo(ano, ate) })).data.data,
+  fornecedoresDaPesquisa: async (ano: number, ate: number | undefined) =>
+    (await api.get<{ data: string[] }>("/proxy/relatorios/resultados/pesquisa/fornecedores", { params: periodo(ano, ate) })).data.data,
   resultados: async (ano: number, ate: number | undefined, visao: number, comparaCom?: MarcacaoComparavel, prova?: MarcacaoComparavel[]) =>
     (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao, ...comparado(comparaCom), ...comProva(prova) } })).data.data,
   /** Os cenários marcados do exercício (21/10/2026): as opções do Compara Com. */

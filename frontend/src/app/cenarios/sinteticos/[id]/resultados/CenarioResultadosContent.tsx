@@ -15,6 +15,8 @@ import { usePermissions } from "@/context/PermissionContext";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 
 import { TabelaResultados } from "@/app/relatorios/resultados/ResultadosContent";
+import { InfoAgrupamento } from "@/app/competencias/[anoMes]/dre/components/InfoAgrupamento";
+import { CampoBusca } from "@/components/shared/Filtros";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { useRotulosDosValores, useTipoGrafico } from "@/app/relatorios/components/GraficoRealizadoOrcado";
 
@@ -80,6 +82,77 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
 }
 
 /**
+ * A aba Centros de Custo dos Resultados de um cenário analítico (19/11/2026, pedido do Adão: como a de Resultados
+ * Empresariais): a lista dos grupos de centros com valor à esquerda, com a busca, e a DRE do escolhido (as contas, as
+ * atribuições e o total do grupo, mês a mês, sobre as bases do Consolidado do cenário).
+ */
+function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: string | null; onEscolher: (g: string) => void }) {
+  const [busca, setBusca] = useState("");
+  const grupos = useQuery({ queryKey: ["cenarios", id, "resultados", "centros"], queryFn: () => cenariosService.centrosDosResultados(id) });
+  const lista = grupos.data?.grupos ?? [];
+  const grupo = (escolhido && lista.some((g) => g.grupo === escolhido) ? escolhido : lista[0]?.grupo) ?? null;
+  const centro = useQuery({ queryKey: ["cenarios", id, "resultados", "centros", grupo], queryFn: () => cenariosService.resultadosDoCentro(id, grupo!), enabled: grupo !== null });
+  if (grupos.isError) {
+    return (
+      <div className="rounded-sm border border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-700">{mensagemDeErro(grupos.error, "Erro ao carregar os centros de custo do cenário.")}</p>
+      </div>
+    );
+  }
+  if (grupos.isPending) return <Carregando />;
+  if (lista.length === 0) return <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Nenhum centro de custo com valor no cenário.</p>;
+  const t = busca.trim().toLowerCase();
+  const filtrados = lista.filter((g) => !t || g.grupo.toLowerCase().includes(t));
+  return (
+    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
+      <div className="rounded-sm border border-gray-200 bg-white">
+        <div className="border-b border-gray-200 p-2">
+          <CampoBusca rotulo="Buscar centro de custo" valor={busca} onMudar={setBusca} placeholder="Centro de Custo…" largura="w-full" />
+        </div>
+        <ul className="max-h-[60vh] overflow-y-auto py-1" aria-label="Centros de custo">
+          {filtrados.map((g) => (
+            <li key={g.grupo}>
+              <button
+                type="button"
+                onClick={() => onEscolher(g.grupo)}
+                aria-current={g.grupo === grupo ? "true" : undefined}
+                className={`flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-sm ${g.grupo === grupo ? "bg-black text-white" : "text-gray-800 hover:bg-gray-100"}`}
+              >
+                <span className="min-w-0 truncate" title={g.grupo}>
+                  {g.grupo}
+                </span>
+              </button>
+            </li>
+          ))}
+          {filtrados.length === 0 ? <li className="px-3 py-2 text-sm text-gray-500">Nenhum centro com esse nome.</li> : null}
+        </ul>
+      </div>
+      <div className="min-w-0">
+        {centro.isError ? (
+          <div className="rounded-sm border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-700">{mensagemDeErro(centro.error, "Erro ao carregar o centro de custo.")}</p>
+          </div>
+        ) : centro.isPending || !centro.data ? (
+          <Carregando />
+        ) : (
+          <TabelaResultados
+            key={grupo ?? ""}
+            dados={centro.data}
+            titulo={grupo ?? ""}
+            visao={{ grupo: grupo! }}
+            nomeVisao={grupo ?? ""}
+            consultas={false}
+            doCenario
+            aoLadoDoTitulo={<InfoAgrupamento grupo={grupo ?? ""} centros={centro.data.centros} periodo="no cenário" />}
+            acaoDaLinha={(l) => (!l.volume && l.tipo === "ITEM" ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * A tela Resultados de um cenário: as visões da DRE mês a mês no exercício, como em Resultados Empresariais. No sintético,
  * quem edita os cenários edita a DRE aqui, e a aba Indicadores Manuais (12/11/2026, pedido do Adão), depois das visões,
  * digita os indicadores que não saem da DRE; no analítico (13/10/2026), a DRE é calculada a partir das premissas e fica
@@ -90,6 +163,8 @@ export function CenarioResultadosContent() {
   const t = useTipoDoCenario();
   useRegistrarAcessoTela(`${t.base}/${id}/resultados`);
   const [escolhida, setVisao] = useAbaLembrada("visao", "0");
+  // O grupo de centros escolhido na aba Centros de Custo (19/11/2026).
+  const [grupoEscolhido, setGrupoEscolhido] = useState<string | null>(null);
   // Quem edita os cenários edita a DRE aqui mesmo (12/10/2026; antes, na tela Editar, que deixou de existir).
   const { hasPermission } = usePermissions();
   // O cenário marcado (12/10/2026) ou com a versão congelada (13/10/2026) não se edita: a tabela fica só para leitura, com o aviso.
@@ -100,9 +175,16 @@ export function CenarioResultadosContent() {
   const visoes = VISOES.filter((v) => hasPermission(t.perm("resultados", "ler", v.aba)));
   // A aba Indicadores Manuais dos sintéticos (12/11/2026), depois das visões, com a permissão dela.
   const leManuais = !analitico && hasPermission(t.perm("resultados", "ler", "manuais"));
-  const abas = [...visoes.map((v) => ({ chave: v.chave, rotulo: v.nome })), ...(leManuais ? [{ chave: "manuais", rotulo: "Indicadores Manuais" }] : [])];
+  // A aba Centros de Custo dos analíticos (19/11/2026, pedido do Adão), depois das unidades, com a permissão dela.
+  const leCentrosDosResultados = analitico && hasPermission(t.perm("resultados", "ler", "centros"));
+  const abas = [
+    ...visoes.map((v) => ({ chave: v.chave, rotulo: v.nome })),
+    ...(leCentrosDosResultados ? [{ chave: "centros", rotulo: "Centros de Custo" }] : []),
+    ...(leManuais ? [{ chave: "manuais", rotulo: "Indicadores Manuais" }] : []),
+  ];
   const visao = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
   const naManuais = visao === "manuais";
+  const nosCentros = visao === "centros";
   const daVisao = VISOES.find((v) => v.chave === visao);
   const podeEditar = !analitico && !!daVisao && hasPermission(t.perm("resultados", "editar", daVisao.aba)) && !!cenario.data && !travado;
   const nome = daVisao?.nome ?? "";
@@ -120,6 +202,10 @@ export function CenarioResultadosContent() {
     ...(leTodas ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { escopo: "unidades" } }] : []),
     ...(leCentros
       ? [
+          // Na aba Centros de Custo (19/11/2026), também o centro escolhido.
+          ...(nosCentros && grupoEscolhido
+            ? [{ chave: "centro", excel: "Centro de Custo Atual", pdf: null, params: { escopo: "atual", grupo: grupoEscolhido }, url: `/proxy/cenarios/${id}/centros/exportar` }]
+            : []),
           { chave: "centros", excel: "Todos os Centros de Custo (um por aba)", pdf: null, params: { escopo: "centros" }, url: `/proxy/cenarios/${id}/centros/exportar` },
           { chave: "arquivos", excel: "Todos os Centros de Custo (um arquivo por centro)", pdf: null, params: { escopo: "centros_arquivos" }, url: `/proxy/cenarios/${id}/centros/exportar` },
         ]
@@ -152,7 +238,19 @@ export function CenarioResultadosContent() {
                 situação.
               </li>
             ) : null}
-            <li>Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? "" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).</li>
+            <li>
+              Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? " e, depois delas, Centros de Custo" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).
+            </li>
+            {analitico ? (
+              <li>
+                Na aba Centros de Custo, como em Resultados Empresariais: a lista dos grupos de centros com valor no cenário à esquerda (busque pelo nome)
+                e, ao lado, a DRE do escolhido, mês a mês — as contas do grupo com valor (as da aba Centros de Custo das Premissas, com os Benefícios
+                Adicionais na conta Encargos e Benefícios, como na DRE), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % e o R$/m³
+                sobre as bases do Consolidado do cenário. O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
+                que vai para Serviços (na DRE, nas contas da CSM ou da CSC). A lista traz só os grupos do recorte do seu perfil: todos, os dos seus
+                departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário.
+              </li>
+            ) : null}
             {analitico ? null : (
               <li>
                 Na aba Indicadores Manuais, os quadros de lotação e os indicadores do Comercial e do Administrativo, que não saem da DRE: vêm da aba
@@ -180,7 +278,7 @@ export function CenarioResultadosContent() {
             ) : null}
             <li>
               Use “Exportar” para baixar em Excel ou PDF, como em Resultados Empresariais: a visão atual ou todas as unidades (uma por aba ou por
-              página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel: todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
+              página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel: na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
             </li>
             <li>
               Versões (para quem edita a tela Resultados): “Congelar Versão” trava o cenário na versão atual (VER00, VER01…), como o fechamento de uma
@@ -209,7 +307,7 @@ export function CenarioResultadosContent() {
         sobre={
           <>
             <p>
-              A DRE do cenário mês a mês no exercício, como as abas de Resultados Empresariais (sem os centros de custo): o valor e a participação (%)
+              A DRE do cenário mês a mês no exercício, como as abas de Resultados Empresariais{analitico ? " (nos analíticos, também a dos grupos de centros de custo)" : " (sem os centros de custo)"}: o valor e a participação (%)
               de cada mês e o total do exercício, com o valor unitário (R$/m³) em dezembro e no total. Os valores são os digitados na ferramenta ou os da
               referência do cenário (um arquivo importado, ligado às linhas da Estrutura da DRE pela descrição, ou o resultado realizado); os totais são
               calculados pela Estrutura da DRE, e o Consolidado soma as unidades.
@@ -235,6 +333,8 @@ export function CenarioResultadosContent() {
       {analitico ? <AvisoRateiosSemBase id={id} /> : null}
       {naManuais ? (
         <IndicadoresDoCenario id={id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />
+      ) : nosCentros ? (
+        <VisaoCentros id={id} escolhido={grupoEscolhido} onEscolher={setGrupoEscolhido} />
       ) : !daVisao ? (
         <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Seu perfil não tem acesso a nenhuma aba desta tela.</p>
       ) : podeEditar ? (

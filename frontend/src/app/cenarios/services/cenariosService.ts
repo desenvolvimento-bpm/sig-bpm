@@ -201,8 +201,10 @@ export type InvestimentosDoCenario = {
   ano: number;
   meses: Array<{ mes: number; rotulo: string }>;
   editavel: boolean;
+  /** As contas da Depreciação (as do recorte) e as da lista dos investimentos (19/11/2026: todas, para quem edita a aba). */
   contas: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: string; conta: string; rotulo: string }>;
-  /** As opções do Departamento (12/11/2026; as do recorte) e se ele é obrigatório (quem vê por recorte). */
+  contasDosInvestimentos: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: string; conta: string; rotulo: string }>;
+  /** As opções do Departamento (12/11/2026; as do recorte, ou todas para quem edita a aba) e se ele é obrigatório (quem só lê, por recorte). */
   departamentos: DepartamentoDoInvestimento[];
   exigeDepartamento: boolean;
   depreciacao: LinhaDaPremissa[];
@@ -549,6 +551,16 @@ export const cenariosService = {
   correspondencias: async () => (await api.get<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias")).data.data,
   gravarCorrespondencias: async (itens: CorrespondenciaDeTarefa[]) => (await api.put<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias", { itens })).data.data,
   resultados: async (id: string, visao: number) => (await api.get<{ data: Resultados }>(`/proxy/cenarios/${id}/resultados`, { params: { visao } })).data.data,
+  /** A aba Centros de Custo dos Resultados dos analíticos (19/11/2026): os grupos com valor e a DRE de um grupo. */
+  centrosDosResultados: async (id: string) =>
+    (await api.get<{ data: { ano: number; grupos: Array<{ grupo: string; departamento: string; total: number }> } }>(`/proxy/cenarios/${id}/resultados/centros`)).data.data,
+  resultadosDoCentro: async (id: string, grupo: string) =>
+    (
+      await api.get<{ data: Resultados & { grupo: string; departamento: string; destino: string; centros: Array<{ codigoRM: string | null; nome: string }> } }>(
+        `/proxy/cenarios/${id}/resultados/centro`,
+        { params: { grupo } },
+      )
+    ).data.data,
   /** O Painel de Bordo do cenário no mês `ate` (1 a 12): o cenário × o comparado. */
   painel: async (id: string, ate: number) =>
     (await api.get<{ data: Painel & { comparado: { nome: string; ano: number } | null } }>(`/proxy/cenarios/${id}/painel`, { params: { ate } })).data.data,

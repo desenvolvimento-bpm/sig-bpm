@@ -251,6 +251,8 @@ export function RateiosDoCenario({ id }: { id: string }) {
       linhas={linhasDosRateios(consulta.data.rateios)}
       editavel={false}
       comReferencia={false}
+      // Sem o Total e a Média (19/11/2026, pedido do Adão): só nas outras abas.
+      comTotais={false}
       cabecalho="CHAVE E DESTINO"
     />
   );

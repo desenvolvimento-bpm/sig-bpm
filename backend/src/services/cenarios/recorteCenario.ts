@@ -33,10 +33,32 @@ export function recorteDoCenario(
   c: { tipo: string; acessoInformacoes: string; criadoPorId: string | null },
   u: { id: string; admin?: boolean; recorte?: RecorteDoUsuario | null },
 ): Recorte | null {
-  if (c.tipo !== "ANALITICO" || c.acessoInformacoes !== "POR_RECORTE" || u.admin || (!!c.criadoPorId && c.criadoPorId === u.id) || !u.recorte) return null;
+  if (c.tipo !== "ANALITICO" || c.acessoInformacoes !== "POR_RECORTE" || (!!c.criadoPorId && c.criadoPorId === u.id)) return null;
+  return recorteDoPerfil(u);
+}
+
+/**
+ * O recorte do perfil do usuário, qualquer que seja o Acesso às Informações do cenário (19/11/2026, pedido do Adão: a aba Centros
+ * de Custo dos Resultados mostra só os grupos do recorte de cada um, como em Resultados Empresariais): o Gestor, os grupos dos
+ * departamentos dele; o Coordenador, os com algum centro dele; null (vê tudo): o Administrador e quem não tem recorte.
+ */
+export function recorteDoPerfil(u: { admin?: boolean; recorte?: RecorteDoUsuario | null }): Recorte | null {
+  if (u.admin || !u.recorte) return null;
   if (u.recorte.centros) return { departamentos: new Set(), centros: new Set(u.recorte.centros) };
   if (u.recorte.departamentos) return { departamentos: new Set(u.recorte.departamentos.map(departamentoDoAcesso)), centros: null };
   return null;
+}
+
+/**
+ * O recorte da lista dos investimentos (19/11/2026, pedido do Adão): quem edita a aba Investimentos vê, inclui, altera e exclui
+ * qualquer investimento, independente do recorte (null); quem só lê, os do recorte do cenário. A Depreciação (a base de cada
+ * unidade, a dos investimentos e a total) segue o recorte do cenário.
+ */
+export function recorteDosInvestimentos(
+  c: { tipo: string; acessoInformacoes: string; criadoPorId: string | null },
+  u: { id: string; admin?: boolean; recorte?: RecorteDoUsuario | null; editaInvestimentos?: boolean },
+): Recorte | null {
+  return u.editaInvestimentos ? null : recorteDoCenario(c, u);
 }
 
 /** Algum dos departamentos está no recorte (o Coordenador não vê o que é só de departamento). */
@@ -84,26 +106,27 @@ export function veCentro(r: Recorte | null, centroId: string, grupo: Pick<GrupoD
 /**
  * As abas das Premissas do recorte (as chaves da tela): o Coordenador, só as dos centros; o Gestor, as dos departamentos dele
  * (Matriz e Filial, da Produção; Serviços, dos Serviços; os Rateios, da Produção e dos Serviços; o Extra-Operacional, dele;
- * os Investimentos, de todos; os Indicadores Manuais, que são do Comercial e do Administrativo, desses dois).
+ * os Investimentos, de todos; os Indicadores Manuais, que são do Comercial e do Administrativo, desses dois). `editaInvestimentos`
+ * (19/11/2026): quem edita a aba Investimentos a vê, com qualquer recorte (o Coordenador também).
  */
-export function abasDoRecorte(r: Recorte | null): string[] | null {
+export function abasDoRecorte(r: Recorte | null, editaInvestimentos = false): string[] | null {
   if (!r) return null;
-  if (r.centros) return ["quadro", "centros", "rateios"];
+  if (r.centros) return ["quadro", "centros", "rateios", ...(editaInvestimentos ? ["investimentos"] : [])];
   const tem = (...ds: Departamento[]) => ds.some((d) => r.departamentos.has(d));
   return [
     ...(tem("PRODUCAO") ? ["1", "2"] : []),
     ...(tem("SERVICOS") ? ["3"] : []),
     ...(tem(...COM_CENTROS) ? ["quadro", "centros"] : []),
     ...(tem("PRODUCAO", "SERVICOS") ? ["rateios"] : []),
-    ...(r.departamentos.size ? ["investimentos"] : []),
+    ...(r.departamentos.size || editaInvestimentos ? ["investimentos"] : []),
     ...(tem("EXTRA") ? ["extra"] : []),
     ...(tem("COMERCIAL", "ADMINISTRATIVO") ? ["manuais"] : []),
   ];
 }
 
 /** O recorte para a tela (o `obter` do cenário): os departamentos, se é por centro e as abas das Premissas. */
-export function recorteParaTela(r: Recorte | null) {
-  return r ? { departamentos: [...r.departamentos], porCentro: !!r.centros, abas: abasDoRecorte(r)! } : null;
+export function recorteParaTela(r: Recorte | null, editaInvestimentos = false) {
+  return r ? { departamentos: [...r.departamentos], porCentro: !!r.centros, abas: abasDoRecorte(r, editaInvestimentos)! } : null;
 }
 
 /** A recusa de um trecho fora do recorte. */
@@ -114,7 +137,7 @@ export const FORA_DO_RECORTE = "Fora do seu recorte: o cenário tem o Acesso às
  * departamentos dele (vale para qualquer um deles: a depreciação base de Despesas e Extra é dos cinco do patrimônio) e, nos
  * centros de custo e no Quadro de Lotação, o grupo de centros.
  */
-export type Trecho = { d: Departamento[]; g?: string };
+export type Trecho = { d: Departamento[]; g?: string; i?: true };
 /** Os trechos sem repetição. */
 export const trechos = (ts: Trecho[]): Trecho[] => [...new Map(ts.map((t) => [JSON.stringify(t), t])).values()];
 /** O trecho de um grupo de centros. */
@@ -160,18 +183,27 @@ function alcanceDeAntes(
   return [];
 }
 
-/** A alteração do histórico no recorte: todos os trechos dela (o grupo, para o Coordenador; os departamentos, para o Gestor). */
+/** As alterações da lista dos investimentos (o Novo, o Alterado e as exclusões; não a Depreciação Base), pela descrição. */
+const DA_LISTA_DOS_INVESTIMENTOS = /^Investimentos · (Novo|Alterado|Excluído|\d+ excluídos):/;
+
+/**
+ * A alteração do histórico no recorte: todos os trechos dela (o grupo, para o Coordenador; os departamentos, para o Gestor).
+ * `editaInvestimentos` (19/11/2026): quem edita a aba Investimentos vê as alterações da lista dos investimentos (e os trechos
+ * de investimento, `i`, das importações), como vê a lista inteira.
+ */
 export function veAlteracao(
   r: Recorte | null,
   x: { tipo: string; descricao: string | null; contas: unknown; alcance: unknown },
   grupos: Map<string, Pick<GrupoDoCenario, "grupo" | "grupoDRE" | "centros">>,
   unidadeDaConta: (conta: string) => number | null,
+  editaInvestimentos = false,
 ) {
   if (!r) return true;
+  if (editaInvestimentos && DA_LISTA_DOS_INVESTIMENTOS.test(x.descricao ?? "")) return true;
   const ts = (x.alcance as Trecho[] | null) ?? alcanceDeAntes(x, grupos, unidadeDaConta);
   if (ts === "geral") return true;
   if (!ts.length) return false;
-  return ts.every((t) => (r.centros ? !!t.g && grupos.has(t.g) && veGrupo(r, grupos.get(t.g)!) : veDepartamentos(r, t.d)));
+  return ts.every((t) => (editaInvestimentos && t.i) || (r.centros ? !!t.g && grupos.has(t.g) && veGrupo(r, grupos.get(t.g)!) : veDepartamentos(r, t.d)));
 }
 
 /** O departamento de uma conta da DRE pela sigla do grupo (as Justificativas do Histórico): os centros e o extra-operacional. */

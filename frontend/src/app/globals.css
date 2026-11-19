@@ -94,6 +94,16 @@
 }
 
 /*
+ * O zoom do menu do usuário (18/11/2026, pedido do Adão): o tamanho da fonte da raiz, que os tamanhos em rem do Tailwind (os
+ * textos, os espaçamentos, o menu, os cards) acompanham. Menor (85%), Padrão (100%) ou Máximo (125%); lib/zoom.ts.
+ */
+html[data-zoom="85"] {
+  font-size: 85%;
+}
+html[data-zoom="125"] {
+  font-size: 125%;
+}
+/*
  * Tabelas do SIG (G6 e decisão D4 do levantamento de layout): mais compactas,
  * como numa planilha, com o cabeçalho numa linha só e fixo ao rolar a página.
  * Fora de @layer de propósito: regra sem camada vence as utilitárias do

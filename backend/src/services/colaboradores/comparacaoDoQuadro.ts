@@ -2,6 +2,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
 import { calcularCenario, cenariosMarcados } from "../cenarios/indicadoresDoCenario.js";
 import { mesesDaLinha } from "../cenarios/quadroDoCenario.js";
+import { IND, nomeDo } from "../relatorios/indicadoresDoSistema.js";
 
 /**
  * A Comparação do Quadro de Lotação com um cenário (09/11/2026, etapa 4 da Gestão de Colaboradores): os cenários marcados
@@ -13,7 +14,18 @@ import { mesesDaLinha } from "../cenarios/quadroDoCenario.js";
  * - nos analíticos com linhas na aba Quadro de Lotação, os colaboradores de cada centro de custo em cada mês (a aba
  *   Realizado compara centro a centro).
  */
-export const NOMES_DOS_INDICADORES = { quadroDeLotacao: "Quadro de Lotação Total", turnover: "Turnover", contratacoes: "Abertura de Vagas x Contratações" } as const;
+/** Os indicadores da comparação, pelo ID (19/11/2026): os nomes atuais do cadastro. */
+export const NOMES_DOS_INDICADORES = {
+  get quadroDeLotacao() {
+    return nomeDo(IND.QUADRO_TOTAL);
+  },
+  get turnover() {
+    return nomeDo(IND.TURNOVER);
+  },
+  get contratacoes() {
+    return nomeDo(IND.CONTRATACOES);
+  },
+};
 export const MARCACOES_COMPARAVEIS: MarcacaoCenario[] = ["PREVISAO", "ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS"];
 
 /** O cenário de uma marcação (null: nenhum marcado com ela). */

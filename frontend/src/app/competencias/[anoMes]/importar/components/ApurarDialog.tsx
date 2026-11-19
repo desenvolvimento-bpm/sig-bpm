@@ -15,16 +15,17 @@ export type TipoApurado = "INDICADORES_ADMIN" | "QUADRO_LOTACAO";
 type Previa = {
   tipo: TipoApurado;
   competencia: string;
-  indicadores?: Array<{ nome: string; valor: number | null; atual: { valor: number; origem: string } | null }>;
+  /** `percentual` (19/11/2026): o Turnover, marcado pelo servidor (o nome se edita no cadastro). */
+  indicadores?: Array<{ nome: string; valor: number | null; percentual?: true; atual: { valor: number; origem: string } | null }>;
   lotacao?: Array<{ centroCusto: string; unidade: string | null; departamento: string | null; atribuicao: string | null; clt: number; pj: number; total: number }>;
   atual?: { nomeArquivo: string; total: number } | null;
 };
 
 const mensagemDoErro = (error: unknown, padrao: string) => (error as { response?: { data?: { error?: string } } }).response?.data?.error ?? padrao;
 const ORIGEM: Record<string, string> = { IMPORTADO: "importado", DIGITADO: "digitado", APURADO: "apurado" };
-/** O valor do indicador: o Turnover em %, os quadros e as contratações em número. */
-const formatar = (nome: string, v: number | null) =>
-  v === null ? "—" : nome === "Turnover" ? `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : inteiro(v);
+/** O valor do indicador: o Turnover em % (o percentual), os quadros e as contratações em número. */
+const formatar = (i: { percentual?: true }, v: number | null) =>
+  v === null ? "—" : i.percentual ? `${(v * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : inteiro(v);
 
 /**
  * O Apurar das Importações (06/11/2026, pedido do Adão): os valores do mês tirados do Quadro de Lotação da Gestão de
@@ -88,9 +89,9 @@ export function ApurarDialog({ anoMes, tipo, onFechar }: { anoMes: string; tipo:
                 {p.indicadores.map((i) => (
                   <tr key={i.nome} className="border-b border-gray-100">
                     <td className="px-3 py-1.5">{i.nome}</td>
-                    <td className="px-3 py-1.5 text-right font-medium">{formatar(i.nome, i.valor)}</td>
+                    <td className="px-3 py-1.5 text-right font-medium">{formatar(i, i.valor)}</td>
                     <td className="px-3 py-1.5 text-right text-gray-600">
-                      {i.atual ? `${formatar(i.nome, i.atual.valor)} (${ORIGEM[i.atual.origem] ?? i.atual.origem})` : "—"}
+                      {i.atual ? `${formatar(i, i.atual.valor)} (${ORIGEM[i.atual.origem] ?? i.atual.origem})` : "—"}
                     </td>
                   </tr>
                 ))}

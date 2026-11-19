@@ -30,7 +30,25 @@ const CAMPOS: Array<{ campo: CampoDoMes; rotulo: string; dica: string; largura: 
   { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$) da linha: a de todos os colaboradores dela", largura: 112 },
 ];
 const LARGURA_TOTAL = 108;
-const LARGURA_CUSTO = 156;
+/**
+ * As colunas do Total (19/11/2026, pedido do Adão; antes, o Custo no Ano): os Colaboradores (a média do ano, a soma ÷ 12, como
+ * no Exportar dos centros) e a soma dos doze meses do Salário Bruto, da Insalubridade / Periculosidade e do Salário Total; as
+ * da Média, as mesmas ÷ 12.
+ */
+const CAMPOS_DO_TOTAL: Array<{ campo: CampoDoMes | "salarioTotal"; rotulo: string; dica: string; largura: number }> = [
+  { campo: "colaboradores", rotulo: "Colab.", dica: "Colaboradores: a média do ano (a soma dos meses ÷ 12)", largura: 72 },
+  { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$): a soma dos doze meses", largura: 140 },
+  { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$): a soma dos doze meses", largura: 124 },
+  { campo: "salarioTotal", rotulo: "Salário Total", dica: "Salário Total (R$): a soma dos doze meses (o custo da linha no ano)", largura: 156 },
+];
+const CAMPOS_DA_MEDIA: typeof CAMPOS_DO_TOTAL = [
+  { campo: "colaboradores", rotulo: "Colab.", dica: "Colaboradores: a média do ano (a soma dos meses ÷ 12)", largura: 72 },
+  { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$): a soma dos doze meses ÷ 12", largura: 108 },
+  { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$): a soma dos doze meses ÷ 12", largura: 112 },
+  { campo: "salarioTotal", rotulo: "Salário Total", dica: "Salário Total (R$): a soma dos doze meses ÷ 12", largura: 108 },
+];
+/** A soma dos doze meses de cada campo de uma linha (ou do total das linhas), com o Salário Total. */
+type SomaDoAno = Record<CampoDoMes | "salarioTotal", number>;
 /**
  * A coluna da Referência, depois do Centro de Custo: os colaboradores da linha na referência (17/11/2026, pedido do Adão: só a
  * quantidade de colaboradores, sem os salários).
@@ -113,8 +131,20 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   });
   const semReferencia = linhasMarcadas.filter((l) => l.referencia === null).length;
   const todosOsMeses = mesesMarcados.size === meses.length;
-  // 17/11/2026: o Salário Total já é o da linha (todos os colaboradores), sem multiplicar.
-  const custoNoAno = (l: LinhaDoQuadroDoCenario) => l.meses.reduce((s, _, k) => s + total(efetivo(l, k)), 0);
+  // 17/11/2026: o Salário Total já é o da linha (todos os colaboradores), sem multiplicar. A soma do ano de cada campo
+  // (19/11/2026), para o Total e a Média.
+  const somaDoAno = (ls: LinhaDoQuadroDoCenario[]): SomaDoAno => {
+    const s: SomaDoAno = { colaboradores: 0, salarioBruto: 0, adicional: 0, salarioTotal: 0 };
+    for (const l of ls)
+      l.meses.forEach((_, k) => {
+        const e = efetivo(l, k);
+        s.colaboradores += e.colaboradores;
+        s.salarioBruto += e.salarioBruto;
+        s.adicional += e.adicional;
+        s.salarioTotal += total(e);
+      });
+    return s;
+  };
   const foraDosGrupos = dados.linhas.filter((l) => !l.grupo).length;
   // As colunas fixas: a caixa (com edição) e as dos cadastros.
   const esquerdas: number[] = [];
@@ -123,8 +153,17 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
     esquerdas.push(acumulado);
     acumulado += d.largura;
   }
-  // As larguras das colunas: a caixa (com edição), os cadastros, as quatro de cada mês, o Custo no Ano e as Ações (com edição).
-  const larguras = [...(pode ? [36] : []), ...DESCRICAO.map((d) => d.largura), ...(comReferencia ? [LARGURA_REFERENCIA] : []), ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL]), LARGURA_CUSTO, ...(pode ? [56] : [])];
+  // As larguras das colunas: a caixa (com edição), os cadastros, as quatro de cada mês, as quatro do Total e as da Média e as
+  // Ações (com edição).
+  const larguras = [
+    ...(pode ? [36] : []),
+    ...DESCRICAO.map((d) => d.largura),
+    ...(comReferencia ? [LARGURA_REFERENCIA] : []),
+    ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL]),
+    ...CAMPOS_DO_TOTAL.map((c) => c.largura),
+    ...CAMPOS_DA_MEDIA.map((c) => c.largura),
+    ...(pode ? [56] : []),
+  ];
   const todasMarcadas = linhas.length > 0 && linhas.every((l) => marcadas.has(l.id));
   const classeFixa = "sticky z-10 bg-white";
   // O destaque (11/11/2026; 16/11/2026, pedido do Adão: o nome da tabela dentro dele, sem o texto e sem a lista dos meses, e a
@@ -248,8 +287,11 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     </span>
                   </th>
                 ))}
-                <th rowSpan={2} className="border-l border-gray-300 px-3 py-2 text-right" title="A soma do Salário Total dos doze meses">
-                  Custo no Ano (R$)
+                <th colSpan={4} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="Os doze meses: os colaboradores, a média do ano; os valores, a soma">
+                  Total
+                </th>
+                <th colSpan={4} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="A média dos doze meses (a soma ÷ 12)">
+                  Média
                 </th>
                 {pode ? <th rowSpan={2} className="px-2 py-2" aria-label="Ações" /> : null}
               </tr>
@@ -262,6 +304,8 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                 {meses.map((m) => (
                   <SubCabecalhos key={m.mes} />
                 ))}
+                <SubCabecalhosDoAno campos={CAMPOS_DO_TOTAL} />
+                <SubCabecalhosDoAno campos={CAMPOS_DA_MEDIA} />
               </tr>
             </>
           }
@@ -311,7 +355,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                       />
                     );
                   })}
-                  <td className="border-l border-gray-300 px-3 py-1 text-right whitespace-nowrap">{reais(custoNoAno(l))}</td>
+                  <CelulasDoAno soma={somaDoAno([l])} meses={meses.length} />
                   {pode ? (
                     <td className="px-2 py-1">
                       <DropdownMenu>
@@ -345,7 +389,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   </td>
                 </tr>
               ) : (
-                // O total, na última linha: os colaboradores e a folha de cada mês e o Custo no Ano.
+                // O total, na última linha: os colaboradores e a folha de cada mês, do Total e da Média.
                 <tr className="border-t border-gray-300 bg-gray-50 font-bold text-gray-900">
                   {pode ? <td className={`${classeFixa} bg-gray-50`} style={{ left: 0 }} /> : null}
                   <td colSpan={DESCRICAO.length} className={`${classeFixa} bg-gray-50 px-3 py-2`} style={{ left: pode ? 36 : 0 }}>
@@ -369,7 +413,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                       </td>,
                     ];
                   })}
-                  <td className="border-l border-gray-300 px-3 py-2 text-right whitespace-nowrap">{reais(linhas.reduce((s, l) => s + custoNoAno(l), 0))}</td>
+                  <CelulasDoAno soma={somaDoAno(linhas)} meses={meses.length} noTotal />
                   {pode ? <td /> : null}
                 </tr>
               )}
@@ -440,6 +484,45 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
         </ConfirmacaoDialog>
       ) : null}
     </section>
+  );
+}
+
+/** Os rótulos das quatro colunas do Total ou da Média (19/11/2026). */
+function SubCabecalhosDoAno({ campos }: { campos: typeof CAMPOS_DO_TOTAL }) {
+  return (
+    <>
+      {campos.map((c, i) => (
+        <th key={c.campo} className={`px-2 py-1.5 text-right whitespace-nowrap ${i === 0 ? "border-l border-gray-300" : ""}`} style={{ width: c.largura }} title={c.dica}>
+          {c.rotulo}
+        </th>
+      ))}
+    </>
+  );
+}
+
+/**
+ * As células do Total e da Média de uma linha (ou, `noTotal`, da linha Total: como nos meses, só os colaboradores e o Salário
+ * Total): os colaboradores, a média do ano nas duas; os valores, a soma no Total e a soma ÷ 12 na Média.
+ */
+function CelulasDoAno({ soma, meses, noTotal = false }: { soma: SomaDoAno; meses: number; noTotal?: boolean }) {
+  const colaboradores = soma.colaboradores / meses;
+  const celula = (chave: string, texto: string, borda = false) => (
+    <td key={chave} className={`bg-gray-50 px-2 ${noTotal ? "py-2" : "py-1"} text-right whitespace-nowrap ${borda ? "border-l border-gray-300" : ""}`}>
+      {texto}
+    </td>
+  );
+  const valor = (v: number) => (v ? reais(v) : "");
+  return (
+    <>
+      {celula("tc", colaboradores ? numero(colaboradores, 1) : "", true)}
+      {celula("tb", noTotal ? "" : valor(soma.salarioBruto))}
+      {celula("ta", noTotal ? "" : valor(soma.adicional))}
+      {celula("tt", valor(soma.salarioTotal))}
+      {celula("mc", colaboradores ? numero(colaboradores, 1) : "", true)}
+      {celula("mb", noTotal ? "" : valor(soma.salarioBruto / meses))}
+      {celula("ma", noTotal ? "" : valor(soma.adicional / meses))}
+      {celula("mt", valor(soma.salarioTotal / meses))}
+    </>
   );
 }
 

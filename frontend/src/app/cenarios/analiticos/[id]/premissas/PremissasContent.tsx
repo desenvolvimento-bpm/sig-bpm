@@ -7,13 +7,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useAbaLembrada } from "@/hooks/useAbaLembrada";
 import { Abas } from "@/components/shared/Abas";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
+import { SituacaoDoSalvamento } from "@/components/shared/SituacaoDoSalvamento";
 import { usePermissions } from "@/context/PermissionContext";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "../../../components/AvisoMarcado";
-import { AvisoRateiosSemBase, CentrosDoCenario, RateiosDoCenario } from "../../../components/CentrosDoCenario";
+import { CentrosDoCenario, RateiosDoCenario } from "../../../components/CentrosDoCenario";
 import { Erro } from "../../../components/CenarioDialog";
 import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/InvestimentosDoCenario";
 import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
@@ -80,6 +81,8 @@ export function PremissasContent() {
         acoes={
           abas.length ? (
             <div className="flex flex-wrap items-center gap-2">
+              {/* A situação do salvamento (18/11/2026, pedido do Adão), como nos Relatórios Executivos: antes dos botões. */}
+              {editaAlguma && !!cenario.data && !travado ? <SituacaoDoSalvamento /> : null}
               {editaPlanilha && editaAlguma ? <BotaoImportarValores id={id} /> : null}
               <ExportarPremissas id={id} />
             </div>
@@ -93,22 +96,36 @@ export function PremissasContent() {
               Usuários / Perfis).
             </li>
             <li>
+              À direita do título, antes dos botões, a situação do salvamento, como nos Relatórios Executivos: cada alteração (o modal de um valor, o
+              Reajustar Marcados, o Replicar Referências, o Importar Valores…) se salva ao ser confirmada, e a situação mostra “Salvando…”, “Salvo às 14:32”
+              ou “Não Salvo”, em vermelho, quando a última gravação falhou (passe o mouse para ver o motivo).
+            </li>
+            <li>
               Ao rolar a tela, os rótulos de cada tabela ficam presos logo abaixo do título da tela e, um pouco abaixo deles, o destaque da tabela continua
               à vista, flutuando sobre ela, com as mesmas funções (menos nas abas Indicadores Manuais e Rateios). Nas abas com mais de uma tabela, o
               destaque que flutua é o da tabela cujos rótulos estão presos.
             </li>
             <li>
+              Depois dos doze meses, as colunas Total e Média (menos nas abas Indicadores Manuais e Rateios): nos valores e nas quantidades (R$, m³, kg,
+              pistas, dias…), o Total é a soma dos doze meses e a Média, o Total ÷ 12; nos colaboradores, os dois são a média do ano (a soma ÷ 12); nas
+              taxas e nos percentuais (R$/m³, kg/m³, m³/dia, %…), os dois são a média dos meses com valor. O mês em branco não conta. As duas colunas
+              acompanham cada gravação e não vão para o Exportar Premissas.
+            </li>
+            <li>
               Com o Acesso às Informações Por Recorte (Configurações / Cenário), quem tem recorte no perfil vê só o seu recorte: o Gestor, as abas e
-              as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, os investimentos e os indicadores manuais, só os
-              deles); o Coordenador, só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e nos Rateios. O aviso
-              acima das abas diz o recorte; o Exportar Premissas e o Importar Valores ficam no recorte.
+              as linhas dos departamentos dele (os centros de custo, o Quadro de Lotação, os rateios, a depreciação, os investimentos e os indicadores
+              manuais, só os deles); o Coordenador, só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e nos
+              Rateios. Quem edita a aba Investimentos vê, inclui, altera e exclui qualquer investimento da lista, com qualquer recorte (o Coordenador
+              também vê a aba), e as alterações deles no histórico; a Depreciação segue o recorte. O aviso acima das abas diz o recorte; o Exportar
+              Premissas e o Importar Valores ficam no recorte (no Importar Valores, os investimentos de quem edita a aba, não).
             </li>
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
               (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um) e o
-              Salário Total (a soma) —, com o Custo no Ano (a soma do Salário Total dos doze meses) e, na última linha, o Total: os colaboradores e a
-              folha de cada mês. No destaque acima da tabela,
+              Salário Total (a soma) —, com o Total (os Colaboradores, a média do ano; o Salário Bruto, a Insalubridade / Periculosidade e o Salário
+              Total, a soma dos doze meses: o custo da linha no ano) e a Média (a soma ÷ 12) e, na última linha, o Total: os colaboradores e a folha de
+              cada mês, do Total e da Média. No destaque acima da tabela,
               com o nome dela, busque as linhas pela função, pelo centro, pela unidade ou pelo tipo. Com a referência carregada (Configurações /
               Referência), a coluna da Referência, depois do Centro de Custo, traz os Colaboradores da linha nela: os do QL Realizado da competência
               mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
@@ -152,7 +169,7 @@ export function PremissasContent() {
               {podeEditar
                 ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”."
                 : null} Cada investimento
-              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas e Extra o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco — com o Acesso às Informações Por Recorte, quem tem recorte o escolhe entre os seus), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
+              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas e Extra o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
               valor pós uso e a vida útil em meses; a lista mostra a depreciação mensal.
             </li>
             <li>
@@ -175,7 +192,7 @@ export function PremissasContent() {
               Filial); Projeto pela Liberação de Projetos: Matriz e Filial (aba Indicadores Manuais), como no Fechamento Mensal; Metalurgia e Armadura pelo kg
               de cada linha (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos Acompanhamentos por Dia das linhas
               de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio (Cadastros Gerais), valem eles. Sem base no mês, o
-              percentual é zero, e o valor dos grupos daquela chave não entra (o aviso acima das abas diz em que meses).
+              percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário).
             </li>
             <li>
               Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
@@ -353,7 +370,6 @@ export function PremissasContent() {
         </p>
       ) : null}
       <Abas rotulo="Unidade das premissas" ativa={aba} onMudar={setAba} abas={abas} />
-      {abas.length ? <AvisoRateiosSemBase id={id} /> : null}
       {cenario.data && travado && editaAba ? (
         <AvisoMarcado cenario={cenario.data} oQue="as premissas" />
       ) : bloqueadaPelosReajustes && editaAba && !rateios ? (

@@ -22,7 +22,8 @@ type Bloco = Extrato["blocos"][number];
 type BlocoComLancamentos = Extract<Bloco, { lancamentos: unknown }>;
 type Lancamento = BlocoComLancamentos["lancamentos"][number];
 /** A conta do modal Balancete (o reduzido do balancete) e, com a caixa marcada, o centro e a filial do lançamento. */
-export type RecorteDaConta = { conta: string; centro: string | null; filial: number | null };
+/** O recorte do modal Balancete: a conta e, com a caixa marcada, o centro e a filial do lançamento (`semCentro`: ele sem centro, 18/11/2026). */
+export type RecorteDaConta = { conta: string; centro: string | null; filial: number | null; semCentro?: boolean };
 
 const Decimal = Prisma.Decimal;
 const rotuloMes = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
@@ -170,7 +171,10 @@ export async function exportarExtrato(ano: number, mes: number, linha: string, v
   const consolidado = extrato.visao === "Consolidado";
   const tituloDoBloco = (b: Bloco) => `${consolidado && b.unidade ? `${unidades.get(b.unidade) ?? b.unidade} · ` : ""}${b.titulo}`;
   const daConta = (l: Lancamento) =>
-    !recorte || (l.conta.reduzido === recorte.conta && (!recorte.centro || l.centro?.codigoRM === recorte.centro) && (!recorte.filial || l.filial === recorte.filial));
+    !recorte ||
+    (l.conta.reduzido === recorte.conta &&
+      (recorte.centro ? l.centro?.codigoRM === recorte.centro : !recorte.semCentro || !l.centro) &&
+      (!recorte.filial || l.filial === recorte.filial));
   const titulo = `${extrato.visao} · ${extrato.linha.descricao} · ${rotuloMes(ano, mes)}`;
   const geracao = `Gerado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`;
 
@@ -178,7 +182,7 @@ export async function exportarExtrato(ano: number, mes: number, linha: string, v
   const movimentacoes: Celula[][] = [
     [{ valor: recorte ? `Extrato da Conta ${recorte.conta} · ${titulo}` : `Extrato · ${titulo}`, estilo: ESTILO.titulo }],
     [{ valor: extrato.regra ?? "Os lançamentos que formaram o valor, como foram apurados.", estilo: ESTILO.informacao }],
-    ...(recorte ? [[{ valor: recorte.filial ? `Só a filial ${recorte.filial}${recorte.centro ? ` e o centro de custo ${recorte.centro}` : ""}.` : "Todas as filiais e centros de custo da conta.", estilo: ESTILO.informacao }]] : []),
+    ...(recorte ? [[{ valor: recorte.filial ? `Só a filial ${recorte.filial}${recorte.centro ? ` e o centro de custo ${recorte.centro}` : recorte.semCentro ? ", sem centro de custo" : ""}.` : "Todas as filiais e centros de custo da conta.", estilo: ESTILO.informacao }]] : []),
     [{ valor: geracao, estilo: ESTILO.informacao }],
     [],
   ];
@@ -231,7 +235,7 @@ export async function exportarExtrato(ano: number, mes: number, linha: string, v
   if (recorte) {
     // Os movimentos que o modal Balancete mostra: a conta do balancete no mês, no centro e na filial, quando vêm.
     colunasDetalhes = COLUNAS_DETALHES.filter(([n]) => !["Bloco", "Conta do Balancete", "Balde", "Na Linha"].includes(n));
-    const b = await documentosService.listar(ano, mes, { linha, conta: recorte.conta, centro: recorte.centro, filial: recorte.filial }, acesso);
+    const b = await documentosService.listar(ano, mes, { linha, conta: recorte.conta, centro: recorte.centro, filial: recorte.filial, semCentro: recorte.semCentro }, acesso);
     if (!b.detalhado) detalhes.splice(3, 0, [{ valor: "O balancete deste mês foi importado sem o detalhe dos movimentos: cada linha é a soma da filial, do centro de custo e da conta.", estilo: ESTILO.aviso }]);
     linhaCabecalhoDet = detalhes.length + 1;
     detalhes.push(cabecalho(colunasDetalhes));

@@ -771,7 +771,9 @@ export function PainelContent() {
               rótulo preto, o orçado do último mês e o acumulado do orçado. O Exercício, o Período, os Rótulos e o Tipo do Configurar Gráficos valem
               também nela; fora do Orçamento, as colunas do orçado trazem o nome da marcação escolhida na Comparação (Forecast SET/26, Forecast
               Acum.…), como em Resultados. Na Comparação PROVA, cada cenário dela tem as duas colunas (Forecast SET/26, Forecast Acum., Orçado
-              SET/26…), lado a lado e na cor dele, como em Resultados, e o gráfico do indicador traz uma série por cenário. Na lista antes do rótulo Indicador (a seta), escolha Todos os Grupos ou um grupo; use os filtros nos rótulos das colunas;
+              SET/26…), lado a lado e na cor dele, como em Resultados, e o gráfico do indicador traz uma série por cenário. Na lista antes do rótulo Indicador (a seta), escolha Todos os Grupos ou um grupo; o botão de seta ao lado dela recolhe (seta para a
+              esquerda) ou expande (seta para a direita) os meses anteriores ao Período, deixando o do Período (com o orçado dele) e os acumulados,
+              como em Resultados (a escolha é a mesma das tabelas de Resultados e fica guardada neste navegador); use os filtros nos rótulos das colunas;
               as colunas Indicador, Sent. e Und. ficam fixas. Clique num indicador para abrir o gráfico dele (o realizado e o orçado mês a mês e o
               acumulado), que o botão ao lado do nome copia como imagem. Nesta aba, “Exportar” baixa os indicadores em Excel ou PDF.
             </li>

@@ -2,6 +2,7 @@ import type { TipoImportacao } from "../../../generated/prisma/enums.js";
 import type { LinhaPlanilha, ValorCelula } from "../../../lib/xlsx.js";
 import { getPrismaClient } from "../../../config/prisma.js";
 import { ESTRUTURA_INICIAL_INDICADORES } from "../../relatorios/estruturaInicialIndicadores.js";
+import { atualDe, IND, nomeDo, nomesAntigos } from "../../relatorios/indicadoresDoSistema.js";
 
 /**
  * Os nomes dos indicadores do cadastro Estrutura dos Indicadores, para a aba das metas (11/10/2026): um indicador
@@ -40,10 +41,16 @@ export type TipoIndicadores = "INDICADORES_ADMIN" | "INDICADORES_COMERCIAL" | "M
 type Definicao = {
   aba: string;
   rotulo: string;
-  nomes: string[];
+  /** Os indicadores da aba, pelo ID (19/11/2026): a linha da aba vale pelo nome atual do indicador. */
+  ids?: readonly string[];
+  /** Os nomes atuais (dos IDs; nas metas, os do cadastro). */
+  readonly nomes: string[];
   /** Onde o valor é gravado: os indicadores realizados ou as metas do orçamento. */
   destino: "INDICADOR" | "META";
-  /** Outros nomes de um indicador na aba (o nome da aba → o do catálogo). */
+  /**
+   * Outros nomes de um indicador na aba (o nome da aba → o nome original do indicador, o de 19/11/2026). Depois da troca do
+   * nome do indicador, o apelido também é um nome antigo e é recusado.
+   */
   apelidos?: Record<string, string>;
   /** Linhas com nome fora do catálogo são ignoradas, e não rejeitadas (a aba das metas tem indicadores que a ferramenta não calcula). */
   ignorarOutros?: boolean;
@@ -54,48 +61,54 @@ export const DEFINICOES_INDICADORES: Record<TipoIndicadores, Definicao> = {
     aba: "Indicadores (Admin.)",
     rotulo: "Indicadores do Administrativo",
     destino: "INDICADOR",
-    nomes: [
-      "Quadro de Lotação: MO Direta Matriz",
-      "Quadro de Lotação: MO Direta Filial",
-      "Quadro de Lotação: MO Direta Total",
-      "Quadro de Lotação: MO Indireta Matriz",
-      "Quadro de Lotação: MO Indireta Filial",
-      "Quadro de Lotação: MO Indireta Total",
-      "Quadro de Lotação: MO Geral Matriz",
-      "Quadro de Lotação: MO Geral Filial",
-      "Quadro de Lotação: MO Geral Total",
-      "Quadro de Lotação: MO Direta Montagem",
-      "Quadro de Lotação: MO Indireta Montagem",
-      "Quadro de Lotação: MO Geral Montagem",
-      "Fluxo de Caixa Operacional Líquido",
-      "Inadimplência",
-      "Quadro de Lotação Total",
-      "Turnover",
-      "Abertura de Vagas x Contratações",
-      "Acidentes c/ Afastamento",
+    ids: [
+      IND.QL_DIRETA_MATRIZ,
+      IND.QL_DIRETA_FILIAL,
+      IND.QL_DIRETA_TOTAL,
+      IND.QL_INDIRETA_MATRIZ,
+      IND.QL_INDIRETA_FILIAL,
+      IND.QL_INDIRETA_TOTAL,
+      IND.QL_GERAL_MATRIZ,
+      IND.QL_GERAL_FILIAL,
+      IND.QL_GERAL_TOTAL,
+      IND.QL_DIRETA_MONTAGEM,
+      IND.QL_INDIRETA_MONTAGEM,
+      IND.QL_GERAL_MONTAGEM,
+      IND.FCOL,
+      IND.INADIMPLENCIA,
+      IND.QUADRO_TOTAL,
+      IND.TURNOVER,
+      IND.CONTRATACOES,
+      IND.ACIDENTES,
     ],
+    get nomes() {
+      return (this.ids ?? []).map(nomeDo);
+    },
   },
   INDICADORES_COMERCIAL: {
     aba: "Indicadores (Comercial)",
     rotulo: "Indicadores do Comercial",
     destino: "INDICADOR",
-    nomes: [
-      "Venda: Global",
-      "Venda: Mercantil",
-      "Venda: Total",
-      "Receita Líquida Vendida: Global",
-      "Receita Líquida Vendida: Mercantil",
-      "Receita Líquida Vendida: Total",
-      "Margem de Contribuição: Global",
-      "Margem de Contribuição: Mercantil",
-      "Margem de Contribuição: Total",
-      "Demanda (Vol.): Matriz",
-      "Demanda (Vol.): Filial",
-      "Demanda (Vol.): Total (Fabricação)",
-      "Demanda (Vol.): Montagem",
-      "Demanda (Pistas.): Filial",
-      "Repres. do Mix Ampliado nas Vendas",
+    ids: [
+      IND.VENDA_GLOBAL,
+      IND.VENDA_MERCANTIL,
+      IND.VENDA_TOTAL,
+      IND.RLV_GLOBAL,
+      IND.RLV_MERCANTIL,
+      IND.RLV_TOTAL,
+      IND.MCV_GLOBAL,
+      IND.MCV_MERCANTIL,
+      IND.MCV_TOTAL,
+      IND.DEMANDA_MATRIZ,
+      IND.DEMANDA_FILIAL,
+      IND.DEMANDA_FABRICACAO,
+      IND.DEMANDA_MONTAGEM,
+      IND.DEMANDA_PISTAS_FILIAL,
+      IND.MIX_AMPLIADO,
     ],
+    get nomes() {
+      return (this.ids ?? []).map(nomeDo);
+    },
   },
   // Desde 11/10/2026, não se importa mais no mês (as metas ficam nos cenários); a definição fica para as importações antigas.
   METAS_ORCAMENTO: {
@@ -123,6 +136,16 @@ export const TIPOS_FORA_DA_APURACAO: TipoImportacao[] = [...(Object.keys(DEFINIC
 
 export type ValorIndicador = { nome: string; valor: number; linhaArquivo: number };
 export type Rejeicao = { linha: number; codigo: string; mensagem: string };
+
+/** A recusa do arquivo com nomes antigos de indicadores (19/11/2026), ou nulo. */
+export function recusaPorNomesAntigos(rejeicoes: Rejeicao[]): string | null {
+  const antigas = rejeicoes.filter((r) => r.codigo === "NOME_ANTIGO");
+  if (!antigas.length) return null;
+  return `O arquivo tem ${antigas.length === 1 ? "um nome antigo de indicador" : `${antigas.length} nomes antigos de indicadores`}, e nada foi gravado: ${antigas
+    .slice(0, 5)
+    .map((r) => `linha ${r.linha}, ${r.mensagem.replace(/: mude o nome no arquivo e importe de novo\.$/, "")}`)
+    .join("; ")}${antigas.length > 5 ? "…" : ""}. Mude os nomes no arquivo e importe de novo.`;
+}
 export type LeituraIndicadores =
   | { ok: true; valores: ValorIndicador[]; rejeicoes: Rejeicao[]; lidas: number; vazias: number }
   | { ok: false; motivo: string };
@@ -156,8 +179,11 @@ const numero = (v: ValorCelula): number | null => {
  * Lê o mês da aba: o valor de cada indicador do catálogo do tipo. Recusa a aba
  * sem o cabeçalho ou sem a coluna do mês; uma linha de indicador fora do
  * catálogo ou com valor que não é número é rejeitada (e relatada).
+ *
+ * `antigos` (19/11/2026): os nomes antigos dos indicadores renomeados → o nome atual. A linha com um nome antigo é
+ * rejeitada, com o nome novo na mensagem: o arquivo muda antes de importar (pedido do Adão).
  */
-export function lerIndicadores(tipo: TipoIndicadores, linhas: LinhaPlanilha[], ano: number, mes: number): LeituraIndicadores {
+export function lerIndicadores(tipo: TipoIndicadores, linhas: LinhaPlanilha[], ano: number, mes: number, antigos: ReadonlyMap<string, string> = nomesAntigos()): LeituraIndicadores {
   const def = DEFINICOES_INDICADORES[tipo];
   const cabecalho = linhas.find((l) => l.celulas.slice(0, 3).some((v) => normalizar(v) === "INDICADOR"));
   if (!cabecalho) return { ok: false, motivo: `A aba não tem o cabeçalho (coluna INDICADOR). Envie a aba ${def.aba}.` };
@@ -167,7 +193,11 @@ export function lerIndicadores(tipo: TipoIndicadores, linhas: LinhaPlanilha[], a
     return m !== null && m.ano === ano && m.mes === mes;
   })());
   if (coluna < 0) return { ok: false, motivo: `A aba não tem a coluna de ${String(mes).padStart(2, "0")}/${ano}.` };
-  const catalogo = new Map([...def.nomes.map((n) => [normalizar(n), n] as const), ...Object.entries(def.apelidos ?? {}).map(([a, n]) => [normalizar(a), n] as const)]);
+  // Os apelidos valem enquanto o indicador tem o nome original; depois da troca, são nomes antigos.
+  const apelidos = Object.entries(def.apelidos ?? {}).filter(([, original]) => atualDe(original) === original);
+  const catalogo = new Map([...def.nomes.map((n) => [normalizar(n), n] as const), ...apelidos.map(([a, n]) => [normalizar(a), n] as const)]);
+  const nomesAntigos = new Map([...antigos].map(([antigo, atual]) => [normalizar(antigo), atual] as const));
+  for (const [a, original] of Object.entries(def.apelidos ?? {})) if (atualDe(original) !== original) nomesAntigos.set(normalizar(a), atualDe(original));
   const valores: ValorIndicador[] = [];
   const rejeicoes: Rejeicao[] = [];
   let lidas = 0;
@@ -183,6 +213,15 @@ export function lerIndicadores(tipo: TipoIndicadores, linhas: LinhaPlanilha[], a
       continue;
     }
     const doCatalogo = catalogo.get(nome);
+    const atual = doCatalogo ? undefined : nomesAntigos.get(nome);
+    if (atual) {
+      rejeicoes.push({
+        linha: l.numero,
+        codigo: "NOME_ANTIGO",
+        mensagem: `"${String(l.celulas[colunaNome]).trim()}" é o nome antigo do indicador ${atual}: mude o nome no arquivo e importe de novo.`,
+      });
+      continue;
+    }
     if (!doCatalogo && def.ignorarOutros) {
       vazias++;
       continue;

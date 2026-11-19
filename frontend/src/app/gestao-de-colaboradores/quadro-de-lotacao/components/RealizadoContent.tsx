@@ -13,6 +13,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { SeletorDaComparacao, useComparacaoDoQuadro } from "../../components/ComparacaoDoQuadro";
 import { quadroService, type LinhaDoRealizado } from "../../services/quadroService";
 import { CabecalhoDoQuadro, rotuloDoMes } from "./CabecalhoDoQuadro";
+import { QuadrosPorDepartamentoEUnidade } from "../../components/QuadrosPorDepartamentoEUnidade";
 
 const numero = (chave: keyof LinhaDoRealizado, rotulo: string): Coluna<LinhaDoRealizado> => ({
   chave,
@@ -89,6 +90,12 @@ export function RealizadoContent() {
               filtradas.
             </li>
             <li>
+              Acima da tabela, os quadros de destaque Por Unidade e Por Departamento: em cada card, os colaboradores do fim do mês e o percentual do total
+              (no título, entre parênteses). O departamento é o do cadastro Departamentos (Cadastros Gerais / Controladoria) com o grupo da DRE do centro de
+              custo (Produção, Montagem, Administrativo…); a unidade, a dos colaboradores do Lançamento Inicial no centro e na função (a linha só das
+              movimentações fica em Sem Unidade). Os quadros seguem os filtros dos rótulos das colunas.
+            </li>
+            <li>
               “Comparação”, ao lado do título, escolhe o cenário marcado (Forecast, Orçamento, Anterior ou Vendido, nos Cenários Sintéticos e Analíticos) ou Sem
               Comparação; a escolha fica guardada neste navegador e vale também no Painel de Bordo. Na tabela, as colunas Cenário (os colaboradores do centro e da
               função no mês, na aba Quadro de Lotação do cenário) e Diferença (Fim do Mês − Cenário) aparecem quando o cenário é analítico e tem linhas nessa
@@ -99,6 +106,10 @@ export function RealizadoContent() {
         }
         acoes={<SeletorDaComparacao comparacao={comparacao} />}
         exportar={<ExportarTabela titulo={`Quadro de Lotação · Realizado · ${rotuloDoMes(anoMes)}`} colunas={colunas} linhas={tabela.filtradas} />}
+      />
+      {/* Os quadros de destaque por Unidade e por Departamento (18/11/2026): os colaboradores do fim do mês, com os filtros da tabela. */}
+      <QuadrosPorDepartamentoEUnidade
+        itens={tabela.filtradas.map((l) => ({ unidade: l.unidade, ordemDaUnidade: l.ordemDaUnidade, departamento: l.departamentoDoCadastro, ordemDoDepartamento: l.ordemDoDepartamento, quantidade: l.final }))}
       />
       <QuadroTabela>
         <DataTable<LinhaDoRealizado>

@@ -115,7 +115,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
   const colunasDosInvestimentos: ColunaExportavel<InvestimentoDoCenario>[] = [
     { chave: "nome", rotulo: "Nome de Referência", valor: (i) => i.nomeReferencia },
     { chave: "unidade", rotulo: "Unidade", valor: (i) => NOME_DA_UNIDADE[i.unidade] },
-    { chave: "conta", rotulo: "Conta", valor: (i) => dados.contas.find((c) => c.unidade === i.unidade)?.rotulo ?? "" },
+    { chave: "conta", rotulo: "Conta", valor: (i) => dados.contasDosInvestimentos.find((c) => c.unidade === i.unidade)?.rotulo ?? "" },
     { chave: "departamento", rotulo: "Departamento", valor: (i) => departamentoDoInvestimento(i) },
     { chave: "descricao", rotulo: "Descrição", valor: (i) => i.descricao },
     { chave: "condicao", rotulo: "Condição de Pagamento", valor: (i) => i.condicaoPagamento ?? "—" },
@@ -172,19 +172,22 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
   );
   return (
     <div className="space-y-8">
-      {/* O título e a descrição no card de destaque, com as funções da tabela à direita (12/11/2026, pedido do Adão). */}
-      <TabelaEditavel
-        titulo="Depreciação"
-        subtitulo="A Depreciação Base de cada unidade, somada com a depreciação dos investimentos listados abaixo."
-        tituloNoDestaque
-        meses={dados.meses}
-        linhas={dados.depreciacao}
-        editavel={pode}
-        item={["conta", "contas"]}
-        cabecalho="CONTA"
-        aoGravar={(alteracoes, origem) => cenariosService.gravarMensais(id, "BASE", alteracoes, origem)}
-        mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
-      />
+      {/* O título e a descrição no card de destaque, com as funções da tabela à direita (12/11/2026, pedido do Adão). A Depreciação
+          segue o recorte (19/11/2026): sem unidade no recorte (o Coordenador que edita a aba), só a lista dos investimentos. */}
+      {dados.depreciacao.length ? (
+        <TabelaEditavel
+          titulo="Depreciação"
+          subtitulo="A Depreciação Base de cada unidade, somada com a depreciação dos investimentos listados abaixo."
+          tituloNoDestaque
+          meses={dados.meses}
+          linhas={dados.depreciacao}
+          editavel={pode}
+          item={["conta", "contas"]}
+          cabecalho="CONTA"
+          aoGravar={(alteracoes, origem) => cenariosService.gravarMensais(id, "BASE", alteracoes, origem)}
+          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
+        />
+      ) : null}
       <section className="space-y-2">
         <div ref={refOriginal}>{destaqueDaLista}</div>
         <div ref={refArea}>
@@ -240,7 +243,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                       {i.nomeReferencia}
                     </td>
                     <td className="truncate px-3 py-1.5 whitespace-nowrap">{NOME_DA_UNIDADE[i.unidade]}</td>
-                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{dados.contas.find((c) => c.unidade === i.unidade)?.rotulo}</td>
+                    <td className="truncate px-3 py-1.5 whitespace-nowrap">{dados.contasDosInvestimentos.find((c) => c.unidade === i.unidade)?.rotulo}</td>
                     <td className="truncate px-3 py-1.5 whitespace-nowrap">{departamentoDoInvestimento(i)}</td>
                     <td className="px-3 py-1.5 text-gray-900">{i.descricao}</td>
                     <td className="px-3 py-1.5 text-gray-600">{i.condicaoPagamento ?? "—"}</td>
@@ -275,7 +278,8 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
 function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string; dados: Dados; investimento: InvestimentoDoCenario | null; onFechar: () => void }) {
   const queryClient = useQueryClient();
   const [nome, setNome] = useState(investimento?.nomeReferencia ?? "");
-  const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? dados.contas[0]?.unidade ?? 1);
+  // As unidades da lista (19/11/2026): todas para quem edita a aba Investimentos, qualquer que seja o recorte.
+  const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? dados.contasDosInvestimentos[0]?.unidade ?? 1);
   // O Departamento dos investimentos de Despesas e Extra (12/11/2026): quem vê por recorte o escolhe entre os dele.
   const [departamento, setDepartamento] = useState<DepartamentoDoInvestimento | "">(
     investimento?.departamento ?? (dados.exigeDepartamento && dados.departamentos.length === 1 ? dados.departamentos[0] : ""),
@@ -340,7 +344,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
           <div className="space-y-1.5">
             <Label htmlFor="inv-unidade">Unidade</Label>
             <select id="inv-unidade" value={unidade} onChange={(e) => setUnidade(Number(e.target.value))} className={classeSelect}>
-              {dados.contas.map((c) => (
+              {dados.contasDosInvestimentos.map((c) => (
                 <option key={c.unidade} value={c.unidade}>
                   {c.nomeUnidade}
                 </option>
@@ -351,7 +355,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
             <Label htmlFor="inv-conta">Conta</Label>
             {/* A conta é a de depreciação da unidade: a do maquinário de produção, de serviços ou do patrimônio. */}
             <select id="inv-conta" value={unidade} disabled className={`${classeSelect} bg-gray-50 text-gray-700`}>
-              {dados.contas
+              {dados.contasDosInvestimentos
                 .filter((c) => c.unidade === unidade)
                 .map((c) => (
                   <option key={c.unidade} value={c.unidade}>

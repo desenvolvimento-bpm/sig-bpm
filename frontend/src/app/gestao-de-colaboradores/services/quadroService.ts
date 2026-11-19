@@ -74,6 +74,11 @@ export type LinhaDoRealizado = {
   funcao: string | null;
   departamento: string | null;
   atribuicao: string | null;
+  /** Os quadros de destaque (18/11/2026): o departamento do cadastro Departamentos e a unidade, com as ordens deles. */
+  departamentoDoCadastro: string | null;
+  ordemDoDepartamento: number | null;
+  unidade: string | null;
+  ordemDaUnidade: number | null;
   inicial: number;
   entradas: number;
   saidas: number;
@@ -153,6 +158,8 @@ export const quadroService = {
           anos: number[];
           meses: Array<IndicadoresDoMes & { mes: number; porTipo: Record<string, number> }>;
           sentidos: Record<"quadroDeLotacao" | "turnover" | "contratacoes", string>;
+          /** Os nomes atuais dos indicadores no cadastro (19/11/2026). */
+          nomes?: Record<"quadroDeLotacao" | "turnover" | "contratacoes", string>;
         };
       }>(`${base}/painel`, { params: ano ? { ano } : {} }),
     ),

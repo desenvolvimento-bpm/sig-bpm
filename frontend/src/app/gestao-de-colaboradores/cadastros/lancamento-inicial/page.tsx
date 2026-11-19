@@ -32,16 +32,17 @@ export default function LancamentoInicialPage() {
               </li>
               <li>
                 Use Novo para incluir um colaborador no Lançamento Inicial já importado (na mesma competência), com a unidade, o tipo, a função e o centro de custo. A
-                tabela traz as mesmas colunas do modal (a competência fica no destaque acima dela).
+                tabela traz as mesmas colunas do modal.
               </li>
               <li>No menu Ações de cada linha, Editar muda o colaborador e Excluir o tira do Lançamento Inicial, depois da confirmação.</li>
               <li>
-                Com alguma competência fechada no Quadro de Lotação, o Lançamento Inicial não se edita: o Importar, o Novo e o menu Ações somem, e o destaque
-                vermelho diz quais competências reabrir. A importação das Funções que apagaria o Lançamento Inicial também é recusada.
+                Com alguma competência fechada no Quadro de Lotação, o Lançamento Inicial não se edita: o Importar, o Novo e o menu Ações somem (para mudar o
+                quadro inicial, reabra as competências fechadas no Quadro de Lotação). A importação das Funções que apagaria o Lançamento Inicial também é recusada.
               </li>
               <li>
-                No destaque acima da tabela ficam a competência do quadro e o total de colaboradores, com o de cada tipo (CLT, PJ, Aprendizes e Estagiários).
-                Use os filtros nos rótulos das colunas.
+                Acima da tabela, os quadros de destaque Por Unidade e Por Departamento: em cada card, os colaboradores e o percentual do total (no título,
+                entre parênteses). A unidade é a do colaborador; o departamento, o do cadastro Departamentos (Cadastros Gerais / Controladoria) com o grupo da DRE
+                do centro de custo (Produção, Montagem, Administrativo…). Os quadros seguem os filtros dos rótulos das colunas.
               </li>
             </ul>
           }

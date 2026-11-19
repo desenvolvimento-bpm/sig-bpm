@@ -2,19 +2,35 @@
  * A Liberação de Projetos dos cenários analíticos (16/11/2026, pedido do Adão): os indicadores Liberação de Projetos: Matriz
  * e Liberação de Projetos: Filial se digitam na aba Indicadores Manuais das Premissas (no realizado, vêm das Listas — os
  * Projetos Liberados de cada unidade), e a Liberação de Projetos: Total é a soma dos dois. Como no Fechamento Mensal, eles
- * são a base do rateio de Projeto: a parte de cada unidade é a liberação dela sobre a das duas, mês a mês.
+ * são a base do rateio de Projeto: a parte de cada unidade é a liberação dela sobre a das duas, mês a mês. Pelo ID
+ * (19/11/2026): os nomes são os atuais do cadastro.
  */
+import { IND, IndicadoresPeloId, nomeDo } from "../relatorios/indicadoresDoSistema.js";
 
-export const LIBERACAO_DE_PROJETOS = { MATRIZ: "Liberação de Projetos: Matriz", FILIAL: "Liberação de Projetos: Filial" } as const;
-export const LIBERACAO_TOTAL = "Liberação de Projetos: Total";
+export const LIBERACAO_DE_PROJETOS = {
+  get MATRIZ() {
+    return nomeDo(IND.LIBERACAO_MATRIZ);
+  },
+  get FILIAL() {
+    return nomeDo(IND.LIBERACAO_FILIAL);
+  },
+};
+/** O nome atual da Liberação de Projetos: Total. */
+export const liberacaoTotal = () => nomeDo(IND.LIBERACAO_TOTAL);
 /** Os dois que se digitam. */
-export const LIBERACOES_DIGITADAS: ReadonlySet<string> = new Set(Object.values(LIBERACAO_DE_PROJETOS));
+export const LIBERACOES_DIGITADAS = new IndicadoresPeloId(() => [IND.LIBERACAO_MATRIZ, IND.LIBERACAO_FILIAL]);
 
 /** O totalizador das Listas da fórmula de cada um (o item [LISTA]) → os indicadores do cenário que o dão. */
-export const LIBERACOES_DA_LISTA: Record<string, string[]> = {
-  PROJETOS_MATRIZ: [LIBERACAO_DE_PROJETOS.MATRIZ],
-  PROJETOS_FILIAL: [LIBERACAO_DE_PROJETOS.FILIAL],
-  PROJETOS_TOTAL: [LIBERACAO_DE_PROJETOS.MATRIZ, LIBERACAO_DE_PROJETOS.FILIAL],
+export const LIBERACOES_DA_LISTA: Readonly<Record<string, readonly string[]>> = {
+  get PROJETOS_MATRIZ() {
+    return [LIBERACAO_DE_PROJETOS.MATRIZ];
+  },
+  get PROJETOS_FILIAL() {
+    return [LIBERACAO_DE_PROJETOS.FILIAL];
+  },
+  get PROJETOS_TOTAL() {
+    return [LIBERACAO_DE_PROJETOS.MATRIZ, LIBERACAO_DE_PROJETOS.FILIAL];
+  },
 };
 
 /**

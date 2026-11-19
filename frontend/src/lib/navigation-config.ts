@@ -124,11 +124,6 @@ export const navGrupos: NavGrupo[] = [
     ],
   },
   {
-    // Criação de Cenários (11/10/2026): desde 11/11/2026, só os Resultados Vendidos (os Cenários foram para as Análises Gerenciais).
-    titulo: "Criação de Cenários",
-    itens: [{ title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true }],
-  },
-  {
     titulo: "Apuração dos Resultados",
     itens: [
       // O Realizado por Obra (03/11/2026, pedido do Adão; antes, Resultados por Obra, em desenvolvimento): os Resultados, com a
@@ -143,6 +138,9 @@ export const navGrupos: NavGrupo[] = [
           { title: "Resultados", href: "/realizado-por-obra/resultados", icon: ListOrdered, permission: "realizado_obra_resultados:ler" },
         ],
       },
+      // Os Resultados Vendidos (em desenvolvimento), logo depois do Realizado por Obra (18/11/2026, pedido do Adão; antes, sozinhos
+      // no grupo Criação de Cenários, que saiu do menu).
+      { title: "Resultados Vendidos", href: "/resultados-vendidos", icon: HandCoins, emDesenvolvimento: true },
       // O Balanço Patrimonial saiu do menu em 04/11/2026 (pedido do Adão; estava em desenvolvimento).
       // Os Resultados por Linha (26/10/2026) não são um processo: a etapa Linhas do Fechamento Mensal e a aba Linhas dos
       // Resultados Empresariais.
@@ -311,10 +309,12 @@ export const navGrupos: NavGrupo[] = [
           },
           {
             title: "Controladoria",
-            href: "/cadastros/linhas",
+            href: "/cadastros/departamentos",
             icon: Rows3,
             permission: "cadastro_controladoria:ler",
             abas: [
+              // Os Departamentos (11/11/2026, pedido do Adão), antes das Linhas desde 18/11/2026 (pedido do Adão).
+              { title: "Departamentos", href: "/cadastros/departamentos", icon: Boxes, permission: "cadastro_controladoria.departamentos:ler" },
               { title: "Linhas", href: "/cadastros/linhas", icon: Rows3, permission: "cadastro_controladoria.linhas:ler" },
               { title: "Estrutura da DRE", href: "/cadastros/estrutura-dre", icon: ListTree, permission: "cadastro_controladoria.estrutura_dre:ler" },
               { title: "Regras de Rateio", href: "/cadastros/regras-rateio", icon: Percent, permission: "cadastro_controladoria.regras_rateio:ler" },
@@ -322,8 +322,6 @@ export const navGrupos: NavGrupo[] = [
               { title: "Redistribuições de Gastos", href: "/cadastros/redistribuicoes-gastos", icon: GitFork, permission: "cadastro_controladoria.redistribuicoes:ler" },
               // Os custos sem tarefa nas linhas, para a etapa Linhas da apuração (26/10/2026).
               { title: "Alocação nas Linhas", href: "/cadastros/alocacao-linhas", icon: Split, permission: "cadastro_controladoria.alocacao_linhas:ler" },
-              // Os Departamentos (11/11/2026, pedido do Adão).
-              { title: "Departamentos", href: "/cadastros/departamentos", icon: Boxes, permission: "cadastro_controladoria.departamentos:ler" },
             ],
           },
           {

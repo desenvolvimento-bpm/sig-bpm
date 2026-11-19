@@ -9,7 +9,10 @@ import { conflitoDeVigencia } from "../../volumes/vigenciasRateio.js";
 import { formulasPorExtenso, INDICADORES_DAS_LISTAS, ROTULO_DO_REGISTRADO, rotuloDoMovimento, rotuloDoQuadro, TOTALIZADORES_DAS_LISTAS } from "../../relatorios/catalogoIndicadores.js";
 import { DEPARTAMENTOS_DO_QUADRO } from "../../relatorios/formulaIndicador.js";
 import { compilarFormula, FormulaInvalidaError, formulaPorExtenso } from "../../relatorios/formulaIndicador.js";
-import { CALCULOS_SISTEMA } from "../../relatorios/indicadores.js";
+import { calculoDoSistema } from "../../relatorios/indicadores.js";
+import { ACAO_RENOMEACAO, carregarNomesDoSistema, idPeloOriginal, NOMES_ORIGINAIS } from "../../relatorios/indicadoresDoSistema.js";
+import { exigirNomeLivreNosDados, propagarIdentidadeDoCard, propagarNomeDoIndicador, textoDoResumo, TrocaDeNomeError, type IdentidadeDoCard } from "../../relatorios/renomearIndicador.js";
+import { auditar } from "../../auditoriaService.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
 import { chaveDoFornecedor } from "../../classificacao/regrasClassificacao.js";
@@ -99,7 +102,11 @@ export type DefinicaoCadastro = {
   ler: (db: Db, id: string) => Promise<Valores | null>;
   /** Normaliza, valida e completa os derivados; devolve os dados para gravar. */
   preparar: (db: Db, v: Valores, id: string | null) => Promise<Record<string, unknown>>;
-  gravar: (db: Db, dados: Record<string, unknown>, id: string | null) => Promise<string>;
+  /**
+   * Grava e devolve o ID; ou o ID e um aviso para a tela (19/11/2026: a troca do nome de um indicador ou de um card, com o
+   * que ela atualizou). `quem`: o usuário (para a Auditoria da troca).
+   */
+  gravar: (db: Db, dados: Record<string, unknown>, id: string | null, quem?: string) => Promise<string | { id: string; aviso: string | null }>;
   /** Por que não pode ser excluído (nulo se pode). */
   impedimentoExclusao?: (db: Db, id: string) => Promise<string | null>;
   /**
@@ -116,6 +123,30 @@ export type DefinicaoCadastro = {
 };
 
 // --------------------------------------------------------------- utilitários
+/** O nome para comparar (19/11/2026): sem diferença de maiúsculas, acentos e espaços. */
+const nomeComparavel = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** O nome do usuário (quem trocou o nome, gravado nos relatórios e nos painéis que a troca mudou). */
+async function nomeDoUsuario(db: Db, id: string | undefined) {
+  return (id ? (await db.usuario.findUnique({ where: { id }, select: { nome: true } }))?.nome : null) ?? "Troca de nome no cadastro";
+}
+
+/** A troca de nome com a recusa da conferência como erro da tela. */
+async function trocarNome<T>(fazer: () => Promise<T>): Promise<T> {
+  try {
+    return await fazer();
+  } catch (e) {
+    if (e instanceof TrocaDeNomeError) throw new RegraCadastroError(409, e.message);
+    throw e;
+  }
+}
+
 const texto = (v: unknown) => (v === undefined || v === null ? null : String(v).trim() || null);
 const exigir = (v: unknown, rotulo: string) => {
   const t = texto(v);
@@ -949,7 +980,7 @@ async function itensDaFormula(db: Db): Promise<Opcao[]> {
     ...linhas.map((l) => ({ valor: `DRE|${l.codigo}`, rotulo: `${l.grupoSigla} › ${l.descricao}${l.tipo === "ITEM" ? "" : " (total)"}`, grupos: ["DRE"] })),
     ...TOTALIZADORES_DAS_LISTAS.map((t) => ({ valor: `LISTA|${t.codigo}`, rotulo: t.rotulo, grupos: ["LISTA"] })),
     // O "Comercial e Administrativo" saiu do montador em 06/11/2026: as opções ficam só para mostrar os itens já gravados.
-    ...INDICADORES_DAS_LISTAS.map((n) => ({ valor: `IND|${n}`, rotulo: n, grupos: ["IND"] })),
+    ...[...INDICADORES_DAS_LISTAS].map((n) => ({ valor: `IND|${n}`, rotulo: n, grupos: ["IND"] })),
     // A marca ACUMULAVEL (23/10/2026): o montador oferece o Período (No Mês ou Acumulado no Ano) nas metas e nos indicadores.
     ...nomes.map((n) => ({ valor: `META|${n}`, rotulo: n, grupos: ["META", "ACUMULAVEL"] })),
     // Os outros indicadores do cadastro (23/10/2026), com o grupo antes, como no Painel de Bordo; o próprio, o cadastro recusa.
@@ -1049,7 +1080,13 @@ const estruturaIndicadores: DefinicaoCadastro = {
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro" },
     { nome: "grupo", rotulo: "Grupo", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(GRUPOS_DE_INDICADORES.map((g) => [g, g])) },
     { nome: "numero", rotulo: "Numeração", rotuloColuna: "Nº", tipo: "texto", ajuda: "Vazia nos indicadores principais do grupo." },
-    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, travaComMovimento: true },
+    {
+      nome: "nome",
+      rotulo: "Nome",
+      tipo: "texto",
+      obrigatorio: true,
+      ajuda: "Trocar o nome atualiza os valores, as metas, os cenários, as fórmulas e os cards dos relatórios; as planilhas importadas precisam do nome novo.",
+    },
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS) },
     { nome: "unidade", rotulo: "Unidade de Medida", rotuloColuna: "Und.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(UNIDADES_DE_INDICADOR) },
     { nome: "descricao", rotulo: "Descrição", tipo: "texto", larguraInteira: true, naTabela: false, ajuda: "O texto que a aba Indicadores do Painel de Bordo mostra sob o nome." },
@@ -1089,9 +1126,18 @@ const estruturaIndicadores: DefinicaoCadastro = {
     return paraATela(i, (await formulasPorExtenso([i.formula]))[0]);
   },
   async preparar(db, v, id) {
-    const nome = exigir(v.nome, "O nome");
-    const outro = await db.indicadorEstrutura.findUnique({ where: { nome }, select: { id: true } });
-    if (outro && outro.id !== id) throw new RegraCadastroError(409, `Já existe o indicador ${nome}.`);
+    const nome = exigir(v.nome, "O nome").replace(/\s+/g, " ");
+    // O nome (19/11/2026: editável, com a troca em todos os dados): sem os sinais das fórmulas e sem outro igual, nem
+    // com diferença só de maiúsculas, acentos ou espaços.
+    if (/[|[\]]/.test(nome)) throw new RegraCadastroError(400, "O nome não pode ter | [ ou ]: eles são da escrita das fórmulas.");
+    const cadastrados = await db.indicadorEstrutura.findMany({ select: { id: true, nome: true } });
+    const outro = cadastrados.find((i) => i.id !== id && nomeComparavel(i.nome) === nomeComparavel(nome));
+    if (outro) throw new RegraCadastroError(409, outro.nome === nome ? `Já existe o indicador ${nome}.` : `Já existe o indicador ${outro.nome}, que só difere do nome dado em maiúsculas, acentos ou espaços.`);
+    const anterior = id ? cadastrados.find((i) => i.id === id) : undefined;
+    // Numa base com outros IDs, o código conheceria este indicador pelo nome original: a troca ficaria fora do código.
+    if (id && anterior && anterior.nome !== nome && !(id in NOMES_ORIGINAIS) && idPeloOriginal(anterior.nome)) {
+      throw new RegraCadastroError(409, `O ID de ${anterior.nome} nesta base não é o que o sistema conhece: o nome não se troca aqui. Fale com o desenvolvimento.`);
+    }
     const grupo = exigir(v.grupo, "O grupo");
     if (!GRUPOS_DE_INDICADORES.includes(grupo)) throw new RegraCadastroError(400, "Grupo inválido.");
     const sentido = exigir(v.sentido, "O comportamento");
@@ -1105,7 +1151,7 @@ const estruturaIndicadores: DefinicaoCadastro = {
     let peso = texto(v.peso);
     if (modo === "SISTEMA") {
       // Só os que têm a conta no código; a fórmula não vale para eles.
-      if (!CALCULOS_SISTEMA[nome]) throw new RegraCadastroError(400, "O cálculo do sistema só vale para os indicadores que já o têm; monte a Metodologia.");
+      if (!calculoDoSistema({ id, nome })) throw new RegraCadastroError(400, "O cálculo do sistema só vale para os indicadores que já o têm; monte a Metodologia.");
       formula = null;
       peso = null;
     } else {
@@ -1139,10 +1185,27 @@ const estruturaIndicadores: DefinicaoCadastro = {
       ativo: v.ativo === undefined ? true : booleano(v.ativo),
     };
   },
-  async gravar(db, d, id) {
+  async gravar(db, d, id, quem) {
     const dados = d as Prisma.IndicadorEstruturaUncheckedCreateInput;
-    if (id) return (await db.indicadorEstrutura.update({ where: { id }, data: dados })).id;
-    return (await db.indicadorEstrutura.create({ data: { ...dados, ordem: dados.ordem ?? (await db.indicadorEstrutura.count()) + 1 } })).id;
+    if (!id) return (await db.indicadorEstrutura.create({ data: { ...dados, ordem: dados.ordem ?? (await db.indicadorEstrutura.count()) + 1 } })).id;
+    const antes = await db.indicadorEstrutura.findUnique({ where: { id }, select: { nome: true } });
+    if (!antes || antes.nome === dados.nome) return (await db.indicadorEstrutura.update({ where: { id }, data: dados })).id;
+    // A troca do nome (19/11/2026): o cadastro e todos os dados ligados ao nome numa transação só, com a conferência.
+    const porQuem = await nomeDoUsuario(db, quem);
+    const resumo = await trocarNome(() =>
+      db.$transaction(
+        async (tx) => {
+          await exigirNomeLivreNosDados(tx, dados.nome);
+          await tx.indicadorEstrutura.update({ where: { id }, data: dados });
+          return propagarNomeDoIndicador(tx, antes.nome, dados.nome, porQuem);
+        },
+        { timeout: 120_000 },
+      ),
+    );
+    await auditar({ usuarioId: quem ?? null, acao: ACAO_RENOMEACAO, entidade: "indicador_estrutura", entidadeId: id, antes: { nome: antes.nome }, depois: { nome: dados.nome }, metadados: { nome: dados.nome, ...resumo } });
+    await carregarNomesDoSistema();
+    const texto = textoDoResumo(resumo);
+    return { id, aviso: `Nome trocado de ${antes.nome} para ${dados.nome}${texto ? `: também em ${texto}` : ""}. Mude o nome nas planilhas antes de importar.` };
   },
   // O nome liga o indicador às metas dos cenários, aos valores importados e digitados e ao Painel de Bordo.
   async movimentos(db, id) {
@@ -1523,7 +1586,7 @@ const painelBordo: DefinicaoCadastro = {
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
     { nome: "grupo", rotulo: "Grupo", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(GRUPOS_DO_PAINEL), ajuda: "A aba do Painel de Bordo." },
     { nome: "quadro", rotulo: "Quadro", tipo: "texto", obrigatorio: true, ajuda: "O quadro da aba (Consolidado, Produção: Matriz…): os itens com o mesmo quadro ficam juntos." },
-    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true },
+    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, ajuda: "Trocar o nome (ou o grupo, o quadro e a abreviação) atualiza os cards dos Relatórios Executivos e dos Painéis de Bordo." },
     { nome: "sigla", rotulo: "Abreviação", rotuloColuna: "Abrev.", tipo: "texto", obrigatorio: true },
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS_DO_PAINEL) },
     {
@@ -1568,9 +1631,13 @@ const painelBordo: DefinicaoCadastro = {
     const i = await db.painelItem.findUnique({ where: { id } });
     return i ? comTextos(i) : null;
   },
-  async preparar(db, v) {
+  async preparar(db, v, id) {
     const grupo = exigir(v.grupo, "O grupo");
     if (!GRUPOS_DO_PAINEL.some(([g]) => g === grupo)) throw new RegraCadastroError(400, "Grupo inválido.");
+    // A identidade do card nos blocos dos relatórios (19/11/2026): o grupo, o quadro, o nome e a abreviação, sem outro igual.
+    const identidade = { quadro: exigir(v.quadro, "O quadro").replace(/\s+/g, " "), nome: exigir(v.nome, "O nome").replace(/\s+/g, " "), sigla: exigir(v.sigla, "A abreviação") };
+    const igual = await db.painelItem.findFirst({ where: { grupo, ...identidade, ...(id ? { id: { not: id } } : {}) }, select: { id: true } });
+    if (igual) throw new RegraCadastroError(409, `Já existe o card ${identidade.nome} (${identidade.sigla}) no quadro ${identidade.quadro} desta aba.`);
     const sentido = exigir(v.sentido, "O comportamento");
     if (!SENTIDOS_DO_PAINEL.some(([s]) => s === sentido)) throw new RegraCadastroError(400, "Comportamento inválido.");
     const formula = texto(v.formula);
@@ -1585,9 +1652,7 @@ const painelBordo: DefinicaoCadastro = {
     return {
       ordem: inteiro(v.ordem, "A ordem") ?? undefined,
       grupo,
-      quadro: exigir(v.quadro, "O quadro"),
-      nome: exigir(v.nome, "O nome"),
-      sigla: exigir(v.sigla, "A abreviação"),
+      ...identidade,
       sentido,
       formula,
       formato,
@@ -1599,9 +1664,28 @@ const painelBordo: DefinicaoCadastro = {
       ativo: v.ativo === undefined ? true : booleano(v.ativo),
     };
   },
-  async gravar(db, d, id) {
+  async gravar(db, d, id, quem) {
     const dados = d as Prisma.PainelItemUncheckedCreateInput;
-    if (id) return (await db.painelItem.update({ where: { id }, data: dados })).id;
+    if (id) {
+      const antes = await db.painelItem.findUnique({ where: { id }, select: { grupo: true, quadro: true, nome: true, sigla: true } });
+      const depois: IdentidadeDoCard = { grupo: dados.grupo, quadro: dados.quadro, nome: dados.nome, sigla: dados.sigla };
+      const mudou = antes && (["grupo", "quadro", "nome", "sigla"] as const).some((k) => antes[k] !== depois[k]);
+      if (!antes || !mudou) return (await db.painelItem.update({ where: { id }, data: dados })).id;
+      // A troca do nome (ou do grupo, do quadro e da abreviação) também nos cards dos relatórios e dos painéis (19/11/2026).
+      const porQuem = await nomeDoUsuario(db, quem);
+      const resumo = await trocarNome(() =>
+        db.$transaction(
+          async (tx) => {
+            await tx.painelItem.update({ where: { id }, data: dados });
+            return propagarIdentidadeDoCard(tx, antes, depois, porQuem);
+          },
+          { timeout: 120_000 },
+        ),
+      );
+      await auditar({ usuarioId: quem ?? null, acao: ACAO_RENOMEACAO, entidade: "painel_item", entidadeId: id, antes, depois, metadados: { nome: depois.nome, ...resumo } });
+      const texto = textoDoResumo(resumo);
+      return { id, aviso: texto ? `Também atualizados: ${texto}.` : null };
+    }
     const ultima = await db.painelItem.aggregate({ _max: { ordem: true } });
     return (await db.painelItem.create({ data: { ...dados, ordem: dados.ordem ?? (ultima._max.ordem ?? 0) + 1 } })).id;
   },

@@ -1,4 +1,5 @@
 import type { LinhaPlanilha, ValorCelula } from "../../lib/xlsx.js";
+import { atualDe, nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
 
 /**
  * A leitura de um cenário sintético (11/10/2026): as abas da DRE por unidade, como as do ORÇAMENTO BPM 2026 -
@@ -29,7 +30,10 @@ export const ABAS_METAS = ["Metas (Orçamento)", "Metas"];
 const TOTAIS_SO_DA_PLANILHA = new Set(["DESPESAS + EXTRA OPERACIONAL (DEO)", "EXTRA OPERACIONAL (EO)"]);
 /** Grafias da planilha diferentes das da estrutura ("(pst)" na aba Consolidado do orçamento). */
 const GRAFIAS: Record<string, string> = { "PRODUÇÃO DO PRÉ-FABRICADO (PST)": "PRODUÇÃO DO PRÉ-FABRICADO (PISTAS)" };
-/** Outros nomes de um indicador na aba das metas. */
+/**
+ * Outros nomes de um indicador na aba das metas → o nome original do indicador (o de 19/11/2026). Depois da troca do nome do
+ * indicador, o apelido também é um nome antigo e é recusado.
+ */
 const APELIDOS: Record<string, string> = { "QUADRO DE LOTAÇÃO": "Quadro de Lotação Total" };
 
 const normalizar = (v: ValorCelula | undefined) => String(v ?? "").normalize("NFC").trim().replace(/\s+/g, " ").toUpperCase();
@@ -119,23 +123,43 @@ export function lerAbaDRE(visao: number, aba: string, linhas: LinhaPlanilha[], e
 }
 
 export type ValorMeta = { nome: string; mes: number; valor: number };
-export type AbaMetasLida = { aba: string; ano: number; indicadores: number; valores: ValorMeta[]; ignorados: string[] };
+export type AbaMetasLida = {
+  aba: string;
+  ano: number;
+  indicadores: number;
+  valores: ValorMeta[];
+  ignorados: string[];
+  /** As linhas com o nome antigo de um indicador renomeado (19/11/2026): "nome antigo → nome atual"; o arquivo é recusado. */
+  nomesAntigos: string[];
+};
 
-/** A aba das metas: o valor de cada mês dos indicadores do cadastro (os outros nomes são ignorados e listados); null sem a coluna INDICADOR. */
-export function lerAbaMetas(aba: string, linhas: LinhaPlanilha[], nomes: string[]): AbaMetasLida | null {
+/**
+ * A aba das metas: o valor de cada mês dos indicadores do cadastro (os outros nomes são ignorados e listados; os nomes antigos
+ * dos indicadores renomeados, listados à parte, recusam o arquivo); null sem a coluna INDICADOR.
+ */
+export function lerAbaMetas(aba: string, linhas: LinhaPlanilha[], nomes: string[], antigos: ReadonlyMap<string, string> = nomesAntigos()): AbaMetasLida | null {
   const cabecalho = linhas.find((l) => l.celulas.some((v) => normalizar(v) === "INDICADOR"));
   if (!cabecalho) return null;
   const colNome = cabecalho.celulas.findIndex((v) => normalizar(v) === "INDICADOR");
   const { ano, colunas } = colunasDosMeses(cabecalho.celulas);
   const porNome = new Map(nomes.map((n) => [normalizar(n), n]));
+  // Os nomes antigos: os das trocas e os apelidos dos indicadores renomeados (o apelido vale só com o nome original).
+  const porAntigo = new Map([...antigos].map(([antigo, atual]) => [normalizar(antigo), atual] as const));
+  for (const [apelido, original] of Object.entries(APELIDOS)) if (atualDe(original) !== original) porAntigo.set(apelido, atualDe(original));
   const valores: ValorMeta[] = [];
   const ignorados: string[] = [];
+  const comNomeAntigo: string[] = [];
   const vistos = new Set<string>();
   for (const l of linhas) {
     if (l.numero <= cabecalho.numero) continue;
     const bruto = normalizar(l.celulas[colNome]);
     if (!bruto) continue;
-    const nome = porNome.get(bruto) ?? (APELIDOS[bruto] && porNome.has(normalizar(APELIDOS[bruto])) ? APELIDOS[bruto] : null);
+    const nome = porNome.get(bruto) ?? (APELIDOS[bruto] && atualDe(APELIDOS[bruto]) === APELIDOS[bruto] && porNome.has(normalizar(APELIDOS[bruto])) ? APELIDOS[bruto] : null);
+    const atual = nome ? undefined : porAntigo.get(bruto);
+    if (atual) {
+      comNomeAntigo.push(`${String(l.celulas[colNome]).trim()} → ${atual}`);
+      continue;
+    }
     if (!nome) {
       ignorados.push(String(l.celulas[colNome]).trim());
       continue;
@@ -147,5 +171,5 @@ export function lerAbaMetas(aba: string, linhas: LinhaPlanilha[], nomes: string[
       if (v !== null) valores.push({ nome, mes, valor: v });
     }
   }
-  return { aba, ano: ano ?? 0, indicadores: vistos.size, valores, ignorados };
+  return { aba, ano: ano ?? 0, indicadores: vistos.size, valores, ignorados, nomesAntigos: comNomeAntigo };
 }

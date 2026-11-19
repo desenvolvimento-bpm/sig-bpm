@@ -88,10 +88,11 @@ export const edicaoCadastrosService = {
     const db = getPrismaClient();
     await exigirSemTrava(d, db);
     const dados = await d.preparar(db, valores, null);
-    const id = await d.gravar(db, dados, null);
+    const gravado = await d.gravar(db, dados, null, quem);
+    const id = typeof gravado === "string" ? gravado : gravado.id;
     const depois = apresentar(await d.ler(db, id));
     await auditar({ usuarioId: quem, acao: "CRIACAO", entidade: d.auditoria, entidadeId: id, depois, metadados: { nome: rotuloDoRegistro(depois) } });
-    return { registro: depois, ...(await aplicarNaClassificacao(d)) };
+    return { registro: depois, aviso: typeof gravado === "string" ? null : gravado.aviso, ...(await aplicarNaClassificacao(d)) };
   },
 
   async atualizar(entidade: string, id: string, valores: Valores, quem: string) {
@@ -112,10 +113,10 @@ export const edicaoCadastrosService = {
         `Não é possível mudar ${mudados.map((c) => c.rotulo).join(", ")}: ${movimentos} ${mudados.length > 1 ? "Essas informações ligam" : "Essa informação liga"} o cadastro a outras telas.`,
       );
     }
-    await d.gravar(db, dados, id);
+    const gravado = await d.gravar(db, dados, id, quem);
     const depois = apresentar(await d.ler(db, id));
     await auditar({ usuarioId: quem, acao: "ALTERACAO", entidade: d.auditoria, entidadeId: id, antes, depois, metadados: { nome: rotuloDoRegistro(depois) } });
-    return { registro: depois, ...(await aplicarNaClassificacao(d)) };
+    return { registro: depois, aviso: typeof gravado === "string" ? null : gravado.aviso, ...(await aplicarNaClassificacao(d)) };
   },
 
   async excluir(entidade: string, id: string, quem: string) {

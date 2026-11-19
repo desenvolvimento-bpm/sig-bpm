@@ -10,7 +10,6 @@ import { IconeDaCorrecao } from "@/components/shared/IconeDaCorrecao";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/context/PermissionContext";
 import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
@@ -37,7 +36,9 @@ const atribuicaoTexto = (a: string | null) => a;
 
 /**
  * O Pesquisar de Resultados Empresariais (11/11/2026, pedido do Adão), antes do Exportar: os movimentos do balancete de um
- * fornecedor ou cliente (pelo nome, em parte) ou de uma conta de resultado (a que vale na DRE), nas competências fechadas
+ * fornecedor ou cliente ou de uma conta de resultado (a que vale na DRE), escolhido na lista com busca (18/11/2026, pedido do
+ * Adão: a lista traz todos os que têm movimentos no período e o usuário vê, filtra ao digitar, como nas Contestações de Gastos,
+ * e a escolha já pesquisa, só os movimentos dele; antes, o fornecedor digitado, em parte), nas competências fechadas
  * do exercício até o mês escolhido, no recorte do usuário. Cada ocorrência traz o centro de custo, a atribuição, a conta do
  * DRE (a linha), a conta de resultado (na pesquisa por fornecedor) ou o fornecedor ou cliente (na pesquisa por conta) e o
  * valor; a coluna Ações, como no Balancete, tem os Itens do movimento e o Contestar (de quem edita Contestações › Solicitadas).
@@ -60,14 +61,22 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
   const { hasPermission } = usePermissions();
   const podeContestar = hasPermission("contestacoes.solicitadas:editar");
   const [tipo, setTipo] = useState<TipoDaPesquisa>("fornecedor");
-  const [texto, setTexto] = useState("");
+  const [fornecedor, setFornecedor] = useState<OpcaoDaBusca | null>(null);
   const [conta, setConta] = useState<OpcaoDaBusca | null>(null);
   const [pedido, setPedido] = useState<{ tipo: TipoDaPesquisa; termo: string } | null>(null);
   const [contestando, setContestando] = useState<OcorrenciaDaPesquisa | null>(null);
   const [vendoItens, setVendoItens] = useState<OcorrenciaDaPesquisa | null>(null);
 
-  const contas = useQuery({ queryKey: ["relatorios", "pesquisa", "contas"], queryFn: relatoriosService.contasDaPesquisa, enabled: tipo === "conta", staleTime: 5 * 60_000 });
+  // As listas (18/11/2026): os fornecedores e clientes e as contas dos movimentos do período que o usuário vê.
+  const contas = useQuery({ queryKey: ["relatorios", "pesquisa", "contas", ano, ate], queryFn: () => relatoriosService.contasDaPesquisa(ano, ate), enabled: tipo === "conta", staleTime: 5 * 60_000 });
+  const fornecedores = useQuery({
+    queryKey: ["relatorios", "pesquisa", "fornecedores", ano, ate],
+    queryFn: () => relatoriosService.fornecedoresDaPesquisa(ano, ate),
+    enabled: tipo === "fornecedor",
+    staleTime: 5 * 60_000,
+  });
   const opcoesDeContas = useMemo<OpcaoDaBusca[]>(() => (contas.data ?? []).map((c) => ({ id: c.reduzido, codigo: c.reduzido, nome: c.descricao })), [contas.data]);
+  const opcoesDeFornecedores = useMemo<OpcaoDaBusca[]>(() => (fornecedores.data ?? []).map((n) => ({ id: n, codigo: "", nome: n.trim() })), [fornecedores.data]);
   const consulta = useQuery({
     queryKey: ["relatorios", "pesquisa", ano, ate, pedido],
     queryFn: () => relatoriosService.pesquisar(ano, ate, pedido!.tipo, pedido!.termo),
@@ -76,10 +85,17 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
   const d = consulta.data;
   const porConta = d?.tipo === "conta";
 
-  const termo = tipo === "conta" ? (conta?.codigo ?? "") : texto.trim();
-  const pronto = tipo === "conta" ? !!conta : termo.length >= 3;
+  // O fornecedor ou cliente vale pelo nome exato (o da lista); a conta, pelo código reduzido.
+  const termo = tipo === "conta" ? (conta?.codigo ?? "") : (fornecedor?.id ?? "");
+  const pronto = !!termo;
   const pesquisar = () => {
     if (pronto) setPedido({ tipo, termo });
+  };
+  // A escolha na lista já pesquisa (18/11/2026).
+  const escolher = (t: TipoDaPesquisa, o: OpcaoDaBusca | null) => {
+    if (t === "conta") setConta(o);
+    else setFornecedor(o);
+    if (o) setPedido({ tipo: t, termo: t === "conta" ? o.codigo : o.id });
   };
 
   const colunas = useMemo<Coluna<OcorrenciaDaPesquisa>[]>(
@@ -216,12 +232,13 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
-      <DialogContent className="flex max-h-[90vh] w-[min(84rem,calc(100%_-_2rem))] max-w-none flex-col overflow-hidden rounded-sm sm:max-w-none">
+      {/* A altura inicial de metade da tela (19/11/2026, pedido do Adão: a lista da busca ficava cortada no modal baixo); com os resultados, cresce até 90%. */}
+      <DialogContent className="flex max-h-[90vh] min-h-[50vh] w-[min(84rem,calc(100%_-_2rem))] max-w-none flex-col overflow-hidden rounded-sm sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Pesquisar nos Resultados Empresariais</DialogTitle>
           <DialogDescription>
             Os movimentos do balancete de {ate > 1 ? `01/${ano} a ${String(ate).padStart(2, "0")}/${ano}` : `01/${ano}`} (as competências fechadas do exercício até o
-            mês escolhido) de um fornecedor ou cliente ou de uma conta de resultado — só os que o seu perfil vê.
+            mês escolhido) do fornecedor ou cliente ou da conta de resultado escolhido na lista — só os que o seu perfil vê.
           </DialogDescription>
         </DialogHeader>
 
@@ -241,9 +258,21 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
           </select>
           <div className="min-w-60 flex-1">
             {tipo === "conta" ? (
-              <BuscaNaLista id="pesquisa-conta" opcoes={opcoesDeContas} valor={conta} onEscolher={setConta} placeholder={contas.isLoading ? "Carregando as contas…" : "Busque a conta pelo código ou pelo nome…"} />
+              <BuscaNaLista
+                id="pesquisa-conta"
+                opcoes={opcoesDeContas}
+                valor={conta}
+                onEscolher={(o) => escolher("conta", o)}
+                placeholder={contas.isLoading ? "Carregando as contas…" : "Busque a conta pelo código ou pelo nome…"}
+              />
             ) : (
-              <Input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Nome do fornecedor ou cliente (ao menos três letras)…" className="h-9 rounded-sm" aria-label="Fornecedor ou cliente" />
+              <BuscaNaLista
+                id="pesquisa-fornecedor"
+                opcoes={opcoesDeFornecedores}
+                valor={fornecedor}
+                onEscolher={(o) => escolher("fornecedor", o)}
+                placeholder={fornecedores.isLoading ? "Carregando os fornecedores e clientes…" : "Busque o fornecedor ou cliente pelo nome…"}
+              />
             )}
           </div>
           <Button type="submit" disabled={!pronto || consulta.isFetching} className="bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font-bold text-black shadow-sm">
@@ -254,7 +283,7 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
 
         {!pedido ? (
           <p className="rounded-sm border border-gray-200 bg-white p-4 text-sm text-gray-600">
-            Escolha o tipo, digite o fornecedor ou cliente (ou escolha a conta) e clique em Pesquisar.
+            Escolha o tipo e, na lista, o fornecedor ou cliente ou a conta (digite para filtrar): a pesquisa começa na escolha.
           </p>
         ) : consulta.isError ? (
           <p className="text-sm text-red-700">{mensagemDeErro(consulta.error, "Erro ao pesquisar.")}</p>
@@ -262,12 +291,12 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
           <div className="h-40 animate-pulse rounded-sm bg-gray-100" />
         ) : d.ocorrencias.length === 0 ? (
           <p className="rounded-sm border border-gray-200 bg-white p-4 text-sm text-gray-600">
-            Nenhum movimento {d.conta ? `da conta ${contaTexto(d.conta)}` : `com “${d.termo}” no fornecedor ou cliente`} no período.
+            Nenhum movimento {d.conta ? `da conta ${contaTexto(d.conta)}` : `do fornecedor ou cliente ${d.termo.trim()}`} no período.
           </p>
         ) : (
           <>
             <p className="shrink-0 text-sm text-gray-700">
-              {d.conta ? <>Conta {contaTexto(d.conta)} · </> : null}
+              {d.conta ? <>Conta {contaTexto(d.conta)} · </> : <>{d.termo.trim()} · </>}
               {d.total.toLocaleString("pt-BR")} {plural(d.total, "ocorrência", "ocorrências")}
               {d.total > d.limite ? ` (as ${d.limite.toLocaleString("pt-BR")} primeiras na tabela: refine a pesquisa)` : ""} · Soma <span className="font-bold text-gray-900">{moeda(d.soma)}</span>
             </p>

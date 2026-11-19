@@ -5,6 +5,7 @@ import { auditar } from "../auditoriaService.js";
 import { gruposDoCadastro } from "../cenarios/centrosCenario.js";
 import { quadrosDeLotacao } from "../cenarios/lotacaoCenario.js";
 import { gravarLotacaoDoMes } from "../importacoes/lotacao/processarLotacao.js";
+import { IND, nomeDo } from "../relatorios/indicadoresDoSistema.js";
 import { calcularQuadros, indicadoresDoMes, lerAnoMes, QuadroError, type QuadroDoMes } from "./quadroService.js";
 
 /**
@@ -73,12 +74,14 @@ async function indicadoresApurados(db: Db, q: QuadroDoMes) {
     porGrupo.set(grupo, lista);
   }
   const quadros = quadrosDeLotacao(grupos, porGrupo);
-  const valores: Array<{ nome: string; valor: number | null }> = [
-    { nome: "Quadro de Lotação Total", valor: ind.quadroDeLotacao },
-    { nome: "Turnover", valor: ind.turnover },
-    { nome: "Abertura de Vagas x Contratações", valor: ind.contratacoes },
+  // Pelo ID (19/11/2026): os nomes atuais do cadastro; o Turnover vai marcado como percentual, para a tela.
+  const total = nomeDo(IND.QUADRO_TOTAL);
+  const valores: Array<{ nome: string; valor: number | null; percentual?: true }> = [
+    { nome: total, valor: ind.quadroDeLotacao },
+    { nome: nomeDo(IND.TURNOVER), valor: ind.turnover, percentual: true },
+    { nome: nomeDo(IND.CONTRATACOES), valor: ind.contratacoes },
     ...[...quadros]
-      .filter(([nome]) => nome !== "Quadro de Lotação Total")
+      .filter(([nome]) => nome !== total)
       .map(([nome, meses]) => ({ nome, valor: meses[q.mes - 1] ?? 0 })),
   ];
   return valores;

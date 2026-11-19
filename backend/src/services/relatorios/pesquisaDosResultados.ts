@@ -10,7 +10,8 @@ import { mesesDoExercicio, RelatorioError } from "./resultadosService.js";
 
 /**
  * O Pesquisar de Resultados Empresariais (11/11/2026, pedido do Adão): os movimentos do balancete das competências fechadas
- * do exercício, até o mês escolhido, de um fornecedor ou cliente (pelo nome, em parte) ou de uma conta de resultado (a que
+ * do exercício, até o mês escolhido, de um fornecedor ou cliente (desde 18/11/2026, pedido do Adão, o escolhido na lista dos
+ * que têm movimentos no período, pelo nome exato; antes, o nome digitado, em parte) ou de uma conta de resultado (a que
  * vale na DRE: a do balancete ou a da reclassificação ou da contestação). Cada ocorrência traz o centro de custo, a
  * atribuição, a linha da DRE, a conta (na pesquisa por fornecedor) ou o fornecedor (na pesquisa por conta) e o valor, com
  * o que o Balancete mostra para contestar (a situação da contestação e os itens do movimento).
@@ -49,7 +50,7 @@ const selecao = {
 type Movimento = Prisma.LancamentoContabilGetPayload<{ select: typeof selecao }>;
 
 /** O usuário vê este movimento? A regra do Balancete (documentosService), linha a linha. */
-function noRecorte(acesso: Acesso, m: Movimento) {
+function noRecorte(acesso: Acesso, m: Pick<Movimento, "linhaDRE" | "centroCusto" | "codigoCentroCusto">) {
   const l = m.linhaDRE;
   if (!l || !podeVerSensiveis(acesso, l)) return false;
   if (podeVerMovimentos(acesso, l)) return true;
@@ -71,10 +72,47 @@ async function contaDaPesquisa(termo: string) {
   throw new RelatorioError(400, `Mais de uma conta de resultado com “${termo}”: escolha a conta na lista.`);
 }
 
+/**
+ * As combinações de conta, fornecedor ou cliente, linha e centro dos movimentos do período que vão aos resultados, no recorte do
+ * usuário (18/11/2026: as listas do Pesquisar só com o que tem movimentos e o usuário vê).
+ */
+async function combinacoesDoPeriodo(ano: number, ate: number | undefined, acesso: Acesso) {
+  const prisma = getPrismaClient();
+  const { meses } = await mesesDoExercicio(ano, ate, true);
+  const competencias = meses.flatMap((m) => (m.competenciaId ? [m.competenciaId] : []));
+  if (!competencias.length) return [];
+  const grupos = await prisma.lancamentoContabil.groupBy({
+    by: ["cliForn", "contaResultadoId", "contaAdotadaId", "linhaDREId", "centroCustoId", "codigoCentroCusto"],
+    where: { competenciaId: { in: competencias }, linhaDREId: { not: null } },
+  });
+  const [linhas, centros] = await Promise.all([
+    prisma.linhaDRE.findMany({
+      where: { id: { in: [...new Set(grupos.flatMap((g) => (g.linhaDREId ? [g.linhaDREId] : [])))] } },
+      select: { id: true, codigo: true, descricao: true, grupo: true, grupoSigla: true, atribuicaoSigla: true },
+    }),
+    prisma.centroCusto.findMany({ where: { id: { in: [...new Set(grupos.flatMap((g) => (g.centroCustoId ? [g.centroCustoId] : [])))] } }, select: { id: true, codigoRM: true, nomeRM: true } }),
+  ]);
+  const linhaDe = new Map(linhas.map(({ id, ...l }) => [id, l]));
+  const centroDe = new Map(centros.map((c) => [c.id, c]));
+  return grupos.filter((g) =>
+    noRecorte(acesso, { linhaDRE: (g.linhaDREId && linhaDe.get(g.linhaDREId)) || null, centroCusto: (g.centroCustoId && centroDe.get(g.centroCustoId)) || null, codigoCentroCusto: g.codigoCentroCusto }),
+  );
+}
+
 export const pesquisaDosResultados = {
-  /** As contas de resultado da lista do Pesquisar (o plano de contas): o código reduzido e a descrição. */
-  async contas() {
-    return getPrismaClient().contaResultado.findMany({ orderBy: { reduzido: "asc" }, select: { reduzido: true, descricao: true } });
+  /**
+   * As contas de resultado da lista do Pesquisar: as que valem na DRE (a do balancete ou a da reclassificação ou da contestação)
+   * em algum movimento do período que o usuário vê (18/11/2026; antes, o plano de contas inteiro), pelo código reduzido.
+   */
+  async contas(ano: number, ate: number | undefined, acesso: Acesso = ACESSO_TOTAL) {
+    const ids = [...new Set((await combinacoesDoPeriodo(ano, ate, acesso)).map((g) => g.contaAdotadaId ?? g.contaResultadoId))];
+    return getPrismaClient().contaResultado.findMany({ where: { id: { in: ids } }, orderBy: { reduzido: "asc" }, select: { reduzido: true, descricao: true } });
+  },
+
+  /** Os fornecedores e clientes da lista do Pesquisar (18/11/2026): os dos movimentos do período que o usuário vê, pelo nome. */
+  async fornecedores(ano: number, ate: number | undefined, acesso: Acesso = ACESSO_TOTAL) {
+    const nomes = new Set((await combinacoesDoPeriodo(ano, ate, acesso)).flatMap((g) => (g.cliForn?.trim() ? [g.cliForn] : [])));
+    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
   },
 
   async pesquisar(ano: number, ate: number | undefined, tipo: TipoDaPesquisa, termo: string, acesso: Acesso = ACESSO_TOTAL) {
@@ -87,7 +125,8 @@ export const pesquisaDosResultados = {
       linhaDREId: { not: null },
       ...(conta
         ? { OR: [{ contaAdotadaId: conta.id }, { contaAdotadaId: null, contaResultadoId: conta.id }] }
-        : { cliForn: { contains: termo, mode: "insensitive" } }),
+        : // O fornecedor ou cliente escolhido na lista, pelo nome exato (18/11/2026; antes, o nome em parte).
+          { cliForn: termo }),
     };
     const lidos = await prisma.lancamentoContabil.findMany({
       where: onde,
