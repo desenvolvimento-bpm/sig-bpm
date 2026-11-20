@@ -421,6 +421,10 @@ model UnidadeNegocio {
   regrasRateio   RegraRateio[]
   colaboradoresIniciais ColaboradorCargaInicial[]
   lotacaoDosCenarios    CenarioLotacao[]
+  /// As cópias da unidade nos cenários analíticos e a unidade dedicada das cópias dos centros (20/11/2026).
+  unidadesDosCenarios   CenarioUnidade[]
+  centrosDosCenarios    CenarioCentroCusto[] @relation("UnidadeDoCentroDoCenario")
+  departamentosDosCenarios CenarioDepartamento[] @relation("UnidadeDoDepartamentoDoCenario")
   /// LISTA: as linhas da unidade (cadastro Linhas).
   linhas         Linha[]
   /// LISTA: linhas da DRE que se aplicam a esta unidade.
@@ -467,6 +471,8 @@ model Departamento {
   atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
   /// As redistribuições de gastos do departamento (13/11/2026).
   redistribuicoes  RedistribuicaoGasto[]
+  /// As cópias do departamento nos cenários analíticos (20/11/2026, Cadastros por cenário, etapa 2).
+  departamentosDosCenarios CenarioDepartamento[] @relation("DepartamentoDoCenario")
 
   @@unique([unidadeNegocioId, nome])
   @@map("departamentos")
@@ -506,7 +512,8 @@ model CentroCusto {
   movimentosContestadosAntes ContestacaoMovimento[] @relation("ContestacaoMovimentoCentroAntes")
   colaboradoresIniciais      ColaboradorCargaInicial[]
   movimentacoesQuadro        ColaboradorMovimentacao[]
-  lotacaoDosCenarios         CenarioLotacao[]
+  /// As cópias do centro nos cenários analíticos (20/11/2026, Cadastros por cenário).
+  centrosDosCenarios         CenarioCentroCusto[] @relation("CentroDoCenario")
   /// A Jornada do Quadro de Lotação (13/11/2026): as horas extras e as faltas das linhas deste centro.
   jornadasQuadro             ColaboradorJornada[]
   /// Os destinos das redistribuições de gastos e as partes redistribuídas a este centro (13/11/2026).
@@ -608,6 +615,7 @@ model LinhaDRE {
   /// As redistribuições de gastos desta conta da DRE e as partes redistribuídas nela (13/11/2026).
   redistribuicoes      RedistribuicaoGasto[]
   partesRedistribuidas LancamentoRedistribuido[]
+  redistribuicoesDosCenarios CenarioRedistribuicao[]
 }
 
 /// LISTA-DE: LinhaDRE.unidadesAplicaveis (seria `String[]` no PostgreSQL)
@@ -2084,6 +2092,7 @@ model RedistribuicaoGasto {
   destinos     RedistribuicaoDestino[]
   lancamentos  LancamentoContabil[]
   partes       LancamentoRedistribuido[]
+  copiasDosCenarios CenarioRedistribuicao[] @relation("RedistribuicaoDoCenario")
 
   @@index([linhaDREId])
   @@map("redistribuicoes_gastos")
@@ -2353,6 +2362,11 @@ model Cenario {
   centros        CenarioCentro[]
   investimentos  CenarioInvestimento[]
   lotacao        CenarioLotacao[]
+  /// As cópias de Unidades e de Centros de Custo dos analíticos (20/11/2026, Cadastros por cenário): o cálculo usa as daqui.
+  unidades       CenarioUnidade[]
+  centrosCusto   CenarioCentroCusto[]
+  departamentos  CenarioDepartamento[]
+  redistribuicoes CenarioRedistribuicao[]
 
   @@unique([marcacao])
   @@map("cenarios")
@@ -2524,11 +2538,139 @@ model CenarioLotacao {
   cenario        Cenario                @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
   unidadeNegocio UnidadeNegocio         @relation(fields: [unidadeNegocioId], references: [id])
   funcao         ColaboradorFuncao      @relation(fields: [funcaoId], references: [id])
-  centroCusto    CentroCusto            @relation(fields: [centroCustoId], references: [id])
+  /// O centro da cópia do cenário (20/11/2026, Cadastros por cenário; antes, o dos Cadastros Gerais).
+  centroCusto    CenarioCentroCusto     @relation(fields: [centroCustoId], references: [id])
   meses          CenarioLotacaoMes[]
 
   @@index([cenarioId])
   @@map("cenarios_lotacao")
+}
+
+/// As unidades de um cenário analítico (20/11/2026, Cadastros por cenário, etapa 1): a cópia editável do cadastro Unidades
+/// (Cadastros Gerais / Contábil), tirada na criação do cenário (a revisão copia a do cenário de origem). O nome, a ordem e a
+/// situação valem só no cenário; as unidades não se incluem nem se excluem, como no cadastro.
+model CenarioUnidade {
+  id               String   @id @default(uuid())
+  cenarioId        String   @map("cenario_id")
+  unidadeNegocioId String   @map("unidade_negocio_id")
+  nome             String
+  ordem            Int      @default(0)
+  ativo            Boolean  @default(true)
+  criadoEm         DateTime @default(now()) @map("criado_em")
+  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+
+  cenario        Cenario        @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  unidadeNegocio UnidadeNegocio @relation(fields: [unidadeNegocioId], references: [id], onDelete: Cascade)
+
+  @@unique([cenarioId, unidadeNegocioId])
+  @@map("cenarios_unidades")
+}
+
+/// Os centros de custo de um cenário analítico (20/11/2026, Cadastros por cenário, etapa 1): a cópia editável do cadastro
+/// Centros de Custo (Cadastros Gerais / Contábil), tirada na criação do cenário (a revisão copia a do cenário de origem). O
+/// cenário agrupa e aloca pelos centros daqui (o grupo pelo Nome da Controladoria, o grupo da DRE pelo Departamento, o balde,
+/// a atribuição); `origemId` é o centro dos Cadastros Gerais de que veio — o realizado (os lançamentos e o Quadro de Lotação
+/// da Gestão de Colaboradores) chega ao cenário por ele —, nulo no centro incluído só no cenário.
+model CenarioCentroCusto {
+  id                String           @id @default(uuid())
+  cenarioId         String           @map("cenario_id")
+  origemId          String?          @map("origem_id")
+  coligada          Int?
+  codigoRM          String?          @map("codigo_rm")
+  nomeRM            String           @map("nome_rm")
+  nomeControladoria String?          @map("nome_controladoria")
+  departamento      String?
+  departamentoSigla String?          @map("departamento_sigla")
+  atribuicao        AtribuicaoCusto?
+  atribuicaoSigla   String?          @map("atribuicao_sigla")
+  balde             BaldeAlocacao?   @map("balde")
+  unidadeNegocioId  String?          @map("unidade_negocio_id")
+  ordem             Int              @default(0)
+  ativo             Boolean          @default(true)
+  criadoEm          DateTime         @default(now()) @map("criado_em")
+  atualizadoEm      DateTime         @updatedAt @map("atualizado_em")
+
+  cenario        Cenario          @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  origem         CentroCusto?     @relation("CentroDoCenario", fields: [origemId], references: [id], onDelete: SetNull)
+  unidadeNegocio UnidadeNegocio?  @relation("UnidadeDoCentroDoCenario", fields: [unidadeNegocioId], references: [id])
+  linhasDoQuadro CenarioLotacao[]
+  destinosDasRedistribuicoes CenarioRedistribuicaoDestino[]
+
+  @@unique([cenarioId, codigoRM])
+  @@index([cenarioId])
+  @@map("cenarios_centros_custo")
+}
+
+/// A cópia de um departamento (Cadastros Gerais / Departamentos) num cenário analítico (20/11/2026, Cadastros por cenário, etapa
+/// 2): a aba Departamentos das Configurações. Vale só no cenário, como o departamento das Redistribuições de Gastos dele.
+/// `origemId`: o departamento dos Cadastros Gerais de que veio (nulo no incluído só no cenário).
+model CenarioDepartamento {
+  id               String   @id @default(uuid())
+  cenarioId        String   @map("cenario_id")
+  origemId         String?  @map("origem_id")
+  unidadeNegocioId String   @map("unidade_negocio_id")
+  nome             String
+  /// LISTA: as siglas dos grupos da DRE do departamento, na unidade dele (como no cadastro).
+  gruposDRE        String[] @default([]) @map("grupos_dre")
+  ordem            Int      @default(0)
+  ativo            Boolean  @default(true)
+  criadoEm         DateTime @default(now()) @map("criado_em")
+  atualizadoEm     DateTime @updatedAt @map("atualizado_em")
+
+  cenario         Cenario                 @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  origem          Departamento?           @relation("DepartamentoDoCenario", fields: [origemId], references: [id], onDelete: SetNull)
+  unidadeNegocio  UnidadeNegocio          @relation("UnidadeDoDepartamentoDoCenario", fields: [unidadeNegocioId], references: [id])
+  redistribuicoes CenarioRedistribuicao[]
+
+  @@unique([cenarioId, unidadeNegocioId, nome])
+  @@index([cenarioId])
+  @@map("cenarios_departamentos")
+}
+
+/// A cópia de uma Redistribuição de Gastos num cenário analítico (20/11/2026, Cadastros por cenário, etapa 2): a aba
+/// Redistribuições de Gastos das Configurações. Os campos são os do cadastro; o departamento e os centros dos destinos são os
+/// das cópias do cenário. Vale na carga do realizado da referência do cenário, no lugar das redistribuições dos Cadastros Gerais.
+model CenarioRedistribuicao {
+  id             String    @id @default(uuid())
+  cenarioId      String    @map("cenario_id")
+  origemId       String?   @map("origem_id")
+  departamentoId String?   @map("departamento_id")
+  linhaDREId     String    @map("linha_dre_id")
+  fornecedores   String[]  @default([])
+  vigenciaInicio DateTime  @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim")
+  descricao      String?
+  ordem          Int       @default(0)
+  ativo          Boolean   @default(true)
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
+
+  cenario      Cenario                        @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  origem       RedistribuicaoGasto?           @relation("RedistribuicaoDoCenario", fields: [origemId], references: [id], onDelete: SetNull)
+  /// SET NULL e CASCADE (abaixo): a exclusão do cenário apaga as cópias em cascata, sem ordem garantida entre elas; o app recusa
+  /// excluir o departamento ou o centro usado numa redistribuição.
+  departamento CenarioDepartamento?           @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
+  linhaDRE     LinhaDRE                       @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+  destinos     CenarioRedistribuicaoDestino[]
+
+  @@index([cenarioId])
+  @@map("cenarios_redistribuicoes")
+}
+
+/// Um destino de uma redistribuição do cenário (20/11/2026): o centro da cópia do cenário e o percentual (0 a 1).
+model CenarioRedistribuicaoDestino {
+  id               String  @id @default(uuid())
+  redistribuicaoId String  @map("redistribuicao_id")
+  centroCustoId    String  @map("centro_custo_id")
+  /// DECIMAL: 0 a 1; os destinos de uma redistribuição somam 1 (100%).
+  percentual       Decimal
+  ordem            Int     @default(0)
+
+  redistribuicao CenarioRedistribuicao @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
+  centroCusto    CenarioCentroCusto    @relation(fields: [centroCustoId], references: [id], onDelete: Cascade)
+
+  @@unique([redistribuicaoId, centroCustoId])
+  @@map("cenarios_redistribuicoes_destinos")
 }
 
 /// Um mês de uma linha do Quadro de Lotação do cenário: os colaboradores e o Salário Bruto e a Insalubridade /

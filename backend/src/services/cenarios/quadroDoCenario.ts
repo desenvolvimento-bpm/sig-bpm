@@ -108,14 +108,45 @@ export function mesesDaLinha(meses: Array<{ mes: number; colaboradores: unknown;
   });
 }
 
-/** Copia as linhas do Quadro de Lotação de um cenário para outro (a cópia, a revisão e a referência de outro analítico). */
-export async function copiarQuadro(tx: Pick<Prisma.TransactionClient, "cenarioLotacao" | "cenarioLotacaoMes">, de: string, para: string) {
+/**
+ * Copia as linhas do Quadro de Lotação de um cenário para outro (a cópia, a revisão e a referência de outro analítico). O centro
+ * de cada linha é o da cópia dos Centros de Custo do cenário de destino (20/11/2026, Cadastros por cenário): pelo `mapa` (o da
+ * cópia dos cadastros, na revisão e na cópia) ou pelo centro de origem e pelo código; a linha de um centro que o destino não tem
+ * não vai (devolve quantas).
+ */
+export async function copiarQuadro(
+  tx: Pick<Prisma.TransactionClient, "cenarioLotacao" | "cenarioLotacaoMes" | "cenarioCentroCusto">,
+  de: string,
+  para: string,
+  mapa?: Map<string, string>,
+) {
   const linhas = await tx.cenarioLotacao.findMany({ where: { cenarioId: de }, include: { meses: true } });
-  if (!linhas.length) return;
-  const novas = linhas.map((l) => ({ ...l, novoId: randomUUID() }));
-  await tx.cenarioLotacao.createMany({
-    data: novas.map(({ id: _id, novoId, meses: _meses, criadoEm: _criado, atualizadoEm: _atualizado, ...x }) => ({ ...x, id: novoId, cenarioId: para })),
+  if (!linhas.length) return 0;
+  let centroPara = mapa;
+  if (!centroPara) {
+    const [deles, nossos] = await Promise.all([
+      tx.cenarioCentroCusto.findMany({ where: { cenarioId: de }, select: { id: true, origemId: true, codigoRM: true } }),
+      tx.cenarioCentroCusto.findMany({ where: { cenarioId: para }, select: { id: true, origemId: true, codigoRM: true } }),
+    ]);
+    const porOrigem = new Map(nossos.flatMap((c) => (c.origemId ? [[c.origemId, c.id] as const] : [])));
+    const porCodigo = new Map(nossos.flatMap((c) => (c.codigoRM ? [[c.codigoRM, c.id] as const] : [])));
+    centroPara = new Map(
+      deles.flatMap((c) => {
+        const id = (c.origemId ? porOrigem.get(c.origemId) : undefined) ?? (c.codigoRM ? porCodigo.get(c.codigoRM) : undefined);
+        return id ? [[c.id, id] as const] : [];
+      }),
+    );
+  }
+  const novas = linhas.flatMap((l) => {
+    const centroCustoId = centroPara.get(l.centroCustoId);
+    return centroCustoId ? [{ ...l, centroCustoId, novoId: randomUUID() }] : [];
   });
+  if (novas.length) {
+    await tx.cenarioLotacao.createMany({
+      data: novas.map(({ id: _id, novoId, meses: _meses, criadoEm: _criado, atualizadoEm: _atualizado, ...x }) => ({ ...x, id: novoId, cenarioId: para })),
+    });
+  }
   const meses = novas.flatMap((l) => l.meses.map(({ linhaId: _linha, ...m }) => ({ ...m, linhaId: l.novoId })));
   for (let i = 0; i < meses.length; i += 1000) await tx.cenarioLotacaoMes.createMany({ data: meses.slice(i, i + 1000) });
+  return linhas.length - novas.length;
 }

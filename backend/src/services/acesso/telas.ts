@@ -49,6 +49,16 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
       abas: [
         { codigo: "cenario", nome: "Cenário" },
         { codigo: "referencia", nome: "Referência" },
+        // As cópias dos cadastros dos analíticos (20/11/2026, Cadastros por cenário), depois da Referência; os perfis com a aba
+        // Referência as herdaram, com a mesma ação (as migrações 20261120100000 e 20261120150000).
+        ...(analitico
+          ? [
+              { codigo: "unidades", nome: "Unidades" },
+              { codigo: "departamentos", nome: "Departamentos" },
+              { codigo: "centros_custo", nome: "Centros de Custo" },
+              { codigo: "redistribuicoes", nome: "Redistribuições de Gastos" },
+            ]
+          : []),
         // Os Índices de Referência dos analíticos (19/10/2026, a aba Índices; desde 11/11/2026, o quadro do meio da aba
         // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
         ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),

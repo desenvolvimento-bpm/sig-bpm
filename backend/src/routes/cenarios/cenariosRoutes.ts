@@ -88,6 +88,25 @@ cenariosRoutes.post("/:id/quadro/excluir", autenticacao, tela("premissas", "edit
 cenariosRoutes.post("/:id/quadro", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.put("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.delete("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), asyncHandler(c.gravarLinhaDoQuadro));
+// Cadastros por cenário (20/11/2026, etapa 1): as abas Unidades e Centros de Custo das Configurações dos analíticos.
+cenariosRoutes.get("/:id/cadastros/unidades", autenticacao, tela("configuracoes", "ler", "unidades"), asyncHandler(c.unidadesDoCenario));
+cenariosRoutes.put("/:id/cadastros/unidades/:unidadeId", autenticacao, tela("configuracoes", "editar", "unidades"), express.json(), asyncHandler(c.gravarUnidadeDoCenario));
+cenariosRoutes.get("/:id/cadastros/centros", autenticacao, tela("configuracoes", "ler", "centros_custo"), asyncHandler(c.centrosDoCadastroDoCenario));
+cenariosRoutes.post("/:id/cadastros/centros", autenticacao, tela("configuracoes", "editar", "centros_custo"), express.json(), asyncHandler(c.gravarCentroDoCadastroDoCenario));
+cenariosRoutes.post("/:id/cadastros/centros/renomear-grupo", autenticacao, tela("configuracoes", "editar", "centros_custo"), express.json(), asyncHandler(c.renomearGrupoDoCenario));
+cenariosRoutes.put("/:id/cadastros/centros/:centroId", autenticacao, tela("configuracoes", "editar", "centros_custo"), express.json(), asyncHandler(c.gravarCentroDoCadastroDoCenario));
+cenariosRoutes.delete("/:id/cadastros/centros/:centroId", autenticacao, tela("configuracoes", "editar", "centros_custo"), asyncHandler(c.excluirCentroDoCadastroDoCenario));
+cenariosRoutes.post("/:id/cadastros/trazer-novos", autenticacao, tela("configuracoes", "editar", "centros_custo"), asyncHandler(c.trazerNovosDosCadastrosDoCenario));
+// Cadastros por cenário, etapa 2 (20/11/2026): Departamentos e Redistribuições de Gastos.
+cenariosRoutes.get("/:id/cadastros/departamentos", autenticacao, tela("configuracoes", "ler", "departamentos"), asyncHandler(c.departamentosDoCenario));
+cenariosRoutes.post("/:id/cadastros/departamentos", autenticacao, tela("configuracoes", "editar", "departamentos"), express.json(), asyncHandler(c.gravarDepartamentoDoCenario));
+cenariosRoutes.put("/:id/cadastros/departamentos/:departamentoId", autenticacao, tela("configuracoes", "editar", "departamentos"), express.json(), asyncHandler(c.gravarDepartamentoDoCenario));
+cenariosRoutes.delete("/:id/cadastros/departamentos/:departamentoId", autenticacao, tela("configuracoes", "editar", "departamentos"), asyncHandler(c.excluirDepartamentoDoCenario));
+cenariosRoutes.get("/:id/cadastros/redistribuicoes", autenticacao, tela("configuracoes", "ler", "redistribuicoes"), asyncHandler(c.redistribuicoesDoCenario));
+cenariosRoutes.get("/:id/cadastros/redistribuicoes/fornecedores", autenticacao, tela("configuracoes", "ler", "redistribuicoes"), asyncHandler(c.fornecedoresDaRedistribuicaoDoCenario));
+cenariosRoutes.post("/:id/cadastros/redistribuicoes", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), express.json({ limit: "2mb" }), asyncHandler(c.gravarRedistribuicaoDoCenario));
+cenariosRoutes.put("/:id/cadastros/redistribuicoes/:redistribuicaoId", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), express.json({ limit: "2mb" }), asyncHandler(c.gravarRedistribuicaoDoCenario));
+cenariosRoutes.delete("/:id/cadastros/redistribuicoes/:redistribuicaoId", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), asyncHandler(c.excluirRedistribuicaoDoCenario));
 // A aba Reajustes dos analíticos (11/11/2026; 12/11/2026: nas Configurações): os Índices de Reajuste e a Aplicação dos Reajustes.
 cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("configuracoes", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
 cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));

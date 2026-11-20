@@ -244,34 +244,37 @@ export function useTabelaFiltravel<T>(linhas: T[] | undefined, colunas: Coluna<T
 
   // Nas colunas sem filtro, a tela pode pôr outro conteúdo no rótulo (a caixa de marcar todas, nas divergências); nas
   // com filtro, algo antes do rótulo (`antes`: a lista dos grupos, em Indicadores, 13/10/2026).
-  const montar = (extras: Record<string, ReactNode> = {}, antes: Record<string, ReactNode> = {}): ReactNode => (
-    <thead>
-      {/* Rótulos no cinza do .tabela-sig th, mais escuro que as linhas. */}
-      <tr className="border-b border-gray-200">
-        {colunas.map((c) => (
-          <th
-            key={c.chave}
-            className={`px-4 py-3 text-xs font-bold text-gray-900 ${c.alinhamento === "direita" ? "text-right" : "text-left"} ${c.classe ?? ""}`}
-          >
-            {c.semFiltro ? (
-              (extras[c.chave] ?? iniciaisMaiusculas(c.rotulo))
-            ) : (
-              <span className={`inline-flex items-center gap-1 ${c.alinhamento === "direita" ? "flex-row-reverse" : ""}`}>
-                {antes[c.chave]}
-                {iniciaisMaiusculas(c.rotulo)}
-                <FiltroDeColuna coluna={c} linhas={todas} colunas={colunas} estado={estado} onMudar={mudar} />
-              </span>
-            )}
-          </th>
-        ))}
-      </tr>
-    </thead>
+  const linha = (extras: Record<string, ReactNode> = {}, antes: Record<string, ReactNode> = {}): ReactNode => (
+    // Rótulos no cinza do .tabela-sig th, mais escuro que as linhas.
+    <tr className="border-b border-gray-200">
+      {colunas.map((c) => (
+        <th
+          key={c.chave}
+          className={`px-4 py-3 text-xs font-bold text-gray-900 ${c.alinhamento === "direita" ? "text-right" : "text-left"} ${c.classe ?? ""}`}
+        >
+          {c.semFiltro ? (
+            (extras[c.chave] ?? iniciaisMaiusculas(c.rotulo))
+          ) : (
+            <span className={`inline-flex items-center gap-1 ${c.alinhamento === "direita" ? "flex-row-reverse" : ""}`}>
+              {antes[c.chave]}
+              {iniciaisMaiusculas(c.rotulo)}
+              <FiltroDeColuna coluna={c} linhas={todas} colunas={colunas} estado={estado} onMudar={mudar} />
+            </span>
+          )}
+        </th>
+      ))}
+    </tr>
   );
+  const montar = (extras: Record<string, ReactNode> = {}, antes: Record<string, ReactNode> = {}): ReactNode => <thead>{linha(extras, antes)}</thead>;
 
   return {
     cabecalho: montar(),
     /** O cabeçalho com conteúdo próprio no rótulo de colunas sem filtro, por chave (e, no segundo, antes do rótulo das com filtro). */
     cabecalhoCom: montar,
+    /** A linha dos rótulos, sem o <thead> (20/11/2026: para a TabelaLarga, que põe os rótulos numa tabela presa à parte). */
+    linhaDoCabecalho: linha(),
+    /** A linha dos rótulos com conteúdo próprio (como `cabecalhoCom`), sem o <thead>. */
+    linhaDoCabecalhoCom: linha,
     /** As linhas da página atual, já filtradas e ordenadas. */
     visiveis,
     /** Todas as que passam nos filtros (para totais e exportação). */

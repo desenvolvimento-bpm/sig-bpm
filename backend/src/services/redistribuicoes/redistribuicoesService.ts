@@ -37,21 +37,21 @@ export type DadosDaRedistribuicao = {
 
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 /** "AAAA-MM" → o dia 1º do mês (UTC), como a classificação compara. */
-function mesDe(texto: string, campo: string) {
+export function mesDe(texto: string, campo: string) {
   const m = /^(\d{4})-(\d{2})$/.exec(texto.trim());
   if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) throw new RegraRedistribuicaoError(400, `${campo}: informe o mês e o ano.`);
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
 }
-const textoDoMes = (d: Date | null) => (d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}` : null);
+export const textoDoMes = (d: Date | null) => (d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}` : null);
 const mesDaCompetencia = (c: { ano: number; mes: number }) => new Date(Date.UTC(c.ano, c.mes - 1, 1));
 const naVigencia = (c: { ano: number; mes: number }, inicio: Date, fim: Date | null) => mesDaCompetencia(c) >= inicio && (!fim || mesDaCompetencia(c) <= fim);
-const rotuloDaLinha = (l: { grupoSigla: string | null; atribuicao: string | null; descricao: string }) => [l.grupoSigla, l.atribuicao, l.descricao].filter(Boolean).join(" · ");
+export const rotuloDaLinha = (l: { grupoSigla: string | null; atribuicao: string | null; descricao: string }) => [l.grupoSigla, l.atribuicao, l.descricao].filter(Boolean).join(" · ");
 
-const LINHA_SEL = { id: true, codigo: true, descricao: true, grupoSigla: true, atribuicao: true, tipo: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } } as const;
+export const LINHA_SEL = { id: true, codigo: true, descricao: true, grupoSigla: true, atribuicao: true, tipo: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } } as const;
 const DEPARTAMENTO_SEL = { id: true, nome: true, gruposDRE: true, ativo: true, unidadeNegocio: { select: { codigo: true, nome: true } } } as const;
 
 /** A linha é do departamento: um grupo da DRE dele, numa linha da unidade dele. */
-const linhaDoDepartamento = (l: { grupoSigla: string | null; unidades: Array<{ unidadeNegocio: { codigo: number } }> }, d: { gruposDRE: string[]; unidadeNegocio: { codigo: number } }) =>
+export const linhaDoDepartamento = (l: { grupoSigla: string | null; unidades: Array<{ unidadeNegocio: { codigo: number } }> }, d: { gruposDRE: string[]; unidadeNegocio: { codigo: number } }) =>
   !!l.grupoSigla && d.gruposDRE.includes(l.grupoSigla) && l.unidades.some((u) => u.unidadeNegocio.codigo === d.unidadeNegocio.codigo);
 
 /** Depois de gravar: reclassifica as competências ainda não apuradas da vigência e diz quais apuradas pedem reapurar. */
@@ -152,7 +152,7 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
     ativo: d.ativo,
   };
 }
-const rotuloDaVigencia = (inicio: Date, fim: Date | null) => {
+export const rotuloDaVigencia = (inicio: Date, fim: Date | null) => {
   const t = (x: Date) => `${String(x.getUTCMonth() + 1).padStart(2, "0")}/${x.getUTCFullYear()}`;
   return fim ? `${t(inicio)} a ${t(fim)}` : `desde ${t(inicio)}`;
 };
@@ -219,51 +219,12 @@ export const redistribuicoesService = {
    * hoje para o movimento) e no departamento (os grupos da DRE dele e, na Produção, a filial). Com os movimentos e o valor.
    */
   async fornecedores(departamentoId: string | null, linhaDREId: string) {
-    const prisma = getPrismaClient();
-    const linha = await prisma.linhaDRE.findUnique({ where: { id: linhaDREId }, select: { id: true, grupoSigla: true } });
-    if (!linha) throw new RegraRedistribuicaoError(404, "Conta da DRE inexistente.");
-    let filial: number | null = null;
+    let departamento: DepartamentoDaCombinacao | null = null;
     if (departamentoId) {
-      const d = await prisma.departamento.findUnique({ where: { id: departamentoId }, select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } });
-      if (!d) throw new RegraRedistribuicaoError(404, "Departamento da DRE inexistente.");
-      if (!movimentoNoDepartamento({ grupos: new Set(d.gruposDRE), filial: null }, linha.grupoSigla, 0)) return [];
-      filial = filialDoDepartamento(d.unidadeNegocio.codigo);
+      departamento = await getPrismaClient().departamento.findUnique({ where: { id: departamentoId }, select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } });
+      if (!departamento) throw new RegraRedistribuicaoError(404, "Departamento da DRE inexistente.");
     }
-    const [grupos, competencias] = await Promise.all([
-      prisma.lancamentoContabil.groupBy({
-        by: ["cliForn", "competenciaId"],
-        where: { linhaDREId, cliForn: { not: null }, ...(filial !== null ? { filial } : {}) },
-        _count: { _all: true },
-        _sum: { valorMovimento: true },
-      }),
-      prisma.competencia.findMany({ select: { id: true, ano: true, mes: true, status: true } }),
-    ]);
-    const comp = new Map(competencias.map((c) => [c.id, c]));
-    const porChave = new Map<string, { fornecedor: string; movimentos: number; valor: number; meses: Array<{ ano: number; mes: number }> }>();
-    for (const g of grupos) {
-      const nome = (g.cliForn ?? "").trim();
-      if (!nome) continue;
-      const k = chaveDoFornecedor(nome);
-      const x = porChave.get(k) ?? { fornecedor: nome, movimentos: 0, valor: 0, meses: [] };
-      x.movimentos += g._count._all;
-      x.valor += Number(g._sum.valorMovimento ?? 0);
-      const c = comp.get(g.competenciaId);
-      if (c) x.meses.push({ ano: c.ano, mes: c.mes });
-      porChave.set(k, x);
-    }
-    return [...porChave.values()]
-      .map((x) => {
-        const ordem = x.meses.sort((a, b) => a.ano - b.ano || a.mes - b.mes);
-        const de = ordem[0];
-        const ate = ordem[ordem.length - 1];
-        return {
-          fornecedor: x.fornecedor,
-          movimentos: x.movimentos,
-          valor: Math.round(x.valor * 100) / 100,
-          competencias: de ? (de === ate ? rotulo(de.ano, de.mes) : `${rotulo(de.ano, de.mes)} a ${rotulo(ate.ano, ate.mes)}`) : "",
-        };
-      })
-      .sort((a, b) => a.fornecedor.localeCompare(b.fornecedor, "pt-BR"));
+    return fornecedoresDaCombinacao(departamento, linhaDREId);
   },
 
   async criar(d: DadosDaRedistribuicao, usuarioId: string) {
@@ -319,4 +280,58 @@ export const redistribuicoesService = {
 async function nomeDaConta(linhaDREId: string) {
   const l = await getPrismaClient().linhaDRE.findUnique({ where: { id: linhaDREId }, select: { descricao: true, grupoSigla: true, atribuicao: true } });
   return l ? rotuloDaLinha(l) : null;
+}
+
+/** O departamento de uma combinação (o dos Cadastros Gerais ou o da cópia de um cenário): os grupos da DRE e a unidade. */
+export type DepartamentoDaCombinacao = { gruposDRE: string[]; unidadeNegocio: { codigo: number } };
+
+/**
+ * Os fornecedores com movimentos na combinação (de competências fechadas ou abertas): na conta da DRE (a linha que vale hoje
+ * para o movimento) e no departamento (os grupos da DRE dele e, na Produção, a filial), com os movimentos e o valor. Serve ao
+ * cadastro e às Redistribuições de Gastos dos cenários analíticos (20/11/2026).
+ */
+export async function fornecedoresDaCombinacao(departamento: DepartamentoDaCombinacao | null, linhaDREId: string) {
+  const prisma = getPrismaClient();
+  const linha = await prisma.linhaDRE.findUnique({ where: { id: linhaDREId }, select: { id: true, grupoSigla: true } });
+  if (!linha) throw new RegraRedistribuicaoError(404, "Conta da DRE inexistente.");
+  let filial: number | null = null;
+  if (departamento) {
+    if (!movimentoNoDepartamento({ grupos: new Set(departamento.gruposDRE), filial: null }, linha.grupoSigla, 0)) return [];
+    filial = filialDoDepartamento(departamento.unidadeNegocio.codigo);
+  }
+  const [grupos, competencias] = await Promise.all([
+    prisma.lancamentoContabil.groupBy({
+      by: ["cliForn", "competenciaId"],
+      where: { linhaDREId, cliForn: { not: null }, ...(filial !== null ? { filial } : {}) },
+      _count: { _all: true },
+      _sum: { valorMovimento: true },
+    }),
+    prisma.competencia.findMany({ select: { id: true, ano: true, mes: true, status: true } }),
+  ]);
+  const comp = new Map(competencias.map((c) => [c.id, c]));
+  const porChave = new Map<string, { fornecedor: string; movimentos: number; valor: number; meses: Array<{ ano: number; mes: number }> }>();
+  for (const g of grupos) {
+    const nome = (g.cliForn ?? "").trim();
+    if (!nome) continue;
+    const k = chaveDoFornecedor(nome);
+    const x = porChave.get(k) ?? { fornecedor: nome, movimentos: 0, valor: 0, meses: [] };
+    x.movimentos += g._count._all;
+    x.valor += Number(g._sum.valorMovimento ?? 0);
+    const c = comp.get(g.competenciaId);
+    if (c) x.meses.push({ ano: c.ano, mes: c.mes });
+    porChave.set(k, x);
+  }
+  return [...porChave.values()]
+    .map((x) => {
+      const ordem = x.meses.sort((a, b) => a.ano - b.ano || a.mes - b.mes);
+      const de = ordem[0];
+      const ate = ordem[ordem.length - 1];
+      return {
+        fornecedor: x.fornecedor,
+        movimentos: x.movimentos,
+        valor: Math.round(x.valor * 100) / 100,
+        competencias: de ? (de === ate ? rotulo(de.ano, de.mes) : `${rotulo(de.ano, de.mes)} a ${rotulo(ate.ano, ate.mes)}`) : "",
+      };
+    })
+    .sort((a, b) => a.fornecedor.localeCompare(b.fornecedor, "pt-BR"));
 }

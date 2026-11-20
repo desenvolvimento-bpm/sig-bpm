@@ -190,7 +190,8 @@ const contem = (busca: string | undefined, ...xs: Array<string | null | undefine
 const emLista = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}` : (xs[0] ?? ""));
 
 /** Baldes de alocação: as chaves de rateio e os baldes diretos (a coluna RATEIO da planilha). */
-const BALDES: Array<[string, string]> = [
+/** Os rateios (baldes) de um centro de custo; também os da cópia dos cenários analíticos (20/11/2026). */
+export const BALDES: Array<[string, string]> = [
   ["UNIDADE", "UNIDADE — direto na unidade do lançamento"],
   ["PROJETO", "PROJETO — rateio por projetos"],
   ["PRODUCAO", "PRODUCAO — rateio pela produção"],
@@ -213,7 +214,7 @@ const opcaoBalde = (v: unknown) => {
 };
 
 /** Departamentos que um centro pode ter: os dos cadastros e os grupos da DRE, com a sigla de cada um. */
-async function departamentos(db: Db) {
+export async function departamentos(db: Db) {
   const [centros, linhas] = await Promise.all([
     db.centroCusto.groupBy({ by: ["departamento", "departamentoSigla"], where: { departamento: { not: null } } }),
     db.linhaDRE.findMany({ where: { tipo: "ITEM" }, select: { grupo: true, grupoSigla: true }, distinct: ["grupo"], orderBy: { ordem: "asc" } }),
@@ -348,11 +349,11 @@ const centros: DefinicaoCadastro = {
     if ((await db.regraRateio.findUnique({ where: { id }, select: { percentualFixo: true } }))?.percentualFixo != null) return "Esta regra é de percentual fixo: exclua-a em “Percentuais Fixos”, com os outros destinos da chave.";
     const m = await this.movimentos!(db, id);
     if (m) return `${m} Inative-o em vez de excluir.`;
-    // A Gestão de Colaboradores (09/11/2026): o Lançamento Inicial, as movimentações e as linhas do Quadro de Lotação dos cenários.
-    const [c, q, l, f] = await Promise.all([
+    // A Gestão de Colaboradores (09/11/2026): o Lançamento Inicial e as movimentações. As linhas do Quadro de Lotação dos cenários
+    // são dos centros das cópias deles (20/11/2026, Cadastros por cenário): o centro excluído aqui fica nas cópias, sem a origem.
+    const [c, q, f] = await Promise.all([
       db.colaboradorCargaInicial.count({ where: { centroCustoId: id } }),
       db.colaboradorMovimentacao.count({ where: { centroCustoId: id } }),
-      db.cenarioLotacao.count({ where: { centroCustoId: id } }),
       db.reclassificacaoFornecedor.count({ where: { centroCustoId: id } }),
     ]);
     // O centro imperativo de reclassificações por fornecedor (13/11/2026).
@@ -360,7 +361,6 @@ const centros: DefinicaoCadastro = {
     const usos = [
       c ? `${c} ${plural(c, "colaborador", "colaboradores")} do Lançamento Inicial` : "",
       q ? `${q} ${plural(q, "movimentação", "movimentações")} do Quadro de Lotação` : "",
-      l ? `${l} ${plural(l, "linha", "linhas")} do Quadro de Lotação dos cenários analíticos` : "",
     ].filter(Boolean);
     return usos.length ? `O centro está em ${usos.join(", ")} (Gestão de Colaboradores). Inative-o em vez de excluir.` : null;
   },
@@ -1730,7 +1730,8 @@ const tipos: DefinicaoCadastro = {
  * que as linhas aparecem.
  */
 const GRUPOS_DE_VOLUME = new Set(["P", "S"]);
-async function gruposDaDRE(db: Db) {
+/** Os grupos da DRE (os Departamentos da DRE) com as unidades em que têm linhas; também nos Departamentos dos cenários (20/11/2026). */
+export async function gruposDaDRE(db: Db) {
   const ls = await db.linhaDRE.findMany({
     where: { tipo: "ITEM", ativo: true },
     orderBy: { ordem: "asc" },

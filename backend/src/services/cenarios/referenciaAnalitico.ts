@@ -1,10 +1,12 @@
 import { getPrismaClient } from "../../config/prisma.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import { estrutura } from "../dre/dreService.js";
 import { diasUteis } from "./calendario.js";
-import { contasDoGrupo, ehContaDeCentro, gruposDoCadastro, nomeDoGrupo } from "./centrosCenario.js";
+import { contasDoGrupo, ehContaDeCentro, gruposDoCadastro, type GrupoDoCenario } from "./centrosCenario.js";
 import { CONTAS_DEPRECIACAO, contasExtra, UNIDADES_EXTRA, VENDA_BASE, VENDA_EXTRA } from "./investimentosCenario.js";
 import { centroPadrao, grupoDoCentroRM, type MovimentacaoForaDoPadrao } from "./realocacoesCenario.js";
-import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_METALURGIA, LIQUIDA_DA_BRUTA, linhasDoCadastro, UNIDADES_PREMISSAS, VENDAS_DA_UNIDADE, type LinhaDoCadastro, type UnidadePremissa, type Venda } from "./premissasCenario.js";
+import { redistribuirMovimentos, type RegraDoCenario } from "./redistribuicoesDoCenario.js";
+import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_ESTOQUE, LINHAS_COM_METALURGIA, LIQUIDA_DA_BRUTA, linhasDoCadastro, UNIDADES_PREMISSAS, VENDAS_DA_UNIDADE, type LinhaDoCadastro, type UnidadePremissa, type Venda } from "./premissasCenario.js";
 
 /**
  * A referência realizada dos cenários analíticos (14/10/2026, etapa 5): do realizado das competências de um período,
@@ -15,8 +17,8 @@ import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_METALURGIA, LIQUIDA_D
  *   terceirizada) e as despesas variáveis de venda em R$ por unidade da linha;
  * - os valores dos grupos de centros de custo, a depreciação de cada unidade e o extra-operacional, mês a mês.
  *
- * Os volumes saem das listas (a produção — em m³, com as pistas nas linhas de pistas —, a metalurgia em kg, a montagem
- * em m³, a armadura e os acompanhamentos), na venda da obra (o tipo de venda dela; sem ele, G… é Global e o resto
+ * Os volumes saem das listas (a produção — em m³, com as pistas nas linhas de pistas —, a expedição em m³ — a Expedição
+ * Diária da Matriz e da Filial, 20/11/2026 —, a metalurgia em kg, a montagem em m³, a armadura e os acompanhamentos), na venda da obra (o tipo de venda dela; sem ele, G… é Global e o resto
  * Mercantil; sem obra, pela receita da linha em cada venda). Em Serviços, a linha sem volume nas listas (Vedação,
  * Fundação, Capeamento, Telhamento…) vai por dia útil: os valores médios são por dia, e a Demanda Diária fica sem Média
  * de Referência (19/11/2026, pedido do Adão; antes, 1): os meses levam a demanda das vendas, na unidade da linha, e os
@@ -27,7 +29,9 @@ import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_METALURGIA, LIQUIDA_D
  * custos (Matérias Primas, Gastos Gerais Variáveis e Estoque) e as despesas variáveis de venda de cada conta e mês são
  * os da DRE realizada da unidade, divididos entre as linhas na proporção das requisições e das notas fiscais com a
  * tarefa de cada linha (a correspondência tarefa × linha); a parte sem tarefa (ou com uma tarefa sem correspondência)
- * vai pelo volume das linhas (o m³; nas despesas variáveis de venda e em Serviços, pela receita).
+ * vai pelo volume das linhas (o m³; nas despesas variáveis de venda e em Serviços, pela receita). A Variação do Estoque
+ * (20/11/2026, pedido do Adão) vai só para as linhas que movimentam o estoque (as Estacas), e o custo unitário dela é a
+ * variação ÷ o Volume de Estoque do período (a produção menos a expedição).
  */
 
 const RECEITA_DA_NATUREZA: Record<string, string> = { PRE_FABRICADO: C.RBPF, FRETE: C.RBF, MONTAGEM: C.RBM, COMPLEMENTAR: C.RBC, DEVOLUCOES_INVENTARIOS: C.RBDI };
@@ -111,8 +115,20 @@ export function mediaDoPeriodo(valores: number[], meses: number): number {
 
 const reais = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
-/** A referência realizada dos meses `meses` do exercício `ano` (os das competências pedidas). */
-export async function referenciaDoRealizado(ano: number, meses: number[], decisoes: Record<string, string | null> = {}): Promise<ReferenciaRealizada> {
+/**
+ * A referência realizada dos meses `meses` do exercício `ano` (os das competências pedidas). `gruposDoCenario` (20/11/2026,
+ * Cadastros por cenário): os grupos de centros da cópia do cenário — o realizado de cada centro dos Cadastros Gerais vai para o
+ * grupo da cópia dele no cenário (pelo centro de origem); sem eles, os grupos dos Cadastros Gerais. `redistribuicoes` (20/11/2026,
+ * etapa 2): as Redistribuições de Gastos da cópia do cenário — nas contas dos centros, as partes que a classificação gravou pelas
+ * regras dos Cadastros Gerais saem, o movimento volta ao centro dele e as regras do cenário o dividem entre os centros da cópia.
+ */
+export async function referenciaDoRealizado(
+  ano: number,
+  meses: number[],
+  decisoes: Record<string, string | null> = {},
+  gruposDoCenario?: GrupoDoCenario[],
+  redistribuicoes?: RegraDoCenario[],
+): Promise<ReferenciaRealizada> {
   const prisma = getPrismaClient();
   const comps = await prisma.competencia.findMany({ where: { ano, mes: { in: meses } }, select: { id: true, mes: true } });
   const ids = comps.map((c) => c.id);
@@ -121,10 +137,10 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const obra = { select: { codigo: true, tipoVenda: true } } as const;
   const linhaSel = { select: { codigo: true } } as const;
   const unidadeSel = { select: { codigo: true } } as const;
-  const [est, linhas, grupos, corr, unidades, centros, lancamentosDiretos, producoes, pistas, metalurgias, armaduras, montagens, acompanhamentos, itens, requisicoes, notas, contas] = await Promise.all([
+  const [est, linhas, grupos, corr, unidades, centros, lancamentosDiretos, producoes, pistas, metalurgias, armaduras, montagens, acompanhamentos, expedicoes, itens, requisicoes, notas, contas] = await Promise.all([
     estrutura(),
     linhasDoCadastro(),
-    gruposDoCadastro(),
+    gruposDoCenario ?? gruposDoCadastro(),
     prisma.correspondenciaTarefa.findMany({ include: { linha: { select: { codigo: true, unidadeNegocio: unidadeSel } } } }),
     prisma.resultadoApurado.findMany({
       where: { ...naComp, centroCustoId: null, unidadeNegocioId: { not: null } },
@@ -133,12 +149,13 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
     }),
     prisma.resultadoApurado.findMany({
       where: { ...naComp, centroCustoId: { not: null } },
-      select: { competenciaId: true, valor: true, linhaDRE: { select: { codigo: true, tipo: true } }, centroCusto: { select: { nomeControladoria: true, nomeRM: true, codigoRM: true } } },
+      select: { competenciaId: true, valor: true, centroCustoId: true, linhaDRE: { select: { codigo: true, tipo: true } } },
     }),
     // Os lançamentos das contas de centros (14/10/2026): os que não caem num grupo do cenário são as movimentações fora
     // dos padrões, que o usuário realoca.
+    // Com as redistribuições do cenário (20/11/2026), também os redistribuídos pelos Cadastros Gerais (o movimento inteiro).
     prisma.lancamentoContabil.findMany({
-      where: { ...naComp, redistribuicaoId: null, OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
+      where: { ...naComp, ...(redistribuicoes ? {} : { redistribuicaoId: null }), OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
       orderBy: [{ competencia: { mes: "asc" } }, { linhaArquivo: "asc" }],
       select: {
         competenciaId: true,
@@ -146,9 +163,13 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
         valorMovimento: true,
         codigoCentroCusto: true,
         nomeCentroCusto: true,
-        linhaDRE: { select: { codigo: true, tipo: true } },
+        centroCustoId: true,
+        redistribuicaoId: true,
+        cliForn: true,
+        linhaDREId: true,
+        linhaDRE: { select: { codigo: true, tipo: true, grupoSigla: true } },
         contaResultado: { select: { reduzido: true, descricao: true } },
-        centroCusto: { select: { nomeControladoria: true, nomeRM: true, codigoRM: true } },
+        centroCusto: { select: { codigoRM: true, nomeRM: true } },
       },
     }),
     prisma.producao.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel, obra, unidadeNegocio: unidadeSel } }),
@@ -157,6 +178,8 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
     prisma.producaoArmadura.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel, obra, unidadeNegocio: unidadeSel } }),
     prisma.montagem.findMany({ where: naComp, select: { quantidade: true } }),
     prisma.acompanhamento.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel } }),
+    // A expedição (20/11/2026): a Expedição Diária e o Volume de Estoque (a produção menos a expedição) das linhas de m³.
+    prisma.expedicao.findMany({ where: { ...naComp, unidadeMedida: "M3" }, select: { quantidade: true, linha: linhaSel, obra, unidadeNegocio: unidadeSel } }),
     prisma.receitaPreviaItem.findMany({
       where: { receitaPrevia: naComp },
       select: { linha: true, venda: true, obraCodigo: true, receitaBruta: true, receitaLiquida: true, receitaPrevia: { select: { natureza: true, unidadeNegocio: unidadeSel } } },
@@ -217,6 +240,13 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
     const l = linha(3, p.linha?.codigo);
     if (l) somar(acomp, chave(l), Number(p.quantidade));
   }
+  // A expedição em m³ (20/11/2026), por linha e venda, como a produção ("?": sem obra, dividida pela receita); sem a unidade
+  // no registro, a linha de mesmo código da Matriz ou da Filial.
+  const expedido = new Map<string, number>();
+  for (const p of expedicoes) {
+    const l = linha(p.unidadeNegocio?.codigo, p.linha?.codigo) ?? linhas.find((x) => x.unidade !== 3 && x.codigo === p.linha?.codigo);
+    if (l && l.unidade !== 3 && emM3(l)) somar(expedido, `${chave(l)}|${vendaDaObra(p.obra) ?? "?"}`, Number(p.quantidade));
+  }
 
   // A receita: a de cada conta da DRE realizada da unidade, dividida entre as linhas e as vendas pelos itens.
   const rbItens = new Map<string, number>();
@@ -265,6 +295,9 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const porDia = (l: LinhaDoCadastro) => l.unidade === 3 && !volumeTotal(l);
   const base = (l: LinhaDoCadastro, venda: Venda) => (porDia(l) ? (venda === "GLOBAL" ? dias : 0) : volume(l, venda));
   const baseTotal = (l: LinhaDoCadastro) => (porDia(l) ? dias : volumeTotal(l));
+  // A expedição da linha na venda e o Volume de Estoque do período (20/11/2026): a produção menos a expedição, nas duas vendas.
+  const expedicao = (l: LinhaDoCadastro, venda: Venda) => porVenda(expedido, l, venda);
+  const volumeDeEstoque = (l: LinhaDoCadastro) => VENDAS_DA_UNIDADE[l.unidade].reduce((s, v) => s + volume(l, v) - expedicao(l, v), 0);
 
   // Os custos e as despesas variáveis de venda: a DRE realizada de cada conta e mês, pelas linhas.
   const reduzidos = new Map(contas.map((c) => [c.reduzido, c.linhaDRE!.codigo]));
@@ -294,6 +327,21 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
       for (const c of [...cs.custos, ...cs.dvv]) doCodigo.set(c.codigo, [...(doCodigo.get(c.codigo) ?? []), l]);
     }
     for (const [codigo, ls] of doCodigo) {
+      // A Variação do Estoque (20/11/2026, pedido do Adão): só as linhas que movimentam o estoque (as Estacas) a recebem, pelo
+      // Volume de Estoque delas; sem elas na unidade, fica de fora das premissas (com aviso).
+      if (codigo === C.VARIACAO_ESTOQUE) {
+        const comEstoque = ls.filter((l) => LINHAS_COM_ESTOQUE.has(l.codigo));
+        const pesos = new Map(comEstoque.map((l) => [chave(l), Math.abs(volumeDeEstoque(l))]));
+        let fora = 0;
+        for (const mes of meses) {
+          const total = real.get(`${u}|${codigo}`)?.[mes - 1] ?? 0;
+          if (!total) continue;
+          if (!comEstoque.length) fora += total;
+          else for (const [l, v] of dividirPorLinhas(total, new Map(), 0, pesos)) somar(custos, `${l}|${codigo}`, v);
+        }
+        if (Math.abs(fora) >= 1) avisos.push(`Variação do Estoque (${NOME_DA_UNIDADE[u]}): ${reais(fora)} sem linha que movimente o estoque (só as Estacas), fora das premissas.`);
+        continue;
+      }
       // Os pesos da parte sem tarefa: o m³ das linhas (sem ele, o volume delas); nas despesas variáveis de venda e em
       // Serviços, a receita.
       const pelaReceita = u === 3 || codigo.startsWith("DVV.");
@@ -358,6 +406,8 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
             add(u, venda, `M3_PISTA:${l.codigo}`, volumeTotal(l) / pistasDaLinha);
           } else add(u, venda, `DEMANDA:${l.codigo}`, b / dias);
         }
+        // A Expedição Diária (20/11/2026): o m³ expedido na venda ÷ os dias úteis do período.
+        if (u !== 3 && emM3(l)) add(u, venda, `EXPEDICAO:${l.codigo}`, expedicao(l, venda) / dias);
         // A armadura e a metalurgia por unidade da linha: o kg do período ÷ o volume dele.
         const bt0 = baseTotal(l);
         if (LINHAS_COM_ARMADURA.has(l.codigo) && bt0) add(u, venda, `ARMADURA:${l.codigo}`, VENDAS_DA_UNIDADE[u].reduce((s, v) => s + porVenda(armadura, l, v), 0) / bt0);
@@ -381,6 +431,14 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
           // A conta das comissões se calcula do percentual (acima).
           if (c.codigo === C.COMISSOES) continue;
           const v = custos.get(`${chave(l)}|${c.codigo}`) ?? 0;
+          // A Variação do Estoque (20/11/2026, pedido do Adão): o custo unitário é a variação ÷ o Volume de Estoque do período
+          // (a produção menos a expedição; o sinal vem junto — a variação de custo com o estoque caindo dá o unitário negativo).
+          if (c.codigo === C.VARIACAO_ESTOQUE) {
+            const ve = volumeDeEstoque(l);
+            if (v && Math.abs(ve) >= 1e-6) add(u, venda, `CUSTO:${l.codigo}:${c.codigo}`, v / ve);
+            else if (v && venda === VENDAS_DA_UNIDADE[u][0]) avisos.push(`${l.nome} (${NOME_DA_UNIDADE[u]}): ${reais(v)} de ${c.descricao} sem Volume de Estoque (produção menos expedição) no período, fora das premissas.`);
+            continue;
+          }
           if (v && bt) add(u, venda, `CUSTO:${l.codigo}:${c.codigo}`, v / bt);
           else if (v && venda === VENDAS_DA_UNIDADE[u][0]) avisos.push(`${l.nome} (${NOME_DA_UNIDADE[u]}): ${reais(v)} de ${c.descricao} sem volume no período, fora das premissas.`);
         }
@@ -391,6 +449,9 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   // Os grupos de centros de custo: as contas do grupo no cenário; o resto (os centros de estoque e de investimento e
   // as contas que o cenário não usa nos centros) fica de fora.
   const porGrupo = new Map(grupos.map((g) => [g.grupo, new Set(contasDoGrupo(est, g).map((l) => l.codigo))]));
+  // O grupo de cada centro dos Cadastros Gerais (20/11/2026): o da cópia dele no cenário (pelo centro de origem).
+  const grupoDaOrigem = new Map(grupos.flatMap((g) => g.centros.flatMap((c) => (c.origemId ? [[c.origemId, g.grupo] as const] : []))));
+  const grupoDoCentro = (centroCustoId: string | null) => (centroCustoId ? (grupoDaOrigem.get(centroCustoId) ?? null) : null);
   const somaCentros = new Map<string, number>();
   // O que não cai num grupo do cenário vira movimentação fora dos padrões (abaixo, pelos lançamentos).
   const noGrupo = (grupo: string | null, codigo: string, competenciaId: string, v: number) => {
@@ -399,7 +460,7 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   };
   // As outras contas dos centros (a receita, as matérias primas, a depreciação…) vêm das premissas, dos investimentos e
   // do extra-operacional.
-  for (const r of centros) if (r.linhaDRE.tipo === "ITEM" && ehContaDeCentro(r.linhaDRE.codigo)) noGrupo(nomeDoGrupo(r.centroCusto!), r.linhaDRE.codigo, r.competenciaId, Number(r.valor));
+  for (const r of centros) if (r.linhaDRE.tipo === "ITEM" && ehContaDeCentro(r.linhaDRE.codigo)) noGrupo(grupoDoCentro(r.centroCustoId), r.linhaDRE.codigo, r.competenciaId, Number(r.valor));
   // As movimentações fora dos padrões (14/10/2026; antes, dois avisos com os totais): os lançamentos das contas de
   // centros sem centro de custo, em centros fora do cenário ou em contas fora do grupo do centro, por conta contábil e
   // conta da DRE. Cada uma pode ir a um grupo que tenha a mesma atribuição e conta no grupo da DRE dele.
@@ -407,25 +468,75 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
   const foraDoPadrao = new Map<string, Omit<MovimentacaoForaDoPadrao, "valores"> & { meses: number[] }>();
   const porFilial = new Map<string, Map<number, number>>();
   // Os redistribuídos (13/11/2026) pelas partes, nos centros dos destinos.
-  const partes = await getPrismaClient().lancamentoRedistribuido.findMany({
+  const partesGravadas = await getPrismaClient().lancamentoRedistribuido.findMany({
     where: { ...naComp, OR: [".MOD.", ".MOI.", ".GGD.", ".GGI.", ".GGC."].map((a) => ({ linhaDRE: { codigo: { contains: a } } })) },
     select: {
       competenciaId: true,
       filial: true,
       valorMovimento: true,
+      centroCustoId: true,
       linhaDRE: { select: { codigo: true, tipo: true } },
-      centroCusto: { select: { nomeControladoria: true, nomeRM: true, codigoRM: true } },
+      centroCusto: { select: { codigoRM: true, nomeRM: true } },
       lancamentoContabil: { select: { contaResultado: { select: { reduzido: true, descricao: true } } } },
     },
   });
-  const lancamentosDeCentros = [
-    ...lancamentosDiretos,
-    ...partes.map(({ lancamentoContabil, ...p }) => ({ ...p, codigoCentroCusto: p.centroCusto.codigoRM, nomeCentroCusto: p.centroCusto.nomeRM, contaResultado: lancamentoContabil.contaResultado })),
-  ];
+  // Cada lançamento das contas dos centros, com o grupo do cenário em que cai (nulo: fora do cenário).
+  type DeCentro = {
+    competenciaId: string;
+    filial: number;
+    valorMovimento: number | Prisma.Decimal;
+    codigoCentroCusto: string | null;
+    nomeCentroCusto: string | null;
+    centroCusto: { codigoRM: string | null; nomeRM: string } | null;
+    linhaDRE: { codigo: string; tipo: string } | null;
+    contaResultado: { reduzido: string; descricao: string };
+    grupo: string | null;
+  };
+  const dasPartes = partesGravadas.map(({ lancamentoContabil, ...p }) => ({
+    ...p,
+    codigoCentroCusto: p.centroCusto.codigoRM,
+    nomeCentroCusto: p.centroCusto.nomeRM,
+    contaResultado: lancamentoContabil.contaResultado,
+    grupo: grupoDoCentro(p.centroCustoId),
+  }));
+  let lancamentosDeCentros: DeCentro[];
+  if (!redistribuicoes) {
+    lancamentosDeCentros = [...lancamentosDiretos.map((l) => ({ ...l, grupo: grupoDoCentro(l.centroCustoId) })), ...dasPartes];
+  } else {
+    // As Redistribuições de Gastos do cenário (20/11/2026, etapa 2): as partes gravadas pela classificação saem dos centros dos
+    // destinos e o movimento redistribuído volta ao centro dele; depois, as regras do cenário dividem os movimentos entre os
+    // centros da cópia. O ajuste vai sobre os valores apurados dos centros (acima), conta a conta e mês a mês.
+    const contaDeCentro = (l: { linhaDRE: { codigo: string; tipo: string } | null }) => !!l.linhaDRE && l.linhaDRE.tipo === "ITEM" && ehContaDeCentro(l.linhaDRE.codigo);
+    for (const p of dasPartes) if (contaDeCentro(p)) noGrupo(p.grupo, p.linhaDRE.codigo, p.competenciaId, -Number(p.valorMovimento));
+    for (const l of lancamentosDiretos) if (l.redistribuicaoId && contaDeCentro(l)) noGrupo(grupoDoCentro(l.centroCustoId), l.linhaDRE!.codigo, l.competenciaId, Number(l.valorMovimento));
+    const grupoDaCopia = new Map(grupos.flatMap((g) => g.centros.map((c) => [c.id, g.grupo] as const)));
+    const doMes = (competenciaId: string) => new Date(Date.UTC(ano, (mesDe.get(competenciaId) ?? 1) - 1, 1));
+    const { mantidos, redistribuidos } = redistribuirMovimentos(
+      lancamentosDiretos.map((l) => ({ ...l, grupoSigla: l.linhaDRE?.grupoSigla ?? null })),
+      redistribuicoes,
+      (l) => doMes(l.competenciaId),
+    );
+    lancamentosDeCentros = mantidos.map((l) => ({ ...l, grupo: grupoDoCentro(l.centroCustoId) }));
+    for (const { movimento: l, partes } of redistribuidos) {
+      if (contaDeCentro(l)) noGrupo(grupoDoCentro(l.centroCustoId), l.linhaDRE!.codigo, l.competenciaId, -Number(l.valorMovimento));
+      for (const p of partes) {
+        const grupo = grupoDaCopia.get(p.centro.id) ?? null;
+        if (contaDeCentro(l)) noGrupo(grupo, l.linhaDRE!.codigo, l.competenciaId, p.valor);
+        lancamentosDeCentros.push({
+          ...l,
+          valorMovimento: p.valor,
+          codigoCentroCusto: p.centro.codigoRM,
+          nomeCentroCusto: p.centro.nomeRM,
+          centroCusto: { codigoRM: p.centro.codigoRM, nomeRM: p.centro.nomeRM },
+          grupo,
+        });
+      }
+    }
+  }
   for (const l of lancamentosDeCentros) {
     const codigo = l.linhaDRE?.codigo;
     if (!codigo || l.linhaDRE?.tipo !== "ITEM" || !ehContaDeCentro(codigo)) continue;
-    const grupo = l.centroCusto ? nomeDoGrupo(l.centroCusto) : null;
+    const grupo = l.grupo;
     if (grupo && porGrupo.get(grupo)?.has(codigo)) continue;
     const chaveM = `${l.contaResultado.reduzido}|${codigo}`;
     let m = foraDoPadrao.get(chaveM);
@@ -447,7 +558,7 @@ export async function referenciaDoRealizado(ano: number, meses: number[], deciso
       foraDoPadrao.set(chaveM, m);
     }
     const origem = l.centroCusto
-      ? `${[l.centroCusto.codigoRM, grupo].filter(Boolean).join(" ")}${porGrupo.has(grupo!) ? " (conta fora do grupo)" : " (centro fora do cenário)"}`
+      ? `${[l.centroCusto.codigoRM, grupo ?? l.centroCusto.nomeRM].filter(Boolean).join(" ")}${grupo && porGrupo.has(grupo) ? " (conta fora do grupo)" : " (centro fora do cenário)"}`
       : l.codigoCentroCusto
         ? `${l.codigoCentroCusto} ${l.nomeCentroCusto ?? ""} (fora do cadastro)`.replace(/\s+/g, " ")
         : "Sem centro de custo";

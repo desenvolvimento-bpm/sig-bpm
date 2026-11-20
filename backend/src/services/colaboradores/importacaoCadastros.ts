@@ -207,11 +207,19 @@ export type ColaboradorResolvido = { unidadeNegocioId: string; vinculo: TipoDoCo
  * pelo nome (ativa) e o centro de custo pelo código, pelo "código - nome" ou pelo nome (ativo). Devolve os motivos de recusa
  * ou os cadastros.
  */
-export async function resolvedorDeColaboradores(db: Db) {
+/**
+ * O resolvedor dos cadastros de uma linha de colaborador (a unidade, o tipo, a função e o centro, pelos nomes). `fonte`
+ * (20/11/2026, Cadastros por cenário): as unidades e os centros de outra origem — as cópias de um cenário analítico (a aba Quadro
+ * de Lotação do Importar Valores) —, no lugar dos dos Cadastros Gerais.
+ */
+export async function resolvedorDeColaboradores(
+  db: Db,
+  fonte?: { unidades: Array<{ id: string; codigo: number; nome: string }>; centros: Array<{ id: string; codigoRM: string | null; nomeRM: string; ativo: boolean }> },
+) {
   const [unidades, funcoes, centros] = await Promise.all([
-    db.unidadeNegocio.findMany(),
+    fonte ? fonte.unidades : db.unidadeNegocio.findMany(),
     db.colaboradorFuncao.findMany(),
-    db.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, ativo: true } }),
+    fonte ? fonte.centros : db.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, ativo: true } }),
   ]);
   const unidadePorNome = new Map(unidades.flatMap((u) => [[chaveDoNome(u.nome), u] as const, [String(u.codigo), u] as const]));
   const funcaoPorNome = new Map(funcoes.map((f) => [chaveDoNome(f.nome), f]));

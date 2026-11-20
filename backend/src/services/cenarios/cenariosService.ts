@@ -61,7 +61,19 @@ import {
   type UnidadePremissa,
   type Venda,
 } from "./premissasCenario.js";
-import { contasDoGrupo, gruposDoCadastro, RATEIOS, rateiosSemBase } from "./centrosCenario.js";
+import { contasDoGrupo, gruposDoCenario, RATEIOS, rateiosSemBase, type GrupoDoCenario } from "./centrosCenario.js";
+import { apagarValoresDoGrupo, copiarCadastros, renomearValoresDoGrupo, trazerNovosDosCadastros } from "./cadastrosDoCenario.js";
+import {
+  gruposDaDREParaDepartamentos,
+  prepararDepartamento,
+  prepararRedistribuicao,
+  redistribuicaoParaAuditoria,
+  regrasDoCenario,
+  type DadosDaRedistribuicaoDoCenario,
+} from "./redistribuicoesDoCenario.js";
+import { fornecedoresDaCombinacao, LINHA_SEL, linhaDoDepartamento, RegraRedistribuicaoError, rotuloDaLinha, textoDoMes } from "../redistribuicoes/redistribuicoesService.js";
+import { foraDoCenario, nomeDoGrupo } from "./centrosCenario.js";
+import { BALDES, departamentos as departamentosDosCentros } from "../cadastros/edicao/definicoesCadastros.js";
 import {
   abasDoRecorte,
   DEPARTAMENTOS_DO_PATRIMONIO,
@@ -131,10 +143,22 @@ import { assinaturaDasRegras, avisosDosRateios, bloqueioPorRateios, mesesDoAno, 
  * Controle de Usuários); para os demais, ele não existe (404). O público aparece para todos com permissão.
  */
 
+/** As recusas das regras das redistribuições e dos departamentos (RegraRedistribuicaoError) como recusas do cenário. */
+async function daRegra<T>(f: () => Promise<T>): Promise<T> {
+  try {
+    return await f();
+  } catch (e) {
+    if (e instanceof RegraRedistribuicaoError) throw new CenarioError(e.status, e.message);
+    throw e;
+  }
+}
+
 export class CenarioError extends Error {
   constructor(
     readonly status: 400 | 403 | 404 | 409,
     message: string,
+    /** O que a tela precisa além da mensagem (20/11/2026: o grupo que fica sem centros, para confirmar). */
+    readonly detalhes?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -686,21 +710,32 @@ type CadastrosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: string; fun
  * nula. Nula sem referência (ou sem o quadro dela). Só a quantidade de colaboradores (17/11/2026, pedido do Adão: sem os salários
  * do Lançamento Inicial na referência).
  */
-async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null): Promise<{ rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number | null } | null> {
+async function colunaDoQuadroDe(detalhe: DetalheDaReferencia | null, cenarioId: string): Promise<{ rotulo: string; daLinha: (l: CadastrosDaLinhaDoQuadro) => number | null } | null> {
   if (!detalhe) return null;
   const prisma = getPrismaClient();
+  // O centro de cada linha é o da cópia do cenário (20/11/2026, Cadastros por cenário): o centro de origem dele (ou, sem ela, o
+  // código) o acha no QL Realizado e nas linhas do outro cenário.
+  const meus = await prisma.cenarioCentroCusto.findMany({ where: { cenarioId }, select: { id: true, origemId: true, codigoRM: true } });
+  const doCentro = new Map(meus.map((x) => [x.id, x]));
+  const identidade = (c: { origemId: string | null; codigoRM: string | null } | undefined) => (c ? (c.origemId ?? `codigo:${c.codigoRM ?? ""}`) : "");
   if (detalhe.tipo === "CENARIO") {
     const origem = await prisma.cenario.findUnique({ where: { id: detalhe.cenarioId }, select: { id: true, ano: true, tipo: true } });
     if (!origem || origem.tipo !== "ANALITICO") return null;
-    const lotacao = await prisma.cenarioLotacao.findMany({ where: { cenarioId: origem.id }, select: { unidadeNegocioId: true, vinculo: true, funcaoId: true, centroCustoId: true, meses: true } });
-    const chave = (l: CadastrosDaLinhaDoQuadro) => `${l.unidadeNegocioId}|${l.vinculo}|${l.funcaoId}|${l.centroCustoId}`;
+    const lotacao = await prisma.cenarioLotacao.findMany({
+      where: { cenarioId: origem.id },
+      select: { unidadeNegocioId: true, vinculo: true, funcaoId: true, meses: true, centroCusto: { select: { origemId: true, codigoRM: true } } },
+    });
+    const chave = (l: Omit<CadastrosDaLinhaDoQuadro, "centroCustoId">, centro: string) => `${l.unidadeNegocioId}|${l.vinculo}|${l.funcaoId}|${centro}`;
     const doUltimo = new Map<string, number>();
-    for (const l of lotacao) doUltimo.set(chave(l), (doUltimo.get(chave(l)) ?? 0) + (mesesDaLinha(l.meses)[11]?.colaboradores ?? 0));
-    return { rotulo: `Colaboradores da Referência (${rotuloMes(origem.ano, 12)})`, daLinha: (l) => doUltimo.get(chave(l)) ?? null };
+    for (const l of lotacao) {
+      const k = chave(l, identidade(l.centroCusto));
+      doUltimo.set(k, (doUltimo.get(k) ?? 0) + (mesesDaLinha(l.meses)[11]?.colaboradores ?? 0));
+    }
+    return { rotulo: `Colaboradores da Referência (${rotuloMes(origem.ano, 12)})`, daLinha: (l) => doUltimo.get(chave(l, identidade(doCentro.get(l.centroCustoId)))) ?? null };
   }
   const ql = await quadroRealizadoMaisRecente(prisma);
   if (!ql) return null;
-  const chave = (l: CadastrosDaLinhaDoQuadro) => chaveDaLinhaDoQuadro({ centroCustoId: l.centroCustoId, vinculo: l.vinculo, funcaoId: l.funcaoId });
+  const chave = (l: CadastrosDaLinhaDoQuadro) => chaveDaLinhaDoQuadro({ centroCustoId: doCentro.get(l.centroCustoId)?.origemId ?? "", vinculo: l.vinculo, funcaoId: l.funcaoId });
   return { rotulo: `QL Realizado (${String(ql.mes).padStart(2, "0")}/${ql.ano})`, daLinha: (l) => ql.final.get(chave(l)) ?? null };
 }
 
@@ -726,7 +761,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
       prisma.cenarioIndicador.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } } }),
       linhasDoQuadro(prisma, origem.id),
       // Os colaboradores do último mês do Quadro de Lotação de origem, pelos cadastros da linha.
-      colunaDoQuadroDe(detalhe),
+      colunaDoQuadroDe(detalhe, c.id),
     ]);
     return {
       rotulo: "Referência",
@@ -745,14 +780,18 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   const prem = new Map<string, number>();
   const cen = new Map<string, number>();
   const ind = new Map<string, number>();
+  // Os grupos da cópia dos Centros de Custo do cenário (20/11/2026, Cadastros por cenário).
+  const gruposDoC = await gruposDoCenario(c.id);
+  // As Redistribuições de Gastos da cópia do cenário (20/11/2026, etapa 2).
+  const regrasDoC = await regrasDoCenario(c.id);
   for (const f of fechadas) {
-    const ref = await referenciaDoRealizado(ano, [f.mes], decisoes);
+    const ref = await referenciaDoRealizado(ano, [f.mes], decisoes, gruposDoC, regrasDoC);
     for (const p of ref.premissas) prem.set(`${p.unidade}|${p.venda}|${p.chave}|${f.mes}`, p.valor);
     for (const x of ref.mensais) somar(prem, `${x.unidade}|${x.venda}|${x.chave}|${x.mes}`, x.valor);
     for (const x of ref.centros) somar(cen, `${x.grupo}|${x.codigo}|${x.mes}`, x.valor);
   }
   if (fechadas.length) {
-    const [est, grupos] = await Promise.all([estruturaDRE(), gruposDoCadastro()]);
+    const [est, grupos] = [await estruturaDRE(), gruposDoC];
     // Os Benefícios Adicionais de cada mês: a diferença entre os encargos realizados e o cálculo com os percentuais padrão.
     const vendaDosBeneficios = itemDosEncargos("BENEFICIOS")!.venda;
     for (const g of grupos) {
@@ -773,9 +812,9 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   }
   // Os colaboradores dos grupos em cada mês (12/11/2026: a Gestão de Colaboradores é a única fonte; antes, as listas do
   // Quadro de Lotação do Fechamento Mensal): o QL Realizado do fim do mês, nos meses com a competência do Quadro de Lotação.
-  for (const [mes, doMes] of await colaboradoresRealizados(ano, detalhe.meses, await gruposDoCadastro())) for (const [k, n] of doMes) prem.set(`0|${k}|${mes}`, n);
+  for (const [mes, doMes] of await colaboradoresRealizados(ano, detalhe.meses, gruposDoC)) for (const [k, n] of doMes) prem.set(`0|${k}|${mes}`, n);
   // O QL Realizado da competência mais recente do Quadro de Lotação (Gestão de Colaboradores).
-  const coluna = await colunaDoQuadroDe(detalhe);
+  const coluna = await colunaDoQuadroDe(detalhe, c.id);
   const periodo = detalhe.meses.length ? `${String(detalhe.meses[0]).padStart(2, "0")}${detalhe.meses.length > 1 ? ` a ${String(detalhe.meses[detalhe.meses.length - 1]).padStart(2, "0")}` : ""}` : "";
   return {
     rotulo: "Realizado",
@@ -795,15 +834,14 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
  * Quadro de Lotação, pelos centros dos grupos e pelo Tipo (Aprendizes, Estagiários, CLT e PJ), como a aba Quadro de Lotação
  * do cenário. Devolve mês → ("VENDA|grupo" → colaboradores).
  */
-async function colaboradoresRealizados(ano: number, meses: number[], grupos: Awaited<ReturnType<typeof gruposDoCadastro>>) {
+async function colaboradoresRealizados(ano: number, meses: number[], grupos: GrupoDoCenario[]) {
   const prisma = getPrismaClient();
   const { quadros } = await quadrosRealizadosPorLinha(prisma);
   const doPeriodo = quadros.filter((q) => q.ano === ano && meses.includes(q.mes));
   const r = new Map<number, Map<string, number>>();
   if (!doPeriodo.length) return r;
-  const centros = await prisma.centroCusto.findMany({ select: { id: true, codigoRM: true } });
-  const codigoDe = new Map(centros.map((x) => [x.id, x.codigoRM]));
-  const grupoDoCodigo = new Map(grupos.flatMap((g) => g.centros.filter((x) => x.codigo).map((x) => [x.codigo!, g.grupo] as const)));
+  // O QL Realizado é dos centros dos Cadastros Gerais: o grupo da cópia de cada um no cenário (20/11/2026, pelo centro de origem).
+  const grupoDaOrigem = new Map(grupos.flatMap((g) => g.centros.flatMap((x) => (x.origemId ? [[x.origemId, g.grupo] as const] : []))));
   const vendaDo: Record<TipoDeColaborador, string> = {
     aprendizes: VENDA_LOTACAO_APRENDIZ,
     estagiarios: VENDA_LOTACAO_ESTAGIARIO,
@@ -814,7 +852,7 @@ async function colaboradoresRealizados(ano: number, meses: number[], grupos: Awa
     const doMes = new Map<string, number>();
     for (const [k, n] of q.final) {
       const [centroId, vinculo] = k.split("|");
-      const grupo = grupoDoCodigo.get(codigoDe.get(centroId) ?? "");
+      const grupo = grupoDaOrigem.get(centroId);
       if (!n || !grupo || !TIPOS_DO_COLABORADOR.includes(vinculo as TipoDoColaborador)) continue;
       const venda = vendaDo[tipoDaLinha({ vinculo: vinculo as TipoDoColaborador })];
       doMes.set(`${venda}|${grupo}`, (doMes.get(`${venda}|${grupo}`) ?? 0) + n);
@@ -839,7 +877,7 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     prisma.cenarioPremissa.findMany({ where: { cenarioId: c.id } }),
     prisma.cenarioCentro.findMany({ where: { cenarioId: c.id }, include: { linhaDRE: { select: { codigo: true } } } }),
     prisma.cenarioIndicador.findMany({ where: { cenarioId: c.id } }),
-    gruposDoCadastro(),
+    gruposDoCenario(c.id),
     prisma.cenarioPremissaJustificativa.findMany({ where: { cenarioId: c.id } }),
     calcularCenario(c.id),
     linhasDoQuadro(prisma, c.id),
@@ -1061,35 +1099,39 @@ export type DadosDaLinhaDoQuadro = { unidadeNegocioId: string; vinculo: TipoDoCo
 const INCLUIR_DO_QUADRO = {
   unidadeNegocio: { select: { nome: true } },
   funcao: { select: { nome: true } },
-  centroCusto: { select: { codigoRM: true, nomeRM: true } },
+  centroCusto: { select: { codigoRM: true, nomeRM: true, origemId: true } },
   meses: true,
 } satisfies Prisma.CenarioLotacaoInclude;
 const rotuloDoCentro = (c: { codigoRM: string | null; nomeRM: string }) => `${c.codigoRM ? `${c.codigoRM} - ` : ""}${c.nomeRM}`;
 
 /**
- * Os cadastros que as linhas do Quadro de Lotação do cenário aceitam (09/11/2026): as unidades e as funções ativas da
- * Gestão de Colaboradores e os centros ativos, com código, dos grupos do cenário (os de estoque e de
- * investimento ficam de fora, como nos Centros de Custo).
+ * Os cadastros que as linhas do Quadro de Lotação do cenário aceitam (09/11/2026): as unidades ativas e os centros ativos dos
+ * grupos do cenário (os de estoque e de investimento ficam de fora, como nos Centros de Custo) — desde 20/11/2026 (Cadastros por
+ * cenário), os das cópias de Unidades e de Centros de Custo do cenário (a unidade pelo id da dos Cadastros Gerais, com o nome da
+ * cópia) — e as funções ativas da Gestão de Colaboradores.
  */
-async function cadastrosDoQuadro() {
+async function cadastrosDoQuadro(cenarioId: string) {
   const prisma = getPrismaClient();
-  const [grupos, unidades, funcoes] = await Promise.all([
-    gruposDoCadastro(),
-    prisma.unidadeNegocio.findMany({ where: { ativo: true }, orderBy: [{ ordem: "asc" }, { codigo: "asc" }], select: { id: true, nome: true } }),
+  const [grupos, unidades, funcoes, centros] = await Promise.all([
+    gruposDoCenario(cenarioId),
+    prisma.cenarioUnidade.findMany({ where: { cenarioId }, orderBy: [{ ordem: "asc" }, { unidadeNegocio: { codigo: "asc" } }], select: { unidadeNegocioId: true, nome: true, ativo: true } }),
     prisma.colaboradorFuncao.findMany({ where: { ativo: true }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
+    prisma.cenarioCentroCusto.findMany({ where: { cenarioId }, orderBy: [{ codigoRM: { sort: "asc", nulls: "last" } }, { nomeRM: "asc" }], select: { id: true, origemId: true, codigoRM: true, nomeRM: true, ativo: true } }),
   ]);
   const grupoDoCodigo = new Map(grupos.flatMap((g) => g.centros.filter((x) => x.codigo).map((x) => [x.codigo!, g] as const)));
-  const centros = await prisma.centroCusto.findMany({
-    where: { ativo: true, codigoRM: { in: [...grupoDoCodigo.keys()] } },
-    orderBy: { codigoRM: "asc" },
-    select: { id: true, codigoRM: true, nomeRM: true },
-  });
+  const grupoDoCentro = new Map(grupos.flatMap((g) => g.centros.map((x) => [x.id, g] as const)));
   return {
     grupos,
     grupoDoCodigo,
-    unidades,
+    /** O grupo de cada centro da cópia (os ativos, nos grupos do cenário). */
+    grupoDoCentro,
+    /** O centro de origem (dos Cadastros Gerais) de cada centro da cópia, também dos inativos: o recorte por centro. */
+    origemDoCentro: new Map(centros.map((x) => [x.id, x.origemId])),
+    /** O nome de cada unidade na cópia do cenário, também das inativas. */
+    nomeDaUnidade: new Map(unidades.map((u) => [u.unidadeNegocioId, u.nome])),
+    unidades: unidades.filter((u) => u.ativo).map((u) => ({ id: u.unidadeNegocioId, nome: u.nome })),
     funcoes,
-    centros: centros.map((x) => ({ id: x.id, nome: rotuloDoCentro(x), grupo: grupoDoCodigo.get(x.codigoRM!)!.grupo })),
+    centros: centros.filter((x) => x.ativo && grupoDoCentro.has(x.id)).map((x) => ({ id: x.id, origemId: x.origemId, nome: rotuloDoCentro(x), grupo: grupoDoCentro.get(x.id)!.grupo })),
   };
 }
 
@@ -1105,28 +1147,35 @@ async function quadroVigente(cenarioId: string) {
   const prisma = getPrismaClient();
   const ql = await quadroRealizadoMaisRecente(prisma);
   if (!ql) throw new CenarioError(400, "Nenhuma competência no Quadro de Lotação (Gestão de Colaboradores) para importar.");
-  const [cad, centros, unidades, funcoes, existentes] = await Promise.all([
-    cadastrosDoQuadro(),
-    prisma.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true, unidadeNegocioId: true } }),
+  const [cad, centros, gerais, unidades, funcoes, existentes] = await Promise.all([
+    cadastrosDoQuadro(cenarioId),
+    // Os centros da cópia do cenário (20/11/2026): o QL Realizado é dos centros dos Cadastros Gerais e chega pelo de origem.
+    prisma.cenarioCentroCusto.findMany({ where: { cenarioId }, select: { id: true, origemId: true, codigoRM: true, nomeRM: true, unidadeNegocioId: true } }),
+    prisma.centroCusto.findMany({ select: { id: true, codigoRM: true, nomeRM: true } }),
     prisma.unidadeNegocio.findMany({ select: { id: true, codigo: true } }),
     prisma.colaboradorFuncao.findMany({ select: { id: true, nome: true } }),
     prisma.cenarioLotacao.findMany({ where: { cenarioId }, select: { vinculo: true, funcaoId: true, centroCustoId: true, meses: true } }),
   ]);
+  const copiaDaOrigem = new Map(centros.flatMap((x) => (x.origemId ? [[x.origemId, x] as const] : [])));
+  const origemDaCopia = new Map(centros.map((x) => [x.id, x.origemId]));
+  const geralDe = new Map(gerais.map((x) => [x.id, x]));
   const centroDe = new Map(centros.map((x) => [x.id, x]));
   const ativos = new Set(cad.centros.map((x) => x.id));
   const unidadeDoCodigo = new Map(unidades.map((u) => [u.codigo, u.id]));
   const nomeDaFuncao = new Map(funcoes.map((f) => [f.id, f.nome]));
-  const salarios = new Map(existentes.map((l) => [chaveDaLinhaDoQuadro(l), mesesDaLinha(l.meses)]));
+  // Os salários das linhas que o cenário já tinha, pelo centro de origem (a chave do QL Realizado).
+  const salarios = new Map(existentes.map((l) => [chaveDaLinhaDoQuadro({ ...l, centroCustoId: origemDaCopia.get(l.centroCustoId) ?? l.centroCustoId }), mesesDaLinha(l.meses)]));
   const linhas: DadosDaLinhaDoQuadro[] = [];
   const fora = new Map<string, number>();
   let total = 0;
   for (const [k, n] of ql.final) {
     if (n <= 0) continue;
-    const [centroCustoId, vinculo, funcaoId] = k.split("|");
-    const c = centroDe.get(centroCustoId);
-    const g = c?.codigoRM && ativos.has(c.id) ? cad.grupoDoCodigo.get(c.codigoRM) : undefined;
+    const [origemId, vinculo, funcaoId] = k.split("|");
+    const c = copiaDaOrigem.get(origemId);
+    const g = c && ativos.has(c.id) ? cad.grupoDoCentro.get(c.id) : undefined;
     if (!c || !g || !funcaoId || !TIPOS_DO_COLABORADOR.includes(vinculo as TipoDoColaborador)) {
-      const nome = c ? rotuloDoCentro(c) : "centro de custo excluído";
+      const geral = geralDe.get(origemId);
+      const nome = c ? rotuloDoCentro(c) : geral ? rotuloDoCentro(geral) : "centro de custo excluído";
       fora.set(nome, (fora.get(nome) ?? 0) + n);
       continue;
     }
@@ -1135,7 +1184,7 @@ async function quadroVigente(cenarioId: string) {
       unidadeNegocioId: ql.unidadeDaChave.get(k) ?? c.unidadeNegocioId ?? unidadeDoCodigo.get(g.unidade) ?? unidades[0].id,
       vinculo: vinculo as TipoDoColaborador,
       funcaoId,
-      centroCustoId,
+      centroCustoId: c.id,
       meses: Array.from({ length: 12 }, (_, m) => ({ colaboradores: n, salarioBruto: s?.[m].salarioBruto ?? 0, adicional: s?.[m].adicional ?? 0 })),
     });
     total += n;
@@ -1179,20 +1228,18 @@ function exigirNoRecorte(ok: boolean) {
   if (!ok) throw new CenarioError(403, FORA_DO_RECORTE);
 }
 /** O recorte nas linhas do Quadro de Lotação (12/11/2026): cada centro pelo grupo dele no cenário, e o trecho do histórico. */
-function recorteDoQuadroCom(r: Recorte | null, cad: { centros: Array<{ id: string; grupo: string }>; grupoDoCodigo: Map<string, GrupoDoCenarioDoQuadro> }) {
-  const grupoDoId = new Map(cad.centros.map((x) => [x.id, x.grupo]));
-  const porNome = new Map([...cad.grupoDoCodigo.values()].map((g) => [g.grupo, g]));
-  const grupo = (centroId: string) => porNome.get(grupoDoId.get(centroId) ?? "");
+function recorteDoQuadroCom(r: Recorte | null, cad: { grupoDoCentro: Map<string, GrupoDoCenario>; origemDoCentro: Map<string, string | null> }) {
+  // O centro é o da cópia do cenário (20/11/2026): o grupo dele no cenário e, no recorte por centro, o de origem.
+  const grupo = (centroId: string) => cad.grupoDoCentro.get(centroId);
   return {
-    ve: (centroId: string) => veCentro(r, centroId, grupo(centroId)),
+    ve: (centroId: string) => veCentro(r, cad.origemDoCentro.get(centroId) ?? null, grupo(centroId)),
     trecho: (centroId: string): Trecho => {
       const g = grupo(centroId);
       return g ? trechoDoGrupo(g) : { d: [] };
     },
   };
 }
-type GrupoDoCenarioDoQuadro = Awaited<ReturnType<typeof gruposDoCadastro>>[number];
-const recorteDoQuadro = async (r: Recorte | null) => recorteDoQuadroCom(r, await cadastrosDoQuadro());
+const recorteDoQuadro = async (r: Recorte | null, cenarioId: string) => recorteDoQuadroCom(r, await cadastrosDoQuadro(cenarioId));
 
 /**
  * Grava mudanças das linhas da planilha (15/10/2026: o Replicar Médias, o Apagar Valores e o Importar Valores): cada
@@ -1312,8 +1359,12 @@ export const cenariosService = {
           await gravarEmLotes(centros, (lote) => tx.cenarioCentro.createMany({ data: lote.map((x) => ({ ...x, cenarioId: c.id })) }));
           const investimentos = await tx.cenarioInvestimento.findMany({ where: { cenarioId: origem.id } });
           await gravarEmLotes(investimentos, (lote) => tx.cenarioInvestimento.createMany({ data: lote.map(({ id: _id, ...x }) => ({ ...x, cenarioId: c.id })) }));
-          // O Quadro de Lotação do analítico (09/11/2026).
-          await copiarQuadro(tx, origem.id, c.id);
+          // O Quadro de Lotação do analítico (09/11/2026), nos centros da cópia nova (20/11/2026).
+          const mapa = tipo === "ANALITICO" ? await copiarCadastros(tx, c.id, origem.id) : undefined;
+          await copiarQuadro(tx, origem.id, c.id, mapa);
+        } else if (tipo === "ANALITICO") {
+          // As cópias de Unidades e de Centros de Custo (20/11/2026, Cadastros por cenário): as dos Cadastros Gerais de hoje.
+          await copiarCadastros(tx, c.id, null);
         }
         return c;
       },
@@ -1716,7 +1767,10 @@ export const cenariosService = {
     const nomeArquivo = media ? `Médias do realizado de ${ano} (${periodo})` : `Resultado realizado de ${ano} (${periodo})`;
     // As decisões de realocação das movimentações fora dos padrões ficam entre as cargas (14/10/2026).
     const anteriores = lerRealocacoes(c.realocacoes);
-    const ref = await referenciaDoRealizado(ano, fechadas.map((f) => f.mes), anteriores.decisoes);
+    // Os grupos da cópia dos Centros de Custo do cenário (20/11/2026, Cadastros por cenário).
+    const grupos = await gruposDoCenario(c.id);
+    // E as Redistribuições de Gastos da cópia (20/11/2026, etapa 2), no lugar das dos Cadastros Gerais.
+    const ref = await referenciaDoRealizado(ano, fechadas.map((f) => f.mes), anteriores.decisoes, grupos, await regrasDoCenario(c.id));
     // Cada movimentação (15/10/2026): a soma dos meses ÷ os meses da referência (17/11/2026, pedido do Adão: também os sem
     // valor) vai para a Média de Referência do grupo (o mês 0); os meses, só no Mês a Mês (na média do período, os meses do
     // cenário ficam em branco). Mantendo os meses (11/11/2026), as realocações também ficam só na média.
@@ -1733,7 +1787,6 @@ export const cenariosService = {
       ),
     };
     const idDaConta = new Map((await estruturaDRE()).map((l) => [l.codigo, l.id]));
-    const grupos = await gruposDoCadastro();
     // A Média de Referência (15/10/2026; o mês 0): a soma no período ÷ o número de meses. Os doze meses do cenário ficam
     // em branco (o botão Replicar Médias os preenche); no Mês a Mês, cada mês fechado vai também para o seu mês.
     const comMedia = <T extends { mes: number; valor: number }>(xs: T[], chave: (x: T) => string) => {
@@ -2144,7 +2197,7 @@ export const cenariosService = {
     const [todas, est] = await Promise.all([getPrismaClient().cenarioReajuste.findMany({ where: { cenarioId: id }, orderBy: { criadoEm: "desc" } }), estruturaDRE()]);
     // Com o Acesso às Informações Por Recorte (12/11/2026), só as alterações do recorte (as do cenário inteiro, todos).
     const recorte = recorteDoCenario(c, usuario);
-    const grupos = recorte ? new Map((await gruposDoCadastro()).map((g) => [g.grupo, g])) : new Map();
+    const grupos = recorte ? new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g])) : new Map();
     const unidadeDaConta = (conta: string) => CONTAS_DEPRECIACAO.find((d) => d.conta === conta)?.unidade ?? null;
     // As alterações da lista dos investimentos (19/11/2026), todos as veem, como veem a lista inteira.
     const rs = recorte ? todas.filter((x) => veAlteracao(recorte, x, grupos, unidadeDaConta)) : todas;
@@ -2266,7 +2319,9 @@ export const cenariosService = {
         await gravarEmLotes(centros, (lote) => tx.cenarioCentro.createMany({ data: lote.map((x) => ({ ...x, cenarioId: c.id })) }));
         const investimentos = await tx.cenarioInvestimento.findMany({ where: { cenarioId: origem.id } });
         await gravarEmLotes(investimentos, (lote) => tx.cenarioInvestimento.createMany({ data: lote.map(({ id: _id, ...x }) => ({ ...x, cenarioId: c.id })) }));
-        await copiarQuadro(tx, origem.id, c.id);
+        // As cópias de Unidades e de Centros de Custo do cenário de origem (20/11/2026) e o Quadro de Lotação nos centros delas.
+        const mapa = origem.tipo === "ANALITICO" ? await copiarCadastros(tx, c.id, origem.id) : undefined;
+        await copiarQuadro(tx, origem.id, c.id, mapa);
         return c;
       },
       { timeout: 120_000 },
@@ -2408,7 +2463,7 @@ export const cenariosService = {
   async centros(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const [grupos, totais] = await Promise.all([gruposDoCadastro(), getPrismaClient().cenarioCentro.groupBy({ by: ["grupo"], where: { cenarioId: id, mes: { gte: 1 } }, _sum: { valor: true } })]);
+    const [grupos, totais] = await Promise.all([gruposDoCenario(id), getPrismaClient().cenarioCentro.groupBy({ by: ["grupo"], where: { cenarioId: id, mes: { gte: 1 } }, _sum: { valor: true } })]);
     const total = new Map(totais.map((t) => [t.grupo, Number(t._sum.valor ?? 0)]));
     return {
       ano: c.ano,
@@ -2448,7 +2503,7 @@ export const cenariosService = {
   async resultadosDoCentro(id: string, grupo: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const g = (await gruposDoCadastro()).find((x) => x.grupo === grupo);
+    const g = (await gruposDoCenario(id)).find((x) => x.grupo === grupo);
     if (!g) throw new CenarioError(404, "Grupo de centros de custo não encontrado.");
     // O recorte do perfil, qualquer que seja o acesso do cenário (19/11/2026), como a lista.
     if (!veGrupo(recorteDoPerfil(usuario), g)) throw new CenarioError(403, "Fora do seu recorte: o seu perfil só vê os centros de custo dos seus departamentos ou os seus centros de custo.");
@@ -2508,7 +2563,7 @@ export const cenariosService = {
   async centro(id: string, grupo: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const g = (await gruposDoCadastro()).find((x) => x.grupo === grupo);
+    const g = (await gruposDoCenario(id)).find((x) => x.grupo === grupo);
     if (!g) throw new CenarioError(404, "Grupo de centros de custo não encontrado.");
     exigirNoRecorte(veGrupo(recorteDoCenario(c, usuario), g));
     const [est, gravados, premissas, linhasDoCenario] = await Promise.all([
@@ -2587,7 +2642,7 @@ export const cenariosService = {
     exigirEditavel(c);
     exigirSemReajustes(c);
     const prisma = getPrismaClient();
-    const g = (await gruposDoCadastro()).find((x) => x.grupo === grupo);
+    const g = (await gruposDoCenario(id)).find((x) => x.grupo === grupo);
     if (!g) throw new CenarioError(404, "Grupo de centros de custo não encontrado.");
     exigirNoRecorte(veGrupo(recorteDoCenario(c, usuario), g));
     const est = await estruturaDRE();
@@ -2992,9 +3047,9 @@ export const cenariosService = {
     exigirAnalitico(c);
     const [linhas, cad, referencia] = await Promise.all([
       getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO }),
-      cadastrosDoQuadro(),
+      cadastrosDoQuadro(id),
       // Os colaboradores de cada linha na referência (16/11/2026): a coluna Colab. Ref. e o Replicar Referências da tela.
-      detalheDaReferencia(c).then(colunaDoQuadroDe),
+      detalheDaReferencia(c).then((d) => colunaDoQuadroDe(d, id)),
     ]);
     // O recorte (12/11/2026): as linhas e os centros dos grupos dele.
     const r = recorteDoCenario(c, usuario);
@@ -3008,14 +3063,15 @@ export const cenariosService = {
       linhas: linhas.filter((l) => q.ve(l.centroCustoId)).map((l) => ({
         id: l.id,
         unidadeNegocioId: l.unidadeNegocioId,
-        unidade: l.unidadeNegocio.nome,
+        // O nome da unidade na cópia do cenário (20/11/2026).
+        unidade: cad.nomeDaUnidade.get(l.unidadeNegocioId) ?? l.unidadeNegocio.nome,
         vinculo: l.vinculo,
         funcaoId: l.funcaoId,
         funcao: l.funcao.nome,
         centroCustoId: l.centroCustoId,
         centro: rotuloDoCentro(l.centroCusto),
         // O grupo do centro (null: fora dos grupos do cenário; a linha não conta).
-        grupo: cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupo ?? null,
+        grupo: cad.grupoDoCentro.get(l.centroCustoId)?.grupo ?? null,
         meses: mesesDaLinha(l.meses),
         // Os colaboradores da linha na referência (nulo: a linha não está nela, ou o cenário não tem referência).
         referencia: referencia ? referencia.daLinha(l) : null,
@@ -3034,12 +3090,12 @@ export const cenariosService = {
     const atual = linhaId ? await prisma.cenarioLotacao.findFirst({ where: { id: linhaId, cenarioId: id }, include: INCLUIR_DO_QUADRO }) : null;
     if (linhaId && !atual) throw new CenarioError(404, "Linha do Quadro de Lotação não encontrada: atualize a tela.");
     // O recorte (12/11/2026): a linha de antes e o centro novo.
-    const q = await recorteDoQuadro(recorteDoCenario(c, usuario));
+    const q = await recorteDoQuadro(recorteDoCenario(c, usuario), id);
     if (atual) exigirNoRecorte(q.ve(atual.centroCustoId));
     if (dados) exigirNoRecorte(q.ve(dados.centroCustoId));
     const meses = dados?.meses ?? (atual ? mesesDaLinha(atual.meses) : Array.from({ length: 12 }, () => ({ colaboradores: 0, salarioBruto: 0, adicional: 0 })));
     if (dados) {
-      const recusa = recusaDaLinha({ ...dados, meses }, await cadastrosDoQuadro(), atual);
+      const recusa = recusaDaLinha({ ...dados, meses }, await cadastrosDoQuadro(id), atual);
       if (recusa) throw new CenarioError(400, recusa);
     }
     let gravada = atual;
@@ -3096,7 +3152,7 @@ export const cenariosService = {
     const prisma = getPrismaClient();
     const lista = await prisma.cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: ids } }, include: INCLUIR_DO_QUADRO });
     if (lista.length !== new Set(ids).size) throw new CenarioError(404, "Alguma linha do Quadro de Lotação não foi encontrada: atualize a tela.");
-    const q = await recorteDoQuadro(recorteDoCenario(c, usuario));
+    const q = await recorteDoQuadro(recorteDoCenario(c, usuario), id);
     exigirNoRecorte(lista.every((l) => q.ve(l.centroCustoId)));
     await prisma.$transaction(
       async (tx) => {
@@ -3141,7 +3197,7 @@ export const cenariosService = {
     const ids = [...new Set(alteracoes.map((a) => a.linha))];
     const linhas = await prisma.cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: ids } }, include: INCLUIR_DO_QUADRO });
     if (linhas.length !== ids.length) throw new CenarioError(404, "Alguma linha do Quadro de Lotação não foi encontrada: atualize a tela.");
-    const q = await recorteDoQuadro(recorteDoCenario(c, usuario));
+    const q = await recorteDoQuadro(recorteDoCenario(c, usuario), id);
     exigirNoRecorte(linhas.every((l) => q.ve(l.centroCustoId)));
     if (alteracoes.some((a) => a.valor !== null && (!Number.isFinite(a.valor) || a.valor < 0 || a.valor > 1e9)))
       throw new CenarioError(400, "Os colaboradores e os salários não podem ser negativos.");
@@ -3210,7 +3266,7 @@ export const cenariosService = {
       estruturaDRE(),
       linhasDoCadastro(),
       prisma.cenarioPremissa.findMany({ where: { cenarioId: id } }),
-      gruposDoCadastro(),
+      gruposDoCenario(id),
       // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
       prisma.cenarioCentro.findMany({ where: { cenarioId: id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
       prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(id), select: { nome: true, mes: true, valor: true } }),
@@ -3267,7 +3323,7 @@ export const cenariosService = {
     // As linhas calculadas (o Total de Colaboradores e a conta Encargos e Benefícios, 19/10/2026) não se replicam nem apagam.
     // Com o Acesso às Informações Por Recorte (12/11/2026), só as linhas do recorte de quem o usa (a Edição Pública).
     const recorte = recorteDoCenario(c, usuario);
-    const gruposDoMedias = new Map((await gruposDoCadastro()).map((g) => [g.grupo, g]));
+    const gruposDoMedias = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
     const linhas = (await linhasDaPlanilha(c)).filter((l) => !l.calculada && veLinha(recorte, l, gruposDoMedias));
     const mudancas: MudancaDaPlanilha[] = linhas.flatMap((l) =>
       acao === "replicar"
@@ -3316,7 +3372,7 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     if (!departamentos.length) throw new CenarioError(400, "Marque ao menos um departamento.");
-    const cadastro = await gruposDoCadastro();
+    const cadastro = await gruposDoCenario(id);
     const grupoDRE = new Map(cadastro.map((g) => [g.grupo, g.grupoDRE]));
     // O recorte (12/11/2026): os departamentos dele (o Coordenador, os dos grupos dele) e só as linhas, os investimentos e o
     // Quadro de Lotação do recorte.
@@ -3344,18 +3400,18 @@ export const cenariosService = {
     // O Quadro de Lotação (09/11/2026): as linhas dos centros dos departamentos escolhidos (a de um centro fora dos grupos vai sempre).
     const quadroDaPlanilha = abas.includes("quadro")
       ? await (async () => {
-          const cad = await cadastrosDoQuadro();
+          const cad = await cadastrosDoQuadro(id);
           const ls = await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO });
           return {
             listas: { unidades: cad.unidades.map((u) => u.nome) },
             linhas: ls
               .filter((l) => {
-                const d = departamentoDoGrupoDRE(cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? "")?.grupoDRE);
-                return (!d || departamentos.includes(d)) && veCentro(recorte, l.centroCustoId, cad.grupoDoCodigo.get(l.centroCusto.codigoRM ?? ""));
+                const d = departamentoDoGrupoDRE(cad.grupoDoCentro.get(l.centroCustoId)?.grupoDRE);
+                return (!d || departamentos.includes(d)) && veCentro(recorte, l.centroCusto.origemId, cad.grupoDoCentro.get(l.centroCustoId));
               })
               .map((l) => ({
                 id: l.id,
-                unidade: l.unidadeNegocio.nome,
+                unidade: cad.nomeDaUnidade.get(l.unidadeNegocioId) ?? l.unidadeNegocio.nome,
                 tipo: ROTULO_DO_TIPO[l.vinculo],
                 funcao: l.funcao.nome,
                 centro: rotuloDoCentro(l.centroCusto),
@@ -3480,7 +3536,7 @@ export const cenariosService = {
     const porChave = new Map(atuais.map((l) => [l.chave, l]));
     // O recorte (12/11/2026): as linhas, os investimentos e o Quadro de Lotação de fora dele recusam o arquivo.
     const recorte = recorteDoCenario(c, usuario);
-    const gruposPorNome = new Map((await gruposDoCadastro()).map((g) => [g.grupo, g]));
+    const gruposPorNome = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
     // Sem a coluna Código (11/11/2026, pedido do Adão), a linha pela aba e pelas descrições (que não se repetem numa aba; a
     // repetida não se acha).
     const vezes = new Map<string, number>();
@@ -3496,8 +3552,15 @@ export const cenariosService = {
     const comQuadro = lidos.some((r) => r.quadro.length || r.substituiQuadro);
     const [resolver, cad, linhasDoCenario] = comQuadro
       ? await Promise.all([
-          resolvedorDeColaboradores(getPrismaClient()),
-          cadastrosDoQuadro(),
+          // A unidade e o centro pelas cópias do cenário (20/11/2026, Cadastros por cenário).
+          (async () => {
+            const [unidades, centros] = await Promise.all([
+              getPrismaClient().cenarioUnidade.findMany({ where: { cenarioId: id }, select: { unidadeNegocioId: true, nome: true, unidadeNegocio: { select: { codigo: true } } } }),
+              getPrismaClient().cenarioCentroCusto.findMany({ where: { cenarioId: id }, select: { id: true, codigoRM: true, nomeRM: true, ativo: true } }),
+            ]);
+            return resolvedorDeColaboradores(getPrismaClient(), { unidades: unidades.map((u) => ({ id: u.unidadeNegocioId, codigo: u.unidadeNegocio.codigo, nome: u.nome })), centros });
+          })(),
+          cadastrosDoQuadro(id),
           getPrismaClient().cenarioLotacao.findMany({
             where: { cenarioId: id },
             orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
@@ -3758,7 +3821,7 @@ export const cenariosService = {
     const nQuadro = novasDoQuadro.length + alteradasDoQuadro.size + excluidasDoQuadro.size;
     if (nQuadro) {
       const ids = [...alteradasDoQuadro.keys(), ...excluidasDoQuadro];
-      const [cad, atuais] = await Promise.all([cadastrosDoQuadro(), getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: ids } } })]);
+      const [cad, atuais] = await Promise.all([cadastrosDoQuadro(id), getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: ids } } })]);
       if (atuais.length !== ids.length) throw new CenarioError(400, "Uma linha do Quadro de Lotação da planilha não é deste cenário: analise os arquivos de novo.");
       const atualDe = new Map(atuais.map((l) => [l.id, l]));
       for (const l of [...novasDoQuadro, ...alteradasDoQuadro.values()]) {
@@ -3770,7 +3833,7 @@ export const cenariosService = {
       throw new CenarioError(400, "Nada a importar: os arquivos têm os mesmos valores, justificativas, investimentos e linhas do Quadro de Lotação do cenário.");
     // O recorte (12/11/2026), de novo: as linhas, os investimentos (o de antes e o novo) e as linhas do Quadro de Lotação.
     const recorte = recorteDoCenario(c, usuario);
-    const gruposPorNome = new Map((await gruposDoCadastro()).map((g) => [g.grupo, g]));
+    const gruposPorNome = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
     const tocadas = [...new Set([...[...mudancas.values()].map((m) => m.chave), ...justificativas.keys()])].map((k) => porChave.get(k)!);
     exigirNoRecorte(tocadas.every((l) => veLinha(recorte, l, gruposPorNome)));
     const investimentosDeAntes = new Map(
@@ -3792,7 +3855,7 @@ export const cenariosService = {
       }),
       ...excluidos.map((i) => ({ d: departamentosDoInvestimento(i), i: true as const })),
     ];
-    const qDoImportar = nQuadro ? await recorteDoQuadro(recorte) : null;
+    const qDoImportar = nQuadro ? await recorteDoQuadro(recorte, id) : null;
     const linhasDeAntesDoQuadro = nQuadro
       ? await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: [...alteradasDoQuadro.keys(), ...excluidasDoQuadro] } }, select: { centroCustoId: true } })
       : [];
@@ -4215,6 +4278,488 @@ export const cenariosService = {
       metadados: { reajustes: "aplicação" },
     });
     return this.reajustesDasPremissas(id, usuario);
+  },
+
+  // ------------------------------------------------------------------------------------------------------------------------
+  // Cadastros por cenário (20/11/2026, pedido do Adão; etapa 1): as abas Unidades e Centros de Custo das Configurações dos
+  // analíticos, as cópias dos cadastros com que o cenário calcula (cadastrosDoCenario.ts). Editam como a Referência (a Edição das
+  // Configurações, com o cenário em aberto e sem os reajustes aplicados); cada mudança nos centros recalcula a DRE do cenário.
+
+  /** A aba Unidades das Configurações de um analítico: a cópia das unidades (o nome, a ordem e a situação no cenário). */
+  async unidadesDoCenario(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const us = await getPrismaClient().cenarioUnidade.findMany({
+      where: { cenarioId: id },
+      include: { unidadeNegocio: { select: { codigo: true, nome: true } } },
+      orderBy: [{ ordem: "asc" }, { unidadeNegocio: { codigo: "asc" } }],
+    });
+    return {
+      editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      unidades: us.map((u) => ({ id: u.id, codigo: u.unidadeNegocio.codigo, nome: u.nome, nomeNosCadastros: u.unidadeNegocio.nome, ordem: u.ordem, ativo: u.ativo })),
+    };
+  },
+
+  /** Grava uma unidade da cópia do cenário: o nome (único no cenário), a ordem e a situação. */
+  async gravarUnidadeDoCenario(id: string, unidadeId: string, dados: { nome: string; ordem: number; ativo: boolean }, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = await prisma.cenarioUnidade.findFirst({ where: { id: unidadeId, cenarioId: id } });
+    if (!antes) throw new CenarioError(404, "Unidade não encontrada no cenário.");
+    const nome = dados.nome.trim();
+    if (!nome) throw new CenarioError(400, "Dê um nome à unidade.");
+    const mesmoNome = await prisma.cenarioUnidade.findFirst({ where: { cenarioId: id, id: { not: unidadeId }, nome: { equals: nome, mode: "insensitive" } } });
+    if (mesmoNome) throw new CenarioError(409, `Já há a unidade ${mesmoNome.nome} no cenário.`);
+    await prisma.cenarioUnidade.update({ where: { id: unidadeId }, data: { nome, ordem: dados.ordem, ativo: dados.ativo } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario_unidade", entidadeId: unidadeId, antes, depois: dados, metadados: { cenario: c.nome } });
+    return this.unidadesDoCenario(id, usuario);
+  },
+
+  /**
+   * A aba Centros de Custo das Configurações de um analítico: a cópia dos centros, com o grupo de cada um (o Nome da
+   * Controladoria; nulo nos de estoque e de investimento, que ficam fora do cenário), as linhas do Quadro de Lotação e as opções.
+   */
+  async centrosDoCadastroDoCenario(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const prisma = getPrismaClient();
+    const [centros, unidades, linhas, deps] = await Promise.all([
+      prisma.cenarioCentroCusto.findMany({ where: { cenarioId: id }, orderBy: [{ codigoRM: { sort: "asc", nulls: "last" } }, { nomeRM: "asc" }] }),
+      prisma.cenarioUnidade.findMany({ where: { cenarioId: id }, include: { unidadeNegocio: { select: { codigo: true } } }, orderBy: [{ ordem: "asc" }, { unidadeNegocio: { codigo: "asc" } }] }),
+      prisma.cenarioLotacao.groupBy({ by: ["centroCustoId"], where: { cenarioId: id }, _count: { _all: true } }),
+      departamentosDosCentros(prisma),
+    ]);
+    const nomeDaUnidade = new Map(unidades.map((u) => [u.unidadeNegocioId, u.nome]));
+    const doQuadro = new Map(linhas.map((l) => [l.centroCustoId, l._count._all]));
+    const departamentos = [...new Set([...deps.keys(), ...centros.flatMap((x) => (x.departamento ? [x.departamento] : []))])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return {
+      editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      centros: centros.map((x) => ({
+        id: x.id,
+        codigoRM: x.codigoRM,
+        coligada: x.coligada,
+        nomeRM: x.nomeRM,
+        nomeControladoria: x.nomeControladoria,
+        /** O grupo do centro no cenário (nulo: de estoque ou de investimento, fora do cenário). */
+        grupo: foraDoCenario(x) ? null : nomeDoGrupo(x),
+        departamento: x.departamento,
+        atribuicao: x.atribuicao,
+        balde: x.balde,
+        unidadeNegocioId: x.unidadeNegocioId,
+        unidade: x.unidadeNegocioId ? (nomeDaUnidade.get(x.unidadeNegocioId) ?? null) : null,
+        ativo: x.ativo,
+        /** Incluído só no cenário (sem o centro de origem nos Cadastros Gerais). */
+        doCenario: !x.origemId,
+        linhasDoQuadro: doQuadro.get(x.id) ?? 0,
+      })),
+      opcoes: {
+        departamentos,
+        baldes: BALDES.map(([valor, rotulo]) => ({ valor, rotulo })),
+        unidades: unidades.map((u) => ({ id: u.unidadeNegocioId, nome: u.nome })),
+      },
+    };
+  },
+
+  /**
+   * Inclui ou altera um centro da cópia do cenário (20/11/2026). O grupo que ficaria sem centros: se o centro só mudou de nome
+   * de grupo (para um grupo novo), os valores vão junto (o renomear); senão, saem do cenário — pede `confirmar` (409 com o
+   * `grupoSemCentros`). Recalcula a DRE do cenário.
+   */
+  async gravarCentroDoCadastroDoCenario(
+    id: string,
+    centroId: string | null,
+    dados: {
+      codigoRM: string | null;
+      coligada: number | null;
+      nomeRM: string;
+      nomeControladoria: string | null;
+      departamento: string | null;
+      atribuicao: "DIRETA" | "INDIRETA" | null;
+      balde: string | null;
+      unidadeNegocioId: string | null;
+      ativo: boolean;
+    },
+    confirmar: boolean,
+    usuario: Usuario,
+  ) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const atual = centroId ? await prisma.cenarioCentroCusto.findFirst({ where: { id: centroId, cenarioId: id } }) : null;
+    if (centroId && !atual) throw new CenarioError(404, "Centro de custo não encontrado no cenário.");
+    const texto = (v: string | null) => v?.trim() || null;
+    const codigoRM = texto(dados.codigoRM);
+    if (codigoRM) {
+      const outro = await prisma.cenarioCentroCusto.findFirst({ where: { cenarioId: id, codigoRM, id: centroId ? { not: centroId } : undefined } });
+      if (outro) throw new CenarioError(409, `Já há o centro ${codigoRM} no cenário (${outro.nomeRM}).`);
+    }
+    const nomeRM = dados.nomeRM.trim();
+    if (!nomeRM) throw new CenarioError(400, "Dê o nome do centro de custo (o nome no RM).");
+    if (dados.balde && !BALDES.some(([b]) => b === dados.balde)) throw new CenarioError(400, `Rateio ${dados.balde} desconhecido.`);
+    if (dados.unidadeNegocioId && !(await prisma.cenarioUnidade.findFirst({ where: { cenarioId: id, unidadeNegocioId: dados.unidadeNegocioId } }))) {
+      throw new CenarioError(400, "A unidade dedicada não é uma das unidades do cenário.");
+    }
+    const departamento = texto(dados.departamento);
+    const siglaDoDepartamento = departamento
+      ? ((await departamentosDosCentros(prisma)).get(departamento) ??
+        (await prisma.cenarioCentroCusto.findFirst({ where: { cenarioId: id, departamento, departamentoSigla: { not: null } }, select: { departamentoSigla: true } }))?.departamentoSigla ??
+        null)
+      : null;
+    const campos = {
+      codigoRM,
+      coligada: dados.coligada,
+      nomeRM,
+      nomeControladoria: texto(dados.nomeControladoria),
+      departamento,
+      departamentoSigla: siglaDoDepartamento,
+      atribuicao: dados.atribuicao,
+      atribuicaoSigla: dados.atribuicao ? dados.atribuicao.slice(0, 3) : null,
+      balde: (dados.balde as Prisma.CenarioCentroCustoCreateInput["balde"]) ?? null,
+      unidadeNegocioId: dados.unidadeNegocioId,
+      ativo: dados.ativo,
+    };
+    const { renomear, apagar } = await this.efeitoNosGrupos(id, centroId, atual, campos);
+    if (apagar && !confirmar) {
+      throw new CenarioError(
+        409,
+        `O grupo ${apagar} fica sem centros de custo: os valores dele (as premissas, os encargos, os benefícios e as justificativas) saem do cenário.`,
+        { grupoSemCentros: apagar },
+      );
+    }
+    const rotulo = `${codigoRM ? `${codigoRM} - ` : ""}${nomeRM}`;
+    await prisma.$transaction(
+      async (tx) => {
+        if (renomear) await renomearValoresDoGrupo(tx, id, renomear.de, renomear.para);
+        if (apagar) await apagarValoresDoGrupo(tx, id, apagar);
+        if (atual) await tx.cenarioCentroCusto.update({ where: { id: atual.id }, data: campos });
+        else await tx.cenarioCentroCusto.create({ data: { ...campos, cenarioId: id, origemId: null, ordem: (await tx.cenarioCentroCusto.count({ where: { cenarioId: id } })) + 1 } });
+        await calcularAnalitico(tx, id);
+      },
+      { timeout: 120_000 },
+    );
+    await this.registrarCadastroNoHistorico(
+      id,
+      usuario,
+      `Centros de Custo do cenário (Configurações): ${rotulo} ${atual ? "alterado" : "incluído"}${renomear ? `; o grupo ${renomear.de} passou a ${renomear.para}, com os valores` : ""}${apagar ? `; o grupo ${apagar} saiu do cenário, com os valores` : ""}`,
+    );
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: atual ? "ALTERACAO" : "CRIACAO", entidade: "cenario_centro_custo", entidadeId: centroId ?? id, antes: atual ?? undefined, depois: campos, metadados: { cenario: c.nome, renomear, apagar } });
+    return this.centrosDoCadastroDoCenario(id, usuario);
+  },
+
+  /** Exclui um centro da cópia do cenário (sem linhas no Quadro de Lotação), com a mesma regra do grupo que fica sem centros. */
+  async excluirCentroDoCadastroDoCenario(id: string, centroId: string, confirmar: boolean, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const atual = await prisma.cenarioCentroCusto.findFirst({ where: { id: centroId, cenarioId: id } });
+    if (!atual) throw new CenarioError(404, "Centro de custo não encontrado no cenário.");
+    const linhas = await prisma.cenarioLotacao.count({ where: { cenarioId: id, centroCustoId: centroId } });
+    if (linhas) throw new CenarioError(409, `O centro está em ${linhas} ${linhas === 1 ? "linha" : "linhas"} do Quadro de Lotação do cenário: inative-o em vez de excluir (ou tire as linhas antes).`);
+    const destinos = await prisma.cenarioRedistribuicaoDestino.count({ where: { centroCustoId: centroId } });
+    if (destinos) throw new CenarioError(409, `O centro está em ${destinos} ${destinos === 1 ? "redistribuição" : "redistribuições"} de gastos do cenário (Redistribuir Para): tire-o delas antes de excluir.`);
+    const { apagar } = await this.efeitoNosGrupos(id, centroId, atual, null);
+    if (apagar && !confirmar) {
+      throw new CenarioError(409, `O grupo ${apagar} fica sem centros de custo: os valores dele (as premissas, os encargos, os benefícios e as justificativas) saem do cenário.`, {
+        grupoSemCentros: apagar,
+      });
+    }
+    await prisma.$transaction(
+      async (tx) => {
+        if (apagar) await apagarValoresDoGrupo(tx, id, apagar);
+        await tx.cenarioCentroCusto.delete({ where: { id: centroId } });
+        await calcularAnalitico(tx, id);
+      },
+      { timeout: 120_000 },
+    );
+    const rotulo = `${atual.codigoRM ? `${atual.codigoRM} - ` : ""}${atual.nomeRM}`;
+    await this.registrarCadastroNoHistorico(id, usuario, `Centros de Custo do cenário (Configurações): ${rotulo} excluído${apagar ? `; o grupo ${apagar} saiu do cenário, com os valores` : ""}`);
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_centro_custo", entidadeId: centroId, antes: atual, metadados: { cenario: c.nome, apagar } });
+    return this.centrosDoCadastroDoCenario(id, usuario);
+  },
+
+  /**
+   * Renomeia um grupo da cópia (o Nome da Controladoria de todos os centros dele) e leva os valores do grupo junto (a decisão do
+   * Adão). O nome de um grupo que já existe é recusado: juntar dois grupos é mover os centros um a um.
+   */
+  async renomearGrupoDoCenario(id: string, de: string, para: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const novo = para.trim();
+    if (!novo) throw new CenarioError(400, "Dê o nome novo do grupo.");
+    if (novo === de) return this.centrosDoCadastroDoCenario(id, usuario);
+    const grupos = await gruposDoCenario(id);
+    if (!grupos.some((g) => g.grupo === de)) throw new CenarioError(404, `O grupo ${de} não está no cenário.`);
+    if (grupos.some((g) => g.grupo === novo)) throw new CenarioError(409, `Já há o grupo ${novo} no cenário: para juntar os dois, mude o Nome da Controladoria dos centros um a um.`);
+    const prisma = getPrismaClient();
+    const doGrupo = (await prisma.cenarioCentroCusto.findMany({ where: { cenarioId: id } })).filter((x) => nomeDoGrupo(x) === de);
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.cenarioCentroCusto.updateMany({ where: { id: { in: doGrupo.map((x) => x.id) } }, data: { nomeControladoria: novo } });
+        await renomearValoresDoGrupo(tx, id, de, novo);
+        await calcularAnalitico(tx, id);
+      },
+      { timeout: 120_000 },
+    );
+    await this.registrarCadastroNoHistorico(id, usuario, `Centros de Custo do cenário (Configurações): o grupo ${de} passou a ${novo} (${doGrupo.length} ${doGrupo.length === 1 ? "centro" : "centros"}), com os valores`);
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario_centro_custo", entidadeId: id, metadados: { cenario: c.nome, renomearGrupo: { de, para: novo } } });
+    return this.centrosDoCadastroDoCenario(id, usuario);
+  },
+
+  /** Trazer Novos dos Cadastros Gerais (a decisão do Adão): as unidades e os centros que surgiram depois da cópia. */
+  async trazerNovosDosCadastrosDoCenario(id: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const trazidos = await getPrismaClient().$transaction(
+      async (tx) => {
+        const r = await trazerNovosDosCadastros(tx, id);
+        if (r.centros.length) await calcularAnalitico(tx, id);
+        return r;
+      },
+      { timeout: 120_000 },
+    );
+    if (trazidos.unidades.length || trazidos.centros.length || trazidos.departamentos.length || trazidos.redistribuicoes.length) {
+      const partes = [
+        trazidos.unidades.length ? `${trazidos.unidades.length} ${trazidos.unidades.length === 1 ? "unidade" : "unidades"}` : "",
+        trazidos.departamentos.length ? `${trazidos.departamentos.length} ${trazidos.departamentos.length === 1 ? "departamento" : "departamentos"}` : "",
+        trazidos.centros.length ? `${trazidos.centros.length} ${trazidos.centros.length === 1 ? "centro de custo" : "centros de custo"}` : "",
+        trazidos.redistribuicoes.length ? `${trazidos.redistribuicoes.length} ${trazidos.redistribuicoes.length === 1 ? "redistribuição de gastos" : "redistribuições de gastos"}` : "",
+      ].filter(Boolean);
+      await this.registrarCadastroNoHistorico(id, usuario, `Cadastros do cenário (Configurações): ${partes.join(" e ")} dos Cadastros Gerais`);
+      await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, trazerNovos: trazidos } });
+    }
+    return trazidos;
+  },
+
+
+  // Cadastros por cenário, etapa 2 (20/11/2026): as abas Departamentos e Redistribuições de Gastos das Configurações dos
+  // analíticos (redistribuicoesDoCenario.ts). Editam como as da etapa 1; valem na próxima carga do realizado da referência.
+
+  /** A aba Departamentos: a cópia dos departamentos do cenário, com os grupos da DRE e as redistribuições que usam cada um. */
+  async departamentosDoCenario(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const prisma = getPrismaClient();
+    const [ds, unidades, grupos, usos] = await Promise.all([
+      prisma.cenarioDepartamento.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { nome: "asc" }] }),
+      prisma.cenarioUnidade.findMany({ where: { cenarioId: id }, include: { unidadeNegocio: { select: { codigo: true } } }, orderBy: [{ ordem: "asc" }, { unidadeNegocio: { codigo: "asc" } }] }),
+      gruposDaDREParaDepartamentos(),
+      prisma.cenarioRedistribuicao.groupBy({ by: ["departamentoId"], where: { cenarioId: id, departamentoId: { not: null } }, _count: { _all: true } }),
+    ]);
+    const nomeDaUnidade = new Map(unidades.map((u) => [u.unidadeNegocioId, u.nome]));
+    const nomeDoGrupoDRE = new Map(grupos.map((g) => [g.sigla, g.nome]));
+    const usadas = new Map(usos.map((u) => [u.departamentoId, u._count._all]));
+    return {
+      editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      departamentos: ds.map((d) => ({
+        id: d.id,
+        unidadeNegocioId: d.unidadeNegocioId,
+        unidade: nomeDaUnidade.get(d.unidadeNegocioId) ?? "",
+        nome: d.nome,
+        gruposDRE: d.gruposDRE,
+        grupos: d.gruposDRE.map((g) => nomeDoGrupoDRE.get(g) ?? g),
+        ordem: d.ordem,
+        ativo: d.ativo,
+        /** Incluído só no cenário (sem o departamento de origem nos Cadastros Gerais). */
+        doCenario: !d.origemId,
+        redistribuicoes: usadas.get(d.id) ?? 0,
+      })),
+      opcoes: { unidades: unidades.map((u) => ({ id: u.unidadeNegocioId, nome: u.nome })), grupos },
+    };
+  },
+
+  /** Inclui (sem `departamentoId`) ou altera um departamento da cópia do cenário (as regras do cadastro). */
+  async gravarDepartamentoDoCenario(
+    id: string,
+    departamentoId: string | null,
+    dados: { unidadeNegocioId: string; nome: string; gruposDRE: string[]; ordem: number | null; ativo: boolean },
+    usuario: Usuario,
+  ) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = departamentoId ? await prisma.cenarioDepartamento.findFirst({ where: { id: departamentoId, cenarioId: id } }) : null;
+    if (departamentoId && !antes) throw new CenarioError(404, "Departamento não encontrado no cenário.");
+    const campos = await daRegra(() => prepararDepartamento(prisma, id, dados, departamentoId));
+    const { ordem, ...resto } = campos;
+    if (antes) await prisma.cenarioDepartamento.update({ where: { id: antes.id }, data: { ...resto, ...(ordem !== null ? { ordem } : {}) } });
+    else await prisma.cenarioDepartamento.create({ data: { ...resto, cenarioId: id, origemId: null, ordem: ordem ?? (await prisma.cenarioDepartamento.count({ where: { cenarioId: id } })) + 1 } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: antes ? "ALTERACAO" : "CRIACAO", entidade: "cenario_departamento", entidadeId: departamentoId ?? id, antes: antes ?? undefined, depois: campos, metadados: { cenario: c.nome } });
+    return this.departamentosDoCenario(id, usuario);
+  },
+
+  /** Exclui um departamento da cópia do cenário (sem redistribuições do cenário que o usem). */
+  async excluirDepartamentoDoCenario(id: string, departamentoId: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = await prisma.cenarioDepartamento.findFirst({ where: { id: departamentoId, cenarioId: id } });
+    if (!antes) throw new CenarioError(404, "Departamento não encontrado no cenário.");
+    const usos = await prisma.cenarioRedistribuicao.count({ where: { cenarioId: id, departamentoId } });
+    if (usos) throw new CenarioError(409, `O departamento está em ${usos} ${usos === 1 ? "redistribuição" : "redistribuições"} de gastos do cenário: troque o departamento delas (ou inative-o) antes de excluir.`);
+    await prisma.cenarioDepartamento.delete({ where: { id: departamentoId } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_departamento", entidadeId: departamentoId, antes, metadados: { cenario: c.nome } });
+    return this.departamentosDoCenario(id, usuario);
+  },
+
+  /** A aba Redistribuições de Gastos: a cópia das redistribuições do cenário e as listas do modal (as do cenário). */
+  async redistribuicoesDoCenario(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const prisma = getPrismaClient();
+    const [rs, departamentos, linhas, centros, unidades] = await Promise.all([
+      prisma.cenarioRedistribuicao.findMany({
+        where: { cenarioId: id },
+        orderBy: [{ ativo: "desc" }, { vigenciaInicio: "desc" }, { criadoEm: "asc" }],
+        include: {
+          departamento: { select: { nome: true, unidadeNegocioId: true } },
+          linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } },
+          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true, ativo: true } } } },
+        },
+      }),
+      prisma.cenarioDepartamento.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], include: { unidadeNegocio: { select: { codigo: true } } } }),
+      prisma.linhaDRE.findMany({ where: { tipo: "ITEM", ativo: true }, orderBy: { ordem: "asc" }, select: LINHA_SEL }),
+      prisma.cenarioCentroCusto.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ codigoRM: { sort: "asc", nulls: "last" } }, { nomeRM: "asc" }], select: { id: true, codigoRM: true, nomeRM: true, nomeControladoria: true, departamento: true, balde: true } }),
+      prisma.cenarioUnidade.findMany({ where: { cenarioId: id }, select: { unidadeNegocioId: true, nome: true } }),
+    ]);
+    const nomeDaUnidade = new Map(unidades.map((u) => [u.unidadeNegocioId, u.nome]));
+    return {
+      editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      redistribuicoes: rs.map((r) => ({
+        id: r.id,
+        departamentoId: r.departamentoId,
+        departamento: r.departamento ? `${r.departamento.nome} (${nomeDaUnidade.get(r.departamento.unidadeNegocioId) ?? ""})` : null,
+        linhaDREId: r.linhaDREId,
+        conta: { codigo: r.linhaDRE.codigo, rotulo: rotuloDaLinha(r.linhaDRE) },
+        fornecedores: r.fornecedores,
+        destinos: r.destinos.map((d) => ({
+          centroCustoId: d.centroCustoId,
+          centro: `${d.centroCusto.codigoRM ?? "sem código"} · ${d.centroCusto.nomeRM}${d.centroCusto.ativo ? "" : " (inativo)"}`,
+          percentual: Number(d.percentual) * 100,
+        })),
+        vigenciaInicio: textoDoMes(r.vigenciaInicio)!,
+        vigenciaFim: textoDoMes(r.vigenciaFim),
+        descricao: r.descricao,
+        ativo: r.ativo,
+        /** Incluída só no cenário (sem a redistribuição de origem nos Cadastros Gerais). */
+        doCenario: !r.origemId,
+      })),
+      opcoes: {
+        departamentos: departamentos.map((d) => ({
+          id: d.id,
+          nome: `${d.nome} (${nomeDaUnidade.get(d.unidadeNegocioId) ?? ""})`,
+          linhas: linhas.filter((l) => linhaDoDepartamento(l, d)).map((l) => l.id),
+        })),
+        linhas: linhas.map((l) => ({ id: l.id, codigo: l.codigo, rotulo: rotuloDaLinha(l) })),
+        centros: centros.map((x) => ({ id: x.id, codigo: x.codigoRM ?? "", nome: x.nomeRM, detalhe: [x.nomeControladoria, x.departamento, x.balde].filter(Boolean).join(" · ") || null })),
+      },
+    };
+  },
+
+  /** Os fornecedores com movimentos na combinação do modal, com o departamento da cópia do cenário (ou todos). */
+  async fornecedoresDaRedistribuicaoDoCenario(id: string, departamentoId: string | null, linhaDREId: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    let departamento: { gruposDRE: string[]; unidadeNegocio: { codigo: number } } | null = null;
+    if (departamentoId) {
+      departamento = await getPrismaClient().cenarioDepartamento.findFirst({ where: { id: departamentoId, cenarioId: id }, select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } });
+      if (!departamento) throw new CenarioError(404, "Departamento não encontrado no cenário.");
+    }
+    return daRegra(() => fornecedoresDaCombinacao(departamento, linhaDREId));
+  },
+
+  /** Inclui (sem `redistribuicaoId`) ou altera uma redistribuição da cópia do cenário (as regras do cadastro). */
+  async gravarRedistribuicaoDoCenario(id: string, redistribuicaoId: string | null, dados: DadosDaRedistribuicaoDoCenario, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = redistribuicaoId ? await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } } } }) : null;
+    if (redistribuicaoId && !antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
+    const campos = await daRegra(() => prepararRedistribuicao(prisma, id, dados, redistribuicaoId));
+    const { destinos, ...regra } = campos;
+    const gravada = await prisma.$transaction(async (tx) => {
+      if (antes) {
+        await tx.cenarioRedistribuicaoDestino.deleteMany({ where: { redistribuicaoId: antes.id } });
+        return tx.cenarioRedistribuicao.update({ where: { id: antes.id }, data: { ...regra, destinos: { create: destinos } } });
+      }
+      return tx.cenarioRedistribuicao.create({ data: { ...regra, cenarioId: id, origemId: null, ordem: (await tx.cenarioRedistribuicao.count({ where: { cenarioId: id } })) + 1, destinos: { create: destinos } } });
+    });
+    await auditar({
+      usuarioId: usuario.id,
+      usuarioNome: usuario.nome,
+      acao: antes ? "ALTERACAO" : "CRIACAO",
+      entidade: "cenario_redistribuicao",
+      entidadeId: gravada.id,
+      antes: antes ? redistribuicaoParaAuditoria(antes) : undefined,
+      depois: redistribuicaoParaAuditoria({ ...regra, destinos }),
+      metadados: { cenario: c.nome },
+    });
+    return this.redistribuicoesDoCenario(id, usuario);
+  },
+
+  /** Exclui uma redistribuição da cópia do cenário (vale só nas próximas cargas do realizado: nada a desfazer). */
+  async excluirRedistribuicaoDoCenario(id: string, redistribuicaoId: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } } } });
+    if (!antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
+    await prisma.cenarioRedistribuicao.delete({ where: { id: redistribuicaoId } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_redistribuicao", entidadeId: redistribuicaoId, antes: redistribuicaoParaAuditoria(antes), metadados: { cenario: c.nome } });
+    return this.redistribuicoesDoCenario(id, usuario);
+  },
+
+  /**
+   * O que a mudança de um centro faz nos grupos do cenário: o grupo de antes que fica sem centros vai para o nome novo
+   * (`renomear`: o centro era o último dele e foi para um grupo que ainda não existe) ou sai do cenário (`apagar`).
+   */
+  async efeitoNosGrupos(
+    id: string,
+    centroId: string | null,
+    atual: { ativo: boolean; departamento: string | null; codigoRM: string | null; nomeControladoria: string | null; nomeRM: string } | null,
+    depois: { ativo: boolean; departamento: string | null; codigoRM: string | null; nomeControladoria: string | null; nomeRM: string } | null,
+  ): Promise<{ renomear: { de: string; para: string } | null; apagar: string | null }> {
+    const grupoDe = (x: typeof atual) => (x && x.ativo && !foraDoCenario(x) ? nomeDoGrupo(x) : null);
+    const antes = grupoDe(atual);
+    const novo = grupoDe(depois);
+    if (!antes || antes === novo) return { renomear: null, apagar: null };
+    const grupos = await gruposDoCenario(id);
+    const g = grupos.find((x) => x.grupo === antes);
+    if (!g || g.centros.some((x) => x.id !== centroId)) return { renomear: null, apagar: null };
+    if (novo && !grupos.some((x) => x.grupo === novo)) return { renomear: { de: antes, para: novo }, apagar: null };
+    return { renomear: null, apagar: antes };
+  },
+
+  /** A mudança nos cadastros do cenário no Histórico (aba Alterações): um recálculo do cenário inteiro, que todos veem. */
+  async registrarCadastroNoHistorico(id: string, usuario: Usuario, descricao: string) {
+    await getPrismaClient().cenarioReajuste.create({ data: { cenarioId: id, usuarioId: usuario.id || null, usuarioNome: usuario.nome, tipo: "RECALCULO", modo: "DIGITADO", descricao: descricao.slice(0, 900), contas: [] } });
   },
 
   /**

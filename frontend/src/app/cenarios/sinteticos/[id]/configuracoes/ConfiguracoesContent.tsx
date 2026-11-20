@@ -69,6 +69,35 @@ export function ConfiguracoesContent() {
                   MOD, GGD e GGV em Guindasteiros, MOI e GGI em Adm. de Obras; Logística em Logística; Técnico em Técnico; Comercial em Orçamentos;
                   Administrativo em Financeiro. Ele só preenche: confira e clique em “Gravar”.
                 </li>
+                <li>
+                  As abas Unidades, Departamentos, Centros de Custo e Redistribuições de Gastos, depois da Referência, são as cópias dos cadastros com que
+                  o cenário calcula: a cópia é tirada na criação do cenário (a revisão e a cópia de um cenário levam as do cenário de origem) e não muda
+                  com os Cadastros Gerais — “Trazer Novos”, nessas abas, inclui as unidades, os departamentos, os centros e as redistribuições que
+                  surgiram lá depois, sem mexer no que foi editado aqui. Nas quatro abas, os rótulos das colunas ordenam e filtram a tabela, como nas
+                  outras tabelas do SIG (em Centros de Custo, a coluna Ativo filtra a situação), e o Exportar leva o que está filtrado. Em Unidades, clique
+                  numa linha para mudar o Nome no Cenário, a Ordem e se está Ativa (as unidades não se incluem nem se excluem). Em Centros de Custo,
+                  clique numa linha para editar o centro, ou em “Novo Centro” para um que vale só no cenário: o Centro de Custo (Controladoria) é o grupo
+                  do centro (os valores das premissas são de cada grupo), e o Departamento, a Atribuição, o Rateio e a Unidade Dedicada decidem como o
+                  cenário agrupa e aloca os gastos; os centros de estoque e de investimento ficam fora do cenário. “Excluir”, no modal, só vale para o
+                  centro sem linhas no Quadro de Lotação do cenário (inative os outros). “Renomear Grupo” muda o nome de um grupo em todos os centros
+                  dele, e os valores do grupo (as premissas, os encargos, os benefícios, as justificativas e as realocações) vão junto; levar o último
+                  centro de um grupo para um grupo novo faz o mesmo. Se a mudança deixar um grupo sem centros, o SIG avisa antes de gravar: os valores
+                  dele saem do cenário. Cada mudança nos centros recalcula a DRE do cenário e fica no Histórico (aba Alterações); para a Média de
+                  Referência seguir os grupos novos, carregue a referência de novo. O realizado dos centros dos Cadastros Gerais chega à cópia de cada
+                  um; o resto do SIG segue os Cadastros Gerais.
+                </li>
+                <li>
+                  Em Departamentos, clique numa linha para editar a unidade, o nome, os Departamentos da DRE (os grupos da DRE com linhas na unidade; cada
+                  grupo num departamento ativo só da unidade), a ordem e se está ativo, ou em “Novo Departamento”; o departamento usado numa redistribuição
+                  do cenário não se exclui. Em Redistribuições de Gastos, clique numa linha para abrir a redistribuição (com a permissão de editar, para
+                  alterá-la ou excluí-la) ou em “Nova Redistribuição”: o modal é o do cadastro (o Departamento da DRE, a Conta da DRE, os fornecedores
+                  com movimentos na combinação, os centros de Redistribuir Para com os percentuais somando 100% e a vigência), com os departamentos e os
+                  centros de custo do cenário. Na carga do realizado da referência (aba Referência), as redistribuições do cenário valem no lugar das dos
+                  Cadastros Gerais, nas contas dos centros de custo: o movimento redistribuído pelos Cadastros Gerais volta ao centro dele, e o que casa
+                  com uma redistribuição do cenário (a conta, um fornecedor marcado, o departamento e um mês da vigência) vai dividido entre os centros
+                  dela. Mudar as redistribuições não recalcula nada: carregue o realizado de novo para a mudança chegar às Médias de Referência. Um centro
+                  usado em Redistribuir Para não se exclui da aba Centros de Custo.
+                </li>
               </>
             ) : (
               <>
@@ -127,7 +156,7 @@ export function ConfiguracoesContent() {
             <li>Aparecem só as abas que o seu perfil lê, e os botões de cada aba só com a permissão de editar nela (Controle de Usuários / Perfis); sem ela, a aba se lê, com um aviso.</li>
             <li>
               A Edição das Configurações vale para toda esta tela (todas as abas e ações: o cenário, Marcar e Excluir, a referência, as realocações,
-              o Replicar Médias e o Apagar Valores, o comparativo, os índices e os reajustes). Particular (o padrão): só quem criou o cenário
+              o Replicar Médias e o Apagar Valores, {analitico ? "as unidades, os departamentos, os centros de custo e as redistribuições de gastos do cenário, " : ""}o comparativo, os índices e os reajustes). Particular (o padrão): só quem criou o cenário
               (ou o Administrador) altera as Configurações; num cenário público de outro usuário, as abas se leem, com um aviso que diz de quem é o
               cenário. Pública: todos os usuários com permissão de editar as Configurações as alteram.
             </li>
@@ -158,7 +187,14 @@ export function ConfiguracoesContent() {
               Com um cenário comparado, a tela Resultados e a aba Indicadores do Painel de Bordo trazem, em preto e cinza depois do total, os totais dele (e, nos Resultados, a
               Diferença, o Atingimento e a Eficiência), e a tela {analitico ? "Histórico" : "Reajustes"} ganha a aba Justificativas, com as contas acima da variação.
             </li>
-            <li>“Exportar”, o último botão do quadro (nas Variações Máximas, depois do Limpar; nos Índices de Referência, depois do Incluir Índice), leva o que está gravado em Excel ou PDF.</li>
+            <li>
+              Nas abas com tabela (as cópias dos cadastros, o Comparativo e os Reajustes), o destaque acima de cada tabela — o título, a descrição e, à
+              direita, os botões dela, como Incluir, Gravar e “Exportar” — é um cartão à parte que, ao rolar a tela, flutua sobre a tabela, logo abaixo
+              dos rótulos presos, com as mesmas funções (como nas Premissas). “Exportar”, o último botão do destaque, leva o que está gravado em Excel ou PDF.
+              Os rótulos das colunas têm os filtros e a ordenação padrão (também nos Índices de Referência, nas Variações Máximas, nos Índices de
+              Reajuste e na Aplicação dos Reajustes, sobre o que está na tela, ainda não gravado); nas tabelas da DRE, com um filtro ou uma ordem, aparecem
+              as linhas que passam, de todos os níveis, e sem eles a tabela volta à árvore. “Incluir Índice” tira os filtros, para o índice novo aparecer.
+            </li>
           </ul>
         }
         sobre={

@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { DadosDaRedistribuicao, FornecedorDaCombinacao, OpcoesDaRedistribuicao, Redistribuicao } from "@/app/cadastros/services/redistribuicoesService";
 
 import type { Indicador, MesRelatorio, Painel, Resultados } from "@/app/relatorios/services/relatoriosService";
 import type { TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
@@ -214,6 +215,58 @@ export type InvestimentosDoCenario = {
   depreciacao: LinhaDaPremissa[];
   investimentos: InvestimentoDoCenario[];
 };
+/** A aba Unidades das Configurações dos analíticos (20/11/2026, Cadastros por cenário): a cópia das unidades. */
+export type UnidadesDoCenario = {
+  editavel: boolean;
+  unidades: Array<{ id: string; codigo: number; nome: string; nomeNosCadastros: string; ordem: number; ativo: boolean }>;
+};
+/** Um centro da cópia dos Centros de Custo do cenário (20/11/2026). `grupo` nulo: de estoque ou de investimento, fora do cenário. */
+export type CentroDoCadastroDoCenario = {
+  id: string;
+  codigoRM: string | null;
+  coligada: number | null;
+  nomeRM: string;
+  nomeControladoria: string | null;
+  grupo: string | null;
+  departamento: string | null;
+  atribuicao: "DIRETA" | "INDIRETA" | null;
+  balde: string | null;
+  unidadeNegocioId: string | null;
+  unidade: string | null;
+  ativo: boolean;
+  doCenario: boolean;
+  linhasDoQuadro: number;
+};
+export type CentrosDoCadastroDoCenario = {
+  editavel: boolean;
+  centros: CentroDoCadastroDoCenario[];
+  opcoes: { departamentos: string[]; baldes: Array<{ valor: string; rotulo: string }>; unidades: Array<{ id: string; nome: string }> };
+};
+export type DadosDoCentroDoCenario = Pick<CentroDoCadastroDoCenario, "codigoRM" | "coligada" | "nomeRM" | "nomeControladoria" | "departamento" | "atribuicao" | "balde" | "unidadeNegocioId" | "ativo">;
+/** A cópia dos Departamentos do cenário (20/11/2026, Cadastros por cenário, etapa 2). */
+export type DepartamentoDoCenario = {
+  id: string;
+  unidadeNegocioId: string;
+  unidade: string;
+  nome: string;
+  gruposDRE: string[];
+  grupos: string[];
+  ordem: number;
+  ativo: boolean;
+  doCenario: boolean;
+  redistribuicoes: number;
+};
+export type DepartamentosDoCenario = {
+  editavel: boolean;
+  departamentos: DepartamentoDoCenario[];
+  opcoes: { unidades: Array<{ id: string; nome: string }>; grupos: Array<{ sigla: string; nome: string; unidades: string[] }> };
+};
+export type DadosDoDepartamentoDoCenario = { unidadeNegocioId: string; nome: string; gruposDRE: string[]; ordem: number | null; ativo: boolean };
+/** A cópia das Redistribuições de Gastos do cenário (20/11/2026, etapa 2): os campos do cadastro, com os centros da cópia. */
+export type RedistribuicaoDoCenario = Omit<Redistribuicao, "competencias"> & { doCenario: boolean };
+export type RedistribuicoesDoCenario = { editavel: boolean; redistribuicoes: RedistribuicaoDoCenario[]; opcoes: OpcoesDaRedistribuicao };
+/** O que o Trazer Novos dos Cadastros Gerais trouxe. */
+export type TrazidosDosCadastros = { unidades: string[]; departamentos: string[]; centros: string[]; redistribuicoes: string[] };
 export type ExtraDoCenario = { ano: number; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: Array<{ unidade: 4 | 5; nome: string; linhas: LinhaDaPremissa[] }> };
 export type PremissasDaUnidade = { ano: number; unidade: 1 | 2 | 3; nome: string; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: TabelaDePremissas[] };
 /**
@@ -599,6 +652,40 @@ export const cenariosService = {
   gravarIndices: async (id: string, indices: Array<{ chave: string | null; descricao: string; observacao: string | null; variacao: number }>) =>
     (await api.put<{ data: { indices: Array<IndiceDeReajuste & { contas: number }> } }>(`/proxy/cenarios/${id}/indices`, { indices })).data.data,
   /** A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes. */
+  // Cadastros por cenário (20/11/2026, etapa 1): as abas Unidades e Centros de Custo das Configurações dos analíticos.
+  unidadesDoCenario: async (id: string) => (await api.get<{ data: UnidadesDoCenario }>(`/proxy/cenarios/${id}/cadastros/unidades`)).data.data,
+  gravarUnidadeDoCenario: async (id: string, unidadeId: string, dados: { nome: string; ordem: number; ativo: boolean }) =>
+    (await api.put<{ data: UnidadesDoCenario }>(`/proxy/cenarios/${id}/cadastros/unidades/${unidadeId}`, dados)).data.data,
+  centrosDoCadastroDoCenario: async (id: string) => (await api.get<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros`)).data.data,
+  gravarCentroDoCadastroDoCenario: async (id: string, centroId: string | null, dados: DadosDoCentroDoCenario, confirmar = false) =>
+    (centroId
+      ? await api.put<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros/${centroId}`, { ...dados, confirmar })
+      : await api.post<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros`, { ...dados, confirmar })
+    ).data.data,
+  excluirCentroDoCadastroDoCenario: async (id: string, centroId: string, confirmar = false) =>
+    (await api.delete<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros/${centroId}`, { params: confirmar ? { confirmar: "1" } : undefined })).data.data,
+  renomearGrupoDoCenario: async (id: string, de: string, para: string) =>
+    (await api.post<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros/renomear-grupo`, { de, para })).data.data,
+  trazerNovosDosCadastrosDoCenario: async (id: string) => (await api.post<{ data: TrazidosDosCadastros }>(`/proxy/cenarios/${id}/cadastros/trazer-novos`)).data.data,
+  departamentosDoCenario: async (id: string) => (await api.get<{ data: DepartamentosDoCenario }>(`/proxy/cenarios/${id}/cadastros/departamentos`)).data.data,
+  gravarDepartamentoDoCenario: async (id: string, departamentoId: string | null, dados: DadosDoDepartamentoDoCenario) =>
+    (departamentoId
+      ? await api.put<{ data: DepartamentosDoCenario }>(`/proxy/cenarios/${id}/cadastros/departamentos/${departamentoId}`, dados)
+      : await api.post<{ data: DepartamentosDoCenario }>(`/proxy/cenarios/${id}/cadastros/departamentos`, dados)
+    ).data.data,
+  excluirDepartamentoDoCenario: async (id: string, departamentoId: string) =>
+    (await api.delete<{ data: DepartamentosDoCenario }>(`/proxy/cenarios/${id}/cadastros/departamentos/${departamentoId}`)).data.data,
+  redistribuicoesDoCenario: async (id: string) => (await api.get<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes`)).data.data,
+  fornecedoresDaRedistribuicaoDoCenario: async (id: string, departamentoId: string | null, linhaDREId: string) =>
+    (await api.get<{ data: FornecedorDaCombinacao[] }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/fornecedores`, { params: { linhaDREId, ...(departamentoId ? { departamentoId } : {}) } })).data
+      .data,
+  gravarRedistribuicaoDoCenario: async (id: string, redistribuicaoId: string | null, dados: DadosDaRedistribuicao) =>
+    (redistribuicaoId
+      ? await api.put<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/${redistribuicaoId}`, dados)
+      : await api.post<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes`, dados)
+    ).data.data,
+  excluirRedistribuicaoDoCenario: async (id: string, redistribuicaoId: string) =>
+    (await api.delete<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/${redistribuicaoId}`)).data.data,
   reajustesDasPremissas: async (id: string) => (await api.get<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes`)).data.data,
   gravarIndicesDosReajustes: async (id: string, indices: Array<{ chave: string | null; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[] }>) =>
     (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/indices`, { indices })).data.data,

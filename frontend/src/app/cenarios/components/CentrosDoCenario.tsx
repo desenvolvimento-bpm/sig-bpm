@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { CampoBusca } from "@/components/shared/Filtros";
+import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import type { Coluna } from "@/lib/filtrosDeTabela";
 
+import { TabelaLarga } from "@/app/relatorios/components/TabelaLarga";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type ContasDoCentro, type LinhaDaPremissa, type RateiosDoCenario as Rateios, type SerieDoCentro } from "../services/cenariosService";
@@ -238,43 +241,74 @@ export function AvisoRateiosSemBase({ id }: { id: string }) {
  */
 export function RateiosDoCenario({ id }: { id: string }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "rateios"], queryFn: () => cenariosService.rateios(id) });
+  const linhas = useMemo(() => (consulta.data ? linhasDosRateios(consulta.data.rateios) : undefined), [consulta.data]);
+  const colunas = useMemo(() => colunasDosRateios(consulta.data?.meses ?? []), [consulta.data]);
+  // Os filtros padrão nos rótulos das colunas (20/11/2026, pedido do Adão), como nas outras tabelas do SIG.
+  const tabela = useTabelaFiltravel(linhas, colunas);
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar os rateios.")} />;
   if (consulta.isPending) return <Carregando />;
   // Com o Acesso às Informações Por Recorte (12/11/2026), só os rateios dos grupos de centros (e dos destinos) do recorte.
   if (!consulta.data.rateios.length) return <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Nenhum rateio no seu recorte.</p>;
+  const meses = consulta.data.meses;
+  // Sem o título e a explicação acima da tabela (11/11/2026, pedido do Adão: as bases estão no Como Usar da tela), sem a Média de
+  // Referência e sem o Total e a Média (19/11/2026); os rótulos presos ao rolar, abaixo do título da tela.
   return (
-    <TabelaEditavel
-      titulo="Rateios"
-      // Sem o título e a explicação acima da tabela (11/11/2026, pedido do Adão): as bases estão no Como Usar da tela.
-      semTitulo
-      meses={consulta.data.meses}
-      linhas={linhasDosRateios(consulta.data.rateios)}
-      editavel={false}
-      comReferencia={false}
-      // Sem o Total e a Média (19/11/2026, pedido do Adão): só nas outras abas.
-      comTotais={false}
-      cabecalho="CHAVE E DESTINO"
+    <TabelaLarga
+      larguras={[170, 210, 110, 90, ...meses.map(() => 100)]}
+      cabecalho={tabela.linhaDoCabecalho}
+      corpo={
+        tabela.visiveis.length === 0 ? (
+          <SemResultado colunas={colunas.length} onLimpar={tabela.limpar} />
+        ) : (
+          tabela.visiveis.map((r) => (
+            <tr key={r.id} className={`border-t border-gray-100 ${r.linha === "Base" ? "" : "bg-gray-50/60"}`}>
+              <td className="truncate px-4 py-1.5 whitespace-nowrap text-gray-900" title={r.chave}>
+                {r.chave}
+              </td>
+              <td className="truncate px-4 py-1.5 whitespace-nowrap" title={r.destino}>
+                {r.destino}
+              </td>
+              <td className="truncate px-4 py-1.5 whitespace-nowrap">{r.linha}</td>
+              <td className="truncate px-4 py-1.5 whitespace-nowrap text-gray-600">{r.und}</td>
+              {r.valores.map((v, m) => (
+                <td key={m} className="px-4 py-1.5 text-right whitespace-nowrap">
+                  {numeroDoRateio(v)}
+                </td>
+              ))}
+            </tr>
+          ))
+        )
+      }
     />
   );
 }
 
-/** Os rateios como linhas da tabela: por chave, o destino com a base e o percentual. */
-function linhasDosRateios(rateios: Rateios["rateios"]): LinhaDaPremissa[] {
+/** Uma linha da tabela dos rateios: a chave, o destino, a base ou o percentual, a unidade e os meses. */
+type LinhaDoRateio = { id: string; chave: string; destino: string; linha: "Base" | "Percentual"; und: string; valores: number[] };
+
+const numeroDoRateio = (v: number) => (Number.isFinite(v) ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
+
+/** As colunas da tabela dos rateios, com os filtros e a ordenação nos rótulos. */
+function colunasDosRateios(meses: Array<{ mes: number; rotulo: string }>): Coluna<LinhaDoRateio>[] {
+  return [
+    { chave: "chave", rotulo: "Chave", valor: (r) => r.chave },
+    { chave: "destino", rotulo: "Destino", valor: (r) => r.destino },
+    { chave: "linha", rotulo: "Linha", valor: (r) => r.linha },
+    { chave: "und", rotulo: "Und.", valor: (r) => r.und },
+    ...meses.map(
+      (m, k): Coluna<LinhaDoRateio> => ({ chave: `m${m.mes}`, rotulo: m.rotulo, tipo: "numero", alinhamento: "direita", valor: (r) => r.valores[k], texto: (r) => numeroDoRateio(r.valores[k]) }),
+    ),
+  ];
+}
+
+/** Os rateios como linhas da tabela: por chave e destino, a base e o percentual. */
+function linhasDosRateios(rateios: Rateios["rateios"]): LinhaDoRateio[] {
   return rateios.flatMap((r) => {
-    const secao = r.rotulo.split(":")[0].toUpperCase();
-    const grupo = r.rotulo.split(": ")[1] ?? r.rotulo;
-    const linha = (chave: string, rotulo: string, und: string, valores: number[]): LinhaDaPremissa => ({
-      chave,
-      secao,
-      grupo,
-      rotulo,
-      und,
-      tipo: "CALCULO",
-      casas: 2,
-      referencia: null,
-      valores,
-      gravados: valores.map(() => false),
-    });
-    return [linha(`${r.chave}|${r.destino}|BASE`, "Base", r.base, r.bases), linha(`${r.chave}|${r.destino}`, "Percentual", "%", r.percentuais.map((p) => p * 100))];
+    const chave = r.rotulo.split(":")[0].trim();
+    const destino = r.rotulo.split(": ")[1] ?? r.rotulo;
+    return [
+      { id: `${r.chave}|${r.destino}|BASE`, chave, destino, linha: "Base" as const, und: r.base, valores: r.bases },
+      { id: `${r.chave}|${r.destino}`, chave, destino, linha: "Percentual" as const, und: "%", valores: r.percentuais.map((p) => p * 100) },
+    ];
   });
 }

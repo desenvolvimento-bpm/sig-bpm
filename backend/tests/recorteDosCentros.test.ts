@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { gruposDoRecorte, recorteDoCenario, recorteDoPerfil } from "../src/services/cenarios/recorteCenario.js";
+import { gruposDoRecorte, recorteDoCenario, recorteDoPerfil, veCentro } from "../src/services/cenarios/recorteCenario.js";
 
 /** Os grupos de centros: um da produção (CPP) e um do administrativo (DA), com os centros. */
 const grupos = [
@@ -24,5 +24,27 @@ describe("o recorte da aba Centros de Custo dos Resultados dos analíticos (19/1
     assert.equal(recorteDoPerfil({ admin: true, recorte: gestor.recorte }), null);
     assert.equal(recorteDoPerfil({ recorte: null }), null);
     assert.equal(gruposDoRecorte(recorteDoPerfil({}), grupos).length, 2);
+  });
+});
+
+describe("o recorte nos centros da cópia do cenário (20/11/2026, Cadastros por cenário)", () => {
+  // Os centros da cópia têm id próprio; o recorte do Coordenador guarda os centros dos Cadastros Gerais (a origem da cópia).
+  const daCopia = [
+    { grupo: "ACABAMENTO", grupoDRE: "CPP", centros: [{ id: "k1", origemId: "c1", codigo: "1.01", nome: "Acabamento" }] },
+    { grupo: "NOVO NO CENÁRIO", grupoDRE: "CPP", centros: [{ id: "k9", origemId: null, codigo: "9.99", nome: "Só no cenário" }] },
+  ] as unknown as Parameters<typeof gruposDoRecorte>[1];
+  const coordenador = recorteDoPerfil({ recorte: { departamentos: null, centros: ["c1"] } });
+  const gestor = recorteDoPerfil({ recorte: { departamentos: ["PRODUCAO" as const], centros: null } });
+
+  it("o Coordenador vê o grupo pela origem da cópia, e não o centro que só existe no cenário", () => {
+    assert.deepEqual(gruposDoRecorte(coordenador, daCopia).map((g) => g.grupo), ["ACABAMENTO"]);
+    assert.equal(veCentro(coordenador, "c1", daCopia[0]), true);
+    assert.equal(veCentro(coordenador, null, daCopia[1]), false);
+  });
+
+  it("o Gestor vê pelo departamento do grupo, com ou sem origem", () => {
+    assert.equal(gruposDoRecorte(gestor, daCopia).length, 2);
+    assert.equal(veCentro(gestor, null, daCopia[1]), true);
+    assert.equal(veCentro(gestor, null, null), false);
   });
 });

@@ -27,6 +27,7 @@ import { MarcarCenarioDialog } from "./MarcarCenarioDialog";
 import { ReferenciaAnalitica } from "./ReferenciaAnalitica";
 import { ReferenciaSintetica } from "./ReferenciaSintetica";
 import { ReajustesDoCenario } from "./ReajustesDoCenario";
+import { CentrosDoCadastroDoCenarioAba, DepartamentosDoCenarioAba, RedistribuicoesDoCenarioAba, UnidadesDoCenarioAba } from "./CadastrosDoCenario";
 
 /**
  * As configurações do cenário, em duas abas (12/10/2026; antes, dois quadros lado a lado): Cenário (nome, descrição,
@@ -34,7 +35,9 @@ import { ReajustesDoCenario } from "./ReajustesDoCenario";
  * resultado realizado ou outro analítico). Os quadros ocupam a largura da tela, com o
  * destaque amarelo-ouro à esquerda, e as opções ficam uma embaixo da outra, com o texto ao lado (13/10/2026).
  */
-export type AbaDasConfiguracoes = "cenario" | "referencia" | "indices" | "comparativo" | "reajustes";
+export type AbaDasConfiguracoes = "cenario" | "referencia" | "unidades" | "departamentos" | "centros_custo" | "redistribuicoes" | "indices" | "comparativo" | "reajustes";
+/** As abas das cópias dos cadastros do cenário (20/11/2026) e o que cada uma edita, para os avisos. */
+const DOS_CADASTROS = { unidades: "as unidades", departamentos: "os departamentos", centros_custo: "os centros de custo", redistribuicoes: "as redistribuições de gastos" } as const;
 
 export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cenario: Cenario; abaInicial?: AbaDasConfiguracoes }) {
   const queryClient = useQueryClient();
@@ -62,7 +65,12 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
   // Comparativo, com a permissão deles: a aba aparece com uma das duas.
   const lerIndices = analitico && pode("indices");
   // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; antes, nas Premissas), depois do Comparativo.
-  const abas = (["cenario", "referencia", "comparativo", ...(analitico ? ["reajustes"] : [])] as AbaDasConfiguracoes[]).filter((a) => pode(a) || (a === "comparativo" && lerIndices));
+  // As cópias dos cadastros dos analíticos (20/11/2026, Cadastros por cenário, etapas 1 e 2), depois da Referência.
+  const abas = (
+    ["cenario", "referencia", ...(analitico ? ["unidades", "departamentos", "centros_custo", "redistribuicoes"] : []), "comparativo", ...(analitico ? ["reajustes"] : [])] as AbaDasConfiguracoes[]
+  ).filter(
+    (a) => pode(a) || (a === "comparativo" && lerIndices),
+  );
   // A aba Índices lembrada (ou num endereço) abre o Comparativo.
   const pedida = escolhida === "indices" ? "comparativo" : escolhida;
   const aba: AbaDasConfiguracoes | null = abas.includes(pedida) ? pedida : (abas[0] ?? null);
@@ -101,6 +109,10 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
         abas={[
           { chave: "cenario", rotulo: "Cenário" },
           { chave: "referencia", rotulo: "Referência" },
+          { chave: "unidades", rotulo: "Unidades" },
+          { chave: "departamentos", rotulo: "Departamentos" },
+          { chave: "centros_custo", rotulo: "Centros de Custo" },
+          { chave: "redistribuicoes", rotulo: "Redistribuições de Gastos" },
           // O comparativo com outro cenário (13/10/2026; antes, a aba Referência da tela Comparativo).
           { chave: "comparativo", rotulo: "Comparativo" },
           { chave: "reajustes", rotulo: "Reajustes" },
@@ -262,6 +274,27 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
             />
           ) : (
             <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
+          )}
+        </div>
+      ) : aba in DOS_CADASTROS ? (
+        // As cópias dos cadastros do cenário (20/11/2026, Cadastros por cenário): Unidades, Departamentos, Centros de Custo e
+        // Redistribuições de Gastos.
+        <div className="space-y-4">
+          {!edita(aba) ? (
+            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
+              {soLe(aba, `${DOS_CADASTROS[aba as keyof typeof DOS_CADASTROS]} do cenário`)}
+            </p>
+          ) : travado ? (
+            <AvisoMarcado cenario={cenario} oQue={DOS_CADASTROS[aba as keyof typeof DOS_CADASTROS]} varios />
+          ) : null}
+          {aba === "unidades" ? (
+            <UnidadesDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
+          ) : aba === "departamentos" ? (
+            <DepartamentosDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
+          ) : aba === "centros_custo" ? (
+            <CentrosDoCadastroDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
+          ) : (
+            <RedistribuicoesDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
           )}
         </div>
       ) : aba === "reajustes" ? (

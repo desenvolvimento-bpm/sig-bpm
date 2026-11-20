@@ -3,7 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 import { estrutura } from "../dre/dreService.js";
 import { diasUteis } from "./calendario.js";
-import { alocarCentros, contasDoGrupo, gruposDoCadastro } from "./centrosCenario.js";
+import { alocarCentros, contasDoGrupo, gruposDoCenario, type GrupoDoCenario } from "./centrosCenario.js";
 import { ehContaDeEncargos, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
 import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
@@ -23,7 +23,8 @@ type Tx = Prisma.TransactionClient;
  * - Jornada: os dias úteis (o calendário — segunda a sexta menos os feriados nacionais —, editável);
  * - Produção e Serviços: a demanda diária de cada linha do cadastro Linhas da unidade, na Und. de Medida dela (nas
  *   linhas de "m³ e pistas", as pistas por dia e os m³ por pista: o m³ é o m³/pista × as pistas); o volume do mês é a
- *   demanda × os dias úteis;
+ *   demanda × os dias úteis. Na Matriz e na Filial (20/11/2026), também a Expedição Diária (m³), separada da produção: a
+ *   Expedição no Mês (sem ela gravada, igual à produção) e o Volume de Estoque no Mês (a produção menos a expedição);
  * - Receita Operacional: por linha, a receita bruta média de cada conta da ROB (R$ por unidade da linha — o m³, nas
  *   de pistas), os impostos operacionais (%/ROB) e a receita líquida média (calculada);
  * - Custos de Produção / Serviços: por linha, as Matérias Primas, a Mão de Obra Terceirizada (14/10/2026) e os Gastos
@@ -31,7 +32,8 @@ type Tx = Prisma.TransactionClient;
  * - Despesas Variáveis de Venda: por linha, os Gastos Gerais Variáveis da DVV (por conta), em R$ por unidade; as
  *   Comissões (15/10/2026) são um percentual sobre a receita bruta, e a conta das comissões se calcula dele.
  *
- * O valor de cada conta no mês é o volume × o valor unitário (sem ajustes: só as médias e as demandas, 15/10/2026); a receita líquida, a bruta × (1 − os
+ * O valor de cada conta no mês é o volume × o valor unitário (sem ajustes: só as médias e as demandas, 15/10/2026); a
+ * Variação do Estoque (20/11/2026), o Volume de Estoque × o custo unitário; a receita líquida, a bruta × (1 − os
  * impostos). As contas das tabelas somam-se na DRE da unidade (as de Global e Mercantil juntas), com os volumes
  * (produção, pistas, metalurgia, expedição e montagem), e os totais e o Consolidado se calculam pela Estrutura da DRE.
  * As demais contas (mão de obra, gastos gerais diretos e indiretos, depreciação, despesas e o extra-operacional) virão
@@ -59,6 +61,7 @@ export const C = {
   MONTAGEM_M3: "S.MONTAGEM_DO_PRE_FABRICADO_M",
   ACOMPANHAMENTO_D: "S.ACOMPANHAMENTO_DE_OBRA_D",
   COMISSOES: "DVV.GGV.COMISSOES_DE_REPRESENTANTES_E_TERCEIROS",
+  VARIACAO_ESTOQUE: "CPP.E.VARIACAO_DO_ESTOQUE",
 } as const;
 /** A receita líquida de cada receita bruta. */
 export const LIQUIDA_DA_BRUTA: Record<string, string> = {
@@ -83,6 +86,11 @@ const PISTAS = "m³ e pistas";
  */
 export const LINHAS_COM_ARMADURA = new Set(["ESTRUTURA", "ALVEOLARES", "ESTACAS", "MONTAGEM", "CAPEAMENTO", "METÁLICA"]);
 export const LINHAS_COM_METALURGIA = new Set(["ESTRUTURA", "ALVEOLARES", "ESTACAS", "MONTAGEM", "CAPEAMENTO", "METÁLICA"]);
+/**
+ * As linhas que movimentam o estoque (20/11/2026, pedido do Adão: só as Estacas — produzidas para o estoque e baixadas dele
+ * quando expedidas). Na referência realizada, a Variação do Estoque da unidade vai só para elas, por m³ do Volume de Estoque.
+ */
+export const LINHAS_COM_ESTOQUE = new Set(["ESTACAS"]);
 
 /** Uma linha de produto ou de obra do cadastro Linhas, na unidade dela. */
 export type LinhaDoCadastro = { codigo: string; nome: string; unidade: UnidadePremissa; medida: string };
@@ -127,6 +135,11 @@ export function contasDaLinha(est: LinhaEstrutura[], l: LinhaDoCadastro) {
 }
 
 const pistas = (l: LinhaDoCadastro) => l.medida === PISTAS;
+/**
+ * As linhas com a Expedição Diária (20/11/2026, pedido do Adão): as de m³ (e de pistas) da Matriz e da Filial, para separar a
+ * demanda de produção da de expedição. O Volume de Estoque do mês é a produção menos a expedição.
+ */
+const comExpedicao = (l: LinhaDoCadastro) => l.unidade !== 3 && (l.medida === "m³" || pistas(l));
 /** A unidade dos valores da linha: o m³ nas de pistas; a da linha nas demais. */
 const undDoValor = (l: LinhaDoCadastro) => (pistas(l) ? "m³" : l.medida);
 const nomeDaLinha = (l: LinhaDoCadastro) => `${l.nome} (${l.medida})`;
@@ -151,6 +164,13 @@ export function linhasDaTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
     } else {
       add("PRODUÇÃO E SERVIÇOS", g, `DEMANDA:${l.codigo}`, "Demanda Diária", `${l.medida}/dia`);
       add("PRODUÇÃO E SERVIÇOS", g, `VOLUME:${l.codigo}`, "Volume no Mês", l.medida, "CALCULO");
+    }
+    // A expedição (20/11/2026, pedido do Adão), separada da produção: a Expedição Diária em m³ e, calculados, a Expedição no
+    // Mês e o Volume de Estoque no Mês (a produção menos a expedição), a base da Variação do Estoque.
+    if (comExpedicao(l)) {
+      add("PRODUÇÃO E SERVIÇOS", g, `EXPEDICAO:${l.codigo}`, "Expedição Diária", "m³/dia");
+      add("PRODUÇÃO E SERVIÇOS", g, `VOLUME_EXPEDICAO:${l.codigo}`, "Expedição no Mês", "m³", "CALCULO");
+      add("PRODUÇÃO E SERVIÇOS", g, `VOLUME_ESTOQUE:${l.codigo}`, "Volume de Estoque no Mês", "m³", "CALCULO");
     }
     // As bases dos rateios de armadura e de metalurgia (14/10/2026), em kg por unidade da linha (o volume × a demanda).
     if (LINHAS_COM_ARMADURA.has(l.codigo)) {
@@ -251,6 +271,18 @@ export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
       volume = demanda.map((d, k) => d * dias[k]);
     }
     valores.set(`VOLUME:${l.codigo}`, volume);
+    // A expedição (20/11/2026): a Expedição Diária × os dias úteis; sem ela gravada no mês, a expedição é a produção (como antes),
+    // e o Volume de Estoque (a produção menos a expedição) fica zero.
+    let expedicao = volume;
+    let estoque: number[] | null = null;
+    if (comExpedicao(l)) {
+      const k = `EXPEDICAO:${l.codigo}`;
+      const diaria = premissa(k, (m) => (dias[m - 1] ? volume[m - 1] / dias[m - 1] : 0));
+      expedicao = meses.map((m) => (ler(k, m) === undefined ? volume[m - 1] : diaria[m - 1] * dias[m - 1]));
+      estoque = volume.map((v, i) => v - expedicao[i]);
+      valores.set(`VOLUME_EXPEDICAO:${l.codigo}`, expedicao);
+      valores.set(`VOLUME_ESTOQUE:${l.codigo}`, estoque);
+    }
     // A armadura e a metalurgia: o volume × o kg por unidade da linha (14/10/2026; antes, a armadura por dia útil).
     const armadura = LINHAS_COM_ARMADURA.has(l.codigo) ? premissa(`ARMADURA:${l.codigo}`).map((a, k) => a * volume[k]) : Array<number>(12).fill(0);
     if (LINHAS_COM_ARMADURA.has(l.codigo)) valores.set(`VOLUME_ARMADURA:${l.codigo}`, armadura);
@@ -259,13 +291,14 @@ export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
     const acompanhamentos = l.unidade === 3 ? premissa(`ACOMPANHAMENTO:${l.codigo}`).map((a, k) => a * dias[k]) : null;
     if (acompanhamentos) valores.set(`VOLUME_ACOMPANHAMENTO:${l.codigo}`, acompanhamentos);
     const destino = destinoDaLinha(l);
-    // Os volumes da DRE: a produção (m³, e a expedição igual a ela) nas fábricas, a metalurgia consumida pelas linhas da
-    // unidade, a montagem e os acompanhamentos em Serviços. E as bases dos rateios dos centros de custo.
+    // Os volumes da DRE: a produção (m³) e a expedição (a da Expedição Diária, 20/11/2026; antes, igual à produção) nas
+    // fábricas, a metalurgia consumida pelas linhas da unidade, a montagem e os acompanhamentos em Serviços. E as bases dos
+    // rateios dos centros de custo.
     for (const m of meses) {
       const v = volume[m - 1];
       if (l.unidade !== 3 && (l.medida === "m³" || pistas(l))) {
         somar(C.PRODUCAO_M3, m, v);
-        somar(C.EXPEDICAO_M3, m, v);
+        somar(C.EXPEDICAO_M3, m, expedicao[m - 1]);
         base("PRODUCAO", destino, m, v);
         // A base do rateio de Projeto é a Liberação de Projetos dos Indicadores Manuais (projetosCenario.ts).
       } else if (l.unidade === 3 && l.codigo === "MONTAGEM") somar(C.MONTAGEM_M3, m, v);
@@ -310,7 +343,10 @@ export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
         const pctRef = referencia.get(`COMISSOES:${l.codigo}`);
         referencia.set(k, pctRef !== null && pctRef !== undefined && brutaRef !== null ? (brutaRef * pctRef) / 100 : null);
       } else unitario = premissa(k);
-      for (const m of meses) somar(c.codigo, m, volume[m - 1] * unitario[m - 1]);
+      // A Variação do Estoque (20/11/2026, pedido do Adão): o custo unitário × o Volume de Estoque (a produção menos a
+      // expedição); as demais contas, × o volume produzido.
+      const baseDoCusto = c.codigo === C.VARIACAO_ESTOQUE && estoque ? estoque : volume;
+      for (const m of meses) somar(c.codigo, m, baseDoCusto[m - 1] * unitario[m - 1]);
     }
   }
   // O resultado da tabela em R$.
@@ -355,7 +391,7 @@ async function materializarEncargos(
   tx: Tx,
   cenarioId: string,
   est: LinhaEstrutura[],
-  grupos: Awaited<ReturnType<typeof gruposDoCadastro>>,
+  grupos: GrupoDoCenario[],
   gravadas: Array<{ unidade: number; venda: string; chave: string; mes: number; valor: unknown }>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
   quadro: Map<string, QuadroDoGrupo>,
@@ -402,7 +438,7 @@ async function materializarQuadro(
   tx: Tx,
   cenarioId: string,
   est: LinhaEstrutura[],
-  grupos: Awaited<ReturnType<typeof gruposDoCadastro>>,
+  grupos: GrupoDoCenario[],
   quadro: Map<string, QuadroDoGrupo>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
 ) {
@@ -469,7 +505,8 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     estrutura(),
     linhasDoCadastro(),
     tx.cenarioPremissa.findMany({ where: { cenarioId } }),
-    gruposDoCadastro(),
+    // Os grupos da cópia dos Centros de Custo do cenário (20/11/2026, Cadastros por cenário).
+    gruposDoCenario(cenarioId, tx),
     tx.cenarioCentro.findMany({ where: { cenarioId }, include: { linhaDRE: { select: { codigo: true } } } }),
     tx.cenarioInvestimento.findMany({ where: { cenarioId } }),
     regrasDeRateio(tx),

@@ -5,7 +5,7 @@ import { originalDe } from "../relatorios/indicadoresDoSistema.js";
 import { compilarFormula } from "../relatorios/formulaIndicador.js";
 import { acumular, type DadosDoMes, type Indicador, type Parte } from "../relatorios/indicadores.js";
 import { acumularMeta } from "../relatorios/metasOrcamento.js";
-import { gruposDoCadastro } from "./centrosCenario.js";
+import { gruposDoCenario } from "./centrosCenario.js";
 import { QUADROS_DE_LOTACAO, quadrosDeLotacao, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { liberacaoTotal, LIBERACOES_DA_LISTA, LIBERACOES_DIGITADAS } from "./projetosCenario.js";
 
@@ -90,7 +90,7 @@ export async function calcularCenario(cenarioId: string): Promise<CalculoDoCenar
   const analitico = cenario.tipo === "ANALITICO";
   let quadros: Map<string, Array<number | null>> | null = null;
   if (analitico) {
-    const [grupos, lotacao] = await Promise.all([gruposDoCadastro(), prisma.cenarioPremissa.findMany({ where: { cenarioId, venda: { in: VENDAS_LOTACAO } } })]);
+    const [grupos, lotacao] = await Promise.all([gruposDoCenario(cenarioId), prisma.cenarioPremissa.findMany({ where: { cenarioId, venda: { in: VENDAS_LOTACAO } } })]);
     const porGrupo = new Map<string, number[]>();
     for (const p of lotacao) {
       if (p.mes < 1 || p.mes > 12) continue;

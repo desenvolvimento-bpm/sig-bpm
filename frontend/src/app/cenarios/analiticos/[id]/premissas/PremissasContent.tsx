@@ -158,8 +158,8 @@ export function PremissasContent() {
               Aprendizes e dos Estagiários, só na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ
               e os estagiários não têm encargos. Os Benefícios Adicionais ficam fora da conta: somados a ela (a da mão de obra da atribuição do
               grupo), dão o total de encargos e benefícios, que é o que vai para a DRE — também na Média de Referência —, e o Total do Centro os soma. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
-              baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem do cadastro Centros de Custo, nos
-              Cadastros Gerais). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
+              baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem da aba Centros de Custo das
+              Configurações, a cópia do cadastro com que o cenário calcula). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
             </li>
             <li>
@@ -193,7 +193,9 @@ export function PremissasContent() {
               Filial); Projeto pela Liberação de Projetos: Matriz e Filial (aba Indicadores Manuais), como no Fechamento Mensal; Metalurgia e Armadura pelo kg
               de cada linha (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos Acompanhamentos por Dia das linhas
               de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio (Cadastros Gerais), valem eles. Sem base no mês, o
-              percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário).
+              percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário). A tabela tem
+              uma linha por chave, destino e Base ou Percentual, com os filtros e a ordenação nos rótulos das colunas (Chave, Destino, Linha, Und. e
+              cada mês), como nas outras tabelas do SIG.
             </li>
             <li>
               Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
@@ -261,14 +263,16 @@ export function PremissasContent() {
             <li>
               Cada tabela traz, mês a mês: a Jornada (os dias úteis, já calculados pelo calendário — segunda a sexta, menos os feriados nacionais), a
               Demanda Diária de cada linha (na
-              unidade de medida dela; nas linhas de m³ e pistas, as pistas por dia e o volume por pista), a Armadura (Interno) Unit. e a Metalúrgica (Interno) Unit. (em kg por
+              unidade de medida dela; nas linhas de m³ e pistas, as pistas por dia e o volume por pista), na Matriz e na Filial a Expedição Diária (em m³ por dia,
+              separada da produção), a Armadura (Interno) Unit. e a Metalúrgica (Interno) Unit. (em kg por
               unidade da linha: kg/m³, kg/kg, kg/m²; só nas linhas que as levam), a Receita Bruta Média (na Matriz e na Filial, também a de Devoluções e
               Inventários, negativa) e os Impostos, os Custos (Mão de Obra Terceirizada, Matérias Primas, Gastos Gerais Variáveis e Estoque, por conta) e
               as Despesas Variáveis de Venda, em R$ por unidade da linha; antes da conta das comissões, as Comissões (em %/ROB, sobre a receita
               bruta).
             </li>
             <li>
-              Os cálculos ficam em cinza-escuro e não se editam: o volume do mês (a demanda × os dias úteis), a armadura e a metalurgia do mês (o
+              Os cálculos ficam em cinza-escuro e não se editam: o volume do mês (a demanda × os dias úteis), a Expedição no Mês (a Expedição Diária
+              × os dias úteis; sem ela digitada, igual à produção) e o Volume de Estoque no Mês (a produção menos a expedição), a armadura e a metalurgia do mês (o
               volume × o kg por unidade), a Receita Líquida Média, a conta das comissões (a soma das Receitas Brutas Médias × as Comissões) e, no fim, o
               Resultado das Premissas em R$ (o que a tabela leva para a DRE).
             </li>
@@ -303,16 +307,17 @@ export function PremissasContent() {
             <p>
               As premissas do cenário analítico, de onde a DRE dele se calcula: em cada unidade e venda, o volume de cada linha é a demanda diária ×
               os dias úteis (nas linhas de m³ e pistas, as pistas × o volume por pista); cada conta é o volume × o valor unitário (os totais
-              consideram só as médias e as demandas, sem ajustes); a receita líquida é a bruta × (1 − os impostos). As contas de Global e Mercantil somam-se na DRE da unidade, com os volumes (a produção e a
-              expedição, iguais, a metalurgia consumida pelas linhas da unidade e a montagem), e os totais e o Consolidado saem da Estrutura da DRE.
+              consideram só as médias e as demandas, sem ajustes); a Variação do Estoque é o Volume de Estoque (a produção menos a expedição) × o custo
+              unitário dela; a receita líquida é a bruta × (1 − os impostos). As contas de Global e Mercantil somam-se na DRE da unidade, com os volumes (a produção, a
+              expedição — a da Expedição Diária, ou a produção quando ela não foi digitada —, a metalurgia consumida pelas linhas da unidade e a montagem), e os totais e o Consolidado saem da Estrutura da DRE.
             </p>
             <p>
               Em Serviços, as linhas de Montagem e Vedação levam à receita de montagem e aos custos da CSM; as demais, à receita complementar e à CSC. A
               Média de Referência é a média realizada da referência do cenário (Configurações / Referência / Resultado Realizado): o total do período ÷ o
               volume da linha — o m³ produzido, o m³ montado na Montagem e o kg na Metálica; as linhas de Serviços sem volume nas
               listas têm os valores por dia útil e a demanda diária sem Média de Referência (—), para os botões de replicar não a levarem: digite a
-              demanda e os valores dos meses na mesma unidade. A demanda diária é o volume do período ÷ os dias úteis dele, e os doze meses começam
-              iguais às médias.
+              demanda e os valores dos meses na mesma unidade. A demanda diária é o volume do período ÷ os dias úteis dele, e a Expedição Diária, o m³
+              expedido (a lista de expedições) ÷ os mesmos dias úteis; os doze meses começam iguais às médias.
               A mão de obra direta e indireta, os gastos gerais diretos e indiretos e as despesas vêm dos centros de custo; a depreciação, dos investimentos; o imposto de
               renda, a contribuição social e o resultado financeiro, do extra-operacional.
             </p>
@@ -328,7 +333,10 @@ export function PremissasContent() {
               linhas e as vendas pelos itens da receita prévia, e os impostos são os dos itens, ajustados aos da DRE da unidade. Os custos (Mão de Obra
               Terceirizada, Matérias Primas, Gastos Gerais Variáveis e Estoque) e as despesas variáveis de venda de cada conta e mês são os da DRE da unidade, divididos entre as
               linhas na proporção das requisições e das notas fiscais com a tarefa de cada linha (a Correspondência Tarefa × Linha, nos Cadastros Gerais / Linhas);
-              o que não tem tarefa vai pelo m³ das linhas (pela receita, nas despesas variáveis de venda e em Serviços). A armadura e a metalurgia por
+              o que não tem tarefa vai pelo m³ das linhas (pela receita, nas despesas variáveis de venda e em Serviços). A Variação do Estoque vai só para as
+              Estacas, as únicas que movimentam o estoque, e o custo unitário dela é a variação do período ÷ o Volume de Estoque dele (o m³ produzido menos o
+              expedido). Como o estoque das Estacas caiu no realizado e a variação foi custo, o unitário fica negativo: no cenário, o mês que expede mais do
+              que produz (Volume de Estoque negativo) tem custo, e o que produz mais do que expede reduz o custo. A armadura e a metalurgia por
               unidade são as das listas de cada linha ÷ o volume dela. A Metalúrgica, na Matriz, presta serviço às outras linhas e não entra nas premissas: os custos dela ficam com a Estrutura, e a metalurgia que as linhas consomem é a Metalúrgica (Interno) Unit. delas. As Comissões são as da DRE da unidade
               em % da receita bruta, por venda (as da unidade divididas entre a Global e a Mercantil pela receita bruta de cada uma).
             </p>

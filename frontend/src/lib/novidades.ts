@@ -28,6 +28,42 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 13:22): Cadastros por cenário, etapas 1 e 2 — as abas Unidades, Departamentos, Centros de
+  // Custo e Redistribuições de Gastos das Configurações.
+  {
+    publicada: "2026-11-20T13:22",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Novas abas Unidades, Departamentos, Centros de Custo e Redistribuições de Gastos, depois da Referência: as cópias dos cadastros com que o cenário calcula. Cada cenário analítico tem as suas (tiradas dos Cadastros Gerais na criação; a revisão leva as do cenário de origem), e mudar os Cadastros Gerais não muda o cenário: “Trazer Novos” inclui o que surgiu lá depois.",
+      "Em Centros de Custo, edite o grupo (o Centro de Custo da Controladoria), o departamento, a atribuição, o rateio e a unidade dedicada de cada centro, ou inclua um centro que vale só no cenário; cada mudança recalcula a DRE do cenário. “Renomear Grupo” leva junto os valores do grupo (as premissas, os encargos, os benefícios, as justificativas e as realocações); se um grupo ficar sem centros, o SIG avisa antes de gravar.",
+      "Em Unidades, mude o nome, a ordem e a situação de cada unidade só no cenário; em Departamentos, os departamentos e os grupos da DRE de cada um.",
+      "Em Redistribuições de Gastos, as redistribuições do cenário (no mesmo modal do cadastro, com os departamentos e os centros de custo dele): na carga do realizado da referência, elas valem no lugar das dos Cadastros Gerais. Carregue o realizado de novo para uma mudança chegar às Médias de Referência.",
+      "Nas abas com tabela das Configurações (as novas, o Comparativo e os Reajustes), o destaque acima de cada tabela, com os botões dela (Gravar e Exportar também), é um cartão à parte que flutua sobre a tabela ao rolar, como nas Premissas.",
+      "Os Índices de Referência, as Variações Máximas, os Índices de Reajuste e a Aplicação dos Reajustes ganharam os filtros e a ordenação nos rótulos das colunas; nas tabelas da DRE, com um filtro, aparecem as linhas que passam, de todos os níveis.",
+    ],
+  },
+  // 20/11/2026 (publicada às 13:22): os filtros padrão na aba Rateios das Premissas.
+  {
+    publicada: "2026-11-20T13:22",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Na aba Rateios, a tabela ganhou os filtros e a ordenação nos rótulos das colunas (Chave, Destino, Linha, Und. e cada mês), como nas outras tabelas do SIG."],
+  },
+  // 20/11/2026 (publicada às 13:22): a Expedição Diária e a Variação do Estoque pelo Volume de Estoque (pedido do Adão).
+  {
+    publicada: "2026-11-20T13:22",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Nas abas Matriz e Filial, em Produção e Serviços, cada linha tem a Expedição Diária (m³/dia), separada da produção, e os cálculos Expedição no Mês e Volume de Estoque no Mês (a produção menos a expedição). Sem a Expedição Diária digitada no mês, a expedição é igual à produção. A Expedição (m³) da DRE do cenário sai dela.",
+      "A Variação do Estoque passa a ser o custo unitário × o Volume de Estoque do mês. Na referência realizada, ela vai só para as Estacas, as únicas que movimentam o estoque, e o custo unitário é a variação do período ÷ o Volume de Estoque dele (o m³ produzido menos o expedido); a Expedição Diária de referência é o m³ expedido ÷ os dias úteis.",
+      "Para as Médias de Referência novas, carregue de novo a referência do realizado (Configurações › Referência), com “Manter os Meses” para não apagar os meses já preenchidos.",
+    ],
+  },
   // 19/11/2026 (publicada às 19:18): as Devoluções e as Saídas opcionais para fechar.
   {
     publicada: "2026-11-19T19:18",

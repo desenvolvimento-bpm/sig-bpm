@@ -325,10 +325,44 @@ describe("premissas dos cenários analíticos (13/10/2026)", () => {
     item("CPP.MOT.PROJETOS_TERCEIRIZADOS", [1, 2]),
     item("CPP.GGV.MADEIRAS", [1, 2]),
     item("CPP.MOD.REMUNERACOES_CLT", [1, 2]),
+    item("CPP.E.VARIACAO_DO_ESTOQUE", [1, 2]),
     item("DVV.GGV.FRETE_E_DESCARGA", [1, 2]),
     item("DVV.GGV.COMISSOES_DE_REPRESENTANTES_E_TERCEIROS", [1, 2, 3]),
   ];
   const ALVEOLARES = { codigo: "ALVEOLARES", nome: "Alveolares", unidade: 2 as const, medida: "m³ e pistas" };
+
+  it("expedição (20/11/2026): a Expedição Diária separa a expedição da produção (sem ela, igual); a Variação do Estoque é o custo unitário × o Volume de Estoque", () => {
+    const chaves = linhasDaTabela(EST, [ALVEOLARES], 2).map((l) => l.chave);
+    const ordem = ["VOLUME:ALVEOLARES", "EXPEDICAO:ALVEOLARES", "VOLUME_EXPEDICAO:ALVEOLARES", "VOLUME_ESTOQUE:ALVEOLARES", "ARMADURA:ALVEOLARES"].map((c) => chaves.indexOf(c));
+    assert.ok(ordem.every((x, i) => x >= 0 && (i === 0 || x > ordem[i - 1])), String(ordem));
+    // Só na Matriz e na Filial.
+    assert.ok(!linhasDaTabela(EST, [{ codigo: "VEDAÇÃO", nome: "Vedação", unidade: 3, medida: "m" }], 3).some((l) => l.chave.startsWith("EXPEDICAO:")));
+    const p: Record<string, number> = {
+      "DEMANDA:ALVEOLARES": 4,
+      "M3_PISTA:ALVEOLARES": 17.5,
+      "CUSTO:ALVEOLARES:CPP.MP.CIMENTO": 300,
+      "CUSTO:ALVEOLARES:CPP.E.VARIACAO_DO_ESTOQUE": -950,
+    };
+    // Sem a Expedição Diária: a expedição é a produção (700 m³ em janeiro, com 10 dias úteis), o estoque fica zero.
+    const sem = calcularTabela(EST, [ALVEOLARES], 2, 2026, (chave, mes) => (mes === 0 ? undefined : chave === "DIAS_UTEIS" && mes === 1 ? 10 : p[chave]));
+    assert.equal(sem.valores.get("VOLUME_EXPEDICAO:ALVEOLARES")![0], 700);
+    assert.equal(sem.valores.get("VOLUME_ESTOQUE:ALVEOLARES")![0], 0);
+    assert.equal(sem.valores.get("EXPEDICAO:ALVEOLARES")![0], 70);
+    assert.equal(sem.dre.get("S.EXPEDICAO_DO_PRE_FABRICADO_M")![0], 700);
+    assert.equal(sem.dre.get("CPP.E.VARIACAO_DO_ESTOQUE"), undefined);
+    // Com 80 m³/dia expedidos em janeiro: 800 m³ expedidos, −100 m³ de estoque × −950 = 95.000 de variação; fevereiro, sem ela.
+    const ler = (chave: string, mes: number) => (mes === 0 ? undefined : chave === "DIAS_UTEIS" && mes === 1 ? 10 : chave === "EXPEDICAO:ALVEOLARES" ? (mes === 1 ? 80 : undefined) : p[chave]);
+    const com = calcularTabela(EST, [ALVEOLARES], 2, 2026, ler);
+    assert.equal(com.valores.get("VOLUME_EXPEDICAO:ALVEOLARES")![0], 800);
+    assert.equal(com.valores.get("VOLUME_ESTOQUE:ALVEOLARES")![0], -100);
+    assert.equal(com.dre.get("P.PRODUCAO_DO_PRE_FABRICADO_M")![0], 700);
+    assert.equal(com.dre.get("S.EXPEDICAO_DO_PRE_FABRICADO_M")![0], 800);
+    assert.equal(com.dre.get("CPP.E.VARIACAO_DO_ESTOQUE")![0], 95_000);
+    assert.equal(com.dre.get("CPP.E.VARIACAO_DO_ESTOQUE")![1], 0);
+    // As outras contas seguem o volume produzido.
+    assert.equal(Math.round(com.dre.get("CPP.MP.CIMENTO")![0]), 700 * 300);
+    assert.equal(com.valores.get("RESULTADO:E")![0], 95_000);
+  });
 
   it("as linhas da tabela: a demanda em pistas e m³ por pista, as receitas (com as devoluções), os impostos, as contas de MP, MOT, GGV e DVV (sem a mão de obra própria)", () => {
     const linhas = linhasDaTabela(EST, [ALVEOLARES], 2);

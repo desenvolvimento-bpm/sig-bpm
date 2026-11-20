@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { type ColunaExportavel, ExportarTabela } from "@/components/shared/ExportarTabela";
+import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import type { Coluna as ColunaDoFiltro } from "@/lib/filtrosDeTabela";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +21,11 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { cenariosService, type IndiceDosReajustes, type ReajustesDasPremissas } from "../services/cenariosService";
 import { botaoPrimario, Erro } from "./CenarioDialog";
 import { Caixa } from "./ComparativoCenario";
+import { Destaque, LinhaVazia, TabelaComDestaque } from "./DestaqueDaAba";
 import { lerNumero } from "./EdicaoDialogs";
 
 /** O percentual no campo: duas casas, sem separador de milhar (fácil de editar), como nos Índices de Referência. */
 const duasCasas = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
-const QUADRO = "space-y-4 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white p-5";
-const TITULO = "text-sm font-bold text-gray-900";
 /** Os reajustes de cada índice: até quatro, cada um sobre os anteriores. */
 const GRUPOS = [0, 1, 2, 3];
 const ORDINAL = ["1º", "2º", "3º", "4º"];
@@ -53,7 +54,7 @@ export function ReajustesDoCenario({ id, podeEditar }: { id: string; podeEditar:
   if (consulta.isPending) return <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
   const dados = consulta.data;
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <p
         className={`rounded-sm border border-l-4 border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 ${dados.aplicados ? "border-l-bpm-primary" : "border-l-red-600"}`}
       >
@@ -156,156 +157,151 @@ function ListaDosIndices({ id, dados, podeEditar }: { id: string; dados: Reajust
   const celula = "px-1.5 py-1.5";
   // Descrição, Observação, os quatro grupos (o Valor e o Inicia Em), Contas e a lixeira.
   const colunas = podeEditar ? 12 : 11;
-  return (
-    <section className={QUADRO}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h2 className={TITULO}>Índices de Reajuste</h2>
-          <p className="mt-1 text-xs text-gray-600">
-            Até quatro reajustes por índice: o Valor (%) e o mês em que ele Inicia Em; cada um vale sobre os anteriores, até o fim do exercício. Na
-            Aplicação dos Reajustes, abaixo, cada conta escolhe até dois índices (o 1º e o 2º, nessa ordem); as contas sem índice não se reajustam.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {podeEditar ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="shrink-0 rounded-sm"
-              onClick={() => setLinhas((atual) => [...atual, { chave: null, descricao: "", observacao: "", grupos: GRUPOS.map(() => ({ valor: "", mes: "" })), contas: 0 }])}
-            >
-              <Plus className="size-4" />
-              Incluir Índice
-            </Button>
-          ) : null}
-          {/* O Exportar, por último: os índices gravados. */}
-          <ExportarTabela titulo="Cenário · Premissas · Índices de Reajuste" colunas={COLUNAS_DOS_INDICES(dados.meses)} linhas={dados.indices} />
-        </div>
-      </div>
-      <div className="overflow-x-auto rounded-sm border border-gray-200">
-        {/* [--topo-tabela:0px]: a rolagem é a da caixa (para os lados), e os rótulos ficam no topo dela, como no Quadro de Lotação. */}
-        <table className="tabela-sig w-full border-collapse [--topo-tabela:0px]">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-600">
-              <th rowSpan={2} className={`${celula} min-w-40 pl-3 text-left`}>
-                Descrição
-              </th>
-              <th rowSpan={2} className={`${celula} min-w-32 text-left`}>
-                Observação
-              </th>
-              {GRUPOS.map((k) => (
-                <th key={k} colSpan={2} className="border-l border-gray-200 px-1.5 !py-0 text-center" style={{ height: ALTURA_DOS_GRUPOS }}>
-                  {ORDINAL[k]} Reajuste
-                </th>
-              ))}
-              <th rowSpan={2} className={`${celula} w-24 border-l border-gray-200 text-right`}>
-                Contas
-              </th>
-              {podeEditar ? <th rowSpan={2} className={`${celula} w-10`} aria-label="Excluir" /> : null}
-            </tr>
-            <tr className="border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-600">
-              {GRUPOS.map((k) => (
-                <GrupoDoRotulo key={k} celula={celula} />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.length === 0 ? (
-              <tr>
-                <td colSpan={colunas} className="px-3 py-6 text-center text-sm text-gray-500">
-                  Nenhum índice ainda.{podeEditar ? " Use “Incluir Índice”." : ""}
-                </td>
-              </tr>
-            ) : (
-              linhas.map((l, k) => {
-                const e = erros[k];
-                return (
-                  <tr key={l.chave ?? `novo-${k}`} className="border-b border-gray-100 last:border-b-0">
-                    <td className={`${celula} pl-3`}>
-                      <Input
-                        aria-label="Descrição do índice"
-                        value={l.descricao}
-                        onChange={(ev) => mudar(k, { descricao: ev.target.value })}
-                        disabled={!podeEditar}
-                        maxLength={120}
-                        placeholder="Ex.: IPCA, Dissídio, Aço…"
-                        className={`h-8 rounded-sm bg-white ${e.descricao ? "border-red-400" : ""}`}
-                      />
-                    </td>
-                    <td className={celula}>
-                      <Input aria-label="Observação do índice" value={l.observacao} onChange={(ev) => mudar(k, { observacao: ev.target.value })} disabled={!podeEditar} maxLength={500} className="h-8 rounded-sm bg-white" />
-                    </td>
-                    {GRUPOS.map((g) => {
-                      const ruim = e.grupos.has(g) || (e.semReajuste && g === 0 && !e.descricao);
-                      return (
-                        <GrupoDaLinha
-                          key={g}
-                          celula={celula}
-                          ordinal={ORDINAL[g]}
-                          grupo={l.grupos[g]}
-                          meses={dados.meses}
-                          ruim={ruim}
-                          podeEditar={podeEditar}
-                          onMudar={(m) => mudarGrupo(k, g, m)}
-                        />
-                      );
-                    })}
-                    <td className={`${celula} border-l border-gray-100 text-right text-sm whitespace-nowrap text-gray-600`} title={l.contas ? "Contas da Aplicação dos Reajustes com este índice" : undefined}>
-                      {l.contas ? `${l.contas} ${plural(l.contas, "conta", "contas")}` : "—"}
-                    </td>
-                    {podeEditar ? (
-                      <td className={`${celula} text-right`}>
-                        <button
-                          type="button"
-                          className="inline-flex size-7 items-center justify-center rounded-sm text-gray-500 hover:bg-gray-100 hover:text-red-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                          title={l.contas ? "O índice está na Aplicação dos Reajustes: troque o índice dessas contas antes de excluir" : "Excluir o índice"}
-                          aria-label="Excluir o índice"
-                          disabled={l.contas > 0}
-                          onClick={() => setLinhas((atual) => atual.filter((_, i) => i !== k))}
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-      {invalidas ? (
-        <p className="text-xs text-red-700">
-          {invalidas} {plural(invalidas, "índice incompleto", "índices incompletos")} (em vermelho): toda linha precisa da descrição e de ao menos um
-          reajuste; cada reajuste, do Valor (%) (acima de −100) e do Inicia Em, na ordem (o 1º antes do 2º…) e em meses crescentes.
-        </p>
-      ) : null}
-      <Erro erro={gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar os índices.") : null} />
+  // Os filtros padrão nos rótulos (20/11/2026, pedido do Adão), sobre o que está na tela (também o ainda não gravado).
+  const comIndice = useMemo(() => linhas.map((l, k) => ({ l, k })), [linhas]);
+  const colunasDoFiltro = useMemo<ColunaDoFiltro<{ l: LinhaDoIndice; k: number }>[]>(
+    () => [
+      { chave: "descricao", rotulo: "Descrição", valor: (r) => r.l.descricao },
+      { chave: "observacao", rotulo: "Observação", valor: (r) => r.l.observacao },
+      ...GRUPOS.flatMap((g): ColunaDoFiltro<{ l: LinhaDoIndice; k: number }>[] => [
+        {
+          chave: `valor${g}`,
+          rotulo: "Valor (%)",
+          tipo: "numero",
+          alinhamento: "direita",
+          valor: (r) => {
+            const v = lerNumero(r.l.grupos[g].valor);
+            return typeof v === "number" ? v : null;
+          },
+          texto: (r) => r.l.grupos[g].valor,
+        },
+        { chave: `mes${g}`, rotulo: "Inicia Em", tipo: "numero", valor: (r) => (r.l.grupos[g].mes ? Number(r.l.grupos[g].mes) : null), texto: (r) => (r.l.grupos[g].mes ? rotuloDoMes(dados.meses, Number(r.l.grupos[g].mes)) : "") },
+      ]),
+      { chave: "contas", rotulo: "Contas", tipo: "numero", alinhamento: "direita", valor: (r) => r.l.contas },
+      ...(podeEditar ? [{ chave: "excluir", rotulo: "", semFiltro: true }] : []),
+    ],
+    [podeEditar, dados.meses],
+  );
+  const tabela = useTabelaFiltravel(comIndice, colunasDoFiltro);
+  // O destaque acima da tabela, que flutua sobre ela ao rolar (20/11/2026, pedido do Adão: o padrão das Premissas), com o
+  // Incluir Índice, o Gravar Índices e, por último, o Exportar.
+  const destaque = (
+    <Destaque
+      titulo="Índices de Reajuste"
+      descricao="Até quatro reajustes por índice: o Valor (%) e o mês em que ele Inicia Em; cada um vale sobre os anteriores, até o fim do exercício."
+      abaixo={
+        invalidas || gravar.isError ? (
+          <div className="space-y-1">
+            {invalidas ? (
+              <p className="text-xs text-red-700">
+                {invalidas} {plural(invalidas, "índice incompleto", "índices incompletos")} (em vermelho): toda linha precisa da descrição e de ao menos um
+                reajuste; cada reajuste, do Valor (%) (acima de −100) e do Inicia Em, na ordem (o 1º antes do 2º…) e em meses crescentes.
+              </p>
+            ) : null}
+            <Erro erro={gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar os índices.") : null} />
+          </div>
+        ) : null
+      }
+    >
       {podeEditar ? (
-        <div className="flex items-center justify-end gap-3">
+        <>
           <span className="text-xs text-gray-500">
             {linhas.length} {plural(linhas.length, "índice", "índices")}
           </span>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 rounded-sm"
+            onClick={() => {
+              // O índice novo aparece mesmo com filtro (os filtros saem).
+              tabela.limpar();
+              setLinhas((atual) => [...atual, { chave: null, descricao: "", observacao: "", grupos: GRUPOS.map(() => ({ valor: "", mes: "" })), contas: 0 }]);
+            }}
+          >
+            <Plus className="size-4" />
+            Incluir Índice
+          </Button>
           <Button type="button" className={botaoPrimario} disabled={!mudou || invalidas > 0 || gravar.isPending} onClick={() => gravar.mutate()}>
             {gravar.isPending ? "Gravando…" : "Gravar Índices"}
           </Button>
-        </div>
+        </>
       ) : null}
-    </section>
+      {/* O Exportar, por último: os índices gravados. */}
+      <ExportarTabela titulo="Cenário · Premissas · Índices de Reajuste" colunas={COLUNAS_DOS_INDICES(dados.meses)} linhas={dados.indices} />
+    </Destaque>
   );
-}
-
-/** Os rótulos de um grupo: o Valor (%) e o Inicia Em. */
-function GrupoDoRotulo({ celula }: { celula: string }) {
   return (
-    <>
-      <th className={`${celula} border-l border-gray-200 text-right whitespace-nowrap`} style={{ top: ALTURA_DOS_GRUPOS }}>
-        Valor (%)
-      </th>
-      <th className={`${celula} text-left whitespace-nowrap`} style={{ top: ALTURA_DOS_GRUPOS }}>
-        Inicia Em
-      </th>
-    </>
+    <TabelaComDestaque
+      destaque={destaque}
+      larguras={[200, 180, ...GRUPOS.flatMap(() => [118, 136]), 120, ...(podeEditar ? [48] : [])]}
+      cabecalho={
+        <>
+          {/* Os grupos (1º Reajuste…) acima dos rótulos com os filtros. */}
+          <tr className="text-xs font-bold text-gray-900">
+            <th colSpan={2} className="px-4 !py-0" style={{ height: ALTURA_DOS_GRUPOS }} />
+            {GRUPOS.map((k) => (
+              <th key={k} colSpan={2} className="border-l border-gray-300 px-1.5 !py-0 text-center" style={{ height: ALTURA_DOS_GRUPOS }}>
+                {ORDINAL[k]} Reajuste
+              </th>
+            ))}
+            <th colSpan={podeEditar ? 2 : 1} className="border-l border-gray-300 !py-0" style={{ height: ALTURA_DOS_GRUPOS }} />
+          </tr>
+          {tabela.linhaDoCabecalho}
+        </>
+      }
+      corpo={
+        linhas.length === 0 ? (
+          <LinhaVazia colunas={colunas} texto={`Nenhum índice ainda.${podeEditar ? " Use “Incluir Índice”." : ""}`} />
+        ) : tabela.visiveis.length === 0 ? (
+          <SemResultado colunas={colunas} onLimpar={tabela.limpar} />
+        ) : (
+          tabela.visiveis.map(({ l, k }) => {
+            const e = erros[k];
+            return (
+              <tr key={l.chave ?? `novo-${k}`} className="border-t border-gray-100">
+                <td className={`${celula} pl-3`}>
+                  <Input
+                    aria-label="Descrição do índice"
+                    value={l.descricao}
+                    onChange={(ev) => mudar(k, { descricao: ev.target.value })}
+                    disabled={!podeEditar}
+                    maxLength={120}
+                    placeholder="Ex.: IPCA, Dissídio, Aço…"
+                    className={`h-8 rounded-sm bg-white ${e.descricao ? "border-red-400" : ""}`}
+                  />
+                </td>
+                <td className={celula}>
+                  <Input aria-label="Observação do índice" value={l.observacao} onChange={(ev) => mudar(k, { observacao: ev.target.value })} disabled={!podeEditar} maxLength={500} className="h-8 rounded-sm bg-white" />
+                </td>
+                {GRUPOS.map((g) => {
+                  const ruim = e.grupos.has(g) || (e.semReajuste && g === 0 && !e.descricao);
+                  return (
+                    <GrupoDaLinha key={g} celula={celula} ordinal={ORDINAL[g]} grupo={l.grupos[g]} meses={dados.meses} ruim={ruim} podeEditar={podeEditar} onMudar={(m) => mudarGrupo(k, g, m)} />
+                  );
+                })}
+                <td className={`${celula} border-l border-gray-100 text-right whitespace-nowrap text-gray-600`} title={l.contas ? "Contas da Aplicação dos Reajustes com este índice" : undefined}>
+                  {l.contas ? `${l.contas} ${plural(l.contas, "conta", "contas")}` : "—"}
+                </td>
+                {podeEditar ? (
+                  <td className={`${celula} text-right`}>
+                    <button
+                      type="button"
+                      className="inline-flex size-7 items-center justify-center rounded-sm text-gray-500 hover:bg-gray-100 hover:text-red-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                      title={l.contas ? "O índice está na Aplicação dos Reajustes: troque o índice dessas contas antes de excluir" : "Excluir o índice"}
+                      aria-label="Excluir o índice"
+                      disabled={l.contas > 0}
+                      onClick={() => setLinhas((atual) => atual.filter((_, i) => i !== k))}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })
+        )
+      }
+    />
   );
 }
 
@@ -476,156 +472,80 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
       ? "Nenhuma conta com índice: escolha os índices das contas e grave a aplicação"
       : undefined;
 
-  return (
-    <section className={QUADRO}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h2 className={TITULO}>Aplicação dos Reajustes</h2>
-          <p className="mt-1 text-xs text-gray-600">
-            Até dois índices de reajuste por conta, na estrutura da DRE vigente (Produção e Serviços aparece só para leitura: os volumes não se reajustam): o 1º
-            reajusta o valor das premissas e o 2º, o valor já reajustado pelo 1º. Os Custos de Produção têm um grupo de linhas da Matriz e um da Filial, cada
-            um com os seus índices. Contas sem índice não se reajustam.
-          </p>
-          {indices.length === 0 ? <p className="mt-1 text-xs font-medium text-red-700">Nenhum índice cadastrado: inclua os índices no quadro Índices de Reajuste, acima.</p> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {podeEditar ? (
-            <>
-              <Label htmlFor="rea-todos">Preencher Selecionados</Label>
-              <select id="rea-todos" value={todos} onChange={(e) => setTodos(e.target.value)} className="h-9 max-w-64 rounded-sm border border-gray-300 bg-white px-2 text-sm">
-                <option value="">Escolha o índice…</option>
-                {indices.map((i) => (
-                  <option key={i.chave} value={i.chave}>
-                    {rotuloDoIndice(i, dados.meses)}
-                  </option>
-                ))}
-              </select>
-              {/* A coluna em que o Aplicar e o Limpar valem (19/11/2026): o 1º ou o 2º Índice de Reajuste. */}
-              <select
-                aria-label="Coluna do índice"
-                value={coluna}
-                onChange={(e) => setColuna(Number(e.target.value) as Coluna)}
-                className="h-9 rounded-sm border border-gray-300 bg-white px-2 text-sm"
-              >
-                <option value={0}>No 1º Índice</option>
-                <option value={1}>No 2º Índice</option>
-              </select>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-sm"
-                disabled={marcadas.size === 0 || !todos}
-                title={marcadas.size === 0 ? "Marque as contas (a caixa de um total ou de uma atribuição marca as contas abaixo dele)" : undefined}
-                onClick={() => preencherMarcadas(todos)}
-              >
-                Aplicar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-sm"
-                disabled={![...marcadas].some((c) => !!escolhaDaConta(c, coluna))}
-                title={marcadas.size === 0 ? "Marque as contas que perdem o índice" : coluna === 0 ? "Sem o 1º índice, o 2º passa a ser o 1º" : undefined}
-                onClick={() => preencherMarcadas("")}
-              >
-                Limpar
-              </Button>
-            </>
+  // Os filtros padrão nos rótulos (20/11/2026, pedido do Adão): sem filtro nem ordem, a árvore da DRE; com eles, as linhas que
+  // passam (de todos os níveis, abertas), pelo que está na tela.
+  const rotuloDaEscolha = (l: LinhaDaAplicacao, k: Coluna) => {
+    const e = escolhaDe(l, k);
+    return e ? rotulo(e) : !l.verificada && contasDe(l).some((c) => escolhaDaConta(c, k)) ? "Vários" : "";
+  };
+  const colunasDoFiltro: ColunaDoFiltro<LinhaDaAplicacao>[] = [
+    { chave: "linha", rotulo: "Linha da DRE", valor: (l) => l.descricao },
+    { chave: "indice", rotulo: ROTULO_DA_COLUNA[0], alinhamento: "direita", valor: (l) => rotuloDaEscolha(l, 0) },
+    { chave: "indice2", rotulo: ROTULO_DA_COLUNA[1], alinhamento: "direita", valor: (l) => rotuloDaEscolha(l, 1) },
+  ];
+  const tabela = useTabelaFiltravel(niveis.linhas, colunasDoFiltro);
+  const visiveis = tabela.ativos ? tabela.filtradas : niveis.linhas.filter(niveis.visivel);
+  // O destaque acima da tabela, que flutua sobre ela ao rolar (20/11/2026, pedido do Adão: o padrão das Premissas): o Preencher
+  // Selecionados, o Gravar Aplicação, o Aplicar (ou Remover) Reajustes e, por último, o Exportar.
+  const destaque = (
+    <Destaque
+      titulo="Aplicação dos Reajustes"
+      descricao="Até dois índices por conta: o 1º reajusta o valor das premissas e o 2º, o valor já reajustado pelo 1º."
+      abaixo={
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {/* O aviso numa frase só (20/11/2026, pedido do Adão): "0 de 244 contas com índice. Nenhum índice cadastrado: …". */}
+          {podeEditar || indices.length === 0 ? (
+            <span className="text-xs text-gray-500">
+              {podeEditar ? (
+                <>
+                  {marcadas.size ? `${marcadas.size} ${plural(marcadas.size, "conta marcada", "contas marcadas")} · ` : ""}
+                  {comIndice} de {verificadas.length} {plural(verificadas.length, "conta", "contas")} com índice
+                  {comDois ? ` (${comDois} com dois)` : ""}.
+                </>
+              ) : null}
+              {indices.length === 0 ? <span className="font-medium text-red-700"> Nenhum índice cadastrado: inclua os índices no quadro Índices de Reajuste, acima.</span> : null}
+            </span>
           ) : null}
-          {/* O Exportar, por último, depois do Limpar: o que está gravado em cada linha da DRE. */}
-          <ExportarTabela titulo="Cenário · Premissas · Aplicação dos Reajustes" colunas={colunasExportadas} linhas={dados.linhas} />
+          <Erro erro={gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar a aplicação dos reajustes.") : null} />
         </div>
-      </div>
-      <div className="rounded-sm border border-gray-200">
-        <table className="tabela-sig w-full border-collapse">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-4 py-2.5 text-left text-xs font-bold text-gray-600">
-                <span className="flex items-center gap-2">
-                  <SeletorNivel nivel={niveis.nivelGeral} onEscolher={niveis.escolherNivel} />
-                  {podeEditar ? (
-                    <Caixa rotulo="Marcar todas as contas" estado={marcacaoDe(verificadas.map((l) => l.codigo))} onMudar={(m) => marcar(verificadas.map((l) => l.codigo), m)} />
-                  ) : null}
-                  Linha da DRE
-                </span>
-              </th>
-              {ROTULO_DA_COLUNA.map((r) => (
-                <th key={r} className="w-80 px-4 py-2.5 text-right text-xs font-bold text-gray-600">
-                  {r}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {niveis.linhas.filter(niveis.visivel).map((l) => {
-              const contas = contasDe(l);
-              return (
-                <tr key={l.codigo} className={`border-b border-gray-100 last:border-b-0 ${fundoDaLinha(l)}`}>
-                  <td className={`py-1.5 pr-4 text-sm ${niveis.recuo(l)} ${l.tipo !== "ITEM" ? "font-bold text-gray-900" : "text-gray-700"}`}>
-                    <span className="flex items-center gap-1">
-                      <Agrupador grupo={niveis.grupo(l)} fechado={niveis.fechado(l)} onAlternar={() => niveis.alternar(l.codigo)} />
-                      {podeEditar && contas.length ? <Caixa rotulo={`Marcar ${l.descricao}`} estado={marcacaoDe(contas)} onMudar={(m) => marcar(contas, m)} /> : null}
-                      <span className="truncate" title={l.descricao}>
-                        {l.descricao}
-                      </span>
-                    </span>
-                  </td>
-                  {([0, 1] as const).map((k) => {
-                    const escolha = escolhaDe(l, k);
-                    const varias = !l.verificada && !escolha && contas.some((c) => escolhaDaConta(c, k));
-                    // O 2º só com o 1º (em alguma das contas) e sem repetir o 1º.
-                    const semPrimeiro = k === 1 && !contas.some((c) => escolhaDaConta(c, 0));
-                    const primeiro = k === 1 ? escolhaDe(l, 0) : "";
-                    return (
-                      <td key={k} className="px-4 py-1.5 text-right">
-                        {contas.length ? (
-                          <select
-                            aria-label={`${ROTULO_DA_COLUNA[k]} de ${l.descricao}`}
-                            title={
-                              semPrimeiro
-                                ? "Escolha o 1º índice antes"
-                                : escolha
-                                  ? rotulo(escolha)
-                                  : l.verificada
-                                    ? undefined
-                                    : "O índice escolhido vale para todas as contas abaixo"
-                            }
-                            value={escolha}
-                            onChange={(e) => mudar(l, k, e.target.value)}
-                            disabled={!podeEditar || semPrimeiro}
-                            className="ml-auto h-8 w-full max-w-72 rounded-sm border border-gray-300 bg-white px-2 text-sm disabled:opacity-70"
-                          >
-                            <option value="">{varias ? "Vários" : "—"}</option>
-                            {indices
-                              .filter((i) => i.chave !== primeiro)
-                              .map((i) => (
-                                <option key={i.chave} value={i.chave}>
-                                  {rotuloDoIndice(i, dados.meses)}
-                                </option>
-                              ))}
-                          </select>
-                        ) : (
-                          <span className="text-sm text-gray-400" title={/^(PS|P|S)\./.test(l.codigo) ? "Os volumes não se reajustam" : "Sem contas para reajustar"}>
-                            —
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <Erro erro={gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar a aplicação dos reajustes.") : null} />
+      }
+    >
       {podeEditar ? (
-        <div className="flex items-center justify-end gap-3">
-          <span className="text-xs text-gray-500">
-            {marcadas.size ? `${marcadas.size} ${plural(marcadas.size, "conta marcada", "contas marcadas")} · ` : ""}
-            {comIndice} de {verificadas.length} {plural(verificadas.length, "conta", "contas")} com índice
-            {comDois ? ` (${comDois} com dois)` : ""}.
-          </span>
+        <>
+          <Label htmlFor="rea-todos">Preencher Selecionados</Label>
+          <select id="rea-todos" value={todos} onChange={(e) => setTodos(e.target.value)} className="h-9 max-w-64 rounded-sm border border-gray-300 bg-white px-2 text-sm">
+            <option value="">Escolha o índice…</option>
+            {indices.map((i) => (
+              <option key={i.chave} value={i.chave}>
+                {rotuloDoIndice(i, dados.meses)}
+              </option>
+            ))}
+          </select>
+          {/* A coluna em que o Aplicar e o Limpar valem (19/11/2026): o 1º ou o 2º Índice de Reajuste. */}
+          <select aria-label="Coluna do índice" value={coluna} onChange={(e) => setColuna(Number(e.target.value) as Coluna)} className="h-9 rounded-sm border border-gray-300 bg-white px-2 text-sm">
+            <option value={0}>No 1º Índice</option>
+            <option value={1}>No 2º Índice</option>
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-sm"
+            disabled={marcadas.size === 0 || !todos}
+            title={marcadas.size === 0 ? "Marque as contas (a caixa de um total ou de uma atribuição marca as contas abaixo dele)" : undefined}
+            onClick={() => preencherMarcadas(todos)}
+          >
+            Aplicar
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-sm"
+            disabled={![...marcadas].some((c) => !!escolhaDaConta(c, coluna))}
+            title={marcadas.size === 0 ? "Marque as contas que perdem o índice" : coluna === 0 ? "Sem o 1º índice, o 2º passa a ser o 1º" : undefined}
+            onClick={() => preencherMarcadas("")}
+          >
+            Limpar
+          </Button>
           <Button type="button" className={botaoPrimario} disabled={!mudou || gravar.isPending} onClick={() => gravar.mutate()}>
             {gravar.isPending ? "Gravando…" : "Gravar Aplicação"}
           </Button>
@@ -641,8 +561,80 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
           >
             {aplicar ? "Aplicar Reajustes" : "Remover Reajustes"}
           </Button>
-        </div>
+        </>
       ) : null}
+      {/* O Exportar, por último: o que está gravado em cada linha da DRE. */}
+      <ExportarTabela titulo="Cenário · Premissas · Aplicação dos Reajustes" colunas={colunasExportadas} linhas={dados.linhas} />
+    </Destaque>
+  );
+
+  return (
+    <>
+      <TabelaComDestaque
+        destaque={destaque}
+        larguras={[560, 340, 340]}
+        cabecalho={tabela.linhaDoCabecalhoCom(
+          {},
+          {
+            linha: (
+              <>
+                <SeletorNivel nivel={niveis.nivelGeral} onEscolher={niveis.escolherNivel} />
+                {podeEditar ? <Caixa rotulo="Marcar todas as contas" estado={marcacaoDe(verificadas.map((l) => l.codigo))} onMudar={(m) => marcar(verificadas.map((l) => l.codigo), m)} /> : null}
+              </>
+            ),
+          },
+        )}
+        corpo={visiveis.length === 0 ? <SemResultado colunas={3} onLimpar={tabela.limpar} /> : visiveis.map((l) => {
+          const contas = contasDe(l);
+          return (
+            <tr key={l.codigo} className={`border-t border-gray-100 ${fundoDaLinha(l)}`}>
+              <td className={`py-1.5 pr-3 ${niveis.recuo(l)} ${l.tipo !== "ITEM" ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                <span className="flex min-w-0 items-center gap-1">
+                  <Agrupador grupo={niveis.grupo(l)} fechado={niveis.fechado(l)} onAlternar={() => niveis.alternar(l.codigo)} />
+                  {podeEditar && contas.length ? <Caixa rotulo={`Marcar ${l.descricao}`} estado={marcacaoDe(contas)} onMudar={(m) => marcar(contas, m)} /> : null}
+                  <span className="truncate" title={l.descricao}>
+                    {l.descricao}
+                  </span>
+                </span>
+              </td>
+              {([0, 1] as const).map((k) => {
+                const escolha = escolhaDe(l, k);
+                const varias = !l.verificada && !escolha && contas.some((c) => escolhaDaConta(c, k));
+                // O 2º só com o 1º (em alguma das contas) e sem repetir o 1º.
+                const semPrimeiro = k === 1 && !contas.some((c) => escolhaDaConta(c, 0));
+                const primeiro = k === 1 ? escolhaDe(l, 0) : "";
+                return (
+                  <td key={k} className="px-3 py-1.5 text-right">
+                    {contas.length ? (
+                      <select
+                        aria-label={`${ROTULO_DA_COLUNA[k]} de ${l.descricao}`}
+                        title={semPrimeiro ? "Escolha o 1º índice antes" : escolha ? rotulo(escolha) : l.verificada ? undefined : "O índice escolhido vale para todas as contas abaixo"}
+                        value={escolha}
+                        onChange={(e) => mudar(l, k, e.target.value)}
+                        disabled={!podeEditar || semPrimeiro}
+                        className="ml-auto h-8 w-full max-w-72 rounded-sm border border-gray-300 bg-white px-2 text-sm disabled:opacity-70"
+                      >
+                        <option value="">{varias ? "Vários" : "—"}</option>
+                        {indices
+                          .filter((i) => i.chave !== primeiro)
+                          .map((i) => (
+                            <option key={i.chave} value={i.chave}>
+                              {rotuloDoIndice(i, dados.meses)}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <span className="text-gray-400" title={/^(PS|P|S)\./.test(l.codigo) ? "Os volumes não se reajustam" : "Sem contas para reajustar"}>
+                        —
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
+      />
       {confirmando ? (
         <ConfirmacaoDialog
           titulo={aplicar ? "Aplicar Reajustes" : "Remover Reajustes"}
@@ -661,6 +653,6 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
           <Erro erro={alternar.isError ? mensagemDeErro(alternar.error, aplicar ? "Não foi possível aplicar os reajustes." : "Não foi possível remover os reajustes.") : null} />
         </ConfirmacaoDialog>
       ) : null}
-    </section>
+    </>
   );
 }

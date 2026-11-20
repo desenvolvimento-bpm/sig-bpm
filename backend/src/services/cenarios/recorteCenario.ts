@@ -71,7 +71,8 @@ export const veDepartamentos = (r: Recorte | null, ds: Departamento[]) => !r || 
 /** O grupo de centros está no recorte: o do departamento do Gestor, ou o com algum centro do Coordenador. */
 export function veGrupo(r: Recorte | null, g: Pick<GrupoDoCenario, "grupoDRE" | "centros">) {
   if (!r) return true;
-  if (r.centros) return g.centros.some((x) => r.centros!.has(x.id));
+  // O recorte por centro guarda os centros dos Cadastros Gerais: no cenário, o de origem da cópia (20/11/2026).
+  if (r.centros) return g.centros.some((x) => r.centros!.has(x.origemId ?? x.id));
   const d = departamentoDoGrupoDRE(g.grupoDRE);
   return !!d && r.departamentos.has(d);
 }
@@ -100,10 +101,13 @@ export const departamentosDoInvestimento = (i: { unidade: number; departamento: 
 /** Os departamentos que podem ser o de um investimento de Despesas e Extra (os do patrimônio). */
 export const DEPARTAMENTOS_DO_PATRIMONIO: DepartamentoAcesso[] = ["LOGISTICA", "TECNICO", "COMERCIAL", "ADMINISTRATIVO", "EXTRA_OPERACIONAL"];
 
-/** O centro de custo (de uma linha do Quadro de Lotação) no recorte: o do Coordenador, ou o de um grupo do departamento do Gestor. */
-export function veCentro(r: Recorte | null, centroId: string, grupo: Pick<GrupoDoCenario, "grupoDRE" | "centros"> | null | undefined) {
+/**
+ * O centro de custo (de uma linha do Quadro de Lotação) no recorte: o do Coordenador, ou o de um grupo do departamento do Gestor.
+ * `origemId`: o centro dos Cadastros Gerais de que a cópia do cenário veio (20/11/2026; o recorte guarda os dos Cadastros Gerais).
+ */
+export function veCentro(r: Recorte | null, origemId: string | null, grupo: Pick<GrupoDoCenario, "grupoDRE" | "centros"> | null | undefined) {
   if (!r) return true;
-  if (r.centros) return r.centros.has(centroId);
+  if (r.centros) return !!origemId && r.centros.has(origemId);
   return !!grupo && veGrupo(r, grupo);
 }
 

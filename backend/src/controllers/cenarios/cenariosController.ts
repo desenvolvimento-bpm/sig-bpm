@@ -76,7 +76,7 @@ async function enviarArquivo(request: Request, response: Response, gerar: () => 
     response.setHeader("Content-Disposition", `attachment; filename="${r.nomeArquivo.normalize("NFD").replace(/[^ -~]/g, "")}"; filename*=UTF-8''${encodeURIComponent(r.nomeArquivo)}`);
     return response.send(Buffer.from(r.conteudo));
   } catch (error) {
-    if (error instanceof CenarioError) return response.status(error.status).json({ error: error.message });
+    if (error instanceof CenarioError) return response.status(error.status).json({ error: error.message, ...(error.detalhes ?? {}) });
     throw error;
   }
 }
@@ -85,7 +85,7 @@ async function responder(response: Response, fn: () => Promise<unknown>, status 
   try {
     return response.status(status).json({ data: await fn() });
   } catch (error) {
-    if (error instanceof CenarioError) return response.status(error.status).json({ error: error.message });
+    if (error instanceof CenarioError) return response.status(error.status).json({ error: error.message, ...(error.detalhes ?? {}) });
     throw error;
   }
 }
@@ -707,6 +707,157 @@ export const cenariosController = {
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Índices inválidos." });
     return responder(response, () => cenariosService.gravarIndices(c, corpo.data.indices, usuario(request)));
+  },
+
+  // Cadastros por cenário (20/11/2026, etapa 1): as abas Unidades e Centros de Custo das Configurações dos analíticos.
+  /** A cópia das unidades do cenário. */
+  unidadesDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.unidadesDoCenario(c, usuario(request))) : undefined;
+  },
+
+  /** Grava uma unidade da cópia: { nome, ordem, ativo }. */
+  gravarUnidadeDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const unidade = idSchema.safeParse(request.params.unidadeId);
+    const corpo = z.object({ nome: z.string().trim().min(1).max(120), ordem: z.number().int().min(0).max(9999), ativo: z.boolean() }).safeParse(request.body);
+    if (!unidade.success || !corpo.success) return response.status(400).json({ error: "Dados da unidade inválidos." });
+    return responder(response, () => cenariosService.gravarUnidadeDoCenario(c, unidade.data, corpo.data, usuario(request)));
+  },
+
+  /** A cópia dos centros de custo do cenário, com os grupos e as opções. */
+  centrosDoCadastroDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.centrosDoCadastroDoCenario(c, usuario(request))) : undefined;
+  },
+
+  /** Inclui (POST) ou altera (PUT /:centroId) um centro da cópia; `confirmar`: o grupo que fica sem centros perde os valores. */
+  gravarCentroDoCadastroDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const centro = request.params.centroId === undefined ? null : idSchema.safeParse(request.params.centroId);
+    const texto = z.string().trim().max(200).nullable();
+    const corpo = z
+      .object({
+        codigoRM: texto,
+        coligada: z.number().int().min(0).max(9999).nullable(),
+        nomeRM: z.string().trim().min(1).max(200),
+        nomeControladoria: texto,
+        departamento: texto,
+        atribuicao: z.enum(["DIRETA", "INDIRETA"]).nullable(),
+        balde: z.string().max(40).nullable(),
+        unidadeNegocioId: idSchema.nullable(),
+        ativo: z.boolean(),
+        confirmar: z.boolean().optional(),
+      })
+      .safeParse(request.body);
+    if ((centro && !centro.success) || !corpo.success) return response.status(400).json({ error: corpo.success ? "Centro de custo inválido." : (corpo.error.issues[0]?.message ?? "Dados do centro inválidos.") });
+    const { confirmar, ...dados } = corpo.data;
+    return responder(response, () => cenariosService.gravarCentroDoCadastroDoCenario(c, centro ? centro.data! : null, dados, !!confirmar, usuario(request)));
+  },
+
+  /** Exclui um centro da cópia (?confirmar=1: o grupo que fica sem centros perde os valores). */
+  excluirCentroDoCadastroDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const centro = idSchema.safeParse(request.params.centroId);
+    if (!centro.success) return response.status(400).json({ error: "Centro de custo inválido." });
+    return responder(response, () => cenariosService.excluirCentroDoCadastroDoCenario(c, centro.data, request.query.confirmar === "1", usuario(request)));
+  },
+
+  /** Renomeia um grupo da cópia: { de, para }; os valores vão junto. */
+  renomearGrupoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ de: z.string().min(1).max(200), para: z.string().trim().min(1).max(200) }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Dê o nome novo do grupo." });
+    return responder(response, () => cenariosService.renomearGrupoDoCenario(c, corpo.data.de, corpo.data.para, usuario(request)));
+  },
+
+  /** Trazer Novos dos Cadastros Gerais: as unidades e os centros que surgiram depois da cópia. */
+  trazerNovosDosCadastrosDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.trazerNovosDosCadastrosDoCenario(c, usuario(request))) : undefined;
+  },
+
+  // Cadastros por cenário (20/11/2026, etapa 2): as abas Departamentos e Redistribuições de Gastos das Configurações.
+  /** A cópia dos departamentos do cenário, com as opções. */
+  departamentosDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.departamentosDoCenario(c, usuario(request))) : undefined;
+  },
+
+  /** Inclui (POST) ou altera (PUT /:departamentoId) um departamento da cópia: { unidadeNegocioId, nome, gruposDRE, ordem, ativo }. */
+  gravarDepartamentoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const departamento = request.params.departamentoId === undefined ? null : idSchema.safeParse(request.params.departamentoId);
+    const corpo = z
+      .object({
+        unidadeNegocioId: idSchema,
+        nome: z.string().trim().min(1).max(120),
+        gruposDRE: z.array(z.string().min(1).max(20)).max(30),
+        ordem: z.number().int().min(0).max(9999).nullable(),
+        ativo: z.boolean(),
+      })
+      .safeParse(request.body);
+    if ((departamento && !departamento.success) || !corpo.success) return response.status(400).json({ error: "Dados do departamento inválidos." });
+    return responder(response, () => cenariosService.gravarDepartamentoDoCenario(c, departamento ? departamento.data! : null, corpo.data, usuario(request)));
+  },
+
+  /** Exclui um departamento da cópia. */
+  excluirDepartamentoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const departamento = idSchema.safeParse(request.params.departamentoId);
+    if (!departamento.success) return response.status(400).json({ error: "Departamento inválido." });
+    return responder(response, () => cenariosService.excluirDepartamentoDoCenario(c, departamento.data, usuario(request)));
+  },
+
+  /** A cópia das redistribuições de gastos do cenário, com as listas do modal. */
+  redistribuicoesDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.redistribuicoesDoCenario(c, usuario(request))) : undefined;
+  },
+
+  /** Os fornecedores da combinação do modal: ?linhaDREId=&departamentoId= (o departamento da cópia, ou todos). */
+  fornecedoresDaRedistribuicaoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const q = z.object({ linhaDREId: z.string().min(1), departamentoId: z.string().optional() }).safeParse(request.query);
+    if (!q.success) return response.status(400).json({ error: "Escolha a Conta da DRE." });
+    return responder(response, () => cenariosService.fornecedoresDaRedistribuicaoDoCenario(c, q.data.departamentoId || null, q.data.linhaDREId, usuario(request)));
+  },
+
+  /** Inclui (POST) ou altera (PUT /:redistribuicaoId) uma redistribuição da cópia (os campos do modal do cadastro). */
+  gravarRedistribuicaoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const redistribuicao = request.params.redistribuicaoId === undefined ? null : idSchema.safeParse(request.params.redistribuicaoId);
+    const corpo = z
+      .object({
+        departamentoId: z.string().min(1).nullable(),
+        linhaDREId: z.string().min(1),
+        fornecedores: z.array(z.string().max(300)).max(2000),
+        destinos: z.array(z.object({ centroCustoId: z.string().min(1), percentual: z.number() })).max(200),
+        vigenciaInicio: z.string().min(1),
+        vigenciaFim: z.string().min(1).nullable(),
+        descricao: z.string().max(500).nullable(),
+        ativo: z.boolean(),
+      })
+      .safeParse(request.body);
+    if ((redistribuicao && !redistribuicao.success) || !corpo.success) return response.status(400).json({ error: "Dados da redistribuição inválidos." });
+    return responder(response, () => cenariosService.gravarRedistribuicaoDoCenario(c, redistribuicao ? redistribuicao.data! : null, corpo.data, usuario(request)));
+  },
+
+  /** Exclui uma redistribuição da cópia. */
+  excluirRedistribuicaoDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const redistribuicao = idSchema.safeParse(request.params.redistribuicaoId);
+    if (!redistribuicao.success) return response.status(400).json({ error: "Redistribuição inválida." });
+    return responder(response, () => cenariosService.excluirRedistribuicaoDoCenario(c, redistribuicao.data, usuario(request)));
   },
 
   /** A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes. */

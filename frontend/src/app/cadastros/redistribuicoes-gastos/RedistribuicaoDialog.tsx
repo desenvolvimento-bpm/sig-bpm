@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +21,7 @@ import { lerNumero } from "@/app/cenarios/components/EdicaoDialogs";
 import { mensagemDeErro } from "../services/edicaoService";
 import {
   redistribuicoesService as servico,
+  type DadosDaRedistribuicao,
   type EfeitoDaRedistribuicao,
   type FornecedorDaCombinacao,
   type OpcoesDaRedistribuicao,
@@ -40,6 +41,40 @@ export function textoDoEfeito(e: EfeitoDaRedistribuicao) {
 }
 
 type LinhaDoFornecedor = FornecedorDaCombinacao & { marcado: boolean };
+
+/** O registro que o modal edita (o do cadastro ou o da cópia de um cenário). */
+export type RegistroDaRedistribuicao = Omit<Redistribuicao, "competencias" | "departamento">;
+
+/**
+ * De onde o modal lê e onde grava (20/11/2026: o cadastro, ou a cópia de um cenário analítico — as Redistribuições de Gastos das
+ * Configurações): os fornecedores da combinação, a gravação e a exclusão (com o texto do efeito para o aviso), o que atualizar
+ * depois e os textos do modal.
+ */
+export type ServicoDaRedistribuicao = {
+  chave: readonly unknown[];
+  fornecedores: (departamentoId: string | null, linhaDREId: string) => Promise<FornecedorDaCombinacao[]>;
+  gravar: (id: string | null, d: DadosDaRedistribuicao) => Promise<string>;
+  excluir: (id: string) => Promise<string>;
+  aoConcluir: (queryClient: QueryClient) => void;
+  descricao: string;
+  descricaoDaExclusao: (conta: string) => string;
+};
+
+/** O cadastro (Cadastros Gerais / Redistribuições de Gastos): grava e reclassifica as competências ainda não apuradas. */
+const DO_CADASTRO: ServicoDaRedistribuicao = {
+  chave: ["cadastros", "redistribuicoes", "fornecedores"],
+  fornecedores: servico.fornecedores,
+  gravar: async (id, d) => textoDoEfeito(await servico.gravar(id, d)),
+  excluir: async (id) => textoDoEfeito(await servico.excluir(id)),
+  aoConcluir: (queryClient) => {
+    queryClient.invalidateQueries({ queryKey: ["cadastros", "redistribuicoes"] });
+    atualizarCompetencia(queryClient);
+  },
+  descricao:
+    "Os movimentos dos fornecedores marcados, na Conta da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência. Movimentos redistribuídos não podem ser contestados.",
+  descricaoDaExclusao: (conta) =>
+    `A redistribuição de ${conta} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`,
+};
 const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
   { chave: "marcar", rotulo: "", semFiltro: true, classe: "w-10" },
   { chave: "fornecedor", rotulo: "Fornecedor", valor: (f) => f.fornecedor },
@@ -53,7 +88,19 @@ const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
  * fornecedores com movimentos na combinação (de competências fechadas ou abertas; a tabela com os filtros nos rótulos e a
  * caixa de cada um e a de todos), os centros de Redistribuir Para com o percentual de cada um (somando 100%) e a vigência.
  */
-export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { registro: Redistribuicao | null; opcoes: OpcoesDaRedistribuicao; pode: boolean; onFechar: () => void }) {
+export function RedistribuicaoDialog({
+  registro,
+  opcoes,
+  pode,
+  onFechar,
+  fonte = DO_CADASTRO,
+}: {
+  registro: RegistroDaRedistribuicao | null;
+  opcoes: OpcoesDaRedistribuicao;
+  pode: boolean;
+  onFechar: () => void;
+  fonte?: ServicoDaRedistribuicao;
+}) {
   const queryClient = useQueryClient();
   const [departamentoId, setDepartamentoId] = useState(registro?.departamentoId ?? "");
   const [linhaDREId, setLinhaDREId] = useState(registro?.linhaDREId ?? "");
@@ -77,8 +124,8 @@ export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { reg
 
   // Os fornecedores com movimentos na combinação; numa edição, também os marcados que hoje não têm movimentos.
   const fornecedores = useQuery({
-    queryKey: ["cadastros", "redistribuicoes", "fornecedores", departamentoId, linhaDREId],
-    queryFn: () => servico.fornecedores(departamentoId || null, linhaDREId),
+    queryKey: [...fonte.chave, departamentoId, linhaDREId],
+    queryFn: () => fonte.fornecedores(departamentoId || null, linhaDREId),
     enabled: !!linhaDREId,
   });
   const linhas = useMemo<LinhaDoFornecedor[] | undefined>(() => {
@@ -121,15 +168,14 @@ export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { reg
   const vigenciaCerta = !!inicio && (!fim || fim >= inicio);
   const pronto = pode && !!linhaDREId && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
 
-  const concluir = (msg: string, e: EfeitoDaRedistribuicao) => {
-    queryClient.invalidateQueries({ queryKey: ["cadastros", "redistribuicoes"] });
-    atualizarCompetencia(queryClient);
-    toast.success([msg, textoDoEfeito(e)].filter(Boolean).join(" "));
+  const concluir = (msg: string, efeito: string) => {
+    fonte.aoConcluir(queryClient);
+    toast.success([msg, efeito].filter(Boolean).join(" "));
     onFechar();
   };
   const gravar = useMutation({
     mutationFn: () =>
-      servico.gravar(registro?.id ?? null, {
+      fonte.gravar(registro?.id ?? null, {
         departamentoId: departamentoId || null,
         linhaDREId,
         fornecedores: marcadosNaLista.map((f) => nomes.get(chave(f.fornecedor)) ?? f.fornecedor),
@@ -141,7 +187,7 @@ export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { reg
       }),
     onSuccess: (e) => concluir(registro ? "Redistribuição gravada." : "Redistribuição criada.", e),
   });
-  const apagar = useMutation({ mutationFn: () => servico.excluir(registro!.id), onSuccess: (e) => concluir("Redistribuição excluída.", e) });
+  const apagar = useMutation({ mutationFn: () => fonte.excluir(registro!.id), onSuccess: (e) => concluir("Redistribuição excluída.", e) });
   const erro = gravar.isError ? mensagemDeErro(gravar.error, "Não foi possível gravar.") : apagar.isError ? mensagemDeErro(apagar.error, "Não foi possível excluir.") : null;
 
   return (
@@ -149,10 +195,7 @@ export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { reg
       <DialogContent avisoAoSair className="rounded-sm sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Redistribuição de Gastos</DialogTitle>
-          <DialogDescription>
-            Os movimentos dos fornecedores marcados, na Conta da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir
-            Para, pelos percentuais, nas competências da vigência. Movimentos redistribuídos não podem ser contestados.
-          </DialogDescription>
+          <DialogDescription>{fonte.descricao}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -346,7 +389,7 @@ export function RedistribuicaoDialog({ registro, opcoes, pode, onFechar }: { reg
         {excluindo && registro ? (
           <ConfirmacaoDialog
             titulo="Excluir a Redistribuição"
-            descricao={`A redistribuição de ${registro.conta.rotulo} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`}
+            descricao={fonte.descricaoDaExclusao(registro.conta.rotulo)}
             pendente={apagar.isPending}
             onConfirmar={() => apagar.mutate(undefined, { onSettled: () => setExcluindo(false) })}
             onFechar={() => setExcluindo(false)}

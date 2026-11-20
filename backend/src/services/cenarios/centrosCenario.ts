@@ -1,4 +1,5 @@
 import { getPrismaClient } from "../../config/prisma.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 
 /**
@@ -44,7 +45,7 @@ const GRUPO_DO_DEPARTAMENTO: Record<string, string> = {
  * departamento Custos de Produção) ficam.
  */
 const FORA = new Set(["ALMOXARIFADO", "REQUISIÇÃO", "INVESTIMENTO"]);
-const foraDoCenario = (c: { departamento: string | null; codigoRM: string | null }) =>
+export const foraDoCenario = (c: { departamento: string | null; codigoRM: string | null }) =>
   FORA.has((c.departamento ?? "").trim().toUpperCase()) || /^1.9[67](.|$)/.test(c.codigoRM ?? "");
 const DESPESAS = new Set(["DL", "DT", "DC", "DA"]);
 
@@ -54,7 +55,11 @@ export const nomeDoGrupo = (c: { nomeControladoria: string | null; nomeRM: strin
 export type GrupoDoCenario = {
   /** O nome do grupo (o nome da Controladoria; sem ele, o nome do centro). */
   grupo: string;
-  centros: Array<{ id: string; codigo: string | null; nome: string; balde: string | null }>;
+  /**
+   * Os centros do grupo: `id`, o do centro (nos cenários, o da cópia do cenário: 20/11/2026); `origemId`, o dos Cadastros Gerais
+   * de que veio (o realizado chega por ele; nulo no centro incluído só no cenário).
+   */
+  centros: Array<{ id: string; origemId: string | null; codigo: string | null; nome: string; balde: string | null }>;
   /** O balde do grupo: o mais comum entre os centros dele. */
   balde: string | null;
   /** Os baldes diferentes dos centros (mais de um: o aviso na tela). */
@@ -77,36 +82,67 @@ const maisComum = <T>(xs: T[]) => {
   return [...n].sort((a, b) => b[1] - a[1])[0]?.[0];
 };
 
-/** Os grupos de centros de custo ativos (sem os de estoque e de investimento), com o balde e o destino. */
+/** Um centro de custo para os grupos: o dos Cadastros Gerais ou o da cópia de um cenário (com o centro de origem). */
+type CentroDoGrupo = {
+  id: string;
+  origemId: string | null;
+  codigoRM: string | null;
+  nomeRM: string;
+  nomeControladoria: string | null;
+  departamento: string | null;
+  atribuicao: "DIRETA" | "INDIRETA" | null;
+  balde: string | null;
+};
+// Os vazios primeiro, como no SQLite (23/10/2026): o desempate do maisComum é a posição, e decide o balde do grupo.
+const ORDEM_DOS_CENTROS = [{ nomeControladoria: { sort: "asc", nulls: "first" } }, { codigoRM: { sort: "asc", nulls: "first" } }, { criadoEm: "asc" }, { id: "asc" }] as const;
+
+/** Quantos lançamentos cada centro dos Cadastros Gerais tem em cada filial (a unidade do balde UNIDADE). */
+async function lancamentosPorFilial(db: Pick<Prisma.TransactionClient, "lancamentoContabil" | "lancamentoRedistribuido">) {
+  const [diretos, partes] = await Promise.all([
+    db.lancamentoContabil.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true }, where: { centroCustoId: { not: null }, redistribuicaoId: null } }),
+    // Os redistribuídos (13/11/2026) contam nos centros dos destinos.
+    db.lancamentoRedistribuido.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true } }),
+  ]);
+  return [...diretos, ...partes].map((f) => ({ centroCustoId: f.centroCustoId!, filial: f.filial, n: f._count._all }));
+}
+
+/** Os grupos de centros de custo ativos dos Cadastros Gerais (sem os de estoque e de investimento), com o balde e o destino. */
 export async function gruposDoCadastro(): Promise<GrupoDoCenario[]> {
   const prisma = getPrismaClient();
-  const [centros, diretos, partes] = await Promise.all([
-    // Os vazios primeiro, como no SQLite (23/10/2026): o desempate do maisComum é a posição, e decide o balde do grupo.
-    prisma.centroCusto.findMany({
-      where: { ativo: true },
-      orderBy: [{ nomeControladoria: { sort: "asc", nulls: "first" } }, { codigoRM: { sort: "asc", nulls: "first" } }, { criadoEm: "asc" }, { id: "asc" }],
-    }),
-    prisma.lancamentoContabil.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true }, where: { centroCustoId: { not: null }, redistribuicaoId: null } }),
-    // Os redistribuídos (13/11/2026) contam nos centros dos destinos.
-    prisma.lancamentoRedistribuido.groupBy({ by: ["centroCustoId", "filial"], _count: { _all: true } }),
-  ]);
-  const filiais = [...diretos, ...partes];
-  const porGrupo = new Map<string, typeof centros>();
+  const [centros, filiais] = await Promise.all([prisma.centroCusto.findMany({ where: { ativo: true }, orderBy: [...ORDEM_DOS_CENTROS] }), lancamentosPorFilial(prisma)]);
+  return montarGrupos(
+    centros.map((c) => ({ ...c, origemId: c.id })),
+    filiais,
+  );
+}
+
+/**
+ * Os grupos de centros de custo de um cenário analítico (20/11/2026, Cadastros por cenário): os da cópia dele (a aba Centros de
+ * Custo das Configurações), ativos e sem os de estoque e de investimento. A unidade do balde UNIDADE sai dos lançamentos dos
+ * centros de origem (o centro só do cenário não tem lançamentos).
+ */
+export async function gruposDoCenario(cenarioId: string, db: Pick<Prisma.TransactionClient, "cenarioCentroCusto" | "lancamentoContabil" | "lancamentoRedistribuido"> = getPrismaClient()): Promise<GrupoDoCenario[]> {
+  const [centros, filiais] = await Promise.all([db.cenarioCentroCusto.findMany({ where: { cenarioId, ativo: true }, orderBy: [...ORDEM_DOS_CENTROS] }), lancamentosPorFilial(db)]);
+  return montarGrupos(centros, filiais);
+}
+
+function montarGrupos(centros: CentroDoGrupo[], filiais: Array<{ centroCustoId: string; filial: number; n: number }>): GrupoDoCenario[] {
+  const porGrupo = new Map<string, CentroDoGrupo[]>();
   for (const c of centros) {
     if (foraDoCenario(c)) continue;
     const g = nomeDoGrupo(c);
     porGrupo.set(g, [...(porGrupo.get(g) ?? []), c]);
   }
   return [...porGrupo].map(([grupo, cs]): GrupoDoCenario => {
-    const ids = new Set(cs.map((c) => c.id));
+    const origens = new Set(cs.flatMap((c) => (c.origemId ? [c.origemId] : [])));
     const lancamentos = new Map<number, number>();
-    for (const f of filiais) if (ids.has(f.centroCustoId!)) lancamentos.set(f.filial, (lancamentos.get(f.filial) ?? 0) + f._count._all);
+    for (const f of filiais) if (origens.has(f.centroCustoId)) lancamentos.set(f.filial, (lancamentos.get(f.filial) ?? 0) + f.n);
     const unidade = (lancamentos.get(2) ?? 0) > (lancamentos.get(1) ?? 0) ? 2 : 1;
     const balde = maisComum(cs.map((c) => c.balde)) ?? null;
     const grupoDRE = maisComum(cs.map((c) => GRUPO_DO_DEPARTAMENTO[(c.departamento ?? "").trim().toUpperCase()] ?? "CPP")) ?? "CPP";
     return {
       grupo,
-      centros: cs.map((c) => ({ id: c.id, codigo: c.codigoRM, nome: c.nomeRM ?? c.nomeControladoria ?? c.codigoRM ?? "Centro", balde: c.balde })),
+      centros: cs.map((c) => ({ id: c.id, origemId: c.origemId, codigo: c.codigoRM, nome: c.nomeRM ?? c.nomeControladoria ?? c.codigoRM ?? "Centro", balde: c.balde })),
       balde,
       baldes: [...new Set(cs.map((c) => c.balde ?? "—"))],
       grupoDRE,
