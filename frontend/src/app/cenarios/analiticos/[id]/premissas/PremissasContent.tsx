@@ -132,7 +132,7 @@ export function PremissasContent() {
               mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
               linha não está na referência). Os salários não têm referência.
               {podeEditar
-                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários da linha a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. O menu Ações de cada linha edita os cadastros ou a exclui."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários da linha a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. Clicar na Unidade, no Tipo, na Função ou no Centro de Custo de uma linha abre o modal Editar Linha do Quadro de Lotação, com os cadastros dela; o menu Ações de cada linha também a edita, ou a exclui."
                 : null}{" "}
               O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
               Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (a soma do Salário Total das linhas, sem multiplicar pelos colaboradores) e as Remunerações, que não se digitam ali:
@@ -248,7 +248,9 @@ export function PremissasContent() {
             <li>
               “Importar Valores” abre a lista dos arquivos: escolha planilhas do Exportar Premissas (ou o ZIP) ou uma pasta com elas. Cada arquivo é
               conferido no padrão (as descrições, a Média de Referência, os doze meses e a Justificativa; cada linha se acha pelas descrições) e recebe
-              a Situação Válido ou Inválido (o motivo fica abaixo do nome). A tabela mostra o que cada arquivo válido sobrescreve: em Produção e
+              a Situação Válido ou Inválido (o motivo fica abaixo do nome). É Inválido também o arquivo com uma aba do Exportar (o título
+              “Premissas · …”) de colunas mudadas — uma coluna apagada, por exemplo — e o que não muda nada no cenário (Nada a importar);
+              uma aba que não é do Exportar fica de fora, com um aviso. A tabela mostra o que cada arquivo válido sobrescreve: em Produção e
               Serviços, as linhas (Estrutura, Alveolares, Montagem…) das abas Matriz, Filial e Serviços, uma abaixo da outra; em
               Centros de Custo, os centros de custo com valores, justificativas ou linhas do Quadro de Lotação que mudam; em Investimentos (a lista
               e a Depreciação Base), Extra-Operacional e Indicadores Manuais, Sobrescrever. Cada item vem com a caixa marcada: desmarcada, ele
@@ -318,7 +320,8 @@ export function PremissasContent() {
               expedição — a da Expedição Diária, ou a produção quando ela não foi digitada —, a metalurgia consumida pelas linhas da unidade e a montagem), e os totais e o Consolidado saem da Estrutura da DRE.
             </p>
             <p>
-              Em Serviços, as linhas de Montagem e Vedação levam à receita de montagem e aos custos da CSM; as demais, à receita complementar e à CSC. A
+              Em Serviços, as linhas de Montagem e Vedação levam à receita de montagem e aos custos da CSM; as demais, à receita complementar (a Fundação, também à
+              receita de frete) e à CSC. A
               Média de Referência é a média realizada da referência do cenário (Configurações / Referência / Resultado Realizado): o total do período ÷ o
               volume da linha — o m³ produzido, o m³ montado na Montagem e o kg na Metálica; as linhas de Serviços sem volume nas
               listas têm os valores por dia útil e a demanda diária sem Média de Referência (—), para os botões de replicar não a levarem: digite a

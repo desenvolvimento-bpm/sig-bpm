@@ -29,6 +29,7 @@ import {
   departamentosDaUnidade,
   departamentosDoGrupoDoIndicador,
   lerArquivoDePremissas,
+  nadaAImportar,
   chaveDaDescricao,
   quadroDoArquivo,
   NOME_DA_ABA,
@@ -3765,6 +3766,23 @@ export const cenariosService = {
         );
       }
       const semLinhas = r.linhas.length > 0 && r.linhas.length === desconhecidas.length && !r.investimentos.length && !r.comInvestimentos && !r.quadro.length && !r.substituiQuadro;
+      // Nada a importar (20/11/2026, pedido do Adão): o arquivo sem erros que não muda nada no cenário fica Inválido, com o
+      // motivo — antes, Válido e o Importar sem nada a gravar.
+      if (
+        !r.erros.length &&
+        !semLinhas &&
+        nadaAImportar({
+          alteracoes: alteracoes.size,
+          justificativas: justificativas.size,
+          investimentos: { novos: novos.length, alterados: alterados.length, excluidos: excluidos.length },
+          quadro: { novas: novasDoQuadro.length, alteradas: alteradasDoQuadro.length, excluidas: excluidasDoQuadro.length },
+        })
+      )
+        r.erros.push(
+          `Nada a importar: o arquivo não muda nenhum valor, justificativa, investimento nem linha do Quadro de Lotação do cenário (${
+            avisos.length ? "os valores dele são iguais aos do cenário, ou estão nas abas e linhas ignoradas dos avisos abaixo" : "os valores dele são iguais aos do cenário"
+          }).`,
+        );
       return {
         arquivo: r.arquivo,
         valido: r.erros.length === 0 && (r.linhas.length > desconhecidas.length || r.investimentos.length > 0 || r.comInvestimentos || r.quadro.length > 0 || r.substituiQuadro !== null),

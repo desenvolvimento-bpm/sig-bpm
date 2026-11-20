@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type { LinhaPlanilha, ValorCelula } from "../src/lib/xlsx.js";
 import { limiteDaLinha, mesesAcima, totaisDaDRE } from "../src/services/cenarios/comparativoCenario.js";
-import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, chaveDaDescricao, lerArquivoDePremissas, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
+import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, chaveDaDescricao, lerArquivoDePremissas, nadaAImportar, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
 import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
 import { classificar } from "../src/services/cenarios/indicadoresDoCenario.js";
 import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leituraCenario.js";
@@ -189,6 +189,26 @@ describe("comparativo entre cenários", () => {
     const [daAntiga] = lerArquivoDePremissas("a.xlsx", gerarXlsx([antiga]));
     assert.deepEqual([daAntiga.erros, daAntiga.linhas[0].chave, daAntiga.linhas[0].meses[0]], [[], "P|2|GLOBAL|DEMANDA:X", 10]);
     assert.match(lerArquivoDePremissas("x.xlsx", gerarXlsx([{ nome: "Outra", larguras: [10], linhas: [[{ valor: "a" }]] }]))[0].erros[0], /não está no padrão/);
+  });
+
+  it("uma aba do Exportar com uma coluna apagada recusa o arquivo (20/11/2026); um arquivo sem nada a mudar não é válido", () => {
+    const meses = Array.from({ length: 12 }, (_, k) => `M${k + 1}`);
+    const extra: LinhaDaPlanilha = { aba: "extra", chave: "X|4|DFC.DESPESAS_BANCARIAS", descricao: ["Despesas e Extra", "DFC", "Despesas Bancárias"], und: "R$", conta: null, limite: null, media: 100, meses: Array(12).fill(2300), justificativa: null };
+    const centro: LinhaDaPlanilha = { aba: "centros", chave: "C|X|Y", descricao: ["X", "Mão de Obra Direta", "Remunerações CLT"], und: "R$", conta: null, limite: null, media: 1, meses: Array(12).fill(1), justificativa: null };
+    const aba = abaDaPlanilha("Extra-Operacional", "extra", [extra], meses, "teste");
+    // A coluna Und. (a quarta: depois de Unidade, Seção e Conta) apagada, como no arquivo de 16/11/2026.
+    for (const l of aba.linhas) if (l.length > 3) l.splice(3, 1);
+    const [lido] = lerArquivoDePremissas("e.xlsx", gerarXlsx([aba, abaDaPlanilha("Centros de Custo", "centros", [centro], meses, "teste")]));
+    assert.equal(lido.erros.length, 1);
+    assert.match(lido.erros[0], /A aba Extra-Operacional é do Exportar Premissas .* falta a coluna “Und\.”/);
+    // Uma aba de fora do Exportar (sem o título "Premissas · …") segue ignorada, com aviso.
+    const [outra] = lerArquivoDePremissas("o.xlsx", gerarXlsx([{ nome: "Notas", larguras: [10], linhas: [[{ valor: "Minhas contas" }]] }, abaDaPlanilha("Centros de Custo", "centros", [centro], meses, "teste")]));
+    assert.deepEqual([outra.erros, outra.avisos.length], [[], 1]);
+    const vazio = { alteracoes: 0, justificativas: 0, investimentos: { novos: 0, alterados: 0, excluidos: 0 }, quadro: { novas: 0, alteradas: 0, excluidas: 0 } };
+    assert.equal(nadaAImportar(vazio), true);
+    assert.equal(nadaAImportar({ ...vazio, alteracoes: 3 }), false);
+    assert.equal(nadaAImportar({ ...vazio, investimentos: { novos: 0, alterados: 0, excluidos: 1 } }), false);
+    assert.equal(nadaAImportar({ ...vazio, quadro: { novas: 0, alteradas: 0, excluidas: 2 } }), false);
   });
   it("os meses da referência (11/11/2026): doze colunas antes da Média de Referência, que não se importam; as fórmulas acompanham", () => {
     const meses = Array.from({ length: 12 }, (_, k) => `M${k + 1}`);
@@ -390,6 +410,38 @@ describe("premissas dos cenários analíticos (13/10/2026)", () => {
     // Só nas linhas que levam armadura e metalurgia: a Vedação não leva.
     const ved = linhasDaTabela(EST, [{ codigo: "VEDAÇÃO", nome: "Vedação", unidade: 3, medida: "m" }], 3).map((l) => l.chave);
     assert.ok(!ved.includes("ARMADURA:VEDAÇÃO") && !ved.includes("METALURGIA:VEDAÇÃO"));
+  });
+
+  it("a Fundação (20/11/2026): a receita complementar e a de frete (a líquida de frete pelos impostos), com o Frete e Descarga; as outras complementares, sem a de frete", () => {
+    // O Frete e Descarga também em Serviços (como na Estrutura da DRE desde 24/10/2026).
+    const est = [
+      ...EST.map((x) => (x.codigo === "DVV.GGV.FRETE_E_DESCARGA" ? item(x.codigo, [1, 2, 3]) : x)),
+      item("ROB.RBC.RECEITA_BRUTA_COMPLEMENTAR", [3]),
+      item("CSC.MP.CONCRETO_E_GRAUTE", [3]),
+    ];
+    const FUNDACAO = { codigo: "FUNDAÇÃO", nome: "Fundação", unidade: 3 as const, medida: "m³" };
+    const CAPEAMENTO = { codigo: "CAPEAMENTO", nome: "Capeamento", unidade: 3 as const, medida: "m²" };
+    const linhas = linhasDaTabela(est, [FUNDACAO, CAPEAMENTO], 3);
+    const chaves = linhas.map((l) => l.chave);
+    for (const c of ["RB:FUNDAÇÃO:ROB.RBC.RECEITA_BRUTA_COMPLEMENTAR", "RB:FUNDAÇÃO:ROB.RBF.RECEITA_BRUTA_DE_FRETE", "CUSTO:FUNDAÇÃO:DVV.GGV.FRETE_E_DESCARGA"])
+      assert.ok(chaves.includes(c), c);
+    assert.ok(!chaves.includes("RB:CAPEAMENTO:ROB.RBF.RECEITA_BRUTA_DE_FRETE"));
+    assert.equal(linhas.find((l) => l.chave === "RB:FUNDAÇÃO:ROB.RBF.RECEITA_BRUTA_DE_FRETE")!.und, "R$/m³");
+    // 10 m³/dia × 2 dias = 20 m³: frete 100 R$/m³ → 2.000 de bruta e 1.800 de líquida (10% de impostos).
+    const p: Record<string, number> = {
+      DIAS_UTEIS: 2,
+      "DEMANDA:FUNDAÇÃO": 10,
+      "RB:FUNDAÇÃO:ROB.RBC.RECEITA_BRUTA_COMPLEMENTAR": 1000,
+      "RB:FUNDAÇÃO:ROB.RBF.RECEITA_BRUTA_DE_FRETE": 100,
+      "IMPOSTOS:FUNDAÇÃO": 10,
+      "CUSTO:FUNDAÇÃO:DVV.GGV.FRETE_E_DESCARGA": 50,
+    };
+    const t = calcularTabela(est, [FUNDACAO], 3, 2027, (chave, mes) => (mes === 0 ? undefined : p[chave]));
+    assert.equal(t.dre.get("ROB.RBF.RECEITA_BRUTA_DE_FRETE")![0], 2000);
+    assert.equal(t.dre.get("ROL.RLF.RECEITA_LIQUIDA_DE_FRETE")![0], 1800);
+    assert.equal(t.dre.get("ROB.RBC.RECEITA_BRUTA_COMPLEMENTAR")![0], 20000);
+    assert.equal(t.dre.get("DVV.GGV.FRETE_E_DESCARGA")![0], 1000);
+    assert.equal(t.valores.get("RESULTADO:ROB")![0], 22000);
   });
 
   it("calcula: pistas × dias, × m³ por pista; a líquida × (1 − impostos); os ajustes gravados antes de 15/10/2026 não entram", () => {

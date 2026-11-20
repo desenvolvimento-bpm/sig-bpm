@@ -844,6 +844,36 @@ function tipoDaAba(descricoes: string[], titulo: string, nome: string): AbaDasPr
 const chaveSemAcento = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 /**
+ * Os rótulos do padrão que faltam numa aba do Exportar Premissas (20/11/2026), pelo título dela: na Investimentos, os campos
+ * obrigatórios; na Quadro de Lotação, os campos da linha; nas demais (as tabelas), a Und., a Média de Referência e a Justificativa.
+ */
+function rotulosQueFaltam(titulo: string, textos: string[]): string[] {
+  const aba = titulo.replace(/^Premissas\s*·\s*/, "");
+  const esperados =
+    chaveSemAcento(aba) === chaveSemAcento(ABA_INVESTIMENTOS)
+      ? CAMPOS_INVESTIMENTOS.filter((c) => c !== COLUNA_CONDICAO && c !== COLUNA_DEPARTAMENTO)
+      : chaveSemAcento(aba) === chaveSemAcento(NOME_DA_ABA.quadro)
+        ? CAMPOS_DO_QUADRO.map(([, c]) => c)
+        : ["Und.", COLUNA_MEDIA, COLUNA_JUSTIFICATIVA];
+  const tem = new Set(textos);
+  return esperados.filter((c) => !tem.has(c));
+}
+
+/**
+ * Nada a importar (20/11/2026, pedido do Adão): o arquivo não muda nenhum valor, justificativa, investimento nem linha do Quadro
+ * de Lotação do cenário. Um arquivo assim fica Inválido no Importar Valores, com o motivo, em vez de Válido sem importar nada.
+ */
+export function nadaAImportar(a: {
+  alteracoes: number;
+  justificativas: number;
+  investimentos: { novos: number; alterados: number; excluidos: number };
+  quadro: { novas: number; alteradas: number; excluidas: number };
+}) {
+  const { investimentos: i, quadro: q } = a;
+  return a.alteracoes + a.justificativas + i.novos + i.alterados + i.excluidos + q.novas + q.alteradas + q.excluidas === 0;
+}
+
+/**
  * Lê um .xlsx do Exportar Premissas: as abas no padrão (as tabelas, pelos rótulos — 11/11/2026: sem a coluna Código; os
  * arquivos de antes, com ela —, a Investimentos e a Quadro de Lotação); as outras são ignoradas, com um aviso.
  */
@@ -865,7 +895,17 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
       rotulosDoQuadro(cs);
     const i = linhas.findIndex((l) => ehRotulo(l.celulas.map((c) => String(c ?? "").trim())));
     if (i < 0) {
-      r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem os rótulos dele) e foi ignorada.`);
+      // Uma aba do Exportar Premissas (o título "Premissas · …") com a linha dos rótulos mudada (20/11/2026, pedido do Adão: uma
+      // coluna apagada fazia a aba ser ignorada com um aviso, e o arquivo "válido" não importava nada) recusa o arquivo.
+      const titulo = String(linhas.find((l) => l.numero === 1)?.celulas[0] ?? "").trim();
+      if (/^Premissas\s*·/.test(titulo)) {
+        const faltam = rotulosQueFaltam(titulo, linhas.slice(0, 10).flatMap((l) => l.celulas.map((c) => String(c ?? "").trim())));
+        r.erros.push(
+          `A aba ${nome} é do Exportar Premissas (o título “${titulo}”), mas a linha dos rótulos não está no padrão${
+            faltam.length ? `: ${faltam.length === 1 ? "falta a coluna" : "faltam as colunas"} ${faltam.map((c) => `“${c}”`).join(", ")}` : ""
+          }. Não apague nem mude as colunas da aba: ${faltam.length === 1 ? "devolva a coluna" : faltam.length ? "devolva as colunas" : "devolva os rótulos"} ou exporte as premissas de novo.`,
+        );
+      } else r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem os rótulos dele) e foi ignorada.`);
       continue;
     }
     const rotulos = linhas[i].celulas.map((c) => String(c ?? "").trim());

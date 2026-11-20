@@ -28,6 +28,29 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 20:22): a receita de frete da Fundação, o Importar Valores sem arquivos "válidos" que não importam
+  // nada e o clique nos cadastros do Quadro de Lotação (pedidos do Adão).
+  {
+    publicada: "2026-11-20T20:22",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Serviços, a Fundação tem também a Receita Bruta Média de Frete (R$ por m³), além da Complementar: a Receita Líquida de Frete sai dela pelos Impostos Operacionais, e o Frete e Descarga é o dos serviços complementares. A Receita Bruta e a Receita Líquida de Frete aparecem na DRE de Serviços do cenário.",
+      "No Importar Valores, o arquivo fica Inválido, com o motivo abaixo do nome, quando uma aba do Exportar Premissas tem as colunas mudadas (uma coluna apagada, por exemplo: o SIG diz qual falta) e quando ele não muda nada no cenário (Nada a importar). Uma aba que não é do Exportar fica de fora, com um aviso.",
+      "Na aba Quadro de Lotação, clicar na Unidade, no Tipo, na Função ou no Centro de Custo de uma linha abre o modal Editar Linha do Quadro de Lotação, o mesmo do menu Ações.",
+    ],
+  },
+  // 20/11/2026 (publicada às 20:22): as linhas de frete na DRE de Serviços do realizado.
+  {
+    publicada: "2026-11-20T20:22",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Em Serviços, a DRE tem as linhas Receita Bruta de Frete e Receita Líquida de Frete: no realizado, ficam zeradas, porque o frete faturado com os serviços está na Receita Bruta Complementar.",
+    ],
+  },
   // 20/11/2026 (publicada às 17:13): a tabela do Importar Valores das Premissas, com as caixas do que cada arquivo
   // sobrescreve, e o Quadro de Lotação por departamento nos trechos repetidos (pedido do Adão).
   {

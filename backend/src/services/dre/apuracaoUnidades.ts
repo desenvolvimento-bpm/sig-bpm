@@ -501,6 +501,10 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
   {
     const u = UNIDADE.SERVICOS;
     const compl = previa(u, "COMPLEMENTAR");
+    // O frete da receita prévia de Serviços (20/11/2026, a receita de frete da Fundação nos cenários): hoje não há — o frete
+    // faturado com os serviços está na complementar —; com ele, vai às linhas de frete de Serviços e sai da de montagem.
+    const frete = previa(u, "FRETE");
+    const comFrete = !frete.receitaBruta.isZero() || !frete.receitaLiquida.isZero();
     for (const l of itensDa(u)) {
       const desc = n(l.descricao);
       if (ehVolume(l)) {
@@ -511,10 +515,24 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
       if (ehComissao(l)) continue;
       if (desc === n("Receita Bruta de Montagem")) {
         const c = somaDireto(l.id);
-        gravar(u, l, compl.receitaBruta.neg().minus(c), {
-          regra: "−(complementar da receita prévia) − (receita contábil, todas as filiais)",
+        gravar(u, l, compl.receitaBruta.neg().minus(frete.receitaBruta).minus(c), {
+          regra: comFrete
+            ? "−(complementar e frete da receita prévia) − (receita contábil, todas as filiais)"
+            : "−(complementar da receita prévia) − (receita contábil, todas as filiais)",
           direto: c.toFixed(2),
-          origem: { contabil: { linhaId: l.id, fator: "-1" }, previa: [{ unidade: u, natureza: "COMPLEMENTAR", componente: "BRUTA", sinal: -1 }] },
+          origem: {
+            contabil: { linhaId: l.id, fator: "-1" },
+            previa: [
+              { unidade: u, natureza: "COMPLEMENTAR", componente: "BRUTA", sinal: -1 },
+              ...(comFrete ? [{ unidade: u, natureza: "FRETE", componente: "BRUTA" as const, sinal: -1 as const }] : []),
+            ],
+          },
+        });
+      } else if (desc === n("Receita Bruta de Frete") || desc === n("Receita Líquida de Frete")) {
+        const liquida = desc === n("Receita Líquida de Frete");
+        gravar(u, l, liquida ? frete.receitaLiquida : frete.receitaBruta, {
+          regra: `Receita ${liquida ? "líquida" : "bruta"} de frete da receita prévia de Serviços`,
+          origem: { previa: [{ unidade: u, natureza: "FRETE", componente: liquida ? "LIQUIDA" : "BRUTA", sinal: 1 }] },
         });
       } else if (desc === n("Receita Bruta Complementar")) {
         gravar(u, l, compl.receitaBruta, {
@@ -588,9 +606,14 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
       const rlm = linhaPorDescricao(u, "Receita Líquida de Montagem");
       if (rlm) {
         const rbm = itemDe(u, "Receita Bruta de Montagem");
-        gravar(u, rlm, rbm.minus(v.minus(compl.receitaBruta.minus(compl.receitaLiquida))), {
-          regra: "Bruta de montagem − (IRB − impostos da complementar)",
-          observacao: `Bruta de montagem ${rbm.toFixed(2)} − (IRB ${v.toFixed(2)} − impostos da complementar ${compl.receitaBruta.minus(compl.receitaLiquida).toFixed(2)})`,
+        const impCompl = compl.receitaBruta.minus(compl.receitaLiquida);
+        // Os impostos do frete de Serviços (20/11/2026; hoje não há) também saem, como os da complementar.
+        const impFrete = frete.receitaBruta.minus(frete.receitaLiquida);
+        gravar(u, rlm, rbm.minus(v.minus(impCompl).minus(impFrete)), {
+          regra: comFrete ? "Bruta de montagem − (IRB − impostos da complementar e do frete)" : "Bruta de montagem − (IRB − impostos da complementar)",
+          observacao: comFrete
+            ? `Bruta de montagem ${rbm.toFixed(2)} − (IRB ${v.toFixed(2)} − impostos da complementar ${impCompl.toFixed(2)} − impostos do frete ${impFrete.toFixed(2)})`
+            : `Bruta de montagem ${rbm.toFixed(2)} − (IRB ${v.toFixed(2)} − impostos da complementar ${impCompl.toFixed(2)})`,
         });
       }
     }

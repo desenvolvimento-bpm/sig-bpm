@@ -75,7 +75,8 @@ const total = (m: MesDoQuadro) => m.salarioBruto + m.adicional;
  * Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (17/11/2026, pedido do Adão: os de todos os
  * colaboradores dela, sem multiplicar por eles) e o Salário Total (a soma). Clicar num valor
  * abre o modal Editar Valor (16/11/2026, pedido do Adão: o mesmo das demais abas, no lugar da digitação na tabela com
- * Gravar / Descartar), com o reajuste e a chave de replicar aos meses seguintes; cada gravação vai para o histórico. Como nas
+ * Gravar / Descartar), com o reajuste e a chave de replicar aos meses seguintes; cada gravação vai para o histórico. Clicar na
+ * Unidade, no Tipo, na Função ou no Centro de Custo (20/11/2026) abre o modal Editar Linha do Quadro de Lotação. Como nas
  * tabelas das outras abas (16/11/2026), as caixas das linhas e dos meses marcam valores, e o Replicar Referências leva os
  * Colaboradores da referência de cada linha marcada (e, na realizada, os salários: as colunas da Referência) aos meses marcados. O grupo de centros com linhas conta os colaboradores e as remunerações por elas (aba Centros de Custo); o Tipo
  * Aprendiz tem o FGTS Aprendiz, e o Estagiário não tem encargos. Os rótulos ficam presos logo abaixo do título da tela, como
@@ -331,11 +332,23 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                       />
                     </td>
                   ) : null}
-                  {DESCRICAO.map((d, i) => (
-                    <td key={d.chave} className={`${classeFixa} truncate px-3 py-1`} style={{ left: esquerdas[i] }} title={d.chave === "centro" ? `${l.centro}${l.grupo ? ` · grupo ${l.grupo}` : " · fora dos grupos do cenário"}` : d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave])}>
-                      {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{l.centro}</span> : d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave])}
-                    </td>
-                  ))}
+                  {/* Na edição (20/11/2026, pedido do Adão), clicar na Unidade, no Tipo, na Função ou no Centro de Custo abre o modal
+                      Editar Linha do Quadro de Lotação, o mesmo do menu Ações. */}
+                  {DESCRICAO.map((d, i) => {
+                    const texto = d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave]);
+                    const dica = d.chave === "centro" ? `${l.centro}${l.grupo ? ` · grupo ${l.grupo}` : " · fora dos grupos do cenário"}` : texto;
+                    return (
+                      <td
+                        key={d.chave}
+                        className={`${classeFixa} truncate px-3 py-1 ${pode ? "cursor-pointer hover:!bg-gray-100" : ""}`}
+                        style={{ left: esquerdas[i] }}
+                        title={pode ? `${dica} · clique para editar a linha` : dica}
+                        onClick={pode ? () => setDialogo({ linha: l }) : undefined}
+                      >
+                        {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{l.centro}</span> : texto}
+                      </td>
+                    );
+                  })}
                   {comReferencia ? (
                     <td className="border-l border-gray-300 bg-gray-50 px-2 py-1 text-right whitespace-nowrap text-gray-700" title={l.referencia === null ? "A linha não está na referência" : undefined}>
                       {l.referencia === null ? "—" : numero(l.referencia)}

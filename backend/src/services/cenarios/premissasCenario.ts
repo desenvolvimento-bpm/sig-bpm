@@ -78,6 +78,11 @@ export const LIQUIDA_DA_BRUTA: Record<string, string> = {
 const LINHAS_DE_MONTAGEM = new Set(["MONTAGEM", "VEDAÇÃO"]);
 /** O Frete e Descarga do DVV: em Serviços, só das linhas complementares (24/10/2026). */
 const FRETE_DOS_COMPLEMENTARES = "DVV.GGV.FRETE_E_DESCARGA";
+/**
+ * As linhas complementares de Serviços com a receita de frete (20/11/2026, pedido do Adão: a Fundação): a Receita Bruta de
+ * Frete, além da complementar, e a Receita Líquida de Frete dela (pelos impostos), com o Frete e Descarga dos complementares.
+ */
+export const LINHAS_COM_FRETE_EM_SERVICOS = new Set(["FUNDAÇÃO"]);
 const PISTAS = "m³ e pistas";
 /**
  * As linhas com a demanda de armadura (14/10/2026), em kg por unidade da linha (kg/m³, kg/kg, kg/m²…), e as com a
@@ -125,7 +130,13 @@ export function contasDaLinha(est: LinhaEstrutura[], l: LinhaDoCadastro) {
   const custo = l.unidade === 3 ? (LINHAS_DE_MONTAGEM.has(l.codigo) ? "CSM" : "CSC") : "CPP";
   return {
     // As devoluções e os inventários (14/10/2026), como receita unitária (negativa) nas linhas da Matriz e da Filial.
-    receitas: l.unidade === 3 ? [LINHAS_DE_MONTAGEM.has(l.codigo) ? C.RBM : C.RBC] : [C.RBPF, C.RBF, C.RBDI],
+    // Em Serviços, a de montagem ou a complementar; na Fundação, também a de frete (20/11/2026).
+    receitas:
+      l.unidade === 3
+        ? LINHAS_DE_MONTAGEM.has(l.codigo)
+          ? [C.RBM]
+          : [C.RBC, ...(LINHAS_COM_FRETE_EM_SERVICOS.has(l.codigo) ? [C.RBF] : [])]
+        : [C.RBPF, C.RBF, C.RBDI],
     // A mão de obra terceirizada (14/10/2026) é custo unitário da linha: a de produção na Matriz e na Filial, a de
     // serviços em Serviços (não vem dos centros de custo). Desde 15/10/2026, antes das matérias primas.
     custos: [...daUnidade(`${custo}.MOT.`), ...daUnidade(`${custo}.MP.`), ...daUnidade(`${custo}.GGV.`), ...daUnidade(`${custo}.E.`)],
