@@ -247,9 +247,15 @@ export function PremissasContent() {
             </li>
             <li>
               “Importar Valores” abre a lista dos arquivos: escolha planilhas do Exportar Premissas (ou o ZIP) ou uma pasta com elas. Cada arquivo é
-              conferido no padrão (as descrições, a Média de Referência, os doze meses e a Justificativa; cada linha se acha pelas descrições) e mostra quantos valores, justificativas e
-              investimentos mudam. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade…) aparece em mais de um arquivo, o
-              quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último). A aba Investimentos substitui os
+              conferido no padrão (as descrições, a Média de Referência, os doze meses e a Justificativa; cada linha se acha pelas descrições) e recebe
+              a Situação Válido ou Inválido (o motivo fica abaixo do nome). A tabela mostra o que cada arquivo válido sobrescreve: em Produção e
+              Serviços, as linhas (Estrutura, Alveolares, Montagem…) das abas Matriz, Filial e Serviços, uma abaixo da outra; em
+              Centros de Custo, os centros de custo com valores, justificativas ou linhas do Quadro de Lotação que mudam; em Investimentos (a lista
+              e a Depreciação Base), Extra-Operacional e Indicadores Manuais, Sobrescrever. Cada item vem com a caixa marcada: desmarcada, ele
+              fica de fora da importação. Na altura de “Escolher Arquivos” e “Escolher Pasta”, à direita, ficam a quantia de Linhas e a de Centros de Custo de todos os arquivos da lista, cada uma seguida do botão “Desmarcar Todos” (ou “Marcar Todos”), que vale para a coluna inteira. Sem nada a mudar num tipo, a coluna mostra Sem Alteração; o rodapé soma o que vai ser gravado. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade, o Quadro de Lotação de um departamento…) aparece em
+              mais de um arquivo, o
+              quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último); no arquivo que não vale, a
+              caixa do item fica desmarcada e em cinza. A aba Investimentos substitui os
               seus investimentos (os que você incluiu): os seus que não estão nela saem do cenário (a prévia mostra quantos), os com o Nome de Referência
               de um investimento do cenário são atualizados e os de nome novo entram na sequência dos que já existem; os de outros usuários ficam. Em
               dois arquivos com a aba Investimentos, o quadro dos repetidos pede qual vale. Na aba Quadro

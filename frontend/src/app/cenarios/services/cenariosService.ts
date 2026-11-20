@@ -459,8 +459,12 @@ export type AnaliseDePremissas = {
   /** Os trechos do arquivo (a unidade, cada centro, a depreciação base de uma unidade…), para conferir os repetidos (15/10/2026). */
   blocos: string[];
   linhas: number;
-  alteracoes: Array<{ chave: string; mes: number; valor: number | null; bloco: string }>;
-  justificativas: Array<{ chave: string; texto: string | null; bloco: string }>;
+  /**
+   * `item` (20/11/2026): o que o usuário desmarca na tabela para não importar — nas abas Matriz, Filial e Serviços, a aba e a
+   * linha de produto ou de obra; nos Centros de Custo, o grupo; nas demais, o trecho.
+   */
+  alteracoes: Array<{ chave: string; mes: number; valor: number | null; bloco: string; item: string }>;
+  justificativas: Array<{ chave: string; texto: string | null; bloco: string; item: string }>;
   /**
    * Os investimentos novos e os alterados e, com a aba Investimentos (19/11/2026: ela substitui os de quem importa), os Nomes de
    * Referência dela (`nomes`; null sem a aba) e os do usuário que saem (`excluidos`).
@@ -473,11 +477,12 @@ export type AnaliseDePremissas = {
   };
   /**
    * As linhas da aba Quadro de Lotação (09/11/2026): as novas e as alteradas, já com os cadastros, e (11/11/2026: a aba substitui
-   * as linhas do cenário nos departamentos do arquivo) as que saem.
+   * as linhas do cenário nos departamentos do arquivo) as que saem; `centro` (20/11/2026), o grupo do centro da linha (o item da
+   * coluna Centros de Custo), e `bloco`, o trecho dela (o Quadro de Lotação do departamento do centro).
    */
-  quadro: { novas: LinhaDoQuadroDaPlanilha[]; alteradas: Array<LinhaDoQuadroDaPlanilha & { id: string }>; excluidas: Array<{ id: string; descricao: string }> };
+  quadro: { novas: LinhaDoQuadroDaPlanilha[]; alteradas: Array<LinhaDoQuadroDaPlanilha & { id: string }>; excluidas: Array<{ id: string; descricao: string; centro: string; bloco: string }> };
 };
-export type LinhaDoQuadroDaPlanilha = Required<DadosDaLinhaDoQuadro> & { descricao: string };
+export type LinhaDoQuadroDaPlanilha = Required<DadosDaLinhaDoQuadro> & { descricao: string; centro: string; bloco: string };
 /** Os departamentos do Exportar Premissas (15/10/2026). */
 export const DEPARTAMENTOS_DAS_PREMISSAS = [
   { chave: "PRODUCAO", nome: "Produção", detalhe: "Matriz, Filial, os centros de custo de produção e a depreciação da Matriz e da Filial" },
@@ -518,8 +523,8 @@ export const cenariosService = {
             nomes: investimentos.nomes,
           },
           quadro: {
-            novas: quadro.novas.map(({ descricao: _d, ...l }) => l),
-            alteradas: quadro.alteradas.map(({ descricao: _d, ...l }) => l),
+            novas: quadro.novas.map(({ descricao: _d, centro: _c, bloco: _b, ...l }) => l),
+            alteradas: quadro.alteradas.map(({ descricao: _d, centro: _c, bloco: _b, ...l }) => l),
             excluidas: quadro.excluidas.map(({ id }) => ({ id })),
           },
         })),

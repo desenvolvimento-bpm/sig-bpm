@@ -3570,12 +3570,27 @@ export const cenariosService = {
       : [null, null, []];
     const doCenario = new Map(linhasDoCenario.map((l) => [l.id, l]));
     const q = cad ? recorteDoQuadroCom(recorte, cad) : null;
+    // O item de cada mudança na tabela do Importar Valores (20/11/2026, pedido do Adão), que o usuário desmarca para não importar:
+    // nas abas Matriz, Filial e Serviços, a aba e a linha de produto ou de obra (ou os Dias Úteis); nos Centros de Custo, o grupo;
+    // nas demais, o trecho. As linhas do Quadro de Lotação vão no grupo do centro delas (fora dos grupos, o próprio centro).
+    const itemDaLinha = (l: LinhaDaPlanilha, bloco: string) => (l.chave.startsWith("P|") ? `${NOME_DA_ABA[l.aba]} · ${l.descricao[2] || l.descricao[3]}` : (l.grupo ?? bloco));
+    const centroDoQuadro = (centroCustoId: string, centro?: { codigoRM: string | null; nomeRM: string }) =>
+      cad!.grupoDoCentro.get(centroCustoId)?.grupo ?? (centro ? rotuloDoCentro(centro) : "Sem Grupo");
+    // O trecho de cada linha do Quadro de Lotação (20/11/2026, pedido do Adão; antes, a aba inteira era um trecho só): o
+    // departamento do centro dela. Em dois arquivos, o quadro dos repetidos pergunta só pelos departamentos que os dois trazem
+    // (um arquivo só do Extra-Operacional não disputa o Quadro de Lotação da Produção); os centros fora dos grupos (ou de um
+    // grupo da DRE sem departamento), que vão em todos os arquivos, são o trecho Sem Departamento.
+    const nomeDoDepartamento = new Map(DEPARTAMENTOS.map((d) => [d.chave, d.nome]));
+    const blocoDoQuadro = (d: Departamento | null) => `${NOME_DA_ABA.quadro}: ${d ? nomeDoDepartamento.get(d) : "Sem Departamento"}`;
+    const departamentoDoCentro = (centroCustoId: string, codigoRM?: string | null) =>
+      departamentoDoGrupoDRE((cad!.grupoDoCentro.get(centroCustoId) ?? cad!.grupoDoCodigo.get(codigoRM ?? ""))?.grupoDRE);
     return lidos.map((r) => {
-      const novasDoQuadro: Array<DadosDaLinhaDoQuadro & { descricao: string }> = [];
-      const alteradasDoQuadro: Array<DadosDaLinhaDoQuadro & { id: string; descricao: string }> = [];
-      const excluidasDoQuadro: Array<{ id: string; descricao: string }> = [];
+      const novasDoQuadro: Array<DadosDaLinhaDoQuadro & { descricao: string; centro: string; bloco: string }> = [];
+      const alteradasDoQuadro: Array<DadosDaLinhaDoQuadro & { id: string; descricao: string; centro: string; bloco: string }> = [];
+      const excluidasDoQuadro: Array<{ id: string; descricao: string; centro: string; bloco: string }> = [];
+      const blocosDoQuadro = new Set<string>();
       // As linhas da aba que substitui (11/11/2026), conferidas, para comparar com as do cenário depois.
-      const daAba: Array<DadosDaLinhaDoQuadro & { descricao: string }> = [];
+      const daAba: Array<DadosDaLinhaDoQuadro & { descricao: string; centro: string; bloco: string }> = [];
       for (const l of r.quadro) {
         const erro = (m: string) => r.erros.push(`${l.aba}, linha ${l.numero}: ${m}`);
         const res = resolver!(l.campos);
@@ -3591,7 +3606,10 @@ export const cenariosService = {
           erro(`o centro de custo ${l.campos.centro} fica fora do seu recorte.`);
           continue;
         }
-        const dados = { ...res.cadastros, meses: l.meses, descricao: `${l.campos.funcao} · ${l.campos.centro}` };
+        const dados = { ...res.cadastros, meses: l.meses, descricao: `${l.campos.funcao} · ${l.campos.centro}`,
+          centro: centroDoQuadro(res.cadastros.centroCustoId),
+          bloco: blocoDoQuadro(departamentoDoCentro(res.cadastros.centroCustoId)),
+        };
         if (r.substituiQuadro) {
           daAba.push(dados);
           continue;
@@ -3621,7 +3639,7 @@ export const cenariosService = {
         const mesesIguais = (a: MesDaLinha[], b: MesDaLinha[]) => a.every((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).every((f) => iguais(m[f], b[k][f])));
         const doEscopo = linhasDoCenario
           .filter((x) => {
-            const d = departamentoDoGrupoDRE(cad!.grupoDoCodigo.get(x.centroCusto.codigoRM ?? "")?.grupoDRE);
+            const d = departamentoDoCentro(x.centroCustoId, x.centroCusto.codigoRM);
             return (!d || deps.includes(d)) && q!.ve(x.centroCustoId);
           })
           .map((x) => ({ x, meses: mesesDaLinha(x.meses), usada: false }));
@@ -3638,10 +3656,22 @@ export const cenariosService = {
             alteradasDoQuadro.push({ ...d, id: par.x.id });
           } else novasDoQuadro.push(d);
         }
-        for (const y of doEscopo) if (!y.usada) excluidasDoQuadro.push({ id: y.x.id, descricao: `${y.x.funcao.nome} · ${rotuloDoCentro(y.x.centroCusto)}` });
+        for (const y of doEscopo)
+          if (!y.usada)
+            excluidasDoQuadro.push({
+              id: y.x.id,
+              descricao: `${y.x.funcao.nome} · ${rotuloDoCentro(y.x.centroCusto)}`,
+              centro: centroDoQuadro(y.x.centroCustoId, y.x.centroCusto),
+              bloco: blocoDoQuadro(departamentoDoCentro(y.x.centroCustoId, y.x.centroCusto.codigoRM)),
+            });
+        // Os trechos da aba (20/11/2026): os departamentos do arquivo com grupos de centros no cenário e, com alguma linha de
+        // centro sem departamento (no arquivo ou no cenário), o Sem Departamento.
+        for (const d of deps) if (cad!.grupos.some((g) => departamentoDoGrupoDRE(g.grupoDRE) === d)) blocosDoQuadro.add(blocoDoQuadro(d));
+        if (daAba.some((l) => l.bloco === blocoDoQuadro(null)) || doEscopo.some((y) => !departamentoDoCentro(y.x.centroCustoId, y.x.centroCusto.codigoRM)))
+          blocosDoQuadro.add(blocoDoQuadro(null));
       }
-      const alteracoes = new Map<string, MudancaDaPlanilha & { bloco: string }>();
-      const justificativas = new Map<string, { chave: string; texto: string | null; bloco: string }>();
+      const alteracoes = new Map<string, MudancaDaPlanilha & { bloco: string; item: string }>();
+      const justificativas = new Map<string, { chave: string; texto: string | null; bloco: string; item: string }>();
       const desconhecidas: string[] = [];
       // Os nomes antigos dos indicadores renomeados (19/11/2026) nos Indicadores Manuais recusam o arquivo.
       const antigos = nomesAntigos();
@@ -3673,15 +3703,16 @@ export const cenariosService = {
         }
         abasDasLinhas.add(atual.aba);
         const bloco = blocoDaChave(daLinha, atual.descricao);
+        const item = itemDaLinha(atual, bloco);
         // As linhas calculadas (19/10/2026) não se importam: só a justificativa.
         if (atual.calculada) l.meses = [...atual.meses];
         blocos.add(bloco);
         l.meses.forEach((v, k) => {
           const chave = `${daLinha}|${k + 1}`;
-          if (!iguais(atual.meses[k], v)) alteracoes.set(chave, { chave: daLinha, mes: k + 1, valor: v, bloco });
+          if (!iguais(atual.meses[k], v)) alteracoes.set(chave, { chave: daLinha, mes: k + 1, valor: v, bloco, item });
           else alteracoes.delete(chave);
         });
-        if ((l.justificativa ?? null) !== (atual.justificativa ?? null)) justificativas.set(daLinha, { chave: daLinha, texto: l.justificativa, bloco });
+        if ((l.justificativa ?? null) !== (atual.justificativa ?? null)) justificativas.set(daLinha, { chave: daLinha, texto: l.justificativa, bloco, item });
         else justificativas.delete(daLinha);
       }
       // Os investimentos (15/10/2026): com o Nome de Referência de um investimento do cenário, a alteração dele (se mudou);
@@ -3718,8 +3749,9 @@ export const cenariosService = {
       if (r.investimentos.length || r.comInvestimentos) abasDasLinhas.add("investimentos");
       if (r.comInvestimentos) blocos.add(BLOCO_DOS_INVESTIMENTOS);
       if (r.quadro.length || r.substituiQuadro) abasDasLinhas.add("quadro");
-      // O Quadro de Lotação que substitui (11/11/2026) é um trecho: em dois arquivos, o usuário escolhe qual vale.
-      if (r.substituiQuadro) blocos.add(NOME_DA_ABA.quadro);
+      // O Quadro de Lotação que substitui (11/11/2026): um trecho por departamento (20/11/2026); em dois arquivos com o mesmo, o
+      // usuário escolhe qual vale.
+      for (const b of blocosDoQuadro) blocos.add(b);
       if (comNomeAntigo.length)
         r.erros.push(
           `${comNomeAntigo.length === 1 ? "Um nome antigo de indicador" : `${comNomeAntigo.length} nomes antigos de indicadores`} (o nome antigo → o atual): ${comNomeAntigo.slice(0, 5).join("; ")}${comNomeAntigo.length > 5 ? "…" : ""}. Mude os nomes no arquivo (ou exporte as Premissas de novo) e importe de novo.`,

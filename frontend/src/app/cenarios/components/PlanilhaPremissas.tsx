@@ -2,13 +2,14 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CopyCheck, Download, Eraser, FileUp, FolderUp, Loader2, Upload, X } from "lucide-react";
+import { CopyCheck, Download, Eraser, FileUp, FolderUp, ListChecks, ListX, Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { plural } from "@/lib/texto";
 import { usePermissions } from "@/context/PermissionContext";
+import { useAcessibilidade } from "@/lib/acessibilidade";
 
 import { mensagemDoErro, nomeDoArquivo } from "@/app/competencias/[anoMes]/dre/components/ExportarDRE";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -255,12 +256,66 @@ type Item = { id: number; nome: string; estado: "analisando" | "pronto" | "erro"
 const BLOCO_DOS_INVESTIMENTOS = "Investimentos (a lista)";
 
 /**
+ * As colunas da tabela do Importar Valores (20/11/2026, pedido do Adão): o que cada arquivo sobrescreve. Produção e Serviços
+ * (as abas Matriz, Filial e Serviços) e Centros de Custo (os gastos e o Quadro de Lotação de cada grupo) listam os itens, cada
+ * um com a caixa dele; as outras têm uma caixa só (Sobrescrever). A caixa desmarcada deixa o item de fora da importação.
+ */
+type ColunaDaImportacao = "producao" | "centros" | "investimentos" | "extra" | "manuais";
+const COLUNAS_DA_IMPORTACAO: Array<{ chave: ColunaDaImportacao; titulo: string; largura: string }> = [
+  { chave: "producao", titulo: "Produção e Serviços", largura: "w-[220px]" },
+  { chave: "centros", titulo: "Centros de Custo", largura: "w-[220px]" },
+  { chave: "investimentos", titulo: "Investimentos", largura: "w-[120px]" },
+  { chave: "extra", titulo: "Extra-Operacional", largura: "w-[136px]" },
+  { chave: "manuais", titulo: "Indicadores Manuais", largura: "w-[136px]" },
+];
+/** As colunas com a lista dos itens (as demais têm uma caixa só). */
+const EM_LISTA = new Set<ColunaDaImportacao>(["producao", "centros"]);
+/** A coluna de uma linha da planilha, pelo tipo do Código: P (Matriz, Filial e Serviços), C, L e E (Centros de Custo), B (a Depreciação Base, com os Investimentos), X e I. */
+function colunaDaChave(chave: string): ColunaDaImportacao | null {
+  const tipo = chave.split("|")[0];
+  if (tipo === "P") return "producao";
+  if (tipo === "C" || tipo === "L" || tipo === "E") return "centros";
+  if (tipo === "B") return "investimentos";
+  if (tipo === "X") return "extra";
+  if (tipo === "I") return "manuais";
+  return null;
+}
+/** A chave da caixa de um item: a planilha, a coluna e o item (vazio nas colunas de uma caixa só). */
+const chaveDaCaixa = (planilha: string, coluna: ColunaDaImportacao, item: string) => `${planilha}|${coluna}|${EM_LISTA.has(coluna) ? item : ""}`;
+
+/**
+ * Os itens de cada coluna de uma planilha, na ordem do arquivo, e se algum trecho deles vale (`vence`; o trecho repetido em
+ * outro arquivo pode valer o de lá). Sem item, a coluna mostra Sem Alteração.
+ */
+function itensDaPlanilha(a: AnaliseDePremissas, vence: (x: { bloco: string }) => boolean) {
+  const r = new Map<ColunaDaImportacao, Map<string, boolean>>(COLUNAS_DA_IMPORTACAO.map((c) => [c.chave, new Map()]));
+  const incluir = (coluna: ColunaDaImportacao | null, item: string, bloco: string) => {
+    if (!coluna) return;
+    const doItem = r.get(coluna)!;
+    const chave = EM_LISTA.has(coluna) ? item : "";
+    doItem.set(chave, (doItem.get(chave) ?? false) || vence({ bloco }));
+  };
+  for (const x of [...a.alteracoes, ...a.justificativas]) incluir(colunaDaChave(x.chave), x.item, x.bloco);
+  for (const l of [...a.quadro.novas, ...a.quadro.alteradas, ...a.quadro.excluidas]) incluir("centros", l.centro, l.bloco);
+  if (a.investimentos.novos.length + a.investimentos.alterados.length + a.investimentos.excluidos.length) incluir("investimentos", "", BLOCO_DOS_INVESTIMENTOS);
+  return r;
+}
+
+/** A situação do arquivo (20/11/2026): Válido (verde; azul na Acessibilidade Daltonismo) ou Inválido (vermelho). */
+function EtiquetaDoArquivo({ valido }: { valido: boolean }) {
+  const [acessibilidade] = useAcessibilidade();
+  const cor = !valido ? "border-red-300 bg-red-50 text-red-800" : acessibilidade === "daltonismo" ? "border-blue-300 bg-blue-50 text-blue-800" : "border-green-300 bg-green-50 text-green-800";
+  return <span className={`inline-flex rounded-sm border px-1.5 py-px text-xs font-medium whitespace-nowrap ${cor}`}>{valido ? "Válido" : "Inválido"}</span>;
+}
+
+/**
  * O Importar Valores (15/10/2026): a lista dos arquivos escolhidos (um ou vários, ou uma pasta), cada um conferido no
- * padrão do Exportar Premissas assim que entra, com o que muda (os valores, as justificativas e os investimentos). Os
+ * padrão do Exportar Premissas assim que entra, com o que ele sobrescreve em cada coluna (20/11/2026, pedido do Adão: as
+ * linhas de produto das abas Matriz, Filial e Serviços e os centros de custo um abaixo do outro, cada um com a caixa dele, e
+ * Sobrescrever nos Investimentos, no Extra-Operacional e nos Indicadores Manuais; a caixa desmarcada não importa). Os
  * trechos repetidos entre os arquivos (a mesma unidade, o mesmo centro…; 15/10/2026) aparecem num quadro, e o usuário
- * escolhe, em cada um, ignorar o repetido (vale o primeiro arquivo) ou sobrescrever (vale o último); os investimentos
- * não se conferem: os novos entram na sequência. Grava-se só em "Importar", como nas importações do Fechamento Mensal;
- * a importação fica no histórico (tela Histórico, aba Alterações).
+ * escolhe, em cada um, ignorar o repetido (vale o primeiro arquivo) ou sobrescrever (vale o último). Grava-se só em
+ * "Importar", como nas importações do Fechamento Mensal; a importação fica no histórico (tela Histórico, aba Alterações).
  */
 function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => void }) {
   const queryClient = useQueryClient();
@@ -281,26 +336,46 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
         .catch((e) => setItens((xs) => xs.map((x) => (x.id === n ? { ...x, estado: "erro", erro: mensagemDeErro(e, "Não foi possível ler o arquivo.") } : x))));
     }
   };
-  const analises = itens.flatMap((x) => x.analises);
-  const validas = analises.filter((a) => a.valido);
+  // Cada planilha com a chave dela (o arquivo e a posição no .zip), a das caixas desmarcadas.
+  const planilhas = itens.flatMap((x) => x.analises.map((a, k) => ({ a, chave: `${x.id}-${k}` })));
+  const validas = planilhas.filter((p) => p.a.valido);
+  const indiceDaValida = new Map(validas.map((p, i) => [p.chave, i]));
   // Os trechos repetidos entre as planilhas válidas, na ordem da lista, e a escolha de cada um (sobrescrever, de início).
-  const repetidos = [...new Set(validas.flatMap((a) => a.blocos))]
-    .map((bloco) => ({ bloco, em: validas.flatMap((a, i) => (a.blocos.includes(bloco) ? [i] : [])) }))
+  const repetidos = [...new Set(validas.flatMap(({ a }) => a.blocos))]
+    .map((bloco) => ({ bloco, em: validas.flatMap(({ a }, i) => (a.blocos.includes(bloco) ? [i] : [])) }))
     .filter((r) => r.em.length > 1);
   const [ignorar, setIgnorar] = useState<Set<string>>(() => new Set());
   const vencedor = new Map(repetidos.map((r) => [r.bloco, ignorar.has(r.bloco) ? r.em[0] : r.em[r.em.length - 1]]));
   const doVencedor = (i: number) => (x: { bloco: string }) => !vencedor.has(x.bloco) || vencedor.get(x.bloco) === i;
-  // O Quadro de Lotação que substitui as linhas (11/11/2026) é um trecho: em dois arquivos, vale o do arquivo escolhido. A aba
-  // Investimentos também (19/11/2026: ela substitui os investimentos de quem importa).
-  const semQuadro = { novas: [], alteradas: [], excluidas: [] };
+  // As caixas desmarcadas na tabela (20/11/2026): de início, todas marcadas.
+  const [desmarcadas, setDesmarcadas] = useState<Set<string>>(() => new Set());
+  const alternar = (caixa: string) =>
+    setDesmarcadas((atual) => {
+      const nova = new Set(atual);
+      if (nova.has(caixa)) nova.delete(caixa);
+      else nova.add(caixa);
+      return nova;
+    });
+  const marcada = (planilha: string, coluna: ColunaDaImportacao, item: string) => !desmarcadas.has(chaveDaCaixa(planilha, coluna, item));
+  // O Quadro de Lotação que substitui as linhas (11/11/2026) tem um trecho por departamento (20/11/2026): em dois arquivos com o
+  // mesmo, vale o do arquivo escolhido. A aba Investimentos é um trecho (19/11/2026: ela substitui os investimentos de quem
+  // importa). Os itens desmarcados ficam de fora.
   const semInvestimentos = { novos: [], alterados: [], excluidos: [], nomes: null };
-  const aImportar = validas.map((a, i) => ({
-    ...a,
-    alteracoes: a.alteracoes.filter(doVencedor(i)),
-    justificativas: a.justificativas.filter(doVencedor(i)),
-    investimentos: doVencedor(i)({ bloco: BLOCO_DOS_INVESTIMENTOS }) ? a.investimentos : semInvestimentos,
-    quadro: doVencedor(i)({ bloco: "Quadro de Lotação" }) ? a.quadro : semQuadro,
-  }));
+  const aImportar = validas.map(({ a, chave }, i) => {
+    const vence = doVencedor(i);
+    const entra = (x: { chave: string; bloco: string; item: string }) => {
+      const coluna = colunaDaChave(x.chave);
+      return vence(x) && (!coluna || marcada(chave, coluna, x.item));
+    };
+    const doCentro = (l: { centro: string; bloco: string }) => vence(l) && marcada(chave, "centros", l.centro);
+    return {
+      ...a,
+      alteracoes: a.alteracoes.filter(entra),
+      justificativas: a.justificativas.filter(entra),
+      investimentos: vence({ bloco: BLOCO_DOS_INVESTIMENTOS }) && marcada(chave, "investimentos", "") ? a.investimentos : semInvestimentos,
+      quadro: { novas: a.quadro.novas.filter(doCentro), alteradas: a.quadro.alteradas.filter(doCentro), excluidas: a.quadro.excluidas.filter(doCentro) },
+    };
+  });
   const valores = aImportar.reduce((s, a) => s + a.alteracoes.length, 0);
   const justificativas = aImportar.reduce((s, a) => s + a.justificativas.length, 0);
   const investimentos = aImportar.reduce((s, a) => s + a.investimentos.novos.length + a.investimentos.alterados.length + a.investimentos.excluidos.length, 0);
@@ -319,21 +394,64 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
       onFechar();
     },
   });
+  // Os itens de cada planilha válida, por coluna.
+  const itensPorPlanilha = new Map(validas.map(({ a, chave }, i) => [chave, itensDaPlanilha(a, doVencedor(i))]));
+  // A quantia e o Marcar Todos / Desmarcar Todos de cada coluna com lista (20/11/2026, pedido do Adão: na altura dos botões
+  // Escolher Arquivos e Escolher Pasta, à direita; antes, no alto de cada célula), com os itens de todas as planilhas válidas: a
+  // quantia conta os nomes (o mesmo centro em dois arquivos conta uma vez) e os marcados; os botões mudam só as caixas que valem
+  // (as de um trecho que vale o de outro arquivo ficam como estão).
+  const resumos = (["producao", "centros"] as const).map((coluna) => {
+    const caixas = validas.flatMap(({ chave }) => [...itensPorPlanilha.get(chave)!.get(coluna)!].map(([item, vence]) => ({ item, vence, caixa: chaveDaCaixa(chave, coluna, item) })));
+    const ativas = caixas.filter((c) => c.vence);
+    return {
+      coluna,
+      total: new Set(caixas.map((c) => c.item)).size,
+      marcados: new Set(ativas.filter((c) => !desmarcadas.has(c.caixa)).map((c) => c.item)).size,
+      ativas: ativas.map((c) => c.caixa),
+      todas: ativas.every((c) => !desmarcadas.has(c.caixa)),
+      nome: coluna === "producao" ? (["Linha", "Linhas"] as const) : (["Centro de Custo", "Centros de Custo"] as const),
+    };
+  });
+  const marcarTodas = (ativas: string[], todas: boolean) =>
+    setDesmarcadas((atual) => {
+      const nova = new Set(atual);
+      for (const k of ativas) {
+        if (todas) nova.add(k);
+        else nova.delete(k);
+      }
+      return nova;
+    });
+  // A célula de uma coluna de uma planilha válida: Sem Alteração, a caixa Sobrescrever ou a lista dos itens.
+  const celula = (planilha: string, coluna: ColunaDaImportacao, doItem: Map<string, boolean>) => {
+    if (!doItem.size) return <span className="text-gray-500">Sem Alteração</span>;
+    const caixa = (item: string, vence: boolean, rotulo: string) => {
+      const chave = chaveDaCaixa(planilha, coluna, item);
+      return (
+        <label
+          key={chave}
+          title={vence ? undefined : "Vale o mesmo trecho de outro arquivo (veja os trechos repetidos, abaixo da tabela)."}
+          className={`flex items-start gap-1.5 text-xs ${vence ? "cursor-pointer text-gray-800" : "cursor-not-allowed text-gray-400"}`}
+        >
+          <input type="checkbox" className="mt-0.5 shrink-0 accent-black" disabled={!vence} checked={vence && !desmarcadas.has(chave)} onChange={() => alternar(chave)} />
+          <span className="min-w-0 break-words">{rotulo}</span>
+        </label>
+      );
+    };
+    const lista = [...doItem];
+    if (!EM_LISTA.has(coluna)) return caixa("", lista[0][1], "Sobrescrever");
+    return <div className="space-y-1">{lista.map(([item, vence]) => caixa(item, vence, item))}</div>;
+  };
+  const traco = COLUNAS_DA_IMPORTACAO.map((c) => (
+    <td key={c.chave} className="px-3 py-2 text-gray-400">
+      —
+    </td>
+  ));
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
-      <DialogContent avisoAoSair={itens.length > 0} className="flex max-h-[90vh] flex-col rounded-sm sm:max-w-4xl">
+      <DialogContent avisoAoSair={itens.length > 0} className="flex max-h-[90vh] flex-col rounded-sm sm:max-w-[1360px]">
         <DialogHeader>
           <DialogTitle>Importar Valores</DialogTitle>
-          <DialogDescription>
-            Escolha os arquivos (ou uma pasta) gerados pelo Exportar Premissas: planilhas .xlsx ou o .zip de um arquivo por centro. Cada arquivo é
-            conferido assim que entra na lista; os valores mensais, as justificativas e os investimentos se gravam só em “Importar” (em branco, o mês
-            fica sem valor). A Média e o Total da Referência, a Variação Máxima e Justificar? não se importam. A aba Investimentos substitui os seus
-            investimentos (os que você incluiu): os seus que não estão nela saem do cenário, os com o Nome de Referência de um investimento do cenário
-            são atualizados e os de nome novo entram na sequência dos que já existem; os de outros usuários ficam. Nas outras abas, a
-            linha se acha pelas colunas que a descrevem (as antes da Und.). Na aba Quadro de Lotação, as linhas da planilha substituem as do cenário
-            nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com outros valores são alteradas, as novas entram e as que não
-            estão na planilha saem; um cadastro que não existe recusa o arquivo.
-          </DialogDescription>
+          <DialogDescription>Escolha os arquivos .XLSX (ou uma pasta) gerados pelo Exportar Premissas.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={arquivo} type="file" accept=".xlsx,.zip" multiple className="hidden" onChange={(e) => (adicionar(e.target.files), (e.target.value = ""))} />
@@ -355,25 +473,50 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
             <FolderUp className="size-4" />
             Escolher Pasta
           </Button>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
+            {resumos.map((r) =>
+              r.total ? (
+                <div key={r.coluna} className="flex items-center gap-2">
+                  <span className="text-sm whitespace-nowrap text-gray-700">
+                    {r.marcados === r.total ? r.total : `${r.marcados} de ${r.total}`} {plural(r.total, r.nome[0], r.nome[1])}
+                  </span>
+                  {r.ativas.length > 1 ? (
+                    <Button type="button" variant="outline" className="rounded-sm" onClick={() => marcarTodas(r.ativas, r.todas)}>
+                      {r.todas ? <ListX className="size-4" /> : <ListChecks className="size-4" />}
+                      {r.todas ? "Desmarcar Todos" : "Marcar Todos"}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null,
+            )}
+          </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-sm border border-gray-200">
-          <table className="tabela-sig w-full border-collapse text-sm">
-            <thead>
+        <div className="min-h-0 flex-1 overflow-auto rounded-sm border border-gray-200">
+          <table className="tabela-sig w-full min-w-[1328px] table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-[360px]" />
+              <col className="w-24" />
+              {COLUNAS_DA_IMPORTACAO.map((c) => (
+                <col key={c.chave} className={c.largura} />
+              ))}
+              <col className="w-10" />
+            </colgroup>
+            <thead className="sticky top-0 z-10 bg-white">
               <tr className="border-b border-gray-200">
                 <th className="px-3 py-2 text-left text-xs font-bold">Arquivo</th>
                 <th className="px-3 py-2 text-left text-xs font-bold">Situação</th>
-                <th className="px-3 py-2 text-right text-xs font-bold">Linhas</th>
-                <th className="px-3 py-2 text-right text-xs font-bold">Valores</th>
-                <th className="px-3 py-2 text-right text-xs font-bold">Justificativas</th>
-                <th className="px-3 py-2 text-right text-xs font-bold">Investimentos</th>
-                <th className="px-3 py-2 text-right text-xs font-bold">Quadro de Lotação</th>
-                <th className="w-10 px-2 py-2" />
+                {COLUNAS_DA_IMPORTACAO.map((c) => (
+                  <th key={c.chave} className="px-3 py-2 text-left text-xs font-bold">
+                    {c.titulo}
+                  </th>
+                ))}
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
               {itens.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
+                  <td colSpan={COLUNAS_DA_IMPORTACAO.length + 3} className="px-3 py-6 text-center text-gray-500">
                     Nenhum arquivo escolhido.
                   </td>
                 </tr>
@@ -384,49 +527,58 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                     <X className="size-4" />
                   </button>
                 );
-                if (x.estado !== "pronto")
+                if (x.estado === "analisando")
                   return [
                     <tr key={x.id} className="border-b border-gray-100">
-                      <td className="px-3 py-2 break-all text-gray-900">{x.nome}</td>
-                      <td colSpan={6} className={`px-3 py-2 ${x.estado === "erro" ? "text-red-700" : "text-gray-500"}`}>
-                        {x.estado === "erro" ? x.erro : "Conferindo…"}
+                      <td className="px-3 py-2 break-words text-gray-900">{x.nome}</td>
+                      <td colSpan={COLUNAS_DA_IMPORTACAO.length + 1} className="px-3 py-2 text-gray-500">
+                        Conferindo…
                       </td>
                       <td className="px-2 py-2 text-right">{remover}</td>
                     </tr>,
                   ];
-                return x.analises.map((a, k) => (
-                  <tr key={`${x.id}-${k}`} className="border-b border-gray-100 align-top">
-                    <td className="px-3 py-2 break-all text-gray-900">
-                      {a.arquivo}
-                      {[...a.erros.map((e) => ({ e, erro: true })), ...a.avisos.map((e) => ({ e, erro: false }))].map(({ e, erro }) => (
-                        <p key={e} className={`mt-1 text-xs ${erro ? "text-red-700" : "text-gray-500"}`}>
-                          {e}
-                        </p>
-                      ))}
-                    </td>
-                    <td className={`px-3 py-2 whitespace-nowrap ${a.valido ? "text-green-700" : "text-red-700"}`}>{a.valido ? "No padrão" : "Fora do padrão"}</td>
-                    <td className="px-3 py-2 text-right">{a.linhas.toLocaleString("pt-BR")}</td>
-                    <td className="px-3 py-2 text-right">{a.valido ? a.alteracoes.length.toLocaleString("pt-BR") : "—"}</td>
-                    <td className="px-3 py-2 text-right">{a.valido ? a.justificativas.length.toLocaleString("pt-BR") : "—"}</td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {!a.valido
-                        ? "—"
-                        : a.investimentos.novos.length + a.investimentos.alterados.length + a.investimentos.excluidos.length
-                          ? `${a.investimentos.novos.length} ${plural(a.investimentos.novos.length, "novo", "novos")} · ${a.investimentos.alterados.length} ${plural(a.investimentos.alterados.length, "alterado", "alterados")}${
-                              a.investimentos.excluidos.length ? ` · ${a.investimentos.excluidos.length} ${plural(a.investimentos.excluidos.length, "excluído", "excluídos")}` : ""
-                            }`
-                          : "0"}
-                    </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {!a.valido
-                        ? "—"
-                        : a.quadro.novas.length + a.quadro.alteradas.length + a.quadro.excluidas.length
-                          ? `${a.quadro.novas.length} ${plural(a.quadro.novas.length, "nova", "novas")} · ${a.quadro.alteradas.length} ${plural(a.quadro.alteradas.length, "alterada", "alteradas")} · ${a.quadro.excluidas.length} ${plural(a.quadro.excluidas.length, "excluída", "excluídas")}`
-                          : "0"}
-                    </td>
-                    <td className="px-2 py-2 text-right">{k === 0 ? remover : null}</td>
-                  </tr>
-                ));
+                if (x.estado === "erro")
+                  return [
+                    <tr key={x.id} className="border-b border-gray-100 align-top">
+                      <td className="px-3 py-2 break-words text-gray-900">
+                        {x.nome}
+                        <p className="mt-1 text-xs text-red-700">{x.erro}</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <EtiquetaDoArquivo valido={false} />
+                      </td>
+                      {traco}
+                      <td className="px-2 py-2 text-right">{remover}</td>
+                    </tr>,
+                  ];
+                return x.analises.map((a, k) => {
+                  const planilha = `${x.id}-${k}`;
+                  const i = indiceDaValida.get(planilha);
+                  const colunas = i === undefined ? null : itensPorPlanilha.get(planilha)!;
+                  return (
+                    <tr key={planilha} className="border-b border-gray-100 align-top">
+                      <td className="px-3 py-2 break-words text-gray-900">
+                        {a.arquivo}
+                        {[...a.erros.map((e) => ({ e, erro: true })), ...a.avisos.map((e) => ({ e, erro: false }))].map(({ e, erro }) => (
+                          <p key={e} className={`mt-1 text-xs ${erro ? "text-red-700" : "text-gray-500"}`}>
+                            {e}
+                          </p>
+                        ))}
+                      </td>
+                      <td className="px-3 py-2">
+                        <EtiquetaDoArquivo valido={a.valido} />
+                      </td>
+                      {colunas
+                        ? COLUNAS_DA_IMPORTACAO.map((c) => (
+                            <td key={c.chave} className="px-3 py-2">
+                              {celula(planilha, c.chave, colunas.get(c.chave)!)}
+                            </td>
+                          ))
+                        : traco}
+                      <td className="px-2 py-2 text-right">{k === 0 ? remover : null}</td>
+                    </tr>
+                  );
+                });
               })}
             </tbody>
           </table>
@@ -450,7 +602,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
                 {repetidos.map((r) => (
                   <tr key={r.bloco} className="border-t border-gray-100 align-top">
                     <td className="py-1.5 pr-3 font-medium text-gray-900">{r.bloco}</td>
-                    <td className="py-1.5 pr-3 text-xs text-gray-600">{r.em.map((i) => validas[i].arquivo).join("; ")}</td>
+                    <td className="py-1.5 pr-3 text-xs text-gray-600">{r.em.map((i) => validas[i].a.arquivo).join("; ")}</td>
                     <td className="py-1.5 whitespace-nowrap">
                       {(
                         [
@@ -486,7 +638,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
         <Erro erro={importar.isError ? mensagemDeErro(importar.error, "Não foi possível importar.") : null} />
         <DialogFooter className="items-center">
           <span className="text-xs text-gray-600 sm:mr-auto">
-            {validas.length} {plural(validas.length, "planilha no padrão", "planilhas no padrão")}: {valores.toLocaleString("pt-BR")} {plural(valores, "valor muda", "valores mudam")},{" "}
+            {validas.length} {plural(validas.length, "planilha válida", "planilhas válidas")}: {valores.toLocaleString("pt-BR")} {plural(valores, "valor muda", "valores mudam")},{" "}
             {justificativas} {plural(justificativas, "justificativa", "justificativas")}, {investimentos} {plural(investimentos, "investimento", "investimentos")} e {doQuadro}{" "}
             {plural(doQuadro, "linha do Quadro de Lotação", "linhas do Quadro de Lotação")}.
           </span>

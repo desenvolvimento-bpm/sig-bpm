@@ -28,6 +28,19 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 17:13): a tabela do Importar Valores das Premissas, com as caixas do que cada arquivo
+  // sobrescreve, e o Quadro de Lotação por departamento nos trechos repetidos (pedido do Adão).
+  {
+    publicada: "2026-11-20T17:13",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "No Importar Valores, a tabela mostra o que cada arquivo sobrescreve: em Produção e Serviços, as linhas (Estrutura, Alveolares, Montagem…) das abas Matriz, Filial e Serviços; em Centros de Custo, os centros de custo (gastos e Quadro de Lotação); em Investimentos, Extra-Operacional e Indicadores Manuais, Sobrescrever. Cada item vem com a caixa marcada: desmarque o que não quer importar. Acima da tabela, à direita, a quantia de Linhas e a de Centros de Custo, cada uma com o botão Desmarcar Todos (ou Marcar Todos). Sem nada a mudar, a coluna mostra Sem Alteração.",
+      "Com dois arquivos, o quadro dos trechos repetidos pergunta pelo Quadro de Lotação de cada departamento: um arquivo de outros departamentos (só do Extra-Operacional, por exemplo) não tira mais as linhas do Quadro de Lotação do outro arquivo.",
+      "A Situação de cada arquivo virou a etiqueta Válido ou Inválido, e a coluna Arquivo ficou mais larga.",
+    ],
+  },
   // 20/11/2026 (publicada às 13:22): Cadastros por cenário, etapas 1 e 2 — as abas Unidades, Departamentos, Centros de
   // Custo e Redistribuições de Gastos das Configurações.
   {
