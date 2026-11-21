@@ -12,7 +12,8 @@ import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
  *   rateiam entre Matriz e Filial; METALURGIA e ARMADURA, entre Matriz, Filial, Montagem e Complementar (em Serviços, na
  *   conta de mesma atribuição e descrição da CSM ou da CSC);
  * - nas contas dos custos de montagem (CSM), o balde OBRAS vai direto para Serviços; ACOMPANHAMENTO se rateia entre a
- *   Montagem (CSM) e a Complementar (na conta equivalente da CSC);
+ *   Montagem (CSM) e a Complementar (na conta equivalente da CSC); COMPLEMENTAR (20/11/2026) vai para a conta equivalente da
+ *   CSC, como no fechamento;
  * - nas despesas (DL, DT, DC e DA), Despesas e Extra.
  *
  * Os percentuais dos rateios saem das premissas (premissasCenario.ts): Produção pelo m³ produzido, Projeto pela Liberação
@@ -156,7 +157,7 @@ function montarGrupos(centros: CentroDoGrupo[], filiais: Array<{ centroCustoId: 
 
 function destinoDoGrupo(grupoDRE: string, balde: string | null, unidade: 1 | 2) {
   if (DESPESAS.has(grupoDRE)) return "Despesas e Extra";
-  if (grupoDRE === "CSM") return balde === "ACOMPANHAMENTO" ? "Rateio de Acompanhamento (Montagem e Complementar)" : "Serviços";
+  if (grupoDRE === "CSM") return balde === "ACOMPANHAMENTO" ? "Rateio de Acompanhamento (Montagem e Complementar)" : balde === "COMPLEMENTAR" ? "Serviços (Complementares)" : "Serviços";
   switch (balde) {
     case "MATRIZ":
       return "Matriz";
@@ -274,6 +275,10 @@ export function alocarCentros(est: LinhaEstrutura[], grupos: GrupoDoCenario[], v
         // O acompanhamento com percentual fixo na Matriz ou na Filial (14/10/2026): na conta de produção equivalente.
         somar(1, equivalente(l, "CPP")?.codigo, x.mes, x.valor * pct("ACOMPANHAMENTO", "MATRIZ"));
         somar(2, equivalente(l, "CPP")?.codigo, x.mes, x.valor * pct("ACOMPANHAMENTO", "FILIAL"));
+      } else if (g.balde === "COMPLEMENTAR") {
+        // O balde Complementar nas contas da Montagem (20/11/2026, pedido do Adão: a regra do fechamento para todo o centro): na
+        // conta equivalente da CSC (sem ela, como no fechamento, o valor não entra; a aba Verificações o aponta).
+        somar(3, equivalente(l, "CSC")?.codigo, x.mes, x.valor);
       } else somar(3, l.codigo, x.mes, x.valor);
     } else if (sigla === "CPP") {
       switch (g.balde) {

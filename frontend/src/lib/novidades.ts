@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 23:42): o balde Complementar nas contas da Montagem, como no fechamento.
+  {
+    publicada: "2026-11-20T23:42",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Os centros de custo de rateio Complementar que lançam nas contas de mão de obra da Montagem (como o Turn-Key - Obras) vão, como no fechamento mensal, para as contas equivalentes dos Complementares (CSC) da DRE de Serviços, e não mais para as da Montagem (CSM).",
+    ],
+  },
   // 20/11/2026 (publicada às 23:23): o Responsável das Verificações com todos os que podem justificar.
   {
     publicada: "2026-11-20T23:23",

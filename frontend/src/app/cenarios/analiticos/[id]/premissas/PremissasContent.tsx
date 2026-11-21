@@ -375,7 +375,7 @@ export function PremissasContent() {
             <p>
               Os valores dos grupos de centros de custo vão para as unidades como no fechamento mensal, pelo balde do grupo: nos custos de produção, Matriz e
               Filial vão direto para a unidade, Unidade para a da filial dos centros, e Produção e Projeto se rateiam entre Matriz e Filial; Metalurgia e
-              Armadura, também entre a Montagem e a Complementar de Serviços; nos custos de montagem, Obras vai para Serviços e Acompanhamento se rateia entre
+              Armadura, também entre a Montagem e a Complementar de Serviços; nos custos de montagem, Obras vai para Serviços (a Montagem), Complementar para a conta equivalente dos Complementares (a CSC), e Acompanhamento se rateia entre
               a Montagem e a Complementar; as despesas vão para Despesas e Extra. Os percentuais saem das bases das premissas (a aba Rateios). Em Serviços, os
               Acompanhamentos no Mês somam o Acompanhamento de Obra (d) da DRE.
             </p>

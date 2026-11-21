@@ -578,6 +578,12 @@ describe("centros de custo dos cenários analíticos (13/10/2026)", () => {
     assert.equal(jan("4|DA.MOI.CLT"), 1000);
   });
 
+  it("o balde Complementar nas contas da Montagem vai para a conta equivalente da CSC, como no fechamento (20/11/2026)", () => {
+    const r = alocarCentros(EST, [...GRUPOS, grupo("tk", "COMPLEMENTAR", "CSM")], [{ grupo: "tk", codigo: "CSM.MOD.CLT", mes: 1, valor: 1000 }], percentuaisDasBases(BASES));
+    assert.equal(Math.round(r.get("3|CSC.MOD.CLT")?.[0] ?? 0), 1000);
+    assert.equal(r.get("3|CSM.MOD.CLT"), undefined);
+  });
+
   it("avisa o valor dos grupos de rateio num mês sem base (todo custo vai para algum lugar)", () => {
     // A Armadura não tem base no mês 1: o grupo de armadura fica de fora; a Produção tem base.
     const grupos = [grupo("arm", "ARMADURA", "CPP"), grupo("p", "PRODUCAO", "CPP")];
