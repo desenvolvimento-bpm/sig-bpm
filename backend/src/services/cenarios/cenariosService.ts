@@ -451,8 +451,9 @@ function linhasDosReajustes(est: Awaited<ReturnType<typeof estruturaDRE>>) {
   // Produção e Serviços (12/11/2026, pedido do Adão: aparece, como em Resultados Empresariais; antes, ficava fora): só para
   // leitura — os volumes não são contas que se reajustam.
   const comConta = linhas.map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" && l.linha.codigo !== ps && l.acima[0] !== ps }));
-  // Os Custos de Produção (19/11/2026, pedido do Adão): um grupo de linhas da Matriz e um da Filial, no lugar do grupo CPP, com
-  // a unidade no código ("1|CPP…") e no nome do total ("CUSTOS DE PRODUÇÃO: MATRIZ (CPP)").
+  // Os Custos de Produção (19/11/2026, pedido do Adão): um grupo de linhas da Matriz e um da Filial, no lugar do grupo CPP; desde
+  // 21/11/2026 (pedido do Adão), cada unidade em dois, Global e Mercantil, com a unidade e a venda no código ("1|GLOBAL|CPP…") e
+  // no nome do total ("CUSTOS DE PRODUÇÃO: MATRIZ GLOBAL (CPP)").
   const grupoDe = (codigo: string) => codigo.split(".")[0];
   const resultado: typeof comConta = [];
   const feitos = new Set<string>();
@@ -467,13 +468,17 @@ function linhasDosReajustes(est: Awaited<ReturnType<typeof estruturaDRE>>) {
     feitos.add(g);
     const doGrupo = comConta.filter((x) => grupoDe(x.linha.codigo) === g);
     for (const u of unidades) {
-      for (const x of doGrupo) {
-        const nome = x.linha.tipo !== "ITEM" && x.nivel === 0 ? (/^(.*?):.*?(\([^)]*\))\s*$/.exec(x.linha.descricao) ?? null) : null;
-        resultado.push({
-          ...x,
-          linha: { ...x.linha, codigo: `${u.unidade}|${x.linha.codigo}`, descricao: nome ? `${nome[1]}: ${u.nome} ${nome[2]}` : x.nivel === 0 ? `${x.linha.descricao} · ${u.nome}` : x.linha.descricao },
-          acima: x.acima.map((a) => (grupoDe(a) === g ? `${u.unidade}|${a}` : a)),
-        });
+      for (const v of u.vendas) {
+        const prefixo = `${u.unidade}|${v.chave}|`;
+        const rotulo = `${u.nome} ${v.nome}`;
+        for (const x of doGrupo) {
+          const nome = x.linha.tipo !== "ITEM" && x.nivel === 0 ? (/^(.*?):.*?(\([^)]*\))\s*$/.exec(x.linha.descricao) ?? null) : null;
+          resultado.push({
+            ...x,
+            linha: { ...x.linha, codigo: `${prefixo}${x.linha.codigo}`, descricao: nome ? `${nome[1]}: ${rotulo} ${nome[2]}` : x.nivel === 0 ? `${x.linha.descricao} · ${rotulo}` : x.linha.descricao },
+            acima: x.acima.map((a) => (grupoDe(a) === g ? `${prefixo}${a}` : a)),
+          });
+        }
       }
     }
   }
@@ -494,15 +499,18 @@ async function somaDasContas(tx: Prisma.TransactionClient, cenarioId: string, es
   const linhas = await tx.cenarioResultado.findMany({ where: { cenarioId, visao: { in: [...UNIDADES] }, linhaDREId: { in: [...codigoDe.keys()] } }, select: { linhaDREId: true, visao: true, valor: true } });
   return linhas.reduce((s, r) => {
     const codigo = codigoDe.get(r.linhaDREId)!;
-    return chaves.has(codigo) || chaves.has(`${r.visao}|${codigo}`) ? s + Number(r.valor) : s;
+    // A chave da conta, a da conta na unidade ou (21/11/2026) a da conta numa venda da unidade.
+    return chaves.has(codigo) || chaves.has(`${r.visao}|${codigo}`) || [...chaves].some((k) => k.startsWith(`${r.visao}|`) && daChave(k).codigo === codigo) ? s + Number(r.valor) : s;
   }, 0);
 }
 
-/** O nome de uma conta da Aplicação dos Reajustes no histórico: a descrição e, nos Custos de Produção, a unidade. */
+/** O nome de uma conta da Aplicação dos Reajustes no histórico: a descrição e, nos Custos de Produção, a unidade e a venda. */
 function nomeDaChave(chave: string, nome: Map<string, string>) {
-  const { codigo, unidade } = daChave(chave);
+  const { codigo, unidade, venda } = daChave(chave);
   const descricao = nome.get(codigo) ?? codigo;
-  return unidade === null ? descricao : `${descricao} (${unidade === 1 ? "Matriz" : unidade === 2 ? "Filial" : `unidade ${unidade}`})`;
+  if (unidade === null) return descricao;
+  const daUnidade = unidade === 1 ? "Matriz" : unidade === 2 ? "Filial" : `unidade ${unidade}`;
+  return `${descricao} (${venda ? `${daUnidade} · ${venda === "GLOBAL" ? "Global" : "Mercantil"}` : daUnidade})`;
 }
 
 /**

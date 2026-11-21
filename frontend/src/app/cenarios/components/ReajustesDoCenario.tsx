@@ -383,10 +383,19 @@ function comMudanca(par: Par, coluna: Coluna, chave: string): Par {
  * A Aplicação dos Reajustes (o quadro de baixo): como as Variações Máximas das Configurações, os índices de cada conta na
  * estrutura da DRE vigente (desde 12/11/2026, com Produção e Serviços, como em Resultados Empresariais, só para leitura: os volumes
  * não se reajustam) — desde 19/11/2026 (pedido do Adão), até dois por conta, o 1º e o 2º Índice de Reajuste, que rodam nessa
- * ordem (o 2º sobre o valor já reajustado pelo 1º). Os Custos de Produção vêm em dois grupos de linhas (19/11/2026), MATRIZ e
- * FILIAL, com a unidade no código ("1|CPP…"): cada unidade com os seus índices. O índice de um total ou de uma atribuição vale
+ * ordem (o 2º sobre o valor já reajustado pelo 1º). Os Custos de Produção vêm em grupos de linhas por unidade (19/11/2026) e,
+ * desde 21/11/2026 (pedido do Adão), por venda — MATRIZ GLOBAL, MATRIZ MERCANTIL, FILIAL GLOBAL e FILIAL MERCANTIL —, com a
+ * unidade e a venda no código ("1|GLOBAL|CPP…"): cada uma com os seus índices. O índice de um total ou de uma atribuição vale
  * para as contas abaixo dele; “Preencher Selecionados” aplica um índice às contas marcadas, na coluna escolhida.
  */
+/** A unidade e a venda de uma conta dos Custos de Produção ("1|GLOBAL|CPP…" → "Matriz · Global · "), para o Exportar. */
+function grupoDaConta(codigo: string) {
+  const m = /^(\d)\|(?:(GLOBAL|MERCANTIL)\|)?/.exec(codigo);
+  if (!m) return "";
+  const unidade = m[1] === "1" ? "Matriz" : m[1] === "2" ? "Filial" : `Unidade ${m[1]}`;
+  return `${unidade} · ${m[2] ? `${m[2] === "GLOBAL" ? "Global" : "Mercantil"} · ` : ""}`;
+}
+
 function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasPremissas; podeEditar: boolean }) {
   const queryClient = useQueryClient();
   const indices = dados.indices;
@@ -408,8 +417,9 @@ function Aplicacao({ id, dados, podeEditar }: { id: string; dados: ReajustesDasP
     return i ? rotuloDoIndice(i, dados.meses) : "";
   };
   const colunasExportadas: ColunaExportavel<LinhaDaAplicacao>[] = [
-    // Nos Custos de Produção (19/11/2026), a unidade antes da conta: as contas se repetem nos grupos da Matriz e da Filial.
-    { chave: "linha", rotulo: "Linha da DRE", valor: (l) => (l.verificada && /^1\|/.test(l.codigo) ? `Matriz · ${l.descricao}` : l.verificada && /^2\|/.test(l.codigo) ? `Filial · ${l.descricao}` : l.descricao) },
+    // Nos Custos de Produção (19/11/2026; 21/11/2026, com a venda), a unidade e a venda antes da conta: as contas se repetem nos
+    // grupos de cada unidade e venda.
+    { chave: "linha", rotulo: "Linha da DRE", valor: (l) => (l.verificada ? `${grupoDaConta(l.codigo)}${l.descricao}` : l.descricao) },
     { chave: "indice", rotulo: ROTULO_DA_COLUNA[0], valor: (l) => (l.verificada && l.indice ? rotulo(l.indice) : "") },
     { chave: "indice2", rotulo: ROTULO_DA_COLUNA[1], valor: (l) => (l.verificada && l.indice2 ? rotulo(l.indice2) : "") },
   ];

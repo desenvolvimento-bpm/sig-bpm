@@ -134,8 +134,11 @@ export function ConfiguracoesContent() {
                   2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante). Use “Incluir Índice” para uma
                   linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a
                   coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Aplicação dos Reajustes, cada conta da DRE escolhe até dois índices, nas
-                  colunas 1º Índice de Reajuste e 2º Índice de Reajuste (o 2º só depois do 1º e diferente dele; os Custos de Produção vêm em dois grupos de linhas, CUSTOS DE
-                  PRODUÇÃO: MATRIZ e CUSTOS DE PRODUÇÃO: FILIAL, cada um com os índices daquela unidade; Produção e Serviços aparece, recolhida em
+                  colunas 1º Índice de Reajuste e 2º Índice de Reajuste (o 2º só depois do 1º e diferente dele; os Custos de Produção vêm em quatro grupos de linhas, CUSTOS DE
+                  PRODUÇÃO: MATRIZ GLOBAL, MATRIZ MERCANTIL, FILIAL GLOBAL e FILIAL MERCANTIL, cada um com os índices daquela unidade e venda — cada
+                  conta reajusta a parte de cada venda: os valores das premissas da tabela dela e, nas contas dos centros de custo e na depreciação,
+                  que não têm venda, a parte do volume produzido dela no mês (sem volume no mês, tudo na Global); com o mesmo índice nas duas vendas,
+                  é como reajustar a conta inteira da unidade; Produção e Serviços aparece, recolhida em
                   Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam); o de um total ou de uma
                   atribuição vale para as contas abaixo dele, e “Preencher Selecionados” aplica um índice às contas marcadas, no 1º ou no 2º (o Limpar no
                   1º faz o 2º passar a ser o 1º); “Gravar Aplicação” grava os índices das contas.

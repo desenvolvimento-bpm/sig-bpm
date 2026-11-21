@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { aplicacaoDosReajustes, daChave, erroDosReajustes, fatoresDasContas, fatoresDoIndice, fatorNaUnidade, indicesDaLinha, usosDosIndices } from "../src/services/cenarios/reajustesCenario.js";
+import {
+  aplicacaoDosReajustes,
+  daChave,
+  erroDosReajustes,
+  fatoresDasContas,
+  fatoresDoIndice,
+  fatorNaUnidade,
+  fatorNaVenda,
+  indicesDaLinha,
+  reajustarPorVenda,
+  usosDosIndices,
+} from "../src/services/cenarios/reajustesCenario.js";
 
 const perto = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-12, `${a} ≠ ${b}`);
 
@@ -70,13 +81,51 @@ describe("Reajustes das Premissas dos analíticos (11/11/2026)", () => {
     perto(fatorNaUnidade(fatores, conta, 1)![0], 1.04);
     perto(fatorNaUnidade(fatores, conta, 2)![0], 1.1);
     perto(fatorNaUnidade(fatores, "DA.GGI.ALUGUEIS", 4)![0], 1.04);
-    assert.deepEqual(daChave(`2|${conta}`), { codigo: conta, unidade: 2 });
-    assert.deepEqual(daChave(conta), { codigo: conta, unidade: null });
+    assert.deepEqual(daChave(`2|${conta}`), { codigo: conta, unidade: 2, venda: null });
+    assert.deepEqual(daChave(conta), { codigo: conta, unidade: null, venda: null });
     // A gravação de antes (a conta sem unidade) vale para as duas.
     const antiga = aplicacaoDosReajustes({ aplicacaoDosReajustes: { [conta]: "r1" } });
     assert.deepEqual(indicesDaLinha(antiga, `1|${conta}`), ["r1", null]);
     assert.deepEqual(indicesDaLinha(antiga, `2|${conta}`), ["r1", null]);
     perto(fatorNaUnidade(fatoresDasContas({ indicesDosReajustes, aplicacaoDosReajustes: { [conta]: "r1" } }), conta, 2)![0], 1.04);
+  });
+
+  it("os Custos de Produção por unidade e venda (21/11/2026): Global e Mercantil com os seus índices, herdando os da unidade", () => {
+    const indicesDosReajustes = [
+      { chave: "g", descricao: "Global", observacao: null, reajustes: [{ valor: 10, mes: 1 }] },
+      { chave: "m", descricao: "Mercantil", observacao: null, reajustes: [{ valor: 5, mes: 7 }] },
+      { chave: "u", descricao: "Unidade", observacao: null, reajustes: [{ valor: 2, mes: 1 }] },
+    ];
+    const conta = "CPP.MP.CIMENTO";
+    assert.deepEqual(daChave(`1|GLOBAL|${conta}`), { codigo: conta, unidade: 1, venda: "GLOBAL" });
+    assert.deepEqual(daChave(`2|MERCANTIL|${conta}`), { codigo: conta, unidade: 2, venda: "MERCANTIL" });
+    const aplicacao = { [`1|GLOBAL|${conta}`]: ["g", null], [`1|MERCANTIL|${conta}`]: ["m", null], [`2|${conta}`]: ["u", null] };
+    const fatores = fatoresDasContas({ indicesDosReajustes, aplicacaoDosReajustes: aplicacao });
+    perto(fatorNaVenda(fatores, conta, 1, "GLOBAL")![0], 1.1);
+    assert.equal(fatorNaVenda(fatores, conta, 1, "MERCANTIL")![0], 1);
+    perto(fatorNaVenda(fatores, conta, 1, "MERCANTIL")![6], 1.05);
+    // A Filial, gravada por unidade (19/11/2026), vale nas duas vendas.
+    perto(fatorNaVenda(fatores, conta, 2, "GLOBAL")![0], 1.02);
+    perto(fatorNaVenda(fatores, conta, 2, "MERCANTIL")![0], 1.02);
+    const lidas = aplicacaoDosReajustes({ aplicacaoDosReajustes: aplicacao });
+    assert.deepEqual(indicesDaLinha(lidas, `2|GLOBAL|${conta}`), ["u", null]);
+    assert.deepEqual(indicesDaLinha(lidas, `1|MERCANTIL|${conta}`), ["m", null]);
+  });
+
+  it("reajusta por venda: as premissas de cada venda e o resto (centros, depreciação) pelo volume dela", () => {
+    // Total 1000: Global 600 e Mercantil 100 das premissas, 300 dos centros; volume Global 75 e Mercantil 25.
+    const vendas = (fg: number, fm: number) => [
+      { venda: "GLOBAL", premissas: [600], volume: [75], fator: [fg] },
+      { venda: "MERCANTIL", premissas: [100], volume: [25], fator: [fm] },
+    ];
+    // Só a Global (+10%): (600 + 300 × 0,75) × 1,1 + (100 + 300 × 0,25) = 907,5 + 175.
+    perto(reajustarPorVenda([1000], vendas(1.1, 1))[0], 907.5 + 175);
+    // Só a Mercantil (+20%): 825 + 175 × 1,2.
+    perto(reajustarPorVenda([1000], vendas(1, 1.2))[0], 825 + 210);
+    // O mesmo índice nas duas: o total × o fator, como antes.
+    perto(reajustarPorVenda([1000], vendas(1.05, 1.05))[0], 1050);
+    // Sem volume no mês, o resto fica na Global; sem fator, a venda não muda.
+    perto(reajustarPorVenda([1000], [{ venda: "GLOBAL", premissas: [600], volume: [0], fator: [1.1] }, { venda: "MERCANTIL", premissas: [100], volume: [0], fator: undefined }])[0], 900 * 1.1 + 100);
   });
 
   it("confere os reajustes: de 1 a 4, acima de −100% e em meses crescentes", () => {

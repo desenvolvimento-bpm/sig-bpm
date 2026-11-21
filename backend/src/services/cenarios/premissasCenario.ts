@@ -9,7 +9,7 @@ import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VE
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
-import { fatoresDasContas, fatorNaUnidade, resumoVazio } from "./reajustesCenario.js";
+import { fatoresDasContas, fatorNaUnidade, fatorNaVenda, GRUPOS_POR_UNIDADE, reajustarPorVenda, resumoVazio } from "./reajustesCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
 
@@ -376,6 +376,8 @@ export function calcularTabela(est: LinhaEstrutura[], linhas: LinhaDoCadastro[],
 export function calcularPremissas(est: LinhaEstrutura[], linhas: LinhaDoCadastro[], ano: number, gravadas: Array<{ unidade: number; venda: string; chave: string; mes: number; valor: unknown }>) {
   const dados = new Map(gravadas.map((p) => [`${p.unidade}|${p.venda}|${p.chave}|${p.mes}`, Number(p.valor)]));
   const somas = new Map<string, number[]>();
+  // As contas de cada tabela ("unidade|venda|código", 21/11/2026): os reajustes dos Custos de Produção por venda.
+  const porVenda = new Map<string, number[]>();
   const bases = new Map<string, number[]>();
   const juntar = (m: Map<string, number[]>, k: string, lista: number[]) => {
     const s = m.get(k) ?? Array<number>(12).fill(0);
@@ -385,11 +387,14 @@ export function calcularPremissas(est: LinhaEstrutura[], linhas: LinhaDoCadastro
   for (const u of UNIDADES_PREMISSAS) {
     for (const v of VENDAS_DA_UNIDADE[u]) {
       const r = calcularTabela(est, linhas, u, ano, (chave, mes) => dados.get(`${u}|${v}|${chave}|${mes}`), v);
-      for (const [codigo, lista] of r.dre) juntar(somas, `${u}|${codigo}`, lista);
+      for (const [codigo, lista] of r.dre) {
+        juntar(somas, `${u}|${codigo}`, lista);
+        juntar(porVenda, `${u}|${v}|${codigo}`, lista);
+      }
       for (const [chave, lista] of r.bases) juntar(bases, chave, lista);
     }
   }
-  return { somas, bases, juntar };
+  return { somas, porVenda, bases, juntar };
 }
 
 /**
@@ -524,7 +529,7 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     tx.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
   ]);
   const porCodigo = new Map(est.map((l) => [l.codigo, l]));
-  const { somas, bases, juntar } = calcularPremissas(est, linhas, cenario.ano, gravadas);
+  const { somas, porVenda, bases, juntar } = calcularPremissas(est, linhas, cenario.ano, gravadas);
   // A base do rateio de Projeto (16/11/2026): a Liberação de Projetos dos Indicadores Manuais.
   for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
   // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
@@ -559,11 +564,24 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     const u = Number(us);
     const l = porCodigo.get(codigo);
     if (!l || l.tipo !== "ITEM" || !l.unidades.includes(u)) continue;
-    // Nos Custos de Produção, o fator da conta na unidade (19/11/2026: um grupo da Matriz e um da Filial).
-    const f = fatorNaUnidade(fatores, codigo, u);
+    // Nos Custos de Produção, o fator da conta na unidade (19/11/2026: um grupo da Matriz e um da Filial) e, desde 21/11/2026,
+    // na venda (Global e Mercantil): cada venda com a parte dela (as premissas dela e o resto pelo volume dela).
+    const porUnidade = GRUPOS_POR_UNIDADE[l.grupoSigla]?.find((g) => g.unidade === u);
+    const doCPP = porUnidade
+      ? reajustarPorVenda(
+          lista,
+          porUnidade.vendas.map((v) => ({
+            venda: v.chave,
+            premissas: porVenda.get(`${u}|${v.chave}|${codigo}`) ?? [],
+            volume: porVenda.get(`${u}|${v.chave}|${C.PRODUCAO_M3}`) ?? [],
+            fator: fatorNaVenda(fatores, codigo, u, v.chave),
+          })),
+        )
+      : null;
+    const f = porUnidade ? null : fatorNaUnidade(fatores, codigo, u);
     lista.forEach((x, m) => {
       if (Math.abs(x) < 0.00005) return;
-      const reajustado = f ? x * f[m] : x;
+      const reajustado = doCPP ? doCPP[m] : f ? x * f[m] : x;
       if (reajustado !== x) {
         resumo.contas.add(codigo);
         resumo.meses.add(m + 1);

@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 21/11/2026 (publicada às 01:39): os Custos de Produção por venda nos Reajustes.
+  {
+    publicada: "2026-11-21T01:39",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Reajustes, a Aplicação dos Reajustes tem os Custos de Produção em quatro grupos: Matriz Global, Matriz Mercantil, Filial Global e Filial Mercantil, cada um com os seus índices. Cada conta reajusta a parte de cada venda: os valores das premissas da tabela dela e, nas contas dos centros de custo e na depreciação, a parte do volume produzido dela no mês. Os índices já escolhidos para a Matriz e a Filial valem para as duas vendas até serem trocados.",
+    ],
+  },
   // 20/11/2026 (publicada às 23:56): os Indicadores Manuais listados no Importar Valores.
   {
     publicada: "2026-11-20T23:56",

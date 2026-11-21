@@ -41,31 +41,66 @@ export function aplicacaoDosReajustes(c: { aplicacaoDosReajustes: unknown }): Re
   return aplicacao;
 }
 
+/** As vendas das tabelas das premissas da Matriz e da Filial (premissasCenario.VENDAS_DA_UNIDADE), na ordem dos grupos. */
+export const VENDAS_DOS_GRUPOS = [
+  { chave: "GLOBAL", nome: "GLOBAL" },
+  { chave: "MERCANTIL", nome: "MERCANTIL" },
+] as const;
+
 /**
- * Os grupos da DRE cujas contas recebem os índices por unidade (19/11/2026, pedido do Adão): os Custos de Produção (CPP), um
- * grupo de linhas da Matriz e um da Filial na Aplicação dos Reajustes. A chave da conta numa unidade é "unidade|código"
- * ("1|CPP.MOD.REMUNERACOES_CLT"); sem unidade (as demais contas e a gravação de antes), o código vale para todas.
+ * Os grupos da DRE cujas contas recebem os índices por unidade e venda: os Custos de Produção (CPP) — 19/11/2026, pedido do
+ * Adão, um grupo de linhas da Matriz e um da Filial; 21/11/2026, pedido do Adão, cada unidade em dois, Global e Mercantil — na
+ * Aplicação dos Reajustes. A chave da conta é "unidade|venda|código" ("1|GLOBAL|CPP.MP.CIMENTO"); a de 19/11/2026,
+ * "unidade|código", vale para as duas vendas da unidade, e a sem unidade (as demais contas e a gravação de antes), para todas.
  */
-export const GRUPOS_POR_UNIDADE: Record<string, Array<{ unidade: number; nome: string }>> = {
+export const GRUPOS_POR_UNIDADE: Record<string, Array<{ unidade: number; nome: string; vendas: typeof VENDAS_DOS_GRUPOS }>> = {
   CPP: [
-    { unidade: 1, nome: "MATRIZ" },
-    { unidade: 2, nome: "FILIAL" },
+    { unidade: 1, nome: "MATRIZ", vendas: VENDAS_DOS_GRUPOS },
+    { unidade: 2, nome: "FILIAL", vendas: VENDAS_DOS_GRUPOS },
   ],
 };
 
-/** O código da conta e a unidade de uma chave da Aplicação dos Reajustes (sem unidade: nula). */
-export function daChave(chave: string): { codigo: string; unidade: number | null } {
-  const m = /^(\d+)\|(.+)$/.exec(chave);
-  return m ? { codigo: m[2], unidade: Number(m[1]) } : { codigo: chave, unidade: null };
+/** O código da conta, a unidade e a venda de uma chave da Aplicação dos Reajustes (sem unidade ou sem venda: nulas). */
+export function daChave(chave: string): { codigo: string; unidade: number | null; venda: string | null } {
+  const m = /^(\d+)\|(?:(GLOBAL|MERCANTIL)\|)?(.+)$/.exec(chave);
+  return m ? { codigo: m[3], unidade: Number(m[1]), venda: m[2] ?? null } : { codigo: chave, unidade: null, venda: null };
 }
 
-/** Os índices de uma linha da Aplicação: os da conta na unidade ("1|CPP…") ou, sem eles, os da conta (a gravação de antes). */
+/**
+ * Os índices de uma linha da Aplicação: os da conta na unidade e na venda ("1|GLOBAL|CPP…") ou, sem eles, os da conta na
+ * unidade ("1|CPP…", a gravação de 19/11/2026) ou os da conta (a gravação de antes).
+ */
 export function indicesDaLinha(aplicacao: Record<string, IndicesDaConta>, chave: string): IndicesDaConta | undefined {
-  return aplicacao[chave] ?? aplicacao[daChave(chave).codigo];
+  const { codigo, unidade } = daChave(chave);
+  return aplicacao[chave] ?? (unidade !== null ? aplicacao[`${unidade}|${codigo}`] : undefined) ?? aplicacao[codigo];
 }
 
 /** O fator de uma conta numa unidade (de fatoresDasContas): o da conta na unidade ou, sem ele, o da conta. */
 export const fatorNaUnidade = (fatores: Map<string, number[]>, codigo: string, unidade: number) => fatores.get(`${unidade}|${codigo}`) ?? fatores.get(codigo);
+/** O fator de uma conta numa unidade e numa venda (21/11/2026): o da venda, o da unidade ou o da conta. */
+export const fatorNaVenda = (fatores: Map<string, number[]>, codigo: string, unidade: number, venda: string) =>
+  fatores.get(`${unidade}|${venda}|${codigo}`) ?? fatorNaUnidade(fatores, codigo, unidade);
+
+/**
+ * O valor reajustado de uma conta dos Custos de Produção numa unidade, venda a venda (21/11/2026, pedido do Adão), nos doze
+ * meses: a parte de cada venda é a das premissas dela (a tabela Global ou Mercantil) mais o resto da conta (os centros de
+ * custo e a depreciação, que não têm venda) na proporção do volume produzido dela no mês (sem volume no mês, tudo na
+ * primeira venda); cada parte sai multiplicada pelo fator da venda (sem ele, 1). Com o mesmo fator nas vendas, é o total ×
+ * o fator, como antes.
+ */
+export function reajustarPorVenda(
+  total: number[],
+  vendas: Array<{ venda: string; premissas: number[]; volume: number[]; fator: number[] | undefined }>,
+): number[] {
+  return total.map((t, m) => {
+    const resto = t - vendas.reduce((s, v) => s + (v.premissas[m] ?? 0), 0);
+    const volume = vendas.reduce((s, v) => s + Math.max(0, v.volume[m] ?? 0), 0);
+    return vendas.reduce((s, v, k) => {
+      const parte = volume > 0 ? Math.max(0, v.volume[m] ?? 0) / volume : k === 0 ? 1 : 0;
+      return s + ((v.premissas[m] ?? 0) + resto * parte) * (v.fator?.[m] ?? 1);
+    }, 0);
+  });
+}
 
 /** Quantas contas usam cada índice na Aplicação dos Reajustes (no 1º ou no 2º); `vale` filtra as contas. */
 export function usosDosIndices(aplicacao: Record<string, IndicesDaConta>, vale: (codigo: string) => boolean = () => true): Map<string, number> {
