@@ -1,13 +1,14 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { plural } from "../../utils/plural.js";
+import { gestaoDoCentro } from "../acesso/recorteDepartamento.js";
 import { auditar } from "../auditoriaService.js";
 import { classificacaoService } from "../classificacao/classificacaoService.js";
 import { chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento } from "../classificacao/regrasClassificacao.js";
 
 /**
  * As Redistribuições de Gastos (13/11/2026, pedido do Adão; Cadastros Gerais / Controladoria): os movimentos dos
- * fornecedores marcados, numa conta da DRE (e num departamento, ou em todos), valem divididos entre os centros de custo
+ * fornecedores marcados, nas contas da DRE (uma ou mais) e num departamento (ou em todos), valem divididos entre os centros de custo
  * dos destinos, pelos percentuais (somam 100%), nas competências da vigência. A classificação aplica (classificacaoService);
  * aqui, o cadastro: as listas do modal, a validação, a gravação (com a reclassificação das competências ainda não apuradas
  * da vigência) e a exclusão.
@@ -24,7 +25,8 @@ export class RegraRedistribuicaoError extends Error {
 
 export type DadosDaRedistribuicao = {
   departamentoId: string | null;
-  linhaDREId: string;
+  /** As contas da DRE (uma ou mais), na ordem do modal. */
+  linhasDREIds: string[];
   fornecedores: string[];
   /** O percentual de 0 a 100, como digitado. */
   destinos: Array<{ centroCustoId: string; percentual: number }>;
@@ -47,12 +49,70 @@ const mesDaCompetencia = (c: { ano: number; mes: number }) => new Date(Date.UTC(
 const naVigencia = (c: { ano: number; mes: number }, inicio: Date, fim: Date | null) => mesDaCompetencia(c) >= inicio && (!fim || mesDaCompetencia(c) <= fim);
 export const rotuloDaLinha = (l: { grupoSigla: string | null; atribuicao: string | null; descricao: string }) => [l.grupoSigla, l.atribuicao, l.descricao].filter(Boolean).join(" · ");
 
-export const LINHA_SEL = { id: true, codigo: true, descricao: true, grupoSigla: true, atribuicao: true, tipo: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } } as const;
+export const LINHA_SEL = { id: true, codigo: true, descricao: true, grupo: true, grupoSigla: true, atribuicao: true, tipo: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } } as const;
+export type LinhaDaRegra = Prisma.LinhaDREGetPayload<{ select: typeof LINHA_SEL }>;
 const DEPARTAMENTO_SEL = { id: true, nome: true, gruposDRE: true, ativo: true, unidadeNegocio: { select: { codigo: true, nome: true } } } as const;
 
 /** A linha é do departamento: um grupo da DRE dele, numa linha da unidade dele. */
 export const linhaDoDepartamento = (l: { grupoSigla: string | null; unidades: Array<{ unidadeNegocio: { codigo: number } }> }, d: { gruposDRE: string[]; unidadeNegocio: { codigo: number } }) =>
   !!l.grupoSigla && d.gruposDRE.includes(l.grupoSigla) && l.unidades.some((u) => u.unidadeNegocio.codigo === d.unidadeNegocio.codigo);
+
+/**
+ * As contas da DRE de uma redistribuição (20/11/2026: uma ou mais): sem repetir, na ordem do modal, cada uma uma linha de item
+ * ativa da Estrutura da DRE e, com o departamento, uma linha dele. Serve ao cadastro e às cópias dos cenários.
+ */
+export async function contasDaRegra(ids: string[], departamento: { nome: string; gruposDRE: string[]; unidadeNegocio: { codigo: number; nome: string } } | null): Promise<LinhaDaRegra[]> {
+  const unicos = [...new Set(ids.filter(Boolean))];
+  if (!unicos.length) throw new RegraRedistribuicaoError(400, "Escolha ao menos uma Conta da DRE.");
+  const achadas = new Map((await getPrismaClient().linhaDRE.findMany({ where: { id: { in: unicos } }, select: LINHA_SEL })).map((l) => [l.id, l]));
+  return unicos.map((id) => {
+    const linha = achadas.get(id);
+    if (!linha || linha.tipo !== "ITEM") throw new RegraRedistribuicaoError(400, "Escolha Contas da DRE que sejam linhas de item da Estrutura da DRE.");
+    if (!linha.ativo) throw new RegraRedistribuicaoError(400, `A Conta da DRE ${rotuloDaLinha(linha)} está inativa.`);
+    if (departamento && !linhaDoDepartamento(linha, departamento)) throw new RegraRedistribuicaoError(400, `A conta ${rotuloDaLinha(linha)} não é do departamento ${departamento.nome} (${departamento.unidadeNegocio.nome}).`);
+    return linha;
+  });
+}
+
+/** A conta em comum com a redistribuição que conflita, para a mensagem: "da conta X" (ou "das contas X, Y"). */
+export const contaEmComum = (linhas: LinhaDaRegra[], outras: Array<{ linhaDREId: string }>) => {
+  const comuns = linhas.filter((l) => outras.some((o) => o.linhaDREId === l.id)).map(rotuloDaLinha);
+  return `${comuns.length === 1 ? "da conta" : "das contas"} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""}`;
+};
+
+/** As contas da DRE para gravar, na ordem do modal. */
+export const contasParaGravar = (ids: string[]) => ids.map((linhaDREId, i) => ({ linhaDREId, ordem: i + 1 }));
+
+/** As opções das Contas da DRE do modal: com o grupo, a atribuição e as unidades (a lupa e o filtro da Unidade). */
+export const opcaoDaLinha = (l: LinhaDaRegra) => ({
+  id: l.id,
+  codigo: l.codigo,
+  rotulo: rotuloDaLinha(l),
+  descricao: l.descricao,
+  grupo: l.grupo,
+  atribuicao: l.atribuicao,
+  unidades: l.unidades.map((u) => u.unidadeNegocio.codigo),
+});
+
+/** As opções de um centro de Redistribuir Para: com o departamento, o grupo, a atribuição e o balde (a lupa). */
+export const opcaoDoCentro = (c: { id: string; codigoRM: string | null; nomeRM: string; departamento: string | null; atribuicao: string | null; balde: string | null }) => ({
+  id: c.id,
+  codigo: c.codigoRM ?? "",
+  nome: c.nomeRM,
+  detalhe: [c.departamento, c.balde].filter(Boolean).join(" · ") || null,
+  codigoRM: c.codigoRM,
+  nomeRM: c.nomeRM,
+  departamento: c.departamento,
+  atribuicao: c.atribuicao,
+  balde: c.balde,
+  departamentoDoRecorte: gestaoDoCentro(c.departamento),
+});
+
+/** O nome das contas para a auditoria: a primeira e quantas mais. */
+export function nomeDasContas(linhas: Array<{ descricao: string; grupoSigla: string | null; atribuicao: string | null }>) {
+  const nomes = linhas.map(rotuloDaLinha);
+  return nomes.length > 1 ? `${nomes[0]} e mais ${nomes.length - 1}` : (nomes[0] ?? "");
+}
 
 /** Depois de gravar: reclassifica as competências ainda não apuradas da vigência e diz quais apuradas pedem reapurar. */
 async function aplicarNasCompetencias(vigencias: Array<{ inicio: Date; fim: Date | null }>) {
@@ -70,7 +130,10 @@ async function aplicarNasCompetencias(vigencias: Array<{ inicio: Date; fim: Date
 async function ler(id: string) {
   const r = await getPrismaClient().redistribuicaoGasto.findUnique({
     where: { id },
-    include: { destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } } },
+    include: {
+      contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } } },
+      destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } },
+    },
   });
   if (!r) throw new RegraRedistribuicaoError(404, "Redistribuição não encontrada.");
   return r;
@@ -78,7 +141,7 @@ async function ler(id: string) {
 /** Para a auditoria: os campos como a tela os mostra. */
 const paraAuditoria = (r: Awaited<ReturnType<typeof ler>>) => ({
   departamentoId: r.departamentoId,
-  linhaDREId: r.linhaDREId,
+  linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,
   destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: Number(d.percentual) })),
   vigenciaInicio: textoDoMes(r.vigenciaInicio),
@@ -90,15 +153,13 @@ const paraAuditoria = (r: Awaited<ReturnType<typeof ler>>) => ({
 /** Valida e normaliza o que veio do modal. */
 async function preparar(d: DadosDaRedistribuicao, id: string | null) {
   const prisma = getPrismaClient();
-  const linha = await prisma.linhaDRE.findUnique({ where: { id: d.linhaDREId }, select: LINHA_SEL });
-  if (!linha || linha.tipo !== "ITEM") throw new RegraRedistribuicaoError(400, "Escolha uma Conta da DRE (uma linha de item da Estrutura da DRE).");
-  if (!linha.ativo) throw new RegraRedistribuicaoError(400, "A Conta da DRE está inativa.");
   let departamento: Prisma.DepartamentoGetPayload<{ select: typeof DEPARTAMENTO_SEL }> | null = null;
   if (d.departamentoId) {
     departamento = await prisma.departamento.findUnique({ where: { id: d.departamentoId }, select: DEPARTAMENTO_SEL });
     if (!departamento) throw new RegraRedistribuicaoError(400, "Departamento da DRE inexistente.");
-    if (!linhaDoDepartamento(linha, departamento)) throw new RegraRedistribuicaoError(400, `A conta ${rotuloDaLinha(linha)} não é do departamento ${departamento.nome} (${departamento.unidadeNegocio.nome}).`);
   }
+  const linhas = await contasDaRegra(d.linhasDREIds, departamento);
+  const idsDasContas = linhas.map((l) => l.id);
   // Os fornecedores marcados, um por nome (sem caixa).
   const porChave = new Map<string, string>();
   for (const f of d.fornecedores) {
@@ -121,11 +182,11 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
   const inicio = mesDe(d.vigenciaInicio, "O início da vigência");
   const fim = d.vigenciaFim ? mesDe(d.vigenciaFim, "O fim da vigência") : null;
   if (fim && fim < inicio) throw new RegraRedistribuicaoError(400, "O fim da vigência é anterior ao início.");
-  // Sem sobreposição: na mesma conta, com um fornecedor em comum, em departamentos que se cruzam e na mesma época.
+  // Sem sobreposição: numa conta em comum, com um fornecedor em comum, em departamentos que se cruzam e na mesma época.
   if (d.ativo) {
     const outras = await prisma.redistribuicaoGasto.findMany({
-      where: { ativo: true, linhaDREId: linha.id, ...(id ? { id: { not: id } } : {}) },
-      select: { id: true, departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } } },
+      where: { ativo: true, contas: { some: { linhaDREId: { in: idsDasContas } } }, ...(id ? { id: { not: id } } : {}) },
+      select: { id: true, departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
     });
     const cruza = (o: (typeof outras)[number]) =>
       (!o.departamentoId || !d.departamentoId || o.departamentoId === d.departamentoId) &&
@@ -137,13 +198,14 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
       const comuns = conflito.fornecedores.filter((f) => porChave.has(chaveDoFornecedor(f)));
       throw new RegraRedistribuicaoError(
         409,
-        `Já há uma redistribuição ativa desta conta (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
+        `Já há uma redistribuição ativa ${contaEmComum(linhas, conflito.contas)} (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
       );
     }
   }
   return {
     departamentoId: departamento?.id ?? null,
-    linhaDREId: linha.id,
+    linhasDREIds: idsDasContas,
+    nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
     destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
@@ -158,7 +220,7 @@ export const rotuloDaVigencia = (inicio: Date, fim: Date | null) => {
 };
 
 export const redistribuicoesService = {
-  /** A lista da aba: o departamento, a conta, os fornecedores, os destinos, a vigência e as competências em que já valeu. */
+  /** A lista da aba: o departamento, as contas, os fornecedores, os destinos, a vigência e as competências em que já valeu. */
   async listar() {
     const prisma = getPrismaClient();
     const [rs, usos] = await Promise.all([
@@ -166,7 +228,7 @@ export const redistribuicoesService = {
         orderBy: [{ ativo: "desc" }, { vigenciaInicio: "desc" }, { criadoEm: "asc" }],
         include: {
           departamento: { select: { nome: true, unidadeNegocio: { select: { nome: true } } } },
-          linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } },
+          contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } } } },
           destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
         },
       }),
@@ -182,8 +244,8 @@ export const redistribuicoesService = {
       id: r.id,
       departamentoId: r.departamentoId,
       departamento: r.departamento ? `${r.departamento.nome} (${r.departamento.unidadeNegocio.nome})` : null,
-      linhaDREId: r.linhaDREId,
-      conta: { codigo: r.linhaDRE.codigo, rotulo: rotuloDaLinha(r.linhaDRE) },
+      linhasDREIds: r.contas.map((c) => c.linhaDREId),
+      contas: r.contas.map((c) => ({ codigo: c.linhaDRE.codigo, rotulo: rotuloDaLinha(c.linhaDRE) })),
       fornecedores: r.fornecedores,
       destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, centro: `${d.centroCusto.codigoRM ?? "sem código"} · ${d.centroCusto.nomeRM}`, percentual: Number(d.percentual) * 100 })),
       vigenciaInicio: textoDoMes(r.vigenciaInicio)!,
@@ -194,13 +256,17 @@ export const redistribuicoesService = {
     }));
   },
 
-  /** As listas do modal: os departamentos (com os grupos da DRE e a unidade), as contas da DRE (linhas de item) e os centros. */
+  /**
+   * As listas do modal: os departamentos (com os grupos da DRE e a unidade), as unidades (o filtro das contas), as contas da
+   * DRE (linhas de item, com as unidades em que aparecem) e os centros (com o que a lupa mostra).
+   */
   async opcoes() {
     const prisma = getPrismaClient();
-    const [departamentos, linhas, centros] = await Promise.all([
+    const [departamentos, linhas, centros, unidades] = await Promise.all([
       prisma.departamento.findMany({ where: { ativo: true }, orderBy: { ordem: "asc" }, select: DEPARTAMENTO_SEL }),
       prisma.linhaDRE.findMany({ where: { tipo: "ITEM", ativo: true }, orderBy: { ordem: "asc" }, select: LINHA_SEL }),
-      prisma.centroCusto.findMany({ where: { ativo: true }, orderBy: { codigoRM: "asc" }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, balde: true } }),
+      prisma.centroCusto.findMany({ where: { ativo: true }, orderBy: { codigoRM: "asc" }, select: { id: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true, balde: true } }),
+      prisma.unidadeNegocio.findMany({ orderBy: { codigo: "asc" }, select: { codigo: true, nome: true } }),
     ]);
     return {
       departamentos: departamentos.map((d) => ({
@@ -209,33 +275,35 @@ export const redistribuicoesService = {
         // As contas do departamento: as linhas dos grupos da DRE dele, na unidade dele.
         linhas: linhas.filter((l) => linhaDoDepartamento(l, d)).map((l) => l.id),
       })),
-      linhas: linhas.map((l) => ({ id: l.id, codigo: l.codigo, rotulo: rotuloDaLinha(l) })),
-      centros: centros.map((c) => ({ id: c.id, codigo: c.codigoRM ?? "", nome: c.nomeRM, detalhe: [c.departamento, c.balde].filter(Boolean).join(" · ") || null })),
+      unidades,
+      linhas: linhas.map(opcaoDaLinha),
+      centros: centros.map(opcaoDoCentro),
     };
   },
 
   /**
-   * Os fornecedores com movimentos na combinação (de competências fechadas ou abertas): na conta da DRE (a linha que vale
-   * hoje para o movimento) e no departamento (os grupos da DRE dele e, na Produção, a filial). Com os movimentos e o valor.
+   * Os fornecedores com movimentos na combinação (de competências fechadas ou abertas): nas contas da DRE (a linha que vale
+   * hoje para o movimento; em qualquer das escolhidas) e no departamento (os grupos da DRE dele e, na Produção, a filial).
+   * Com os movimentos e o valor.
    */
-  async fornecedores(departamentoId: string | null, linhaDREId: string) {
+  async fornecedores(departamentoId: string | null, linhasDREIds: string[]) {
     let departamento: DepartamentoDaCombinacao | null = null;
     if (departamentoId) {
       departamento = await getPrismaClient().departamento.findUnique({ where: { id: departamentoId }, select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } });
       if (!departamento) throw new RegraRedistribuicaoError(404, "Departamento da DRE inexistente.");
     }
-    return fornecedoresDaCombinacao(departamento, linhaDREId);
+    return fornecedoresDaCombinacao(departamento, linhasDREIds);
   },
 
   async criar(d: DadosDaRedistribuicao, usuarioId: string) {
     const prisma = getPrismaClient();
     const dados = await preparar(d, null);
-    const { destinos, ...regra } = dados;
+    const { destinos, linhasDREIds, nomeDasContas: nome, ...regra } = dados;
     const criada = await prisma.redistribuicaoGasto.create({
-      data: { ...regra, ordem: (await prisma.redistribuicaoGasto.count()) + 1, destinos: { create: destinos } },
+      data: { ...regra, ordem: (await prisma.redistribuicaoGasto.count()) + 1, contas: { create: contasParaGravar(linhasDREIds) }, destinos: { create: destinos } },
     });
     const depois = paraAuditoria(await ler(criada.id));
-    await auditar({ usuarioId, acao: "CRIACAO", entidade: "redistribuicao_gasto", entidadeId: criada.id, depois, metadados: { nome: `${(await nomeDaConta(regra.linhaDREId)) ?? ""} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
+    await auditar({ usuarioId, acao: "CRIACAO", entidade: "redistribuicao_gasto", entidadeId: criada.id, depois, metadados: { nome: `${nome} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
     return { id: criada.id, ...(await aplicarNasCompetencias([{ inicio: regra.vigenciaInicio, fim: regra.vigenciaFim }])) };
   },
 
@@ -243,13 +311,14 @@ export const redistribuicoesService = {
     const prisma = getPrismaClient();
     const anterior = await ler(id);
     const dados = await preparar(d, id);
-    const { destinos, ...regra } = dados;
+    const { destinos, linhasDREIds, nomeDasContas: nome, ...regra } = dados;
     await prisma.$transaction([
       prisma.redistribuicaoDestino.deleteMany({ where: { redistribuicaoId: id } }),
-      prisma.redistribuicaoGasto.update({ where: { id }, data: { ...regra, destinos: { create: destinos } } }),
+      prisma.redistribuicaoConta.deleteMany({ where: { redistribuicaoId: id } }),
+      prisma.redistribuicaoGasto.update({ where: { id }, data: { ...regra, contas: { create: contasParaGravar(linhasDREIds) }, destinos: { create: destinos } } }),
     ]);
     const depois = paraAuditoria(await ler(id));
-    await auditar({ usuarioId, acao: "ALTERACAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), depois, metadados: { nome: `${(await nomeDaConta(regra.linhaDREId)) ?? ""} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
+    await auditar({ usuarioId, acao: "ALTERACAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), depois, metadados: { nome: `${nome} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
     // A vigência de antes e a de agora: as competências que saíram e as que entraram se reclassificam.
     return { id, ...(await aplicarNasCompetencias([{ inicio: anterior.vigenciaInicio, fim: anterior.vigenciaFim }, { inicio: regra.vigenciaInicio, fim: regra.vigenciaFim }])) };
   },
@@ -272,37 +341,33 @@ export const redistribuicoesService = {
       prisma.lancamentoRedistribuido.deleteMany({ where: { redistribuicaoId: id } }),
       prisma.redistribuicaoGasto.delete({ where: { id } }),
     ]);
-    await auditar({ usuarioId, acao: "EXCLUSAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), metadados: { nome: (await nomeDaConta(anterior.linhaDREId)) ?? "" } });
+    await auditar({ usuarioId, acao: "EXCLUSAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), metadados: { nome: nomeDasContas(anterior.contas.map((c) => c.linhaDRE)) } });
     return aplicarNasCompetencias([{ inicio: anterior.vigenciaInicio, fim: anterior.vigenciaFim }]);
   },
 };
-
-async function nomeDaConta(linhaDREId: string) {
-  const l = await getPrismaClient().linhaDRE.findUnique({ where: { id: linhaDREId }, select: { descricao: true, grupoSigla: true, atribuicao: true } });
-  return l ? rotuloDaLinha(l) : null;
-}
 
 /** O departamento de uma combinação (o dos Cadastros Gerais ou o da cópia de um cenário): os grupos da DRE e a unidade. */
 export type DepartamentoDaCombinacao = { gruposDRE: string[]; unidadeNegocio: { codigo: number } };
 
 /**
- * Os fornecedores com movimentos na combinação (de competências fechadas ou abertas): na conta da DRE (a linha que vale hoje
- * para o movimento) e no departamento (os grupos da DRE dele e, na Produção, a filial), com os movimentos e o valor. Serve ao
- * cadastro e às Redistribuições de Gastos dos cenários analíticos (20/11/2026).
+ * Os fornecedores com movimentos na combinação (de competências fechadas ou abertas): nas contas da DRE (a linha que vale
+ * hoje para o movimento; em qualquer das escolhidas, somadas por fornecedor) e no departamento (os grupos da DRE dele e, na
+ * Produção, a filial), com os movimentos e o valor. Serve ao cadastro e às Redistribuições de Gastos dos cenários analíticos.
  */
-export async function fornecedoresDaCombinacao(departamento: DepartamentoDaCombinacao | null, linhaDREId: string) {
+export async function fornecedoresDaCombinacao(departamento: DepartamentoDaCombinacao | null, linhasDREIds: string[]) {
   const prisma = getPrismaClient();
-  const linha = await prisma.linhaDRE.findUnique({ where: { id: linhaDREId }, select: { id: true, grupoSigla: true } });
-  if (!linha) throw new RegraRedistribuicaoError(404, "Conta da DRE inexistente.");
+  let linhas = await prisma.linhaDRE.findMany({ where: { id: { in: [...new Set(linhasDREIds)] } }, select: { id: true, grupoSigla: true } });
+  if (!linhas.length) throw new RegraRedistribuicaoError(404, "Conta da DRE inexistente.");
   let filial: number | null = null;
   if (departamento) {
-    if (!movimentoNoDepartamento({ grupos: new Set(departamento.gruposDRE), filial: null }, linha.grupoSigla, 0)) return [];
+    linhas = linhas.filter((l) => movimentoNoDepartamento({ grupos: new Set(departamento.gruposDRE), filial: null }, l.grupoSigla, 0));
+    if (!linhas.length) return [];
     filial = filialDoDepartamento(departamento.unidadeNegocio.codigo);
   }
   const [grupos, competencias] = await Promise.all([
     prisma.lancamentoContabil.groupBy({
       by: ["cliForn", "competenciaId"],
-      where: { linhaDREId, cliForn: { not: null }, ...(filial !== null ? { filial } : {}) },
+      where: { linhaDREId: { in: linhas.map((l) => l.id) }, cliForn: { not: null }, ...(filial !== null ? { filial } : {}) },
       _count: { _all: true },
       _sum: { valorMovimento: true },
     }),

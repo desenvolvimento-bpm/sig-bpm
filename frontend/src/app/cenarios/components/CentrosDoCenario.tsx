@@ -32,9 +32,9 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * Adão) fica acima da lista e da tabela, a partir da esquerda da lista, e a lista começa na altura dos rótulos da tabela; ao
  * rolar, a cópia dele flutua sobre a tabela.
  */
-export function CentrosDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
+export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: string; editavel: boolean; /** O grupo que a aba abre (o da verificação clicada). */ grupoInicial?: string | null }) {
   const [busca, setBusca] = useState("");
-  const [escolhido, setEscolhido] = useState<string | null>(null);
+  const [escolhido, setEscolhido] = useState<string | null>(grupoInicial);
   const lista = useQuery({ queryKey: ["cenarios", id, "centros"], queryFn: () => cenariosService.centros(id) });
   const grupos = [...(lista.data?.grupos ?? [])].sort((a, b) => a.grupo.localeCompare(b.grupo, "pt-BR"));
   const grupo = (escolhido && grupos.some((g) => g.grupo === escolhido) ? escolhido : grupos[0]?.grupo) ?? null;

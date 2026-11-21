@@ -221,7 +221,8 @@ export type DepartamentoDaRedistribuicao = { grupos: Set<string>; filial: number
 /** Uma redistribuição de gastos, como a classificação a usa (13/11/2026): já filtrada pela vigência da competência. */
 export type RegraDeRedistribuicao<C> = {
   id: string;
-  linhaDREId: string;
+  /** As contas da DRE (20/11/2026: várias; o movimento de qualquer delas). */
+  linhasDRE: Set<string>;
   /** Nulo: todos os departamentos. */
   departamento: DepartamentoDaRedistribuicao | null;
   /** As chaves dos fornecedores marcados (chaveDoFornecedor). */
@@ -237,8 +238,8 @@ export const movimentoNoDepartamento = (d: DepartamentoDaRedistribuicao, grupoSi
   !!grupoSigla && d.grupos.has(grupoSigla) && (d.filial === null || d.filial === filial);
 
 /**
- * A redistribuição de gastos de um movimento (13/11/2026), ou nula: a da conta da DRE dele (a linha da conta que vale
- * depois das reclassificações), do fornecedor dele entre os marcados e do departamento (ou de todos). As regras não se
+ * A redistribuição de gastos de um movimento (13/11/2026), ou nula: a que tem a conta da DRE dele entre as suas (a linha da
+ * conta que vale depois das reclassificações), o fornecedor dele entre os marcados e o departamento (ou todos). As regras não se
  * sobrepõem (o cadastro recusa); havendo mais de uma, vale a primeira.
  */
 export function redistribuicaoDoMovimento<R extends RegraDeRedistribuicao<unknown>>(
@@ -247,7 +248,8 @@ export function redistribuicaoDoMovimento<R extends RegraDeRedistribuicao<unknow
 ): R | null {
   if (!m.linhaDREId || !m.cliForn) return null;
   const fornecedor = chaveDoFornecedor(m.cliForn);
-  return regras.find((r) => r.linhaDREId === m.linhaDREId && r.fornecedores.has(fornecedor) && (!r.departamento || movimentoNoDepartamento(r.departamento, m.grupoSigla, m.filial))) ?? null;
+  const linha = m.linhaDREId;
+  return regras.find((r) => r.linhasDRE.has(linha) && r.fornecedores.has(fornecedor) && (!r.departamento || movimentoNoDepartamento(r.departamento, m.grupoSigla, m.filial))) ?? null;
 }
 
 /**

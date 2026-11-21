@@ -158,7 +158,7 @@ describe("corrigirCentroEConta (Reclassificações por Fornecedor e por Conta, 1
 describe("Redistribuições de Gastos (13/11/2026)", () => {
   const regra = (over: Partial<Parameters<typeof redistribuicaoDoMovimento>[1][number]> = {}) => ({
     id: "r1",
-    linhaDREId: "linha-pj",
+    linhasDRE: new Set(["linha-pj"]),
     departamento: null,
     fornecedores: new Set(["MK ENGENHARIA E CONSULTORIA"]),
     destinos: [{ centro: { id: "a" }, percentual: 0.6 }, { centro: { id: "b" }, percentual: 0.4 }],
@@ -171,6 +171,13 @@ describe("Redistribuições de Gastos (13/11/2026)", () => {
     assert.equal(redistribuicaoDoMovimento(mov({ cliForn: "OUTRO" }), [regra()]), null);
     assert.equal(redistribuicaoDoMovimento(mov({ linhaDREId: "outra-linha" }), [regra()]), null);
     assert.equal(redistribuicaoDoMovimento(mov({ cliForn: null }), [regra()]), null);
+  });
+
+  it("vale em qualquer das contas da DRE da regra (20/11/2026: várias contas)", () => {
+    const varias = regra({ linhasDRE: new Set(["linha-pj", "linha-pf"]) });
+    assert.equal(redistribuicaoDoMovimento(mov({ linhaDREId: "linha-pf" }), [varias])?.id, "r1");
+    assert.equal(redistribuicaoDoMovimento(mov({ linhaDREId: "linha-pj" }), [varias])?.id, "r1");
+    assert.equal(redistribuicaoDoMovimento(mov({ linhaDREId: "outra-linha" }), [varias]), null);
   });
 
   it("no departamento: os grupos da DRE dele e, na Produção, a filial da unidade (1 Matriz, 2 Filial)", () => {

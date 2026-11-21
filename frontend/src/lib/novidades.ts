@@ -28,6 +28,46 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 22:21): a aba Verificações das Premissas (pedido do Adão).
+  {
+    publicada: "2026-11-20T22:21",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "A aba Verificações, a última, lista as inconsistências nos valores digitados ou importados: valores sem volume e volume sem receita (Matriz, Filial e Serviços); colaboradores sem salário, salário sem colaboradores, PJ sem aumento no ano e salário que cai (Quadro de Lotação); salários que não variam com os colaboradores, grupos com Quadro de Lotação e sem remunerações ou sem gastos gerais e valores que não chegam à DRE (Centros de Custo).",
+      "Cada verificação mostra a aba (o clique a abre), a linha ou o centro de custo, os meses e o responsável (quem alterou os valores por último). Corrija os valores ou, se estiverem certos, marque as caixas (ou “Marcar Todas”) e clique em “De Acordo”: só o responsável ou o Administrador confirma. As abas com verificações pendentes mostram o sinal de alerta ao lado do nome.",
+    ],
+  },
+  {
+    publicada: "2026-11-20T22:21",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: ["O Congelar Versão pede as Verificações das Premissas todas corrigidas ou com o De Acordo."],
+  },
+  // 20/11/2026 (publicada às 22:21): as Redistribuições de Gastos com várias contas, a Unidade e as
+  // lupas (pedido do Adão).
+  {
+    publicada: "2026-11-20T22:21",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: [
+      "No modal Redistribuição de Gastos, escolha quantas Contas da DRE precisar: digite parte do nome ou do código, ou use a lupa ao lado do campo para ver a lista das contas (com o código, o grupo, a atribuição e as unidades) e clicar numa. As escolhidas ficam listadas logo abaixo do campo, com o X para tirar, e a tabela Fornecedores traz os fornecedores com movimentos em qualquer delas.",
+      "O campo Unidade, antes da Conta da DRE, filtra as contas oferecidas (Todas, Matriz, Filial, Serviços…).",
+      "Em Redistribuir Para, cada centro de custo tem também a lupa, com a lista dos centros (o departamento, o grupo, a atribuição e o balde), como no modal Contestar.",
+    ],
+  },
+  {
+    publicada: "2026-11-20T22:21",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Na aba Redistribuições de Gastos, o modal é o novo do cadastro: várias Contas da DRE por redistribuição (pela busca ou pela lupa), o filtro da Unidade e a lupa dos centros de custo do cenário em Redistribuir Para.",
+    ],
+  },
   // 20/11/2026 (publicada às 20:22): a receita de frete da Fundação, o Importar Valores sem arquivos "válidos" que não importam
   // nada e o clique nos cadastros do Quadro de Lotação (pedidos do Adão).
   {

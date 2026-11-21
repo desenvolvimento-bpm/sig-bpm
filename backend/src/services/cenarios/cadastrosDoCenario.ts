@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "../../generated/prisma/client.js";
+import { nomeDasContas } from "../redistribuicoes/redistribuicoesService.js";
 import { lerRealocacoes } from "./realocacoesCenario.js";
 
 /**
@@ -68,11 +69,16 @@ export async function copiarCadastros(tx: Tx, cenarioId: string, de: string | nu
         return { ...d, id: novo, cenarioId };
       }),
     });
-    const rs = await tx.cenarioRedistribuicao.findMany({ where: { cenarioId: de }, include: { destinos: true } });
+    const rs = await tx.cenarioRedistribuicao.findMany({ where: { cenarioId: de }, include: { destinos: true, contas: { orderBy: { ordem: "asc" } } } });
     await criarRedistribuicoes(
       tx,
       cenarioId,
-      rs.map(({ id: _id, criadoEm: _c, atualizadoEm: _a, cenarioId: _ce, destinos, ...r }) => ({ ...r, departamentoId: r.departamentoId ? (deps.get(r.departamentoId) ?? null) : null, destinos })),
+      rs.map(({ id: _id, criadoEm: _c, atualizadoEm: _a, cenarioId: _ce, destinos, contas, ...r }) => ({
+        ...r,
+        departamentoId: r.departamentoId ? (deps.get(r.departamentoId) ?? null) : null,
+        destinos,
+        contas: contas.map((c) => ({ linhaDREId: c.linhaDREId, ordem: c.ordem })),
+      })),
       mapa,
     );
   } else {
@@ -84,7 +90,7 @@ export async function copiarCadastros(tx: Tx, cenarioId: string, de: string | nu
         return { id: novo, cenarioId, origemId: d.id, unidadeNegocioId: d.unidadeNegocioId, nome: d.nome, gruposDRE: d.gruposDRE, ordem: d.ordem, ativo: d.ativo };
       }),
     });
-    const rs = await tx.redistribuicaoGasto.findMany({ include: { destinos: true } });
+    const rs = await tx.redistribuicaoGasto.findMany({ include: { destinos: true, contas: { orderBy: { ordem: "asc" } } } });
     await criarRedistribuicoes(
       tx,
       cenarioId,
@@ -97,14 +103,15 @@ export async function copiarCadastros(tx: Tx, cenarioId: string, de: string | nu
 
 type RedistribuicaoParaCopiar = Omit<Prisma.CenarioRedistribuicaoCreateManyInput, "id" | "cenarioId"> & {
   destinos: Array<{ centroCustoId: string; percentual: Prisma.Decimal; ordem: number }>;
+  /** As contas da DRE (uma ou mais), na ordem. */
+  contas: Array<{ linhaDREId: string; ordem: number }>;
 };
 
 /** Os campos da cópia de uma redistribuição dos Cadastros Gerais (o departamento pelo mapa das cópias). */
-function camposDaRedistribuicaoGeral(r: Prisma.RedistribuicaoGastoGetPayload<{ include: { destinos: true } }>, deps: Map<string, string>): RedistribuicaoParaCopiar {
+function camposDaRedistribuicaoGeral(r: Prisma.RedistribuicaoGastoGetPayload<{ include: { destinos: true; contas: true } }>, deps: Map<string, string>): RedistribuicaoParaCopiar {
   return {
     origemId: r.id,
     departamentoId: r.departamentoId ? (deps.get(r.departamentoId) ?? null) : null,
-    linhaDREId: r.linhaDREId,
     fornecedores: r.fornecedores,
     vigenciaInicio: r.vigenciaInicio,
     vigenciaFim: r.vigenciaFim,
@@ -112,6 +119,7 @@ function camposDaRedistribuicaoGeral(r: Prisma.RedistribuicaoGastoGetPayload<{ i
     ordem: r.ordem,
     ativo: r.ativo,
     destinos: r.destinos,
+    contas: r.contas.map((c) => ({ linhaDREId: c.linhaDREId, ordem: c.ordem })),
   };
 }
 
@@ -121,14 +129,19 @@ function camposDaRedistribuicaoGeral(r: Prisma.RedistribuicaoGastoGetPayload<{ i
  */
 async function criarRedistribuicoes(tx: Tx, cenarioId: string, rs: RedistribuicaoParaCopiar[], centros: Map<string, string>) {
   const semCentro: string[] = [];
-  for (const { destinos, ...r } of rs) {
+  for (const { destinos, contas, ...r } of rs) {
     const ds = destinos.map((d) => ({ ...d, centroCustoId: centros.get(d.centroCustoId) }));
     if (ds.some((d) => !d.centroCustoId)) {
       semCentro.push(r.origemId ?? "");
       continue;
     }
     await tx.cenarioRedistribuicao.create({
-      data: { ...r, cenarioId, destinos: { create: ds.map((d) => ({ centroCustoId: d.centroCustoId!, percentual: d.percentual, ordem: d.ordem })) } },
+      data: {
+        ...r,
+        cenarioId,
+        contas: { create: contas },
+        destinos: { create: ds.map((d) => ({ centroCustoId: d.centroCustoId!, percentual: d.percentual, ordem: d.ordem })) },
+      },
     });
   }
   return semCentro;
@@ -216,7 +229,7 @@ export async function trazerNovosDosCadastros(tx: Tx, cenarioId: string) {
 
   // As redistribuições (etapa 2): as que não têm cópia pela origem, com os centros da cópia (pela origem ou pelo código).
   const [redistribuicoes, minhasRedistribuicoes, centrosDaCopia] = await Promise.all([
-    tx.redistribuicaoGasto.findMany({ include: { destinos: true, linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } } }),
+    tx.redistribuicaoGasto.findMany({ include: { destinos: true, contas: { orderBy: { ordem: "asc" }, include: { linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } } } } }),
     tx.cenarioRedistribuicao.findMany({ where: { cenarioId }, select: { origemId: true } }),
     tx.cenarioCentroCusto.findMany({ where: { cenarioId }, select: { id: true, origemId: true, codigoRM: true } }),
   ]);
@@ -236,7 +249,7 @@ export async function trazerNovosDosCadastros(tx: Tx, cenarioId: string) {
     centroDaCopia,
   );
   const rotuloDaRegra = (r: (typeof redistribuicoes)[number]) =>
-    `${[r.linhaDRE.grupoSigla, r.linhaDRE.atribuicao, r.linhaDRE.descricao].filter(Boolean).join(" · ")} (${r.fornecedores.length} ${r.fornecedores.length === 1 ? "fornecedor" : "fornecedores"})`;
+    `${nomeDasContas(r.contas.map((c) => c.linhaDRE))} (${r.fornecedores.length} ${r.fornecedores.length === 1 ? "fornecedor" : "fornecedores"})`;
 
   return {
     unidades: novasUnidades.map((u) => u.nome),

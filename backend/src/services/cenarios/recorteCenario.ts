@@ -119,7 +119,8 @@ export function veCentro(r: Recorte | null, origemId: string | null, grupo: Pick
  */
 export function abasDoRecorte(r: Recorte | null): string[] | null {
   if (!r) return null;
-  if (r.centros) return ["quadro", "centros", "rateios", "investimentos"];
+  // As Verificações (20/11/2026), de todos: cada um vê as do seu recorte.
+  if (r.centros) return ["quadro", "centros", "rateios", "investimentos", "verificacoes"];
   const tem = (...ds: Departamento[]) => ds.some((d) => r.departamentos.has(d));
   return [
     ...(tem("PRODUCAO") ? ["1", "2"] : []),
@@ -129,6 +130,7 @@ export function abasDoRecorte(r: Recorte | null): string[] | null {
     "investimentos",
     ...(tem("EXTRA") ? ["extra"] : []),
     ...(tem("COMERCIAL", "ADMINISTRATIVO") ? ["manuais"] : []),
+    "verificacoes",
   ];
 }
 

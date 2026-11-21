@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { BuscaNaLista, type OpcaoDaBusca } from "@/components/shared/BuscaNaLista";
@@ -17,6 +17,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
 import { botaoPrimario, classeSelect, Erro } from "@/app/cenarios/components/CenarioDialog";
+import { CentrosDeCustoDialog } from "@/app/contestacoes-de-gastos/components/CentrosDeCustoDialog";
 import { lerNumero } from "@/app/cenarios/components/EdicaoDialogs";
 import { mensagemDeErro } from "../services/edicaoService";
 import {
@@ -24,9 +25,11 @@ import {
   type DadosDaRedistribuicao,
   type EfeitoDaRedistribuicao,
   type FornecedorDaCombinacao,
+  nomeDasContas,
   type OpcoesDaRedistribuicao,
   type Redistribuicao,
 } from "../services/redistribuicoesService";
+import { ContasDaDREDialog } from "./ContasDaDREDialog";
 
 const moeda = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (v: number) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
@@ -52,7 +55,7 @@ export type RegistroDaRedistribuicao = Omit<Redistribuicao, "competencias" | "de
  */
 export type ServicoDaRedistribuicao = {
   chave: readonly unknown[];
-  fornecedores: (departamentoId: string | null, linhaDREId: string) => Promise<FornecedorDaCombinacao[]>;
+  fornecedores: (departamentoId: string | null, linhasDREIds: string[]) => Promise<FornecedorDaCombinacao[]>;
   gravar: (id: string | null, d: DadosDaRedistribuicao) => Promise<string>;
   excluir: (id: string) => Promise<string>;
   aoConcluir: (queryClient: QueryClient) => void;
@@ -71,7 +74,7 @@ const DO_CADASTRO: ServicoDaRedistribuicao = {
     atualizarCompetencia(queryClient);
   },
   descricao:
-    "Os movimentos dos fornecedores marcados, na Conta da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência. Movimentos redistribuídos não podem ser contestados.",
+    "Os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência. Movimentos redistribuídos não podem ser contestados.",
   descricaoDaExclusao: (conta) =>
     `A redistribuição de ${conta} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`,
 };
@@ -84,9 +87,11 @@ const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
 ];
 
 /**
- * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Departamento da DRE (ou Todos) e a Conta da DRE, os
- * fornecedores com movimentos na combinação (de competências fechadas ou abertas; a tabela com os filtros nos rótulos e a
- * caixa de cada um e a de todos), os centros de Redistribuir Para com o percentual de cada um (somando 100%) e a vigência.
+ * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Departamento da DRE (ou Todos), a Unidade (ou Todas; só
+ * filtra as contas) e as Contas da DRE (20/11/2026: uma ou mais, pela busca ou pela lupa, listadas abaixo do campo), os
+ * fornecedores com movimentos em qualquer das contas (de competências fechadas ou abertas; a tabela com os filtros nos rótulos
+ * e a caixa de cada um e a de todos), os centros de Redistribuir Para (pela busca ou pela lupa, como no modal Contestar) com o
+ * percentual de cada um (somando 100%) e a vigência.
  */
 export function RedistribuicaoDialog({
   registro,
@@ -103,7 +108,11 @@ export function RedistribuicaoDialog({
 }) {
   const queryClient = useQueryClient();
   const [departamentoId, setDepartamentoId] = useState(registro?.departamentoId ?? "");
-  const [linhaDREId, setLinhaDREId] = useState(registro?.linhaDREId ?? "");
+  const [linhasDREIds, setLinhasDREIds] = useState<string[]>(registro?.linhasDREIds ?? []);
+  const [unidade, setUnidade] = useState("");
+  // A busca da conta volta vazia a cada conta incluída (a chave remonta o campo).
+  const [buscaDaConta, setBuscaDaConta] = useState(0);
+  const [consulta, setConsulta] = useState<{ tipo: "contas" } | { tipo: "centros"; linha: number } | null>(null);
   const [marcados, setMarcados] = useState<Set<string>>(() => new Set((registro?.fornecedores ?? []).map(chave)));
   const [destinos, setDestinos] = useState<Array<{ centroCustoId: string; texto: string }>>(() =>
     registro ? registro.destinos.map((d) => ({ centroCustoId: d.centroCustoId, texto: d.percentual.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) })) : [{ centroCustoId: "", texto: "" }],
@@ -114,19 +123,35 @@ export function RedistribuicaoDialog({
   const [ativo, setAtivo] = useState(registro?.ativo ?? true);
   const [excluindo, setExcluindo] = useState(false);
 
-  // As contas da DRE do departamento escolhido (Todos: todas).
-  const contas = useMemo(() => {
-    const doDepartamento = departamentoId ? new Set(opcoes.departamentos.find((d) => d.id === departamentoId)?.linhas ?? []) : null;
-    return opcoes.linhas.filter((l) => !doDepartamento || doDepartamento.has(l.id)).map((l): OpcaoDaBusca => ({ id: l.id, codigo: "", nome: l.rotulo, detalhe: l.codigo }));
-  }, [departamentoId, opcoes]);
-  const conta = contas.find((c) => c.id === linhaDREId) ?? null;
+  // As contas da DRE do departamento escolhido (Todos: todas) e da unidade (Todas: todas), fora as já escolhidas.
+  const doDepartamento = useMemo(() => (departamentoId ? new Set(opcoes.departamentos.find((d) => d.id === departamentoId)?.linhas ?? []) : null), [departamentoId, opcoes]);
+  const codigoDaUnidade = unidade ? Number(unidade) : null;
+  const escolhidas = useMemo(() => new Set(linhasDREIds), [linhasDREIds]);
+  const contas = useMemo(
+    () =>
+      opcoes.linhas
+        .filter((l) => (!doDepartamento || doDepartamento.has(l.id)) && (codigoDaUnidade === null || l.unidades.includes(codigoDaUnidade)) && !escolhidas.has(l.id))
+        .map((l): OpcaoDaBusca => ({ id: l.id, codigo: "", nome: l.rotulo, detalhe: l.codigo })),
+    [doDepartamento, codigoDaUnidade, escolhidas, opcoes],
+  );
+  // As escolhidas, na ordem; a que saiu da Estrutura da DRE (inativa) aparece com o nome gravado.
+  const contasEscolhidas = linhasDREIds.map((id) => {
+    const l = opcoes.linhas.find((x) => x.id === id);
+    const gravada = registro?.contas[registro.linhasDREIds.indexOf(id)];
+    return { id, codigo: l?.codigo ?? gravada?.codigo ?? "", rotulo: l?.rotulo ?? gravada?.rotulo ?? "Conta inativa" };
+  });
+  const incluirConta = (id: string) => {
+    setLinhasDREIds((xs) => (xs.includes(id) ? xs : [...xs, id]));
+    setBuscaDaConta((n) => n + 1);
+  };
   const centros = useMemo(() => opcoes.centros.map((c): OpcaoDaBusca => ({ id: c.id, codigo: c.codigo, nome: c.nome, detalhe: c.detalhe })), [opcoes]);
+  const escolherCentro = (i: number, id: string) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, centroCustoId: id } : x)));
 
-  // Os fornecedores com movimentos na combinação; numa edição, também os marcados que hoje não têm movimentos.
+  // Os fornecedores com movimentos em qualquer das contas; numa edição, também os marcados que hoje não têm movimentos.
   const fornecedores = useQuery({
-    queryKey: [...fonte.chave, departamentoId, linhaDREId],
-    queryFn: () => fonte.fornecedores(departamentoId || null, linhaDREId),
-    enabled: !!linhaDREId,
+    queryKey: [...fonte.chave, departamentoId, [...linhasDREIds].sort().join(",")],
+    queryFn: () => fonte.fornecedores(departamentoId || null, linhasDREIds),
+    enabled: linhasDREIds.length > 0,
   });
   const linhas = useMemo<LinhaDoFornecedor[] | undefined>(() => {
     if (!fornecedores.data) return undefined;
@@ -166,7 +191,7 @@ export function RedistribuicaoDialog({
   const centrosRepetidos = new Set(lidos.filter((d) => d.centroCustoId).map((d) => d.centroCustoId)).size !== lidos.filter((d) => d.centroCustoId).length;
   const destinosCompletos = lidos.length > 0 && lidos.every((d) => d.centroCustoId && typeof d.valor === "number");
   const vigenciaCerta = !!inicio && (!fim || fim >= inicio);
-  const pronto = pode && !!linhaDREId && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
+  const pronto = pode && linhasDREIds.length > 0 && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
 
   const concluir = (msg: string, efeito: string) => {
     fonte.aoConcluir(queryClient);
@@ -177,7 +202,7 @@ export function RedistribuicaoDialog({
     mutationFn: () =>
       fonte.gravar(registro?.id ?? null, {
         departamentoId: departamentoId || null,
-        linhaDREId,
+        linhasDREIds,
         fornecedores: marcadosNaLista.map((f) => nomes.get(chave(f.fornecedor)) ?? f.fornecedor),
         destinos: lidos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: d.valor as number })),
         vigenciaInicio: inicio,
@@ -198,7 +223,7 @@ export function RedistribuicaoDialog({
           <DialogDescription>{fonte.descricao}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-[1fr_14rem]">
           <div className="space-y-1.5">
             <Label htmlFor="rd-departamento">Departamento da DRE</Label>
             <select
@@ -208,9 +233,9 @@ export function RedistribuicaoDialog({
               onChange={(e) => {
                 const novo = e.target.value;
                 setDepartamentoId(novo);
-                // A conta escolhida fica só se for do departamento novo.
+                // As contas escolhidas ficam só se forem do departamento novo.
                 const doNovo = novo ? new Set(opcoes.departamentos.find((d) => d.id === novo)?.linhas ?? []) : null;
-                if (doNovo && linhaDREId && !doNovo.has(linhaDREId)) setLinhaDREId("");
+                if (doNovo) setLinhasDREIds((xs) => xs.filter((x) => doNovo.has(x)));
               }}
               className={classeSelect}
             >
@@ -223,12 +248,71 @@ export function RedistribuicaoDialog({
             </select>
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="rd-unidade">Unidade</Label>
+            <select id="rd-unidade" value={unidade} disabled={!pode} onChange={(e) => setUnidade(e.target.value)} className={classeSelect}>
+              <option value="">Todas</option>
+              {opcoes.unidades.map((u) => (
+                <option key={u.codigo} value={String(u.codigo)}>
+                  {u.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="rd-conta">Conta da DRE</Label>
             {pode ? (
-              <BuscaNaLista id="rd-conta" opcoes={contas} valor={conta} onEscolher={(o) => setLinhaDREId(o?.id ?? "")} placeholder="Digite parte do nome ou do código da conta" />
-            ) : (
-              <Input id="rd-conta" value={conta?.nome ?? ""} disabled className="rounded-sm" />
-            )}
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <BuscaNaLista
+                    key={buscaDaConta}
+                    id="rd-conta"
+                    opcoes={contas}
+                    valor={null}
+                    onEscolher={(o) => (o ? incluirConta(o.id) : undefined)}
+                    placeholder="Digite parte do nome ou do código da conta para incluí-la"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 rounded-sm"
+                  onClick={() => setConsulta({ tipo: "contas" })}
+                  aria-label="Ver todas as contas da DRE e incluir uma"
+                  title="Ver todas as contas da DRE e incluir uma"
+                >
+                  <Search className="size-4" />
+                </Button>
+              </div>
+            ) : null}
+            {contasEscolhidas.length ? (
+              <ul className="divide-y divide-gray-100 rounded-sm border border-gray-200">
+                {contasEscolhidas.map((c) => (
+                  <li key={c.id} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-gray-900" title={c.rotulo}>
+                        {c.rotulo}
+                      </div>
+                      <div className="truncate text-xs text-gray-500">{c.codigo}</div>
+                    </div>
+                    {pode ? (
+                      <button
+                        type="button"
+                        data-altera
+                        aria-label={`Tirar a conta ${c.rotulo}`}
+                        title="Tirar a conta"
+                        onClick={() => setLinhasDREIds((xs) => xs.filter((x) => x !== c.id))}
+                        className="rounded-sm p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-900"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : !pode ? (
+              <Input id="rd-conta" value="" disabled className="rounded-sm" />
+            ) : null}
           </div>
         </div>
 
@@ -242,14 +326,14 @@ export function RedistribuicaoDialog({
               </span>
             ) : null}
           </div>
-          {!linhaDREId ? (
-            <p className="rounded-sm border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500">Escolha a Conta da DRE para ver os fornecedores com movimentos nela.</p>
+          {!linhasDREIds.length ? (
+            <p className="rounded-sm border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500">Escolha ao menos uma Conta da DRE para ver os fornecedores com movimentos nelas.</p>
           ) : fornecedores.isPending ? (
             <div className="h-32 animate-pulse rounded-sm bg-gray-100" />
           ) : fornecedores.isError ? (
             <Erro erro={mensagemDeErro(fornecedores.error, "Erro ao carregar os fornecedores.")} />
           ) : !linhas?.length ? (
-            <p className="rounded-sm border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500">Nenhum fornecedor com movimentos nesta combinação de departamento e conta.</p>
+            <p className="rounded-sm border border-dashed border-gray-300 px-3 py-4 text-sm text-gray-500">Nenhum fornecedor com movimentos nesta combinação de departamento e contas.</p>
           ) : (
             <div className="max-h-72 overflow-auto rounded-sm border border-gray-200">
               <table className="w-full text-sm">
@@ -295,13 +379,28 @@ export function RedistribuicaoDialog({
             {destinos.map((d, i) => (
               <div key={i} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
                 {pode ? (
-                  <BuscaNaLista
-                    id={`rd-centro-${i}`}
-                    opcoes={centros}
-                    valor={centros.find((c) => c.id === d.centroCustoId) ?? null}
-                    onEscolher={(o) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, centroCustoId: o?.id ?? "" } : x)))}
-                    placeholder="Código ou nome do centro de custo"
-                  />
+                  <div className="flex gap-2">
+                    <div className="min-w-0 flex-1">
+                      <BuscaNaLista
+                        id={`rd-centro-${i}`}
+                        opcoes={centros}
+                        valor={centros.find((c) => c.id === d.centroCustoId) ?? null}
+                        onEscolher={(o) => escolherCentro(i, o?.id ?? "")}
+                        placeholder="Código ou nome do centro de custo"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 rounded-sm"
+                      onClick={() => setConsulta({ tipo: "centros", linha: i })}
+                      aria-label="Ver todos os centros de custo e escolher um"
+                      title="Ver todos os centros de custo e escolher um"
+                    >
+                      <Search className="size-4" />
+                    </Button>
+                  </div>
                 ) : (
                   <Input value={(() => { const c = centros.find((x) => x.id === d.centroCustoId); return c ? `${c.codigo} — ${c.nome}` : ""; })()} disabled className="rounded-sm" />
                 )}
@@ -345,7 +444,6 @@ export function RedistribuicaoDialog({
             )}
             <span className={`text-sm font-bold ${somaCerta ? "text-gray-900" : "text-red-700"}`}>Soma: {pct(soma)}</span>
           </div>
-          {!somaCerta && !percentualInvalido ? <p className="text-xs text-red-700">Os percentuais precisam somar 100% (faltam {pct(100 - soma)}).</p> : null}
           {percentualInvalido ? <p className="text-xs text-red-700">Cada percentual precisa ser maior que 0% e no máximo 100%.</p> : null}
           {centrosRepetidos ? <p className="text-xs text-red-700">Um centro de custo aparece mais de uma vez.</p> : null}
         </section>
@@ -389,10 +487,36 @@ export function RedistribuicaoDialog({
         {excluindo && registro ? (
           <ConfirmacaoDialog
             titulo="Excluir a Redistribuição"
-            descricao={fonte.descricaoDaExclusao(registro.conta.rotulo)}
+            descricao={fonte.descricaoDaExclusao(nomeDasContas(registro.contas))}
             pendente={apagar.isPending}
             onConfirmar={() => apagar.mutate(undefined, { onSettled: () => setExcluindo(false) })}
             onFechar={() => setExcluindo(false)}
+          />
+        ) : null}
+        {consulta?.tipo === "contas" ? (
+          <ContasDaDREDialog
+            contas={opcoes.linhas}
+            unidades={opcoes.unidades}
+            doDepartamento={doDepartamento}
+            nomeDoDepartamento={departamentoId ? (opcoes.departamentos.find((d) => d.id === departamentoId)?.nome ?? null) : null}
+            unidade={codigoDaUnidade}
+            escolhidas={escolhidas}
+            onEscolher={(c) => {
+              incluirConta(c.id);
+              setConsulta(null);
+            }}
+            onFechar={() => setConsulta(null)}
+          />
+        ) : null}
+        {consulta?.tipo === "centros" ? (
+          <CentrosDeCustoDialog
+            centros={opcoes.centros}
+            descricao="Clique num centro para escolhê-lo nesta linha de Redistribuir Para. São os centros de custo ativos, com o departamento, o grupo, a atribuição e o balde."
+            onEscolher={(c) => {
+              escolherCentro(consulta.linha, c.id);
+              setConsulta(null);
+            }}
+            onFechar={() => setConsulta(null)}
           />
         ) : null}
       </DialogContent>

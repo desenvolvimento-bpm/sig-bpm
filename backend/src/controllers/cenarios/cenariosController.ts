@@ -9,6 +9,7 @@ import { CODIGO_ADMINISTRADOR } from "../../services/acesso/acesso.js";
 import { ABA_DA_PERMISSAO, CenarioError, cenariosService } from "../../services/cenarios/cenariosService.js";
 import { contasDoBalancete } from "../../services/cenarios/contasDoBalancete.js";
 import { abaDaChave, ABAS_DAS_PREMISSAS, DEPARTAMENTOS, NOME_DA_ABA, type AbaDasPremissas, type Departamento } from "../../services/cenarios/planilhaPremissas.js";
+import { idsDaConsulta } from "../cadastros/redistribuicoesController.js";
 
 /** As abas das premissas que o perfil lê ou edita (15/10/2026: a planilha das premissas). */
 const abasDasPremissas = (request: Request, response: Response, acao: "ler" | "editar") => {
@@ -317,6 +318,21 @@ export const cenariosController = {
   rateios(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.rateios(c, usuario(request))) : undefined;
+  },
+
+  /** A aba Verificações das Premissas (20/11/2026). */
+  verificacoes(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.verificacoes(c, usuario(request))) : undefined;
+  },
+
+  /** O De Acordo (ou a retirada) nas verificações marcadas: { chaves, deAcordo }. */
+  acordarVerificacoes(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ chaves: z.array(z.string().min(1).max(500)).min(1).max(5000), deAcordo: z.boolean() }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Marque ao menos uma verificação." });
+    return responder(response, () => cenariosService.acordarVerificacoes(c, corpo.data.chaves, corpo.data.deAcordo, usuario(request)));
   },
 
   gravarPremissas(request: Request, response: Response) {
@@ -821,13 +837,13 @@ export const cenariosController = {
     return c ? responder(response, () => cenariosService.redistribuicoesDoCenario(c, usuario(request))) : undefined;
   },
 
-  /** Os fornecedores da combinação do modal: ?linhaDREId=&departamentoId= (o departamento da cópia, ou todos). */
+  /** Os fornecedores da combinação do modal: ?linhasDREIds=a,b&departamentoId= (o departamento da cópia, ou todos). */
   fornecedoresDaRedistribuicaoDoCenario(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
-    const q = z.object({ linhaDREId: z.string().min(1), departamentoId: z.string().optional() }).safeParse(request.query);
-    if (!q.success) return response.status(400).json({ error: "Escolha a Conta da DRE." });
-    return responder(response, () => cenariosService.fornecedoresDaRedistribuicaoDoCenario(c, q.data.departamentoId || null, q.data.linhaDREId, usuario(request)));
+    const q = z.object({ linhasDREIds: z.string().min(1).max(10000), departamentoId: z.string().optional() }).safeParse(request.query);
+    if (!q.success) return response.status(400).json({ error: "Escolha ao menos uma Conta da DRE." });
+    return responder(response, () => cenariosService.fornecedoresDaRedistribuicaoDoCenario(c, q.data.departamentoId || null, idsDaConsulta(q.data.linhasDREIds), usuario(request)));
   },
 
   /** Inclui (POST) ou altera (PUT /:redistribuicaoId) uma redistribuição da cópia (os campos do modal do cadastro). */
@@ -838,7 +854,7 @@ export const cenariosController = {
     const corpo = z
       .object({
         departamentoId: z.string().min(1).nullable(),
-        linhaDREId: z.string().min(1),
+        linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
         fornecedores: z.array(z.string().max(300)).max(2000),
         destinos: z.array(z.object({ centroCustoId: z.string().min(1), percentual: z.number() })).max(200),
         vigenciaInicio: z.string().min(1),

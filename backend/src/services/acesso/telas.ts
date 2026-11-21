@@ -84,6 +84,9 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "manuais", nome: "Indicadores Manuais" },
               // Os Rateios por último (16/11/2026, pedido do Adão), como na tela.
               { codigo: "rateios", nome: "Rateios" },
+              // As Verificações (20/11/2026, pedido do Adão), depois dos Rateios; os perfis com alguma aba das Premissas a herdaram
+              // (Editar: o De Acordo).
+              { codigo: "verificacoes", nome: "Verificações" },
             ],
           },
         ]

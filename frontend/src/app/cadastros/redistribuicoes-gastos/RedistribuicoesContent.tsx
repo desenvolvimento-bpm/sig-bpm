@@ -23,7 +23,7 @@ const destinosTexto = (r: Redistribuicao) => r.destinos.map((d) => `${d.centro}:
 
 const COLUNAS: Coluna<Redistribuicao>[] = [
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
-  { chave: "conta", rotulo: "Conta da DRE", valor: (r) => r.conta.rotulo },
+  { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
   { chave: "fornecedores", rotulo: "Fornecedores", valor: (r) => r.fornecedores.length, texto: (r) => r.fornecedores.join("; "), tipo: "numero", alinhamento: "direita" },
   { chave: "destinos", rotulo: "Redistribuir Para", valor: destinosTexto },
   { chave: "vigencia", rotulo: "Vigência", valor: (r) => r.vigenciaInicio, texto: vigenciaTexto },
@@ -34,7 +34,7 @@ const EDITAR: Coluna<Redistribuicao> = { chave: "editar", rotulo: "", semFiltro:
 
 /**
  * Cadastros Gerais / Controladoria / Redistribuições de Gastos (13/11/2026, pedido do Adão): as regras que
- * dividem os movimentos de fornecedores, numa conta da DRE, entre centros de custo, pelos percentuais e na vigência.
+ * dividem os movimentos de fornecedores, nas contas da DRE escolhidas, entre centros de custo, pelos percentuais e na vigência.
  */
 export function RedistribuicoesContent() {
   useRegistrarAcessoTela("/cadastros/redistribuicoes-gastos");
@@ -52,29 +52,38 @@ export function RedistribuicoesContent() {
     <CadastroShell
       titulo="Redistribuições de Gastos"
       exportar={<ExportarTabela titulo="Cadastros · Controladoria · Redistribuições de Gastos" colunas={colunas} linhas={tabela.filtradas} />}
-      descricao="Os movimentos dos fornecedores marcados, numa conta da DRE (e num departamento, ou em todos), valem divididos entre centros de custo, pelos percentuais, nas competências da vigência."
+      descricao="Os movimentos dos fornecedores marcados, nas contas da DRE escolhidas (e num departamento, ou em todos), valem divididos entre centros de custo, pelos percentuais, nas competências da vigência."
       comoUsar={
         <ul>
           <li>Use os filtros nos rótulos das colunas.</li>
           <li>
             Use “Novo” para incluir e o lápis para editar (a exclusão fica dentro da edição). No modal Redistribuição de Gastos, escolha o
-            Departamento da DRE (ou Todos) e a Conta da DRE (a lista mostra as contas do departamento; digite parte do nome ou do código). A tabela
-            traz os fornecedores com movimentos nessa combinação, em competências fechadas ou abertas, com os filtros nos rótulos: marque um a um ou
-            todos pela caixa do rótulo (a regra guarda só os marcados; um fornecedor que aparecer depois entra só se for incluído).
+            Departamento da DRE (ou Todos) e, se quiser, a Unidade (ou Todas: ela só filtra as contas oferecidas).
           </li>
           <li>
-            Em Redistribuir Para, adicione os centros de custo e o percentual de cada um: os percentuais somam 100%, ou a gravação fica bloqueada.
-            Preencha a vigência (o mês do início e, se houver, o do fim).
+            Em Conta da DRE, digite parte do nome ou do código da conta, ou use a lupa ao lado do campo para ver a lista das contas (com o código, o
+            grupo, a atribuição e as unidades; de início, só as do departamento e da unidade) e clicar numa. Cada conta escolhida entra na lista logo
+            abaixo do campo, e o X a tira: escolha quantas contas precisar.
           </li>
           <li>
-            Na classificação de cada competência da vigência, os movimentos dos fornecedores marcados, na conta e no departamento, valem divididos
+            A tabela Fornecedores traz os fornecedores com movimentos em qualquer das contas escolhidas, no departamento, em competências fechadas ou
+            abertas, com os filtros nos rótulos: marque um a um ou todos pela caixa do rótulo (a regra guarda só os marcados; um fornecedor que
+            aparecer depois entra só se for incluído).
+          </li>
+          <li>
+            Em Redistribuir Para, adicione os centros de custo (digite o código ou o nome, ou use a lupa para ver a lista dos centros, com o
+            departamento, o grupo, a atribuição e o balde) e o percentual de cada um: a Soma mostra o total, e a gravação fica bloqueada enquanto ela
+            não der 100%. Preencha a vigência (o mês do início e, se houver, o do fim).
+          </li>
+          <li>
+            Na classificação de cada competência da vigência, os movimentos dos fornecedores marcados, nas contas e no departamento, valem divididos
             entre os centros, pelos percentuais: cada parte vai à unidade e ao rateio do centro dela, e a conta da DRE não muda. As partes não passam
             pela verificação de departamento e atribuição. A redistribuição vale por cima das reclassificações e das contestações.
           </li>
           <li>Movimentos redistribuídos não podem ser contestados: no balancete e na Pesquisa, a coluna Ações mostra a etiqueta Redistribuição, com os destinos.</li>
           <li>
             Ao gravar, as competências ainda não apuradas da vigência são reclassificadas; as apuradas só mudam se forem reapuradas, e as fechadas
-            ficam como foram fechadas. Na mesma conta, duas redistribuições ativas não podem ter um fornecedor em comum no mesmo período.
+            ficam como foram fechadas. Numa mesma conta, duas redistribuições ativas não podem ter um fornecedor em comum no mesmo período.
           </li>
           <li>A coluna Competências diz em quantas competências a regra já valeu; uma regra usada numa competência apurada ou fechada não se exclui: encerre a vigência.</li>
         </ul>
@@ -108,10 +117,16 @@ export function RedistribuicoesContent() {
           <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
             <td className="px-4 py-3 text-sm text-gray-900">{r.departamento ?? "Todos"}</td>
             <td className="px-4 py-3 text-sm">
-              <div className="max-w-64 truncate text-gray-900" title={r.conta.rotulo}>
-                {r.conta.rotulo}
-              </div>
-              <span className="text-xs text-gray-500">{r.conta.codigo}</span>
+              <ul className="space-y-1">
+                {r.contas.map((c) => (
+                  <li key={c.codigo}>
+                    <div className="max-w-64 truncate text-gray-900" title={c.rotulo}>
+                      {c.rotulo}
+                    </div>
+                    <span className="text-xs text-gray-500">{c.codigo}</span>
+                  </li>
+                ))}
+              </ul>
             </td>
             <td className="px-4 py-3 text-right text-sm text-gray-700" title={r.fornecedores.join("\n")}>
               {r.fornecedores.length} {plural(r.fornecedores.length, "fornecedor", "fornecedores")}

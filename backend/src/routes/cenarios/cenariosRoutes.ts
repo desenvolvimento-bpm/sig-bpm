@@ -81,6 +81,9 @@ cenariosRoutes.get("/:id/centros/contas", autenticacao, tela("premissas", "ler",
 cenariosRoutes.put("/:id/centros", autenticacao, tela("premissas", "editar", "centros"), express.json({ limit: "2mb" }), asyncHandler(c.gravarCentro));
 // Os rateios: a aba Rateios das Premissas; o aviso dos rateios sem base também aparece nas outras abas e nos Resultados.
 cenariosRoutes.get("/:id/rateios", autenticacao, verificarPermissaoDoCenario("ler", "premissas"), asyncHandler(c.rateios));
+// As Verificações das Premissas (20/11/2026): a lista e o De Acordo (Editar na aba).
+cenariosRoutes.get("/:id/verificacoes", autenticacao, tela("premissas", "ler", "verificacoes"), asyncHandler(c.verificacoes));
+cenariosRoutes.post("/:id/verificacoes/acordos", autenticacao, tela("premissas", "editar", "verificacoes"), express.json({ limit: "2mb" }), asyncHandler(c.acordarVerificacoes));
 // A aba Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores).
 cenariosRoutes.get("/:id/quadro", autenticacao, tela("premissas", "ler", "quadro"), asyncHandler(c.quadro));
 cenariosRoutes.put("/:id/quadro/meses", autenticacao, tela("premissas", "editar", "quadro"), express.json({ limit: "4mb" }), asyncHandler(c.gravarMesesDoQuadro));

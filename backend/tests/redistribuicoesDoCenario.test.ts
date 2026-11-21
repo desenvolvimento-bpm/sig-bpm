@@ -6,7 +6,7 @@ import { redistribuirMovimentos, type RegraDoCenario } from "../src/services/cen
 /** Uma regra do cenário: a conta L1, o fornecedor ACME, de 03/2026 em diante, 60% no centro k1 e 40% no k2 (os da cópia). */
 const regra = (extra: Partial<RegraDoCenario> = {}): RegraDoCenario => ({
   id: "r1",
-  linhaDREId: "L1",
+  linhasDRE: new Set(["L1"]),
   departamento: null,
   fornecedores: new Set(["ACME LTDA"]),
   inicio: new Date(Date.UTC(2026, 2, 1)),
@@ -54,6 +54,13 @@ describe("as Redistribuições de Gastos do cenário na referência (20/11/2026,
     assert.equal(redistribuirMovimentos([mov({ filial: 2 })], [daMatriz], doMes).mantidos.length, 1);
     assert.equal(redistribuirMovimentos([mov({ grupoSigla: "DA" })], [daMatriz], doMes).mantidos.length, 1);
     assert.equal(redistribuirMovimentos([mov()], [daMatriz], doMes).redistribuidos.length, 1);
+  });
+
+  it("com várias contas da DRE, divide o movimento de qualquer delas (20/11/2026)", () => {
+    const varias = regra({ linhasDRE: new Set(["L1", "L2"]) });
+    const r = redistribuirMovimentos([mov(), mov({ linhaDREId: "L2" }), mov({ linhaDREId: "L3" })], [varias], doMes);
+    assert.equal(r.redistribuidos.length, 2);
+    assert.equal(r.mantidos.length, 1);
   });
 
   it("sem regras, nada muda", () => {

@@ -751,7 +751,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
   const fonte = useMemo<ServicoDaRedistribuicao>(
     () => ({
       chave: ["cenarios", id, "cadastros", "redistribuicoes", "fornecedores"],
-      fornecedores: (departamentoId, linhaDREId) => cenariosService.fornecedoresDaRedistribuicaoDoCenario(id, departamentoId, linhaDREId),
+      fornecedores: (departamentoId, linhasDREIds) => cenariosService.fornecedoresDaRedistribuicaoDoCenario(id, departamentoId, linhasDREIds),
       gravar: async (rid, d) => {
         await cenariosService.gravarRedistribuicaoDoCenario(id, rid, d);
         return "Vale na próxima carga do realizado (aba Referência).";
@@ -762,7 +762,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
       },
       aoConcluir: (queryClient) => queryClient.invalidateQueries({ queryKey: ["cenarios", id, "cadastros"] }),
       descricao:
-        "Na carga do realizado da referência deste cenário, os movimentos dos fornecedores marcados, na Conta da DRE (e no departamento), vão divididos entre os centros de custo de Redistribuir Para (os do cenário), pelos percentuais, nos meses da vigência. Vale só aqui: o resto do SIG segue as redistribuições dos Cadastros Gerais.",
+        "Na carga do realizado da referência deste cenário, os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), vão divididos entre os centros de custo de Redistribuir Para (os do cenário), pelos percentuais, nos meses da vigência. Vale só aqui: o resto do SIG segue as redistribuições dos Cadastros Gerais.",
       descricaoDaExclusao: (conta) => `A redistribuição de ${conta} sai deste cenário (nos Cadastros Gerais, as redistribuições continuam); a próxima carga do realizado da referência fica sem ela.`,
     }),
     [id],
@@ -775,7 +775,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
   // O arquivo leva os nomes dos fornecedores (na tela, a quantidade).
   const colunas: ColunaExportavel<RedistribuicaoDoCenario>[] = [
     { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
-    { chave: "conta", rotulo: "Conta da DRE", valor: (r) => r.conta.rotulo },
+    { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
     { chave: "fornecedores", rotulo: "Fornecedores", valor: (r) => r.fornecedores.join("; ") },
     { chave: "destinos", rotulo: "Redistribuir Para", valor: destinosTexto },
     { chave: "vigencia", rotulo: "Vigência", valor: vigenciaTexto },
@@ -822,10 +822,16 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
                   {r.departamento ?? "Todos"}
                 </td>
                 <td className="px-3 py-1.5">
-                  <div className="truncate" title={r.conta.rotulo}>
-                    {r.conta.rotulo}
-                  </div>
-                  <span className="text-xs text-gray-500">{r.conta.codigo}</span>
+                  <ul className="space-y-1">
+                    {r.contas.map((c) => (
+                      <li key={c.codigo}>
+                        <div className="truncate" title={c.rotulo}>
+                          {c.rotulo}
+                        </div>
+                        <span className="text-xs text-gray-500">{c.codigo}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </td>
                 <td className={`${TD} text-right`} title={r.fornecedores.join("\n")}>
                   {r.fornecedores.length} {plural(r.fornecedores.length, "fornecedor", "fornecedores")}
@@ -859,7 +865,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
 const destinosTexto = (r: RedistribuicaoDoCenario) => r.destinos.map((d) => `${d.centro}: ${pctTexto(d.percentual)}`).join("; ");
 const COLUNAS_DAS_REDISTRIBUICOES: Coluna<RedistribuicaoDoCenario>[] = [
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
-  { chave: "conta", rotulo: "Conta da DRE", valor: (r) => r.conta.rotulo },
+  { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
   {
     chave: "fornecedores",
     rotulo: "Fornecedores",

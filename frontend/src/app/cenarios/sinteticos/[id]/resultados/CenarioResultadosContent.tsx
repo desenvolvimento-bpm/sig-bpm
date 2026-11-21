@@ -282,7 +282,7 @@ export function CenarioResultadosContent() {
             </li>
             <li>
               Versões (para quem edita a tela Resultados): “Congelar Versão” trava o cenário na versão atual (VER00, VER01…), como o fechamento de uma
-              competência — a DRE, os Indicadores Manuais e a referência não se editam mais; “Reabrir Versão” a destrava, como a reabertura de uma
+              competência — a DRE, os Indicadores Manuais e a referência não se editam mais{analitico ? "; no cenário analítico, só com as Verificações das Premissas (a última aba delas) todas corrigidas ou com o De Acordo" : ""}; “Reabrir Versão” a destrava, como a reabertura de uma
               competência. “Criar Revisão” (só numa versão congelada) cria uma cópia na próxima versão, aberta para edição: um cenário novo na lista, com a DRE, os indicadores, o comparativo e as justificativas. A marcação
               fica na versão de origem: remarque a revisão à mão em Configurações / Cenário.
             </li>

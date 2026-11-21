@@ -9,16 +9,19 @@ import { Input } from "@/components/ui/input";
 import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
-import { ROTULO_DEPARTAMENTO, type CentroOpcao } from "../services/contestacoesService";
+import { ROTULO_DEPARTAMENTO, type CentroOpcao, type DepartamentoDoRecorte } from "../services/contestacoesService";
 import { normal } from "./ContasDeResultadoDialog";
 import { ROTULO_BALDE } from "./RegrasDeRateioDialog";
 
 const ATRIBUICAO: Record<string, string> = { DIRETA: "Direta", INDIRETA: "Indireta" };
 
-const COLUNAS: Coluna<CentroOpcao>[] = [
+/** O centro da lista (20/11/2026: também o das Redistribuições de Gastos, que pode não ser de um departamento da DRE). */
+export type CentroDaLupa = Omit<CentroOpcao, "departamentoDoRecorte"> & { departamentoDoRecorte: DepartamentoDoRecorte | null };
+
+const COLUNAS: Coluna<CentroDaLupa>[] = [
   { chave: "codigo", rotulo: "Código", valor: (c) => c.codigoRM, classe: "w-32" },
   { chave: "nome", rotulo: "Centro de Custo", valor: (c) => c.nomeRM },
-  { chave: "departamento", rotulo: "Departamento", valor: (c) => ROTULO_DEPARTAMENTO[c.departamentoDoRecorte] },
+  { chave: "departamento", rotulo: "Departamento", valor: (c) => (c.departamentoDoRecorte ? ROTULO_DEPARTAMENTO[c.departamentoDoRecorte] : null) },
   { chave: "grupo", rotulo: "Grupo", valor: (c) => c.departamento },
   { chave: "atribuicao", rotulo: "Atribuição", valor: (c) => (c.atribuicao ? ATRIBUICAO[c.atribuicao] : null) },
   { chave: "balde", rotulo: "Balde", valor: (c) => (c.balde ? (ROTULO_BALDE[c.balde] ?? c.balde) : null) },
@@ -28,9 +31,20 @@ const COLUNAS: Coluna<CentroOpcao>[] = [
  * A lista dos centros de custo do modal Contestar (04/11/2026, pedido do Adão; a lupa ao lado do Novo Centro de Custo): os
  * centros que a contestação pode escolher — os ativos de um departamento da DRE, com o código de três níveis —, com o
  * departamento, o grupo da DRE, a atribuição e o balde (que decide como os lançamentos do centro chegam às unidades). Clicar
- * num centro o escolhe. A busca acha por qualquer termo; os rótulos ordenam e filtram.
+ * num centro o escolhe. A busca acha por qualquer termo; os rótulos ordenam e filtram. Serve também a Redistribuir Para das
+ * Redistribuições de Gastos (20/11/2026, pedido do Adão), com a descrição dela.
  */
-export function CentrosDeCustoDialog({ centros, onEscolher, onFechar }: { centros: CentroOpcao[]; onEscolher: (c: CentroOpcao) => void; onFechar: () => void }) {
+export function CentrosDeCustoDialog<C extends CentroDaLupa>({
+  centros,
+  onEscolher,
+  onFechar,
+  descricao = "Clique num centro para escolhê-lo como o novo centro de custo. São os ativos de um departamento da DRE, com o código de três níveis (como 1.01.00000001). O balde do centro decide como os lançamentos dele chegam às unidades (Regras de Rateio).",
+}: {
+  centros: C[];
+  onEscolher: (c: C) => void;
+  onFechar: () => void;
+  descricao?: string;
+}) {
   const [busca, setBusca] = useState("");
   const termos = normal(busca).split(/\s+/).filter(Boolean);
   const achados = useMemo(
@@ -38,16 +52,13 @@ export function CentrosDeCustoDialog({ centros, onEscolher, onFechar }: { centro
     // eslint-disable-next-line react-hooks/exhaustive-deps -- os termos saem da busca.
     [centros, busca],
   );
-  const tabela = useTabelaFiltravel(achados, COLUNAS);
+  const tabela = useTabelaFiltravel<C>(achados, COLUNAS as Coluna<C>[]);
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
       <DialogContent className="flex max-h-[90vh] w-[min(72rem,calc(100%_-_2rem))] max-w-none flex-col overflow-hidden rounded-sm sm:max-w-none">
         <DialogHeader>
           <DialogTitle>Centros de Custo</DialogTitle>
-          <DialogDescription>
-            Clique num centro para escolhê-lo como o novo centro de custo. São os ativos de um departamento da DRE, com o código de três níveis (como
-            1.01.00000001). O balde do centro decide como os lançamentos dele chegam às unidades (Regras de Rateio).
-          </DialogDescription>
+          <DialogDescription>{descricao}</DialogDescription>
         </DialogHeader>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Código, nome ou departamento" className="h-8 w-80 rounded-sm border-gray-300" autoComplete="off" />

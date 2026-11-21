@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 
 import { useAbaLembrada } from "@/hooks/useAbaLembrada";
 import { Abas } from "@/components/shared/Abas";
@@ -21,12 +22,13 @@ import { IndicadoresManuais } from "../../../components/IndicadoresManuais";
 import { BotaoImportarValores, ExportarPremissas } from "../../../components/PlanilhaPremissas";
 import { QuadroDoCenario } from "../../../components/QuadroDoCenario";
 import { TabelaPremissas } from "../../../components/TabelaPremissas";
+import { VerificacoesDoCenario } from "../../../components/VerificacoesDoCenario";
 import { cenariosService, NOME_DO_DEPARTAMENTO } from "../../../services/cenariosService";
 
 /**
  * As abas das premissas: as unidades, o Quadro de Lotação (09/11/2026), os centros de custo, os investimentos, o
- * extra-operacional, os indicadores manuais e, por último (16/11/2026, pedido do Adão), os rateios, que saem das demais (os
- * Reajustes ficam nas Configurações desde 12/11/2026).
+ * extra-operacional, os indicadores manuais, os rateios (16/11/2026, pedido do Adão), que saem das demais, e, por último
+ * (20/11/2026, pedido do Adão), as Verificações (os Reajustes ficam nas Configurações desde 12/11/2026).
  */
 const ABAS = [
   { chave: "1", rotulo: "Matriz" },
@@ -38,6 +40,7 @@ const ABAS = [
   { chave: "extra", rotulo: "Extra-Operacional" },
   { chave: "manuais", rotulo: "Indicadores Manuais" },
   { chave: "rateios", rotulo: "Rateios" },
+  { chave: "verificacoes", rotulo: "Verificações" },
 ];
 
 /**
@@ -54,7 +57,24 @@ export function PremissasContent() {
   const cenario = useQuery({ queryKey: ["cenarios", id], queryFn: () => cenariosService.obter(id) });
   // Com o Acesso às Informações Por Recorte (12/11/2026), só as abas do recorte do usuário.
   const recorte = cenario.data?.recorte ?? null;
-  const abas = ABAS.filter((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:ler`) && (!recorte || recorte.abas.includes(a.chave)));
+  const leVerificacoes = hasPermission("cenarios_analiticos_premissas.verificacoes:ler") && (!recorte || recorte.abas.includes("verificacoes"));
+  // As Verificações pendentes (20/11/2026): o sinal nas abas delas e na aba Verificações.
+  const verificacoes = useQuery({ queryKey: ["cenarios", id, "verificacoes"], queryFn: () => cenariosService.verificacoes(id), enabled: leVerificacoes });
+  const pendentesDaAba = (chave: string) => (verificacoes.data?.verificacoes ?? []).filter((v) => !v.acordo && (chave === "verificacoes" || v.aba === chave)).length;
+  const sinalDa = (chave: string) => {
+    const n = pendentesDaAba(chave);
+    return n ? (
+      <span title={`${n} ${n === 1 ? "verificação pendente" : "verificações pendentes"}${chave === "verificacoes" ? "" : " nesta aba (veja a aba Verificações)"}`}>
+        <TriangleAlert className="size-3.5 text-amber-600" aria-label="Verificações pendentes" />
+      </span>
+    ) : undefined;
+  };
+  const abas = ABAS.filter((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:ler`) && (!recorte || recorte.abas.includes(a.chave))).map((a) => ({
+    ...a,
+    sinal: leVerificacoes ? sinalDa(a.chave) : undefined,
+  }));
+  // O grupo de centros que a aba Centros de Custo abre (o da verificação clicada).
+  const [grupoDaVerificacao, setGrupoDaVerificacao] = useState<string | null>(null);
   const aba = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
   const editaAba = hasPermission(`cenarios_analiticos_premissas.${abaDaChave(aba)}:editar`);
   const quadro = aba === "quadro";
@@ -63,12 +83,13 @@ export function PremissasContent() {
   const investimentos = aba === "investimentos";
   const extra = aba === "extra";
   const manuais = aba === "manuais";
+  const naVerificacoes = aba === "verificacoes";
   const deUnidade = ["1", "2", "3"].includes(aba);
   const consulta = useQuery({ queryKey: ["cenarios", id, "premissas", aba], queryFn: () => cenariosService.premissas(id, Number(aba) as 1 | 2 | 3), enabled: deUnidade });
   const travado = !!cenario.data && estaTravado(cenario.data);
   // Com os reajustes aplicados na DRE (11/11/2026, pedido do Adão), só os Indicadores Manuais se editam.
   const comReajustes = !!cenario.data?.reajustesAplicados;
-  const bloqueadaPelosReajustes = comReajustes && !manuais;
+  const bloqueadaPelosReajustes = comReajustes && !manuais && !naVerificacoes;
   const podeEditar = editaAba && !travado && !bloqueadaPelosReajustes && (!deUnidade || !!consulta.data?.editavel);
   // Os botões da planilha (15/10/2026), na altura do título: Importar Valores (alguma aba editável; sai com os reajustes
   // aplicados) e Exportar Premissas. O Replicar Médias e o Apagar Valores ficam em Configurações / Referência (12/11/2026).
@@ -196,6 +217,23 @@ export function PremissasContent() {
               percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário). A tabela tem
               uma linha por chave, destino e Base ou Percentual, com os filtros e a ordenação nos rótulos das colunas (Chave, Destino, Linha, Und. e
               cada mês), como nas outras tabelas do SIG.
+            </li>
+            <li>
+              Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Situação (Pendente ou De Acordo), a
+              Aba (clique nela para abri-la; nos Centros de Custo, já no grupo), a Linha / Centro de Custo, a Verificação (com a explicação), os Meses
+              e o Responsável — quem alterou os valores por último, pelo Histórico (sem alteração, quem criou o cenário). As abas com verificações
+              pendentes (e a própria Verificações) mostram o sinal de alerta ao lado do nome. As verificações: nas abas Matriz, Filial e Serviços,
+              Valores sem Volume (receitas, impostos, custos ou kg em meses sem volume — na Variação do Estoque, sem Volume de Estoque —, que não geram
+              resultado) e Volume sem Receita (volume sem a Receita Bruta Média); no Quadro de Lotação, Colaboradores sem Salário, Salário sem
+              Colaboradores, PJ sem Aumento no Ano (o salário da linha PJ não aumenta em nenhum mês com colaboradores) e Salário que Cai (o salário por
+              colaborador cai de um mês para o outro com os mesmos colaboradores); nos Centros de Custo, Salários que Não Variam com os Colaboradores (a
+              quantidade de um tipo muda e os salários do grupo não), Quadro de Lotação sem Remunerações e Quadro de Lotação sem Gastos Gerais (o grupo
+              com colaboradores e sem salários, ou sem valores nos gastos gerais diretos, indiretos ou comerciais, no mês) e Valores Fora da DRE (o
+              rateio do grupo não leva o valor a nenhuma unidade: a chave sem base no mês, a conta sem destino). Cada uma pede a correção dos valores
+              (ela some da lista) ou o De Acordo: marque a caixa das verificações (ou use “Marcar Todas” / “Desmarcar Todas”, que valem para a tabela
+              com os filtros) e clique em “De Acordo”; “Retirar Acordo” desfaz. Só o responsável por cada uma (ou o Administrador) a marca; nas
+              outras, a caixa fica em cinza. O De Acordo vale enquanto os valores não mudam: mudou, a verificação volta a Pendente, com o aviso. Com
+              alguma verificação pendente no cenário, a versão não se congela (Congelar Versão, na tela Resultados).
             </li>
             <li>
               Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
@@ -392,10 +430,18 @@ export function PremissasContent() {
             : `Você vê só as premissas ${recorte.departamentos.length === 1 ? "do departamento" : "dos departamentos"} ${recorte.departamentos.map((d) => NOME_DO_DEPARTAMENTO[d] ?? d).join(", ")} e a lista inteira dos Investimentos.`}
         </p>
       ) : null}
-      <Abas rotulo="Unidade das premissas" ativa={aba} onMudar={setAba} abas={abas} />
+      <Abas
+        rotulo="Unidade das premissas"
+        ativa={aba}
+        onMudar={(a) => {
+          setGrupoDaVerificacao(null);
+          setAba(a);
+        }}
+        abas={abas}
+      />
       {cenario.data && travado && editaAba ? (
         <AvisoMarcado cenario={cenario.data} oQue="as premissas" />
-      ) : bloqueadaPelosReajustes && editaAba && !rateios ? (
+      ) : bloqueadaPelosReajustes && editaAba && !rateios && !naVerificacoes ? (
         <AvisoReajustesAplicados oQue="as premissas desta aba" varios />
       ) : null}
       {!abas.length ? (
@@ -403,9 +449,19 @@ export function PremissasContent() {
       ) : quadro ? (
         <QuadroDoCenario id={id} editavel={podeEditar} />
       ) : centros ? (
-        <CentrosDoCenario id={id} editavel={podeEditar} />
+        <CentrosDoCenario key={grupoDaVerificacao ?? ""} id={id} editavel={podeEditar} grupoInicial={grupoDaVerificacao} />
       ) : rateios ? (
         <RateiosDoCenario id={id} />
+      ) : naVerificacoes ? (
+        <VerificacoesDoCenario
+          id={id}
+          podeEditar={editaAba && !travado}
+          onAbrirAba={(a, grupo) => {
+            setGrupoDaVerificacao(a === "centros" ? grupo : null);
+            setAba(a);
+            window.scrollTo({ top: 0 });
+          }}
+        />
       ) : investimentos ? (
         <InvestimentosDoCenario id={id} editavel={podeEditar} />
       ) : extra ? (

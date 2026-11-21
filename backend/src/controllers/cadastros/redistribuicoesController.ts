@@ -16,7 +16,7 @@ async function responder(response: Response, fn: () => Promise<unknown>, status 
 const mes = z.string().regex(/^\d{4}-\d{2}$/);
 const dadosSchema = z.object({
   departamentoId: z.string().min(1).nullable(),
-  linhaDREId: z.string().min(1),
+  linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
   fornecedores: z.array(z.string().max(300)).max(5000),
   destinos: z.array(z.object({ centroCustoId: z.string().min(1), percentual: z.number() })).max(500),
   vigenciaInicio: mes,
@@ -24,15 +24,17 @@ const dadosSchema = z.object({
   descricao: z.string().max(500).nullable(),
   ativo: z.boolean(),
 });
-const fornecedoresSchema = z.object({ linhaDREId: z.string().min(1), departamentoId: z.string().optional() });
+/** As contas da DRE (uma ou mais) vêm separadas por vírgula. */
+const fornecedoresSchema = z.object({ linhasDREIds: z.string().min(1).max(10000), departamentoId: z.string().optional() });
+export const idsDaConsulta = (texto: string) => texto.split(",").map((x) => x.trim()).filter(Boolean);
 
 export const redistribuicoesController = {
   listar: (_r: Request, response: Response) => responder(response, () => s.listar()),
   opcoes: (_r: Request, response: Response) => responder(response, () => s.opcoes()),
   fornecedores(r: Request, response: Response) {
     const q = fornecedoresSchema.safeParse({ ...r.query });
-    if (!q.success) return response.status(400).json({ error: "Escolha a Conta da DRE." });
-    return responder(response, () => s.fornecedores(q.data.departamentoId || null, q.data.linhaDREId));
+    if (!q.success) return response.status(400).json({ error: "Escolha ao menos uma Conta da DRE." });
+    return responder(response, () => s.fornecedores(q.data.departamentoId || null, idsDaConsulta(q.data.linhasDREIds)));
   },
   criar(r: Request, response: Response) {
     const b = dadosSchema.safeParse(r.body);

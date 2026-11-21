@@ -158,7 +158,7 @@ export const classificacaoService = {
         orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
         select: {
           id: true,
-          linhaDREId: true,
+          contas: { select: { linhaDREId: true } },
           fornecedores: true,
           departamento: { select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } },
           destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } },
@@ -166,7 +166,7 @@ export const classificacaoService = {
       })
     ).map((r) => ({
       id: r.id,
-      linhaDREId: r.linhaDREId,
+      linhasDRE: new Set(r.contas.map((c) => c.linhaDREId)),
       departamento: r.departamento ? { grupos: new Set(r.departamento.gruposDRE), filial: filialDoDepartamento(r.departamento.unidadeNegocio.codigo) } : null,
       fornecedores: new Set(r.fornecedores.map(chaveDoFornecedor)),
       destinos: r.destinos.flatMap((d) => (centroPorId.has(d.centroCustoId) ? [{ centro: centroPorId.get(d.centroCustoId)!, percentual: Number(d.percentual) }] : [])),

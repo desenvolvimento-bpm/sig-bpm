@@ -612,10 +612,10 @@ model LinhaDRE {
   @@index([grupoSigla])
   @@map("linhas_dre")
   cenariosCentros CenarioCentro[]
-  /// As redistribuições de gastos desta conta da DRE e as partes redistribuídas nela (13/11/2026).
-  redistribuicoes      RedistribuicaoGasto[]
+  /// As redistribuições de gastos desta conta da DRE (20/11/2026: as contas de cada uma) e as partes redistribuídas nela (13/11/2026).
+  redistribuicoes      RedistribuicaoConta[]
   partesRedistribuidas LancamentoRedistribuido[]
-  redistribuicoesDosCenarios CenarioRedistribuicao[]
+  redistribuicoesDosCenarios CenarioRedistribuicaoConta[]
 }
 
 /// LISTA-DE: LinhaDRE.unidadesAplicaveis (seria `String[]` no PostgreSQL)
@@ -2073,8 +2073,6 @@ model RedistribuicaoGasto {
   id             String    @id @default(uuid())
   /// O departamento da DRE (do cadastro Departamentos); nulo = Todos.
   departamentoId String?   @map("departamento_id")
-  /// A conta da DRE: uma linha ITEM da Estrutura da DRE.
-  linhaDREId     String    @map("linha_dre_id")
   /// LISTA: os fornecedores marcados (o CLI_FORN do balancete, como na lista do modal); comparados sem espaços nas pontas e
   /// sem caixa. Só os marcados: um fornecedor novo na conta não entra sem ser incluído.
   fornecedores   String[]  @default([])
@@ -2088,14 +2086,29 @@ model RedistribuicaoGasto {
   atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
 
   departamento Departamento?           @relation(fields: [departamentoId], references: [id], onDelete: Restrict)
-  linhaDRE     LinhaDRE                @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+  /// As contas da DRE (20/11/2026, pedido do Adão: várias; antes, uma só): linhas ITEM da Estrutura da DRE.
+  contas       RedistribuicaoConta[]
   destinos     RedistribuicaoDestino[]
   lancamentos  LancamentoContabil[]
   partes       LancamentoRedistribuido[]
   copiasDosCenarios CenarioRedistribuicao[] @relation("RedistribuicaoDoCenario")
 
-  @@index([linhaDREId])
   @@map("redistribuicoes_gastos")
+}
+
+/// Uma conta da DRE de uma redistribuição de gastos (20/11/2026): os movimentos de qualquer das contas, dos fornecedores marcados,
+/// se redistribuem.
+model RedistribuicaoConta {
+  redistribuicaoId String @map("redistribuicao_id")
+  linhaDREId       String @map("linha_dre_id")
+  ordem            Int    @default(0)
+
+  redistribuicao RedistribuicaoGasto @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
+  linhaDRE       LinhaDRE            @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+
+  @@id([redistribuicaoId, linhaDREId])
+  @@index([linhaDREId])
+  @@map("redistribuicoes_gastos_contas")
 }
 
 /// Um destino de uma redistribuição de gastos (13/11/2026): o centro de custo e o percentual dele (0 a 1).
@@ -2358,6 +2371,8 @@ model Cenario {
   reajustes      CenarioReajuste[]
   justificativas CenarioJustificativa[]
   justificativasPremissas CenarioPremissaJustificativa[]
+  /// Os De Acordo das Verificações das Premissas (20/11/2026).
+  acordosDasVerificacoes CenarioVerificacaoAcordo[]
   premissas      CenarioPremissa[]
   centros        CenarioCentro[]
   investimentos  CenarioInvestimento[]
@@ -2436,6 +2451,25 @@ model CenarioPremissaJustificativa {
 
   @@id([cenarioId, chave])
   @@map("cenarios_premissas_justificativas")
+}
+
+/// O De Acordo de uma verificação das premissas de um cenário analítico (20/11/2026, pedido do Adão; a aba Verificações das
+/// Premissas): quem alterou os valores por último (ou o Administrador) confirma que a inconsistência está certa. Vale enquanto
+/// a assinatura dos valores envolvidos não muda; com alguma verificação sem correção nem De Acordo, a versão não se congela.
+model CenarioVerificacaoAcordo {
+  cenarioId   String   @map("cenario_id")
+  /// A chave da verificação (verificacoesCenario.ts): o tipo e a linha, a linha do Quadro ou o grupo e a conta.
+  chave       String
+  /// O resumo dos valores envolvidos no De Acordo.
+  assinatura  String
+  usuarioId   String?  @map("usuario_id")
+  usuarioNome String   @map("usuario_nome")
+  criadoEm    DateTime @default(now()) @map("criado_em")
+
+  cenario Cenario @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+
+  @@id([cenarioId, chave])
+  @@map("cenarios_verificacoes_acordos")
 }
 
 /// O histórico de reajustes de um cenário (12/10/2026): cada gravação de valores da DRE (o reajuste dos marcados ou a
@@ -2635,7 +2669,6 @@ model CenarioRedistribuicao {
   cenarioId      String    @map("cenario_id")
   origemId       String?   @map("origem_id")
   departamentoId String?   @map("departamento_id")
-  linhaDREId     String    @map("linha_dre_id")
   fornecedores   String[]  @default([])
   vigenciaInicio DateTime  @map("vigencia_inicio")
   vigenciaFim    DateTime? @map("vigencia_fim")
@@ -2650,11 +2683,26 @@ model CenarioRedistribuicao {
   /// SET NULL e CASCADE (abaixo): a exclusão do cenário apaga as cópias em cascata, sem ordem garantida entre elas; o app recusa
   /// excluir o departamento ou o centro usado numa redistribuição.
   departamento CenarioDepartamento?           @relation(fields: [departamentoId], references: [id], onDelete: SetNull)
-  linhaDRE     LinhaDRE                       @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+  /// As contas da DRE (20/11/2026: várias, como no cadastro).
+  contas       CenarioRedistribuicaoConta[]
   destinos     CenarioRedistribuicaoDestino[]
 
   @@index([cenarioId])
   @@map("cenarios_redistribuicoes")
+}
+
+/// Uma conta da DRE de uma redistribuição do cenário (20/11/2026).
+model CenarioRedistribuicaoConta {
+  redistribuicaoId String @map("redistribuicao_id")
+  linhaDREId       String @map("linha_dre_id")
+  ordem            Int    @default(0)
+
+  redistribuicao CenarioRedistribuicao @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
+  linhaDRE       LinhaDRE              @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
+
+  @@id([redistribuicaoId, linhaDREId])
+  @@index([linhaDREId])
+  @@map("cenarios_redistribuicoes_contas")
 }
 
 /// Um destino de uma redistribuição do cenário (20/11/2026): o centro da cópia do cenário e o percentual (0 a 1).

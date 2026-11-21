@@ -263,6 +263,30 @@ export type DepartamentosDoCenario = {
 };
 export type DadosDoDepartamentoDoCenario = { unidadeNegocioId: string; nome: string; gruposDRE: string[]; ordem: number | null; ativo: boolean };
 /** A cópia das Redistribuições de Gastos do cenário (20/11/2026, etapa 2): os campos do cadastro, com os centros da cópia. */
+/**
+ * Uma verificação das Premissas (20/11/2026, pedido do Adão): a inconsistência, a aba (e o grupo de centros, para abri-la), a linha
+ * ou o centro de custo, os meses, o responsável (quem alterou os valores por último) e a situação.
+ */
+export type VerificacaoDoCenario = {
+  chave: string;
+  tipo: string;
+  titulo: string;
+  aba: string;
+  abaRotulo: string;
+  grupo: string | null;
+  alvo: string;
+  descricao: string;
+  meses: number[];
+  /** Os meses em texto ("Jan a Abr, Jun e Dez"). */
+  mesesTexto: string;
+  responsavel: { nome: string; em: string | null } | null;
+  acordo: { nome: string; em: string } | null;
+  /** O De Acordo de antes de os valores mudarem (a verificação voltou a ficar pendente). */
+  acordoAnterior: { nome: string; em: string } | null;
+  podeAcordar: boolean;
+};
+export type VerificacoesDoCenario = { editavel: boolean; pendentes: number; pendentesNoCenario: number; verificacoes: VerificacaoDoCenario[] };
+
 export type RedistribuicaoDoCenario = Omit<Redistribuicao, "competencias"> & { doCenario: boolean };
 export type RedistribuicoesDoCenario = { editavel: boolean; redistribuicoes: RedistribuicaoDoCenario[]; opcoes: OpcoesDaRedistribuicao };
 /** O que o Trazer Novos dos Cadastros Gerais trouxe. */
@@ -559,6 +583,10 @@ export const cenariosService = {
   gravarMensais: async (id: string, tipo: "BASE" | "EXTRA", alteracoes: Array<{ linha: string; mes: number; valor: number | null }>, origem?: OrigemDaGravacao) =>
     (await api.put<{ data: { alteradas: number; meses: number[] } }>(`/proxy/cenarios/${id}/mensais`, { tipo, alteracoes, origem })).data.data,
   rateios: async (id: string) => (await api.get<{ data: RateiosDoCenario }>(`/proxy/cenarios/${id}/rateios`)).data.data,
+  // As Verificações das Premissas (20/11/2026): a lista e o De Acordo (ou a retirada) nas marcadas.
+  verificacoes: async (id: string) => (await api.get<{ data: VerificacoesDoCenario }>(`/proxy/cenarios/${id}/verificacoes`)).data.data,
+  acordarVerificacoes: async (id: string, chaves: string[], deAcordo: boolean) =>
+    (await api.post<{ data: VerificacoesDoCenario }>(`/proxy/cenarios/${id}/verificacoes/acordos`, { chaves, deAcordo })).data.data,
   premissas: async (id: string, unidade: 1 | 2 | 3) => (await api.get<{ data: PremissasDaUnidade }>(`/proxy/cenarios/${id}/premissas`, { params: { unidade } })).data.data,
   gravarPremissas: async (id: string, unidade: 1 | 2 | 3, alteracoes: Array<{ venda: "GLOBAL" | "MERCANTIL"; chave: string; mes: number; valor: number | null }>, origem?: OrigemDaGravacao) =>
     (await api.put<{ data: { alteradas: number; meses: number[] } }>(`/proxy/cenarios/${id}/premissas`, { unidade, alteracoes, origem })).data.data,
@@ -681,9 +709,12 @@ export const cenariosService = {
   excluirDepartamentoDoCenario: async (id: string, departamentoId: string) =>
     (await api.delete<{ data: DepartamentosDoCenario }>(`/proxy/cenarios/${id}/cadastros/departamentos/${departamentoId}`)).data.data,
   redistribuicoesDoCenario: async (id: string) => (await api.get<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes`)).data.data,
-  fornecedoresDaRedistribuicaoDoCenario: async (id: string, departamentoId: string | null, linhaDREId: string) =>
-    (await api.get<{ data: FornecedorDaCombinacao[] }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/fornecedores`, { params: { linhaDREId, ...(departamentoId ? { departamentoId } : {}) } })).data
-      .data,
+  fornecedoresDaRedistribuicaoDoCenario: async (id: string, departamentoId: string | null, linhasDREIds: string[]) =>
+    (
+      await api.get<{ data: FornecedorDaCombinacao[] }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/fornecedores`, {
+        params: { linhasDREIds: linhasDREIds.join(","), ...(departamentoId ? { departamentoId } : {}) },
+      })
+    ).data.data,
   gravarRedistribuicaoDoCenario: async (id: string, redistribuicaoId: string | null, dados: DadosDaRedistribuicao) =>
     (redistribuicaoId
       ? await api.put<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/${redistribuicaoId}`, dados)

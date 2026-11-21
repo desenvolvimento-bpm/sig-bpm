@@ -72,7 +72,17 @@ import {
   regrasDoCenario,
   type DadosDaRedistribuicaoDoCenario,
 } from "./redistribuicoesDoCenario.js";
-import { fornecedoresDaCombinacao, LINHA_SEL, linhaDoDepartamento, RegraRedistribuicaoError, rotuloDaLinha, textoDoMes } from "../redistribuicoes/redistribuicoesService.js";
+import {
+  contasParaGravar,
+  fornecedoresDaCombinacao,
+  LINHA_SEL,
+  linhaDoDepartamento,
+  opcaoDaLinha,
+  opcaoDoCentro,
+  RegraRedistribuicaoError,
+  rotuloDaLinha,
+  textoDoMes,
+} from "../redistribuicoes/redistribuicoesService.js";
 import { foraDoCenario, nomeDoGrupo } from "./centrosCenario.js";
 import { BALDES, departamentos as departamentosDosCentros } from "../cadastros/edicao/definicoesCadastros.js";
 import {
@@ -101,6 +111,7 @@ import {
   type RecorteDoUsuario,
   type Trecho,
 } from "./recorteCenario.js";
+import { dadosDasVerificacoes, responsavelDa, ROTULO_DA_ABA, textoDosMeses, TITULO_DA_VERIFICACAO, verificar, type Verificacao } from "./verificacoesCenario.js";
 import {
   CONTAS_DEPRECIACAO,
   contaDeDepreciacao,
@@ -270,6 +281,39 @@ async function obterOuFalhar(id: string, usuario: Usuario) {
   if (!c || !alcanca(c, usuario)) throw new CenarioError(404, "Cenário não encontrado.");
   return c;
 }
+
+/**
+ * As Verificações das Premissas de um cenário analítico (20/11/2026, pedido do Adão; verificacoesCenario.ts), com o responsável
+ * (quem alterou os valores por último, pelo Histórico; sem ninguém, quem criou o cenário) e a situação: De Acordo (o da
+ * assinatura de hoje) ou pendente (com o De Acordo anterior, se os valores mudaram depois dele).
+ */
+async function verificacoesComSituacao(c: { id: string; ano: number; criadoPorId: string | null; criadoPor: string | null }) {
+  const prisma = getPrismaClient();
+  const [dados, historico, acordos] = await Promise.all([
+    dadosDasVerificacoes(c),
+    prisma.cenarioReajuste.findMany({
+      where: { cenarioId: c.id },
+      orderBy: { criadoEm: "desc" },
+      select: { criadoEm: true, usuarioId: true, usuarioNome: true, tipo: true, visao: true, contas: true, alcance: true },
+    }),
+    prisma.cenarioVerificacaoAcordo.findMany({ where: { cenarioId: c.id } }),
+  ]);
+  const doAcordo = new Map(acordos.map((a) => [a.chave, a]));
+  const lista = verificar(dados).map((v) => {
+    const responsavel = responsavelDa(v, historico) ?? (c.criadoPor ? { id: c.criadoPorId, nome: c.criadoPor, em: null } : null);
+    const a = doAcordo.get(v.chave);
+    const quem = a ? { usuarioId: a.usuarioId, nome: a.usuarioNome, em: a.criadoEm } : null;
+    return { ...v, responsavel, acordo: a && a.assinatura === v.assinatura ? quem : null, acordoAnterior: a && a.assinatura !== v.assinatura ? quem : null };
+  });
+  return { lista, grupos: new Map(dados.grupos.map((g) => [g.grupo, g])) };
+}
+type VerificacaoComSituacao = Awaited<ReturnType<typeof verificacoesComSituacao>>["lista"][number];
+/** A verificação está no recorte do usuário: as das unidades pelos departamentos delas; as do Quadro e dos Centros, pelo grupo. */
+const veVerificacao = (r: Recorte | null, v: Pick<Verificacao, "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) =>
+  !r || (["1", "2", "3"].includes(v.aba) ? veDepartamentos(r, departamentosDaUnidade(Number(v.aba))) : !!v.grupo && grupos.has(v.grupo) && veGrupo(r, grupos.get(v.grupo)!));
+/** Quem dá (e retira) o De Acordo: o responsável pela verificação ou o Administrador. */
+const daOAcordo = (v: Pick<VerificacaoComSituacao, "responsavel">, u: Usuario) =>
+  !!u.admin || (!!v.responsavel && (v.responsavel.id ? v.responsavel.id === u.id : v.responsavel.nome === u.nome));
 
 /** O que o cenário tem: as visões da DRE com valor e os indicadores com meta. */
 async function conteudo(ids: string[]) {
@@ -2225,7 +2269,16 @@ export const cenariosService = {
   async congelarVersao(id: string, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
     if (c.versaoSalvaEm) throw new CenarioError(409, `A ${rotuloVersao(c.versao)} do cenário ${c.nome} já está congelada.`);
-    if (c.tipo === "ANALITICO") exigirRateios(await regrasDeRateio(), c.ano, `congelar a ${rotuloVersao(c.versao)} de ${c.nome}`);
+    if (c.tipo === "ANALITICO") {
+      exigirRateios(await regrasDeRateio(), c.ano, `congelar a ${rotuloVersao(c.versao)} de ${c.nome}`);
+      // As Verificações das Premissas (20/11/2026): todas corrigidas ou com o De Acordo.
+      const pendentes = (await verificacoesComSituacao(c)).lista.filter((v) => !v.acordo).length;
+      if (pendentes)
+        throw new CenarioError(
+          409,
+          `${pendentes === 1 ? "Há 1 verificação pendente" : `Há ${pendentes} verificações pendentes`} na aba Verificações das Premissas: corrija os valores ou peça o De Acordo de quem os alterou antes de congelar a ${rotuloVersao(c.versao)} de ${c.nome}.`,
+        );
+    }
     const depois = await getPrismaClient().cenario.update({ where: { id }, data: { versaoSalvaEm: new Date(), versaoSalvaPor: usuario.nome } });
     await auditar({
       usuarioId: usuario.id,
@@ -2323,6 +2376,9 @@ export const cenariosService = {
         // As cópias de Unidades e de Centros de Custo do cenário de origem (20/11/2026) e o Quadro de Lotação nos centros delas.
         const mapa = origem.tipo === "ANALITICO" ? await copiarCadastros(tx, c.id, origem.id) : undefined;
         await copiarQuadro(tx, origem.id, c.id, mapa);
+        // Os De Acordo das Verificações (20/11/2026): valem na revisão enquanto os valores não mudam.
+        const acordos = await tx.cenarioVerificacaoAcordo.findMany({ where: { cenarioId: origem.id } });
+        if (acordos.length) await tx.cenarioVerificacaoAcordo.createMany({ data: acordos.map((a) => ({ ...a, cenarioId: c.id })) });
         return c;
       },
       { timeout: 120_000 },
@@ -3308,6 +3364,86 @@ export const cenariosService = {
         percentuais: percentuais.map((p) => p.get(`${r.chave}|${r.destino}`) ?? 0),
       })),
     };
+  },
+
+  /**
+   * A aba Verificações das Premissas (20/11/2026, pedido do Adão): as inconsistências nos valores, do recorte do usuário, com a
+   * aba, a linha ou o centro de custo, o responsável e a situação, e se o usuário dá o De Acordo em cada uma.
+   */
+  async verificacoes(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const recorte = recorteDoCenario(c, usuario);
+    const { lista, grupos } = await verificacoesComSituacao(c);
+    const editavel = !c.marcacao && !c.versaoSalvaEm;
+    const visiveis = lista.filter((v) => veVerificacao(recorte, v, grupos));
+    return {
+      editavel,
+      pendentes: visiveis.filter((v) => !v.acordo).length,
+      // As do cenário inteiro (as de fora do recorte também seguram o Congelar Versão).
+      pendentesNoCenario: lista.filter((v) => !v.acordo).length,
+      verificacoes: visiveis.map((v) => ({
+        chave: v.chave,
+        tipo: v.tipo,
+        titulo: TITULO_DA_VERIFICACAO[v.tipo],
+        aba: v.aba,
+        abaRotulo: ROTULO_DA_ABA[v.aba],
+        grupo: v.grupo,
+        alvo: v.alvo,
+        descricao: v.descricao,
+        meses: v.meses,
+        mesesTexto: textoDosMeses(v.meses),
+        responsavel: v.responsavel ? { nome: v.responsavel.nome, em: v.responsavel.em } : null,
+        acordo: v.acordo ? { nome: v.acordo.nome, em: v.acordo.em } : null,
+        acordoAnterior: v.acordoAnterior ? { nome: v.acordoAnterior.nome, em: v.acordoAnterior.em } : null,
+        podeAcordar: editavel && daOAcordo(v, usuario),
+      })),
+    };
+  },
+
+  /**
+   * O De Acordo (ou a retirada dele) nas verificações marcadas (20/11/2026): só o responsável por cada uma (quem alterou os
+   * valores por último) ou o Administrador, no cenário editável. O De Acordo guarda a assinatura dos valores de hoje.
+   */
+  async acordarVerificacoes(id: string, chaves: string[], deAcordo: boolean, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    const recorte = recorteDoCenario(c, usuario);
+    const { lista, grupos } = await verificacoesComSituacao(c);
+    const pedidas = new Set(chaves);
+    const alvo = lista.filter((v) => pedidas.has(v.chave) && veVerificacao(recorte, v, grupos));
+    if (!alvo.length || alvo.length !== pedidas.size) throw new CenarioError(409, "As verificações mudaram (corrigidas ou com outros valores): atualize a aba Verificações e marque de novo.");
+    const deOutros = alvo.filter((v) => !daOAcordo(v, usuario));
+    if (deOutros.length) {
+      const nomes = [...new Set(deOutros.map((v) => v.responsavel?.nome ?? "quem criou o cenário"))];
+      throw new CenarioError(
+        403,
+        `Só quem alterou os valores por último (ou o Administrador) dá ou retira o De Acordo: ${deOutros.length} ${deOutros.length === 1 ? "das marcadas é" : "das marcadas são"} de ${nomes.join(", ")}.`,
+      );
+    }
+    const prisma = getPrismaClient();
+    if (deAcordo)
+      await prisma.$transaction(
+        alvo.map((v) =>
+          prisma.cenarioVerificacaoAcordo.upsert({
+            where: { cenarioId_chave: { cenarioId: id, chave: v.chave } },
+            create: { cenarioId: id, chave: v.chave, assinatura: v.assinatura, usuarioId: usuario.id || null, usuarioNome: usuario.nome },
+            update: { assinatura: v.assinatura, usuarioId: usuario.id || null, usuarioNome: usuario.nome, criadoEm: new Date() },
+          }),
+        ),
+      );
+    else await prisma.cenarioVerificacaoAcordo.deleteMany({ where: { cenarioId: id, chave: { in: alvo.map((v) => v.chave) } } });
+    await auditar({
+      usuarioId: usuario.id,
+      usuarioNome: usuario.nome,
+      acao: "ALTERACAO",
+      entidade: "cenario_verificacao",
+      entidadeId: id,
+      depois: { deAcordo, verificacoes: alvo.map((v) => `${TITULO_DA_VERIFICACAO[v.tipo]} · ${v.alvo}`) },
+      metadados: { cenario: c.nome, deAcordo },
+    });
+    return this.verificacoes(id, usuario);
   },
 
   /**
@@ -4684,14 +4820,14 @@ export const cenariosService = {
         orderBy: [{ ativo: "desc" }, { vigenciaInicio: "desc" }, { criadoEm: "asc" }],
         include: {
           departamento: { select: { nome: true, unidadeNegocioId: true } },
-          linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } },
+          contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } } } },
           destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true, ativo: true } } } },
         },
       }),
       prisma.cenarioDepartamento.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], include: { unidadeNegocio: { select: { codigo: true } } } }),
       prisma.linhaDRE.findMany({ where: { tipo: "ITEM", ativo: true }, orderBy: { ordem: "asc" }, select: LINHA_SEL }),
-      prisma.cenarioCentroCusto.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ codigoRM: { sort: "asc", nulls: "last" } }, { nomeRM: "asc" }], select: { id: true, codigoRM: true, nomeRM: true, nomeControladoria: true, departamento: true, balde: true } }),
-      prisma.cenarioUnidade.findMany({ where: { cenarioId: id }, select: { unidadeNegocioId: true, nome: true } }),
+      prisma.cenarioCentroCusto.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ codigoRM: { sort: "asc", nulls: "last" } }, { nomeRM: "asc" }], select: { id: true, codigoRM: true, nomeRM: true, nomeControladoria: true, departamento: true, atribuicao: true, balde: true } }),
+      prisma.cenarioUnidade.findMany({ where: { cenarioId: id }, orderBy: { unidadeNegocio: { codigo: "asc" } }, select: { unidadeNegocioId: true, nome: true, unidadeNegocio: { select: { codigo: true } } } }),
     ]);
     const nomeDaUnidade = new Map(unidades.map((u) => [u.unidadeNegocioId, u.nome]));
     return {
@@ -4700,8 +4836,8 @@ export const cenariosService = {
         id: r.id,
         departamentoId: r.departamentoId,
         departamento: r.departamento ? `${r.departamento.nome} (${nomeDaUnidade.get(r.departamento.unidadeNegocioId) ?? ""})` : null,
-        linhaDREId: r.linhaDREId,
-        conta: { codigo: r.linhaDRE.codigo, rotulo: rotuloDaLinha(r.linhaDRE) },
+        linhasDREIds: r.contas.map((x) => x.linhaDREId),
+        contas: r.contas.map((x) => ({ codigo: x.linhaDRE.codigo, rotulo: rotuloDaLinha(x.linhaDRE) })),
         fornecedores: r.fornecedores,
         destinos: r.destinos.map((d) => ({
           centroCustoId: d.centroCustoId,
@@ -4721,14 +4857,15 @@ export const cenariosService = {
           nome: `${d.nome} (${nomeDaUnidade.get(d.unidadeNegocioId) ?? ""})`,
           linhas: linhas.filter((l) => linhaDoDepartamento(l, d)).map((l) => l.id),
         })),
-        linhas: linhas.map((l) => ({ id: l.id, codigo: l.codigo, rotulo: rotuloDaLinha(l) })),
-        centros: centros.map((x) => ({ id: x.id, codigo: x.codigoRM ?? "", nome: x.nomeRM, detalhe: [x.nomeControladoria, x.departamento, x.balde].filter(Boolean).join(" · ") || null })),
+        unidades: unidades.map((u) => ({ codigo: u.unidadeNegocio.codigo, nome: u.nome })),
+        linhas: linhas.map(opcaoDaLinha),
+        centros: centros.map((x) => ({ ...opcaoDoCentro(x), detalhe: [x.nomeControladoria, x.departamento, x.balde].filter(Boolean).join(" · ") || null })),
       },
     };
   },
 
-  /** Os fornecedores com movimentos na combinação do modal, com o departamento da cópia do cenário (ou todos). */
-  async fornecedoresDaRedistribuicaoDoCenario(id: string, departamentoId: string | null, linhaDREId: string, usuario: Usuario = SISTEMA) {
+  /** Os fornecedores com movimentos nas contas do modal, com o departamento da cópia do cenário (ou todos). */
+  async fornecedoresDaRedistribuicaoDoCenario(id: string, departamentoId: string | null, linhasDREIds: string[], usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     let departamento: { gruposDRE: string[]; unidadeNegocio: { codigo: number } } | null = null;
@@ -4736,7 +4873,7 @@ export const cenariosService = {
       departamento = await getPrismaClient().cenarioDepartamento.findFirst({ where: { id: departamentoId, cenarioId: id }, select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } });
       if (!departamento) throw new CenarioError(404, "Departamento não encontrado no cenário.");
     }
-    return daRegra(() => fornecedoresDaCombinacao(departamento, linhaDREId));
+    return daRegra(() => fornecedoresDaCombinacao(departamento, linhasDREIds));
   },
 
   /** Inclui (sem `redistribuicaoId`) ou altera uma redistribuição da cópia do cenário (as regras do cadastro). */
@@ -4747,16 +4884,22 @@ export const cenariosService = {
     exigirEditavel(c);
     exigirSemReajustes(c);
     const prisma = getPrismaClient();
-    const antes = redistribuicaoId ? await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } } } }) : null;
+    const antes = redistribuicaoId
+      ? await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } }, contas: { orderBy: { ordem: "asc" } } } })
+      : null;
     if (redistribuicaoId && !antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
     const campos = await daRegra(() => prepararRedistribuicao(prisma, id, dados, redistribuicaoId));
-    const { destinos, ...regra } = campos;
+    const { destinos, linhasDREIds, nomeDasContas: _nome, ...regra } = campos;
+    const contas = contasParaGravar(linhasDREIds);
     const gravada = await prisma.$transaction(async (tx) => {
       if (antes) {
         await tx.cenarioRedistribuicaoDestino.deleteMany({ where: { redistribuicaoId: antes.id } });
-        return tx.cenarioRedistribuicao.update({ where: { id: antes.id }, data: { ...regra, destinos: { create: destinos } } });
+        await tx.cenarioRedistribuicaoConta.deleteMany({ where: { redistribuicaoId: antes.id } });
+        return tx.cenarioRedistribuicao.update({ where: { id: antes.id }, data: { ...regra, contas: { create: contas }, destinos: { create: destinos } } });
       }
-      return tx.cenarioRedistribuicao.create({ data: { ...regra, cenarioId: id, origemId: null, ordem: (await tx.cenarioRedistribuicao.count({ where: { cenarioId: id } })) + 1, destinos: { create: destinos } } });
+      return tx.cenarioRedistribuicao.create({
+        data: { ...regra, cenarioId: id, origemId: null, ordem: (await tx.cenarioRedistribuicao.count({ where: { cenarioId: id } })) + 1, contas: { create: contas }, destinos: { create: destinos } },
+      });
     });
     await auditar({
       usuarioId: usuario.id,
@@ -4765,7 +4908,7 @@ export const cenariosService = {
       entidade: "cenario_redistribuicao",
       entidadeId: gravada.id,
       antes: antes ? redistribuicaoParaAuditoria(antes) : undefined,
-      depois: redistribuicaoParaAuditoria({ ...regra, destinos }),
+      depois: redistribuicaoParaAuditoria({ ...regra, contas, destinos }),
       metadados: { cenario: c.nome },
     });
     return this.redistribuicoesDoCenario(id, usuario);
@@ -4779,7 +4922,7 @@ export const cenariosService = {
     exigirEditavel(c);
     exigirSemReajustes(c);
     const prisma = getPrismaClient();
-    const antes = await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } } } });
+    const antes = await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } }, contas: { orderBy: { ordem: "asc" } } } });
     if (!antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
     await prisma.cenarioRedistribuicao.delete({ where: { id: redistribuicaoId } });
     await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_redistribuicao", entidadeId: redistribuicaoId, antes: redistribuicaoParaAuditoria(antes), metadados: { cenario: c.nome } });

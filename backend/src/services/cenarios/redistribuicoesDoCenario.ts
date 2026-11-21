@@ -3,7 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { gruposDaDRE } from "../cadastros/edicao/definicoesCadastros.js";
 import { chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento, partesDoValor, type DepartamentoDaRedistribuicao } from "../classificacao/regrasClassificacao.js";
 import { plural } from "../../utils/plural.js";
-import { LINHA_SEL, linhaDoDepartamento, mesDe, RegraRedistribuicaoError, rotuloDaLinha, rotuloDaVigencia, textoDoMes } from "../redistribuicoes/redistribuicoesService.js";
+import { contaEmComum, contasDaRegra, mesDe, nomeDasContas, RegraRedistribuicaoError, rotuloDaVigencia, textoDoMes } from "../redistribuicoes/redistribuicoesService.js";
 
 /**
  * Os Departamentos e as Redistribuições de Gastos de cada cenário analítico (20/11/2026, pedido do Adão: Cadastros por cenário,
@@ -19,7 +19,8 @@ type Tx = Prisma.TransactionClient;
 /** Uma redistribuição do cenário pronta para a divisão: a regra e os centros da cópia dos destinos. */
 export type RegraDoCenario = {
   id: string;
-  linhaDREId: string;
+  /** As contas da DRE da regra (uma ou mais). */
+  linhasDRE: Set<string>;
   departamento: DepartamentoDaRedistribuicao | null;
   fornecedores: Set<string>;
   inicio: Date;
@@ -34,7 +35,7 @@ export async function regrasDoCenario(cenarioId: string, db: Pick<Tx, "cenarioRe
     orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
     select: {
       id: true,
-      linhaDREId: true,
+      contas: { select: { linhaDREId: true } },
       fornecedores: true,
       vigenciaInicio: true,
       vigenciaFim: true,
@@ -44,7 +45,7 @@ export async function regrasDoCenario(cenarioId: string, db: Pick<Tx, "cenarioRe
   });
   return rs.map((r) => ({
     id: r.id,
-    linhaDREId: r.linhaDREId,
+    linhasDRE: new Set(r.contas.map((c) => c.linhaDREId)),
     departamento: r.departamento ? { grupos: new Set(r.departamento.gruposDRE), filial: filialDoDepartamento(r.departamento.unidadeNegocio.codigo) } : null,
     fornecedores: new Set(r.fornecedores.map(chaveDoFornecedor)),
     inicio: r.vigenciaInicio,
@@ -57,7 +58,7 @@ export async function regrasDoCenario(cenarioId: string, db: Pick<Tx, "cenarioRe
 export type MovimentoDaRedistribuicao = { linhaDREId: string | null; grupoSigla: string | null; filial: number; cliForn: string | null; valorMovimento: number | Prisma.Decimal };
 
 /**
- * Divide os movimentos pelas redistribuições do cenário (puro): o movimento da conta, de um fornecedor marcado e do departamento
+ * Divide os movimentos pelas redistribuições do cenário (puro): o movimento de uma das contas, de um fornecedor marcado e do departamento
  * da regra (ou de todos), num mês da vigência, vai para os centros dos destinos pelos percentuais (as partes somam o valor dele,
  * em centavos, como na classificação). `mes`: o dia 1º do mês do movimento (UTC).
  */
@@ -77,13 +78,14 @@ export function redistribuirMovimentos<M extends MovimentoDaRedistribuicao>(movi
 }
 
 function regraDoMovimento(m: MovimentoDaRedistribuicao, regras: RegraDoCenario[], mes: Date) {
-  if (!m.linhaDREId || !m.cliForn) return null;
+  const linha = m.linhaDREId;
+  if (!linha || !m.cliForn) return null;
   const fornecedor = chaveDoFornecedor(m.cliForn);
   return (
     regras.find(
       (r) =>
         r.destinos.length > 0 &&
-        r.linhaDREId === m.linhaDREId &&
+        r.linhasDRE.has(linha) &&
         r.inicio <= mes &&
         (!r.fim || mes <= r.fim) &&
         r.fornecedores.has(fornecedor) &&
@@ -97,7 +99,7 @@ function regraDoMovimento(m: MovimentoDaRedistribuicao, regras: RegraDoCenario[]
 /** O que vem do modal da redistribuição do cenário (como no cadastro; os centros são os da cópia do cenário). */
 export type DadosDaRedistribuicaoDoCenario = {
   departamentoId: string | null;
-  linhaDREId: string;
+  linhasDREIds: string[];
   fornecedores: string[];
   destinos: Array<{ centroCustoId: string; percentual: number }>;
   vigenciaInicio: string;
@@ -110,16 +112,14 @@ const DEPARTAMENTO_SEL = { id: true, nome: true, gruposDRE: true, ativo: true, u
 
 /** Valida e normaliza a redistribuição do cenário (as regras do cadastro, com o departamento e os centros da cópia). */
 export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: DadosDaRedistribuicaoDoCenario, id: string | null) {
-  const linha = await tx.linhaDRE.findUnique({ where: { id: d.linhaDREId }, select: LINHA_SEL });
-  if (!linha || linha.tipo !== "ITEM") throw new RegraRedistribuicaoError(400, "Escolha uma Conta da DRE (uma linha de item da Estrutura da DRE).");
-  if (!linha.ativo) throw new RegraRedistribuicaoError(400, "A Conta da DRE está inativa.");
   let departamento: Prisma.CenarioDepartamentoGetPayload<{ select: typeof DEPARTAMENTO_SEL }> | null = null;
   if (d.departamentoId) {
     departamento = await tx.cenarioDepartamento.findFirst({ where: { id: d.departamentoId, cenarioId }, select: DEPARTAMENTO_SEL });
     if (!departamento) throw new RegraRedistribuicaoError(400, "O departamento não é do cenário.");
     if (!departamento.ativo) throw new RegraRedistribuicaoError(400, `O departamento ${departamento.nome} está inativo no cenário.`);
-    if (!linhaDoDepartamento(linha, departamento)) throw new RegraRedistribuicaoError(400, `A conta ${rotuloDaLinha(linha)} não é do departamento ${departamento.nome} (${departamento.unidadeNegocio.nome}).`);
   }
+  const linhas = await contasDaRegra(d.linhasDREIds, departamento);
+  const idsDasContas = linhas.map((l) => l.id);
   const porChave = new Map<string, string>();
   for (const f of d.fornecedores) {
     const nome = f.trim();
@@ -139,11 +139,11 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
   const inicio = mesDe(d.vigenciaInicio, "O início da vigência");
   const fim = d.vigenciaFim ? mesDe(d.vigenciaFim, "O fim da vigência") : null;
   if (fim && fim < inicio) throw new RegraRedistribuicaoError(400, "O fim da vigência é anterior ao início.");
-  // Sem sobreposição no cenário: na mesma conta, com um fornecedor em comum, em departamentos que se cruzam e na mesma época.
+  // Sem sobreposição no cenário: numa conta em comum, com um fornecedor em comum, em departamentos que se cruzam e na mesma época.
   if (d.ativo) {
     const outras = await tx.cenarioRedistribuicao.findMany({
-      where: { cenarioId, ativo: true, linhaDREId: linha.id, ...(id ? { id: { not: id } } : {}) },
-      select: { departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } } },
+      where: { cenarioId, ativo: true, contas: { some: { linhaDREId: { in: idsDasContas } } }, ...(id ? { id: { not: id } } : {}) },
+      select: { departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
     });
     const SEM_FIM = new Date(Date.UTC(9999, 0, 1));
     const conflito = outras.find(
@@ -157,13 +157,14 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
       const comuns = conflito.fornecedores.filter((f) => porChave.has(chaveDoFornecedor(f)));
       throw new RegraRedistribuicaoError(
         409,
-        `Já há uma redistribuição ativa desta conta no cenário (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
+        `Já há uma redistribuição ativa ${contaEmComum(linhas, conflito.contas)} no cenário (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
       );
     }
   }
   return {
     departamentoId: departamento?.id ?? null,
-    linhaDREId: linha.id,
+    linhasDREIds: idsDasContas,
+    nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
     destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
@@ -176,7 +177,7 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
 /** Os campos de uma redistribuição para a auditoria. */
 export const redistribuicaoParaAuditoria = (r: {
   departamentoId: string | null;
-  linhaDREId: string;
+  contas: Array<{ linhaDREId: string }>;
   fornecedores: string[];
   vigenciaInicio: Date;
   vigenciaFim: Date | null;
@@ -185,7 +186,7 @@ export const redistribuicaoParaAuditoria = (r: {
   destinos: Array<{ centroCustoId: string; percentual: Prisma.Decimal | number }>;
 }) => ({
   departamentoId: r.departamentoId,
-  linhaDREId: r.linhaDREId,
+  linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,
   destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: Number(d.percentual) })),
   vigenciaInicio: textoDoMes(r.vigenciaInicio),
