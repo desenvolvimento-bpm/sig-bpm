@@ -118,7 +118,8 @@ export type ContasDoCentro = {
   /** A mão de obra principal do grupo (o prefixo "CPP.MOD"…): a da atribuição dele, que recebe as remunerações do Quadro de Lotação. */
   principal: string | null;
   /** Os Encargos e Benefícios (19/10/2026): os percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$. */
-  encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$" }>;
+  /** `calculado` (21/11/2026): os Benefícios Padrão, da aba Quadro de Lotação, que não se digitam. */
+  encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$"; calculado?: boolean }>;
   /**
    * `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026).
    * `comBeneficios` (17/11/2026): a conta Encargos e Benefícios que, na DRE, leva os Benefícios Adicionais; aqui vem sem eles
@@ -128,8 +129,16 @@ export type ContasDoCentro = {
 };
 
 /** Um mês de uma linha do Quadro de Lotação do cenário (09/11/2026): os colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (17/11/2026: de todos os colaboradores dela). */
-export type MesDoQuadro = { colaboradores: number; salarioBruto: number; adicional: number };
-export type CampoDoMes = keyof MesDoQuadro;
+/**
+ * Um mês de uma linha do Quadro de Lotação: os três campos que se editam e (21/11/2026) os Benefícios — o valor (`beneficios`), os
+ * Benefícios Padrão aplicados (os ids) e o valor digitado na importação (sem aplicados).
+ */
+export type MesDoQuadro = { colaboradores: number; salarioBruto: number; adicional: number; beneficios: number; beneficiosPadrao: string[]; beneficiosDigitados: number | null };
+export type CampoDoMes = "colaboradores" | "salarioBruto" | "adicional";
+/** Um Benefício Padrão do cenário (21/11/2026; Configurações / Benefícios Padrão): o Valor Mensal por colaborador. */
+export type BeneficioPadrao = { id: string; nome: string; descricao: string | null; valorMensal: number };
+/** A aba Benefícios Padrão: os benefícios, com os valores (as linhas × os meses) e as linhas do Quadro de Lotação que usam cada um. */
+export type BeneficiosDoCenario = { editavel: boolean; beneficios: Array<BeneficioPadrao & { valores: number; linhas: number }> };
 /** Uma linha da aba Quadro de Lotação: os cadastros (como no Lançamento Inicial), o grupo do centro (null: fora dos grupos) e os doze meses. */
 export type LinhaDoQuadroDoCenario = {
   id: string;
@@ -141,6 +150,8 @@ export type LinhaDoQuadroDoCenario = {
   funcao: string;
   centroCustoId: string;
   centro: string;
+  /** Só o nome do centro (21/11/2026: a coluna Centro de Custo, sem o código RM). */
+  nomeDoCentro: string;
   grupo: string | null;
   meses: MesDoQuadro[];
   /** Os colaboradores da linha na referência do cenário (16/11/2026; nulo: a linha não está nela, ou sem referência). */
@@ -154,6 +165,8 @@ export type QuadroDoCenario = {
   /** A referência do cenário para o Quadro de Lotação (16/11/2026): o QL Realizado mais recente ou o último mês do cenário de origem. */
   referencia: { rotulo: string } | null;
   linhas: LinhaDoQuadroDoCenario[];
+  /** Os Benefícios Padrão do cenário (21/11/2026): o modal do botão Benefícios. */
+  beneficios: BeneficioPadrao[];
   opcoes: {
     unidades: Array<{ id: string; nome: string }>;
     funcoes: Array<{ id: string; nome: string }>;
@@ -161,7 +174,7 @@ export type QuadroDoCenario = {
   };
 };
 /** Os dados de uma linha: os cadastros e, na nova, os doze meses. */
-export type DadosDaLinhaDoQuadro = Pick<LinhaDoQuadroDoCenario, "unidadeNegocioId" | "vinculo" | "funcaoId" | "centroCustoId"> & { meses?: MesDoQuadro[] };
+export type DadosDaLinhaDoQuadro = Pick<LinhaDoQuadroDoCenario, "unidadeNegocioId" | "vinculo" | "funcaoId" | "centroCustoId"> & { meses?: Array<Pick<MesDoQuadro, CampoDoMes>> };
 export type SerieDoCentro = { referencia: number | null; valores: number[]; gravados: boolean[] };
 export type RateiosDoCenario = {
   ano: number;
@@ -281,8 +294,11 @@ export type VerificacaoDoCenario = {
   mesesTexto: string;
   /** Quem alterou os valores por último (pelo Histórico; sem alteração, quem criou o cenário). */
   responsavel: { nome: string; em: string | null } | null;
-  /** Todos os que podem justificar (dar o De Acordo): o responsável, se tem Editar na aba e a vê, e os Administradores. */
-  podemJustificar: string[];
+  /**
+   * O responsável imediato (21/11/2026): o Analista do recorte da verificação; sem ele, o Coordenador, o Estratégico ou o Gestor
+   * (mais de um só no mesmo nível); sem nenhum, quem alterou por último. Ele (ou o Administrador) dá o De Acordo.
+   */
+  responsaveis: string[];
   acordo: { nome: string; em: string } | null;
   /** O De Acordo de antes de os valores mudarem (a verificação voltou a ficar pendente). */
   acordoAnterior: { nome: string; em: string } | null;
@@ -293,7 +309,32 @@ export type VerificacoesDoCenario = { editavel: boolean; pendentes: number; pend
 export type RedistribuicaoDoCenario = Omit<Redistribuicao, "competencias"> & { doCenario: boolean };
 export type RedistribuicoesDoCenario = { editavel: boolean; redistribuicoes: RedistribuicaoDoCenario[]; opcoes: OpcoesDaRedistribuicao };
 /** O que o Trazer Novos dos Cadastros Gerais trouxe. */
-export type TrazidosDosCadastros = { unidades: string[]; departamentos: string[]; centros: string[]; redistribuicoes: string[] };
+export type TrazidosDosCadastros = { unidades: string[]; departamentos: string[]; centros: string[]; redistribuicoes: string[]; regras: string[] };
+/** Uma regra da cópia das Regras de Rateio do cenário (21/11/2026): `percentualFixo` em %, nulo na paramétrica; `doCenario`, sem origem em Cadastros Gerais. */
+export type RegraDoCenario = {
+  id: string;
+  rotulo: string;
+  chave: string;
+  chaveNome: string;
+  destino: string;
+  destinoNome: string;
+  origemDoVolume: string;
+  origemDoVolumeNome: string;
+  inicio: string;
+  fim: string | null;
+  percentualFixo: number | null;
+  doCenario: boolean;
+};
+/** Um conjunto de percentuais fixos do cenário: a chave, a vigência, o percentual (%) de cada destino e a base do rótulo. */
+export type ConjuntoFixoDoCenario = { chave: string; inicio: string; fim: string | null; percentuais: Record<string, number>; rotulo: string };
+/** A aba Regras de Rateio do cenário: as regras, os conjuntos fixos, as opções do Novo Rateio e os avisos do exercício. */
+export type RegrasDoCenario = {
+  editavel: boolean;
+  regras: RegraDoCenario[];
+  conjuntos: ConjuntoFixoDoCenario[];
+  opcoes: { chaves: Array<{ chave: string; nome: string; destinos: Array<{ codigo: string; rotulo: string }>; fixos: Array<{ destino: string; nome: string }> }> };
+  avisos: string[];
+};
 export type ExtraDoCenario = { ano: number; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: Array<{ unidade: 4 | 5; nome: string; linhas: LinhaDaPremissa[] }> };
 export type PremissasDaUnidade = { ano: number; unidade: 1 | 2 | 3; nome: string; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: TabelaDePremissas[] };
 /**
@@ -372,8 +413,16 @@ export type Cenario = {
   realocacoes: Realocacoes | null;
   /** Nos analíticos (14/10/2026): os avisos dos rateios no exercício e se as regras mudaram depois do último cálculo. */
   rateios?: { avisos: string[]; desatualizados: boolean } | null;
-  /** Os Reajustes das Premissas aplicados na DRE (analíticos, 11/11/2026: Premissas / Reajustes, Aplicar ou Remover Reajustes). */
+  /**
+   * A caixa Aplicar Reajustes dos Resultados (analíticos; 21/11/2026, antes do Recalcular): marcada, o Recalcular aplica os Reajustes
+   * das Premissas na DRE, e as Configurações e as Premissas não se editam.
+   */
   reajustesAplicados: boolean;
+  /**
+   * As alterações ainda não recalculadas na DRE (analíticos, 21/11/2026): as gravações das Configurações, das Premissas e dos
+   * Reajustes (os Índices de Reajuste com a caixa marcada, e a caixa mudada). O Recalcular dos Resultados as zera.
+   */
+  recalculo?: { configuracoes: number; premissas: number; reajustes: number; total: number } | null;
   criadoEm: string;
   /** As visões da DRE com valor (0 Consolidado, 1 a 5 as unidades). */
   visoes: number[];
@@ -407,6 +456,16 @@ export type ReajusteDoCenario = {
 };
 
 /** O comparativo: o cenário comparado, os que se podem escolher e a variação máxima (%) de cada total da DRE (nula: não verifica). */
+/** Um usuário do Compartilhar do cenário particular (21/11/2026): `soLe`, o perfil só lê os cenários; `ve`, ativo e com o acesso aos cenários. */
+export type UsuarioDoCompartilhamento = { id: string; nome: string; email: string; perfil: string | null; soLe: boolean };
+/** O Compartilhar do cenário particular (21/11/2026): os convidados e, para quem compartilha, os que se podem convidar. */
+export type CompartilhamentoDoCenario = {
+  podeCompartilhar: boolean;
+  particular: boolean;
+  criadoPor: string | null;
+  usuarios: Array<UsuarioDoCompartilhamento & { convidadoPor: string; convidadoEm: string; ve: boolean }>;
+  candidatos: UsuarioDoCompartilhamento[];
+};
 export type Comparativo = {
   comparadoCom: { id: string; nome: string; ano: number } | null;
   /** Os cenários que se podem escolher; `vigente`: a versão mais recente da família (13/10/2026). */
@@ -416,17 +475,36 @@ export type Comparativo = {
    * As linhas da DRE vigente (14/10/2026; antes, só os totais): totais, atribuições e contas. `verificada`: a linha sem
    * nada embaixo (a conta, ou o total e a atribuição sem contas), a que tem a variação máxima.
    */
-  linhas: Array<{ codigo: string; descricao: string; tipo: string; verificada: boolean; limite: number | null; /** Nos analíticos, a chave do índice da conta. */ indice: string | null }>;
-  /** Os Índices de Reajuste (19/10/2026): só nos analíticos, que escolhem um por conta; nulo nos sintéticos (a variação digitada). */
-  indices: IndiceDeReajuste[] | null;
+  /** Vazio nos analíticos (21/11/2026): a variação de cada conta vem das combinações dos Índices de Comparação. */
+  linhas: Array<{ codigo: string; descricao: string; tipo: string; verificada: boolean; limite: number | null }>;
 };
-/** Um Índice de Reajuste do cenário analítico (19/10/2026; Configurações / Índices). */
-export type IndiceDeReajuste = { chave: string; descricao: string; observacao: string | null; variacao: number };
-/** Um reajuste de um Índice de Reajuste das Premissas (11/11/2026): o percentual (5 = 5%) e o mês em que começa (1 a 12). */
+/** A venda das combinações dos Índices de Reajuste (21/11/2026): nos Custos de Produção da Matriz e da Filial. */
+export type VendaDoIndice = "GLOBAL" | "MERCANTIL";
+/**
+ * Uma combinação de um Índice de Comparação ou de Reajuste (21/11/2026, pedido do Adão): Unidade, Departamento, Atribuição,
+ * Conta e (nos reajustes) Venda — cada um nulo ("Todas") ou uma escolha.
+ */
+export type CombinacaoDoIndice = { unidade: number | null; departamento: string | null; atribuicao: string | null; conta: string | null; venda: VendaDoIndice | null };
+/** Uma conta numa unidade (e, nos Custos de Produção da Matriz e da Filial, nos reajustes, numa venda): o que as combinações alcançam. */
+export type CelulaDoIndice = { chave: string; unidade: number; codigo: string; grupo: string; atribuicao: string; conta: string; venda: VendaDoIndice | null; descricao: string };
+/** O que as combinações de um tipo de índice escolhem: as unidades, os departamentos (da cópia do cenário), as atribuições, as contas e as células. */
+export type UniversoDosIndices = {
+  tipo: "COMPARACAO" | "REAJUSTE";
+  unidades: Array<{ codigo: number; nome: string }>;
+  departamentos: Array<{ id: string; unidade: number; nome: string; grupos: string[]; ativo: boolean }>;
+  atribuicoes: Array<{ chave: string; nome: string }>;
+  contas: Array<{ chave: string; nome: string; atribuicao: string }>;
+  celulas: CelulaDoIndice[];
+};
+/** Um Índice de Comparação do cenário analítico (19/10/2026, de Referência; 21/11/2026, com as combinações). */
+export type IndiceDeComparacao = { chave: string; descricao: string; observacao: string | null; variacao: number; combinacoes: CombinacaoDoIndice[] };
+/** Os Índices de Comparação (com quantas contas cada um alcança) e o universo das combinações. */
+export type IndicesDeComparacao = { indices: Array<IndiceDeComparacao & { contas: number }>; universo: UniversoDosIndices };
+/** Um reajuste de um Índice de Reajuste (11/11/2026): o percentual (5 = 5%) e o mês em que começa (1 a 12). */
 export type ReajusteDoIndice = { valor: number; mes: number };
-/** Um Índice de Reajuste das Premissas dos analíticos (11/11/2026; Premissas / Reajustes): até quatro reajustes. */
-export type IndiceDosReajustes = { chave: string; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[] };
-/** A aba Reajustes das Premissas: os índices (com as contas de cada um), as linhas da Aplicação dos Reajustes e se estão aplicados. */
+/** Um Índice de Reajuste dos analíticos (11/11/2026): até quatro reajustes; desde 21/11/2026, com as combinações. */
+export type IndiceDosReajustes = { chave: string; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[]; combinacoes: CombinacaoDoIndice[] };
+/** Os Índices de Reajuste (com quantas contas cada um alcança), o universo das combinações e se estão aplicados na DRE. */
 export type ReajustesDasPremissas = {
   ano: number;
   meses: Array<{ mes: number; rotulo: string }>;
@@ -435,8 +513,7 @@ export type ReajustesDasPremissas = {
   /** As contas que os reajustes mudam: sem nenhuma, não há o que aplicar. */
   contasComReajuste: number;
   indices: Array<IndiceDosReajustes & { contas: number }>;
-  /** As linhas da DRE: `verificada`, a conta, que recebe os índices — o 1º (`indice`) e, desde 19/11/2026, o 2º (`indice2`). */
-  linhas: Array<{ codigo: string; descricao: string; tipo: string; verificada: boolean; indice: string | null; indice2: string | null }>;
+  universo: UniversoDosIndices;
 };
 /** Uma linha acima da variação máxima: os meses (o valor, o comparado e a variação em %; nula sem base) e a justificativa. */
 export type ItemJustificativa = {
@@ -568,6 +645,17 @@ export const cenariosService = {
     (await api.put<{ data: { alteradas: number; meses: number[] } }>(`/proxy/cenarios/${id}/centros`, { grupo, alteracoes, origem })).data.data,
   /** A aba Quadro de Lotação dos analíticos (09/11/2026, etapa 4 da Gestão de Colaboradores). */
   quadro: async (id: string) => (await api.get<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro`)).data.data,
+  /** O botão Benefícios da aba Quadro de Lotação (21/11/2026): os Benefícios Padrão das linhas e dos meses marcados. */
+  aplicarBeneficiosNoQuadro: async (id: string, dados: { linhas: string[]; meses: number[]; beneficios: string[] }) =>
+    (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/beneficios`, dados)).data.data,
+  // A aba Benefícios Padrão das Configurações (21/11/2026).
+  beneficiosDoCenario: async (id: string) => (await api.get<{ data: BeneficiosDoCenario }>(`/proxy/cenarios/${id}/cadastros/beneficios`)).data.data,
+  gravarBeneficioDoCenario: async (id: string, beneficioId: string | null, dados: { nome: string; descricao: string | null; valorMensal: number }) =>
+    (beneficioId
+      ? await api.put<{ data: BeneficiosDoCenario }>(`/proxy/cenarios/${id}/cadastros/beneficios/${beneficioId}`, dados)
+      : await api.post<{ data: BeneficiosDoCenario }>(`/proxy/cenarios/${id}/cadastros/beneficios`, dados)
+    ).data.data,
+  excluirBeneficioDoCenario: async (id: string, beneficioId: string) => (await api.delete<{ data: BeneficiosDoCenario }>(`/proxy/cenarios/${id}/cadastros/beneficios/${beneficioId}`)).data.data,
   criarLinhaDoQuadro: async (id: string, dados: DadosDaLinhaDoQuadro) => (await api.post<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro`, dados)).data.data,
   alterarLinhaDoQuadro: async (id: string, linhaId: string, dados: DadosDaLinhaDoQuadro) => (await api.put<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`, dados)).data.data,
   excluirLinhaDoQuadro: async (id: string, linhaId: string) => (await api.delete<{ data: QuadroDoCenario }>(`/proxy/cenarios/${id}/quadro/${linhaId}`)).data.data,
@@ -679,19 +767,36 @@ export const cenariosService = {
   reabrirVersao: async (id: string) => (await api.post<{ data: Cenario }>(`/proxy/cenarios/${id}/versao/reabrir`)).data.data,
   /** Criar Revisão: a cópia da versão congelada numa versão nova, aberta para edição (devolve o cenário novo). */
   criarRevisao: async (id: string) => (await api.post<{ data: Cenario }>(`/proxy/cenarios/${id}/revisao`)).data.data,
+  /** O Compartilhar do cenário particular (21/11/2026). */
+  compartilhamento: async (id: string) => (await api.get<{ data: CompartilhamentoDoCenario }>(`/proxy/cenarios/${id}/compartilhamento`)).data.data,
+  compartilhar: async (id: string, usuarios: string[]) => (await api.post<{ data: CompartilhamentoDoCenario }>(`/proxy/cenarios/${id}/compartilhamento`, { usuarios })).data.data,
+  removerCompartilhamento: async (id: string, usuarioId: string) =>
+    (await api.delete<{ data: CompartilhamentoDoCenario }>(`/proxy/cenarios/${id}/compartilhamento/${usuarioId}`)).data.data,
   comparativo: async (id: string) => (await api.get<{ data: Comparativo }>(`/proxy/cenarios/${id}/comparativo`)).data.data,
-  /** Sintéticos: `limites` (a variação de cada conta); analíticos: `indices` (a chave do índice de cada conta). */
-  gravarComparativo: async (id: string, dados: { comparadoComId: string | null; limites?: Record<string, number | null>; indices?: Record<string, string | null> }) =>
+  /** Sintéticos: `limites` (a variação de cada conta); analíticos (21/11/2026): só o cenário comparado. */
+  gravarComparativo: async (id: string, dados: { comparadoComId: string | null; limites?: Record<string, number | null> }) =>
     (await api.put<{ data: Comparativo }>(`/proxy/cenarios/${id}/comparativo`, dados)).data.data,
-  /** Os Índices de Reajuste do cenário analítico (19/10/2026), com quantas contas do Comparativo usam cada um. */
-  indices: async (id: string) => (await api.get<{ data: { indices: Array<IndiceDeReajuste & { contas: number }> } }>(`/proxy/cenarios/${id}/indices`)).data.data,
-  gravarIndices: async (id: string, indices: Array<{ chave: string | null; descricao: string; observacao: string | null; variacao: number }>) =>
-    (await api.put<{ data: { indices: Array<IndiceDeReajuste & { contas: number }> } }>(`/proxy/cenarios/${id}/indices`, { indices })).data.data,
-  /** A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes. */
+  /** Os Índices de Comparação do cenário analítico (19/10/2026; 21/11/2026, com as combinações). */
+  indices: async (id: string) => (await api.get<{ data: IndicesDeComparacao }>(`/proxy/cenarios/${id}/indices`)).data.data,
+  /** Grava a lista inteira dos Índices de Comparação, com as combinações de cada um. */
+  gravarIndices: async (id: string, indices: Array<{ chave: string | null; descricao: string; observacao: string | null; variacao: number; combinacoes: CombinacaoDoIndice[] }>) =>
+    (await api.put<{ data: IndicesDeComparacao }>(`/proxy/cenarios/${id}/indices`, { indices })).data.data,
   // Cadastros por cenário (20/11/2026, etapa 1): as abas Unidades e Centros de Custo das Configurações dos analíticos.
   unidadesDoCenario: async (id: string) => (await api.get<{ data: UnidadesDoCenario }>(`/proxy/cenarios/${id}/cadastros/unidades`)).data.data,
   gravarUnidadeDoCenario: async (id: string, unidadeId: string, dados: { nome: string; ordem: number; ativo: boolean }) =>
     (await api.put<{ data: UnidadesDoCenario }>(`/proxy/cenarios/${id}/cadastros/unidades/${unidadeId}`, dados)).data.data,
+  // As Regras de Rateio do cenário (21/11/2026).
+  regrasDoCenario: async (id: string) => (await api.get<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras`)).data.data,
+  gravarRegraDoCenario: async (id: string, regraId: string | null, dados: { rotulo: string; chave: string; origemDoVolume: string; inicio: string; fim: string | null }) =>
+    (regraId
+      ? await api.put<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras/${regraId}`, dados)
+      : await api.post<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras`, dados)
+    ).data.data,
+  excluirRegraDoCenario: async (id: string, regraId: string) => (await api.delete<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras/${regraId}`)).data.data,
+  gravarFixosDoCenario: async (id: string, dados: { chave: string; inicioAnterior: string | null; inicio: string; fim: string | null; percentuais: Record<string, number>; rotulo: string | null }) =>
+    (await api.put<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras/fixos`, dados)).data.data,
+  excluirFixosDoCenario: async (id: string, chave: string, inicio: string) =>
+    (await api.delete<{ data: RegrasDoCenario }>(`/proxy/cenarios/${id}/cadastros/regras/fixos`, { params: { chave, inicio } })).data.data,
   centrosDoCadastroDoCenario: async (id: string) => (await api.get<{ data: CentrosDoCadastroDoCenario }>(`/proxy/cenarios/${id}/cadastros/centros`)).data.data,
   gravarCentroDoCadastroDoCenario: async (id: string, centroId: string | null, dados: DadosDoCentroDoCenario, confirmar = false) =>
     (centroId
@@ -726,14 +831,14 @@ export const cenariosService = {
   excluirRedistribuicaoDoCenario: async (id: string, redistribuicaoId: string) =>
     (await api.delete<{ data: RedistribuicoesDoCenario }>(`/proxy/cenarios/${id}/cadastros/redistribuicoes/${redistribuicaoId}`)).data.data,
   reajustesDasPremissas: async (id: string) => (await api.get<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes`)).data.data,
-  gravarIndicesDosReajustes: async (id: string, indices: Array<{ chave: string | null; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[] }>) =>
+  /** Grava a lista inteira dos Índices de Reajuste, com as combinações de cada um. */
+  gravarIndicesDosReajustes: async (
+    id: string,
+    indices: Array<{ chave: string | null; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[]; combinacoes: CombinacaoDoIndice[] }>,
+  ) =>
     (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/indices`, { indices })).data.data,
-  /** Aplicar (true) ou Remover (false) Reajustes na DRE: nunca duas vezes seguidas. */
-  aplicarReajustes: async (id: string, aplicados: boolean) =>
-    (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicados`, { aplicados })).data.data,
-  /** O índice de cada conta (nulo: sem reajuste). */
-  gravarAplicacaoDosReajustes: async (id: string, indices: Record<string, [string | null, string | null]>) =>
-    (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicacao`, { indices })).data.data,
+  /** A caixa Aplicar Reajustes dos Resultados (21/11/2026): marca (true) ou desmarca; o Recalcular aplica ou remove. Devolve o cenário. */
+  aplicarReajustes: async (id: string, aplicados: boolean) => (await api.put<{ data: Cenario }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicados`, { aplicados })).data.data,
   /** Grava as realocações das movimentações fora dos padrões (o grupo de cada conta, ou nulo). */
   gravarRealocacoes: async (id: string, decisoes: Record<string, string | null>) =>
     (await api.put<{ data: Cenario }>(`/proxy/cenarios/${id}/realocacoes`, { decisoes })).data.data,

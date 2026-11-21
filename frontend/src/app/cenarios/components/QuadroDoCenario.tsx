@@ -2,23 +2,24 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EllipsisVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { EllipsisVertical, Gift, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { CampoBusca } from "@/components/shared/Filtros";
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { DestaqueFlutuante, useDestaqueFlutuante } from "@/components/shared/DestaqueFlutuante";
+import { useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
 import { TabelaLarga } from "@/app/relatorios/components/TabelaLarga";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { cenariosService, type CampoDoMes, type LinhaDoQuadroDoCenario, type MesDoQuadro, type OrigemDaGravacao, type QuadroDoCenario as Dados } from "../services/cenariosService";
+import { cenariosService, type BeneficioPadrao, type CampoDoMes, type LinhaDoQuadroDoCenario, type MesDoQuadro, type OrigemDaGravacao, type QuadroDoCenario as Dados } from "../services/cenariosService";
 import { ROTULO_DO_TIPO, rotuloDoTipo, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero, ValorDialog } from "./EdicaoDialogs";
@@ -30,25 +31,31 @@ const CAMPOS: Array<{ campo: CampoDoMes; rotulo: string; dica: string; largura: 
   { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$) da linha: a de todos os colaboradores dela", largura: 112 },
 ];
 const LARGURA_TOTAL = 108;
+/** A coluna dos Benefícios de cada mês (21/11/2026), depois do Salário Total. */
+const LARGURA_BENEFICIOS = 104;
+/** As colunas de cada mês: os três campos, o Salário Total e os Benefícios. */
+const COLUNAS_DO_MES = 5;
 /**
  * As colunas do Total (19/11/2026, pedido do Adão; antes, o Custo no Ano): os Colaboradores (a média do ano, a soma ÷ 12, como
  * no Exportar dos centros) e a soma dos doze meses do Salário Bruto, da Insalubridade / Periculosidade e do Salário Total; as
  * da Média, as mesmas ÷ 12.
  */
-const CAMPOS_DO_TOTAL: Array<{ campo: CampoDoMes | "salarioTotal"; rotulo: string; dica: string; largura: number }> = [
+const CAMPOS_DO_TOTAL: Array<{ campo: CampoDoMes | "salarioTotal" | "beneficios"; rotulo: string; dica: string; largura: number }> = [
   { campo: "colaboradores", rotulo: "Colab.", dica: "Colaboradores: a média do ano (a soma dos meses ÷ 12)", largura: 72 },
   { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$): a soma dos doze meses", largura: 140 },
   { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$): a soma dos doze meses", largura: 124 },
   { campo: "salarioTotal", rotulo: "Salário Total", dica: "Salário Total (R$): a soma dos doze meses (o custo da linha no ano)", largura: 156 },
+  { campo: "beneficios", rotulo: "Benefícios", dica: "Benefícios (R$): a soma dos doze meses", largura: 124 },
 ];
 const CAMPOS_DA_MEDIA: typeof CAMPOS_DO_TOTAL = [
   { campo: "colaboradores", rotulo: "Colab.", dica: "Colaboradores: a média do ano (a soma dos meses ÷ 12)", largura: 72 },
   { campo: "salarioBruto", rotulo: "Salário Bruto", dica: "Salário Bruto (R$): a soma dos doze meses ÷ 12", largura: 108 },
   { campo: "adicional", rotulo: "Insalub. / Peric.", dica: "Insalubridade / Periculosidade (R$): a soma dos doze meses ÷ 12", largura: 112 },
   { campo: "salarioTotal", rotulo: "Salário Total", dica: "Salário Total (R$): a soma dos doze meses ÷ 12", largura: 108 },
+  { campo: "beneficios", rotulo: "Benefícios", dica: "Benefícios (R$): a soma dos doze meses ÷ 12", largura: 104 },
 ];
-/** A soma dos doze meses de cada campo de uma linha (ou do total das linhas), com o Salário Total. */
-type SomaDoAno = Record<CampoDoMes | "salarioTotal", number>;
+/** A soma dos doze meses de cada campo de uma linha (ou do total das linhas), com o Salário Total e os Benefícios. */
+type SomaDoAno = Record<CampoDoMes | "salarioTotal" | "beneficios", number>;
 /**
  * A coluna da Referência, depois do Centro de Custo: os colaboradores da linha na referência (17/11/2026, pedido do Adão: só a
  * quantidade de colaboradores, sem os salários).
@@ -64,6 +71,16 @@ const DESCRICAO: Array<{ chave: keyof LinhaDoQuadroDoCenario; rotulo: string; la
   { chave: "vinculo", rotulo: "Tipo", largura: 84 },
   { chave: "funcao", rotulo: "Função", largura: 180 },
   { chave: "centro", rotulo: "Centro de Custo", largura: 220 },
+];
+/**
+ * Os filtros padrão das colunas dos cadastros (21/11/2026, pedido do Adão; no lugar da busca), como nas demais tabelas do SIG: os
+ * rótulos ordenam e filtram. O Centro de Custo, pelo nome (sem o código RM).
+ */
+const COLUNAS_DO_FILTRO: Coluna<LinhaDoQuadroDoCenario>[] = [
+  { chave: "unidade", rotulo: "Unidade", valor: (l) => l.unidade },
+  { chave: "vinculo", rotulo: "Tipo", valor: (l) => rotuloDoTipo(l.vinculo) },
+  { chave: "funcao", rotulo: "Função", valor: (l) => l.funcao },
+  { chave: "centro", rotulo: "Centro de Custo", valor: (l) => l.nomeDoCentro },
 ];
 const numero = (v: number, casas = 2) => v.toLocaleString("pt-BR", { maximumFractionDigits: casas });
 const reais = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -85,7 +102,6 @@ const total = (m: MesDoQuadro) => m.salarioBruto + m.adicional;
 export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const queryClient = useQueryClient();
   const consulta = useQuery({ queryKey: ["cenarios", id, "quadro"], queryFn: () => cenariosService.quadro(id) });
-  const [busca, setBusca] = useState("");
   // O valor em edição no modal: a linha, o mês (1 a 12) e o campo.
   const [valor, setValor] = useState<{ linha: LinhaDoQuadroDoCenario; mes: number; campo: CampoDoMes } | null>(null);
   // A marcação (16/11/2026): as linhas e os meses (1 a 12) marcados, e a confirmação do Replicar Referências.
@@ -94,10 +110,13 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   const [replicando, setReplicando] = useState(false);
   const [dialogo, setDialogo] = useState<{ linha: LinhaDoQuadroDoCenario | null } | null>(null);
   const [excluindo, setExcluindo] = useState<LinhaDoQuadroDoCenario[] | null>(null);
+  // O modal do botão Benefícios (21/11/2026): os Benefícios Padrão das linhas e dos meses marcados.
+  const [aplicandoBeneficios, setAplicandoBeneficios] = useState(false);
   const dados = consulta.data;
   const pode = editavel && !!dados?.editavel;
 
   const { refOriginal, refArea, refFlutuante, flutuar, rotulos } = useDestaqueFlutuante(!!dados);
+  const tabela = useTabelaFiltravel(dados?.linhas, COLUNAS_DO_FILTRO);
 
   // A gravação do modal Editar Valor: o mês (e os seguintes, replicando) de um campo de uma linha, com a origem para o histórico.
   const gravar = useMutation({
@@ -106,7 +125,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
     onSuccess: (_, { alteracoes }) => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(`${alteracoes.length} ${plural(alteracoes.length, "valor gravado", "valores gravados")}; os centros de custo e a DRE do cenário foram recalculados.`);
+      toast.success(`${alteracoes.length} ${plural(alteracoes.length, "valor gravado", "valores gravados")}; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`);
       setValor(null);
       setReplicando(false);
     },
@@ -116,11 +135,11 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   if (consulta.isPending || !dados) return <Carregando />;
 
   const efetivo = (l: LinhaDoQuadroDoCenario, k: number): MesDoQuadro => l.meses[k];
-  const t = busca.trim().toLowerCase();
-  const linhas = dados.linhas.filter((l) => !t || [l.unidade, rotuloDoTipo(l.vinculo), l.funcao, l.centro, l.grupo ?? ""].join(" ").toLowerCase().includes(t));
+  // As linhas que os filtros das colunas deixam, na ordem escolhida nos rótulos.
+  const linhas = tabela.filtradas;
   const meses = dados.meses;
   const comReferencia = !!dados.referencia;
-  // Os valores marcados: as linhas marcadas (as que a busca mostra) × os meses marcados. O Replicar Referências leva os
+  // Os valores marcados: as linhas marcadas (as que os filtros mostram) × os meses marcados. O Replicar Referências leva os
   // Colaboradores da referência de cada uma aos meses marcados; as linhas sem a referência ficam como estão, e os salários não
   // têm referência.
   const linhasMarcadas = linhas.filter((l) => marcadas.has(l.id));
@@ -135,7 +154,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
   // 17/11/2026: o Salário Total já é o da linha (todos os colaboradores), sem multiplicar. A soma do ano de cada campo
   // (19/11/2026), para o Total e a Média.
   const somaDoAno = (ls: LinhaDoQuadroDoCenario[]): SomaDoAno => {
-    const s: SomaDoAno = { colaboradores: 0, salarioBruto: 0, adicional: 0, salarioTotal: 0 };
+    const s: SomaDoAno = { colaboradores: 0, salarioBruto: 0, adicional: 0, salarioTotal: 0, beneficios: 0 };
     for (const l of ls)
       l.meses.forEach((_, k) => {
         const e = efetivo(l, k);
@@ -143,6 +162,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
         s.salarioBruto += e.salarioBruto;
         s.adicional += e.adicional;
         s.salarioTotal += total(e);
+        s.beneficios += e.beneficios;
       });
     return s;
   };
@@ -160,22 +180,22 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
     ...(pode ? [36] : []),
     ...DESCRICAO.map((d) => d.largura),
     ...(comReferencia ? [LARGURA_REFERENCIA] : []),
-    ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL]),
+    ...meses.flatMap(() => [...CAMPOS.map((c) => c.largura), LARGURA_TOTAL, LARGURA_BENEFICIOS]),
     ...CAMPOS_DO_TOTAL.map((c) => c.largura),
     ...CAMPOS_DA_MEDIA.map((c) => c.largura),
     ...(pode ? [56] : []),
   ];
   const todasMarcadas = linhas.length > 0 && linhas.every((l) => marcadas.has(l.id));
   const classeFixa = "sticky z-10 bg-white";
-  // O destaque (11/11/2026; 16/11/2026, pedido do Adão: o nome da tabela dentro dele, sem o texto e sem a lista dos meses, e a
-  // busca com o dobro da largura): à direita, a busca, a marcação (como nas tabelas das outras abas) e os botões, com o
-  // Replicar Referências logo antes da Nova Entrada.
+  // O destaque (11/11/2026; 16/11/2026, pedido do Adão: o nome da tabela dentro dele, sem o texto e sem a lista dos meses; 21/11/2026:
+  // sem a busca, com os filtros nos rótulos): à direita, a marcação (como nas tabelas das outras abas) e os botões, com o Replicar
+  // Referências logo antes da Nova Entrada.
   const destaque = (
     <div className="flex flex-wrap items-center gap-3 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2">
-      <h2 className="min-w-0 flex-1 text-base font-bold tracking-wide text-gray-900 uppercase">Quadro de Lotação</h2>
-      {/* Em blocos que quebram juntos, alinhados à direita: a busca, a marcação e os dois botões. */}
+      {/* O título numa linha só: sem espaço, os blocos da direita é que descem. */}
+      <h2 className="flex-1 text-base font-bold tracking-wide whitespace-nowrap text-gray-900 uppercase">Quadro de Lotação</h2>
+      {/* Em blocos que quebram juntos, alinhados à direita: a marcação e os botões. */}
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <CampoBusca rotulo="Buscar linha" valor={busca} onMudar={setBusca} placeholder="Função, centro, unidade, tipo…" largura="sm:w-96" />
         {pode ? (
           <>
             <div className="flex items-center gap-2 whitespace-nowrap">
@@ -212,6 +232,17 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
               <Button type="button" className={botaoPrimario} onClick={() => setDialogo({ linha: null })}>
                 <Plus className="size-4" />
                 Nova Entrada
+              </Button>
+              {/* Os Benefícios Padrão das linhas e dos meses marcados (21/11/2026, pedido do Adão). */}
+              <Button
+                type="button"
+                className={botaoPrimario}
+                disabled={nMarcados === 0}
+                title={nMarcados === 0 ? "Marque ao menos uma linha e um mês (as caixas das linhas e dos meses)" : "Aplicar os Benefícios Padrão às linhas e aos meses marcados"}
+                onClick={() => setAplicandoBeneficios(true)}
+              >
+                <Gift className="size-4" />
+                Benefícios
               </Button>
             </div>
           </>
@@ -251,7 +282,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                 ) : null}
                 {DESCRICAO.map((d, i) => (
                   <th key={d.chave} rowSpan={2} className={`${classeFixa} !z-30 px-3 py-2 text-left`} style={{ left: esquerdas[i] }}>
-                    {d.rotulo}
+                    {tabela.rotuloDe(d.chave)}
                   </th>
                 ))}
                 {comReferencia ? (
@@ -265,7 +296,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   </th>
                 ) : null}
                 {meses.map((m) => (
-                  <th key={m.mes} colSpan={4} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }}>
+                  <th key={m.mes} colSpan={COLUNAS_DO_MES} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }}>
                     <span className="inline-flex items-center gap-1.5">
                       {/* A caixa do mês (16/11/2026), como nas tabelas das outras abas. */}
                       {pode ? (
@@ -288,10 +319,10 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     </span>
                   </th>
                 ))}
-                <th colSpan={4} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="Os doze meses: os colaboradores, a média do ano; os valores, a soma">
+                <th colSpan={CAMPOS_DO_TOTAL.length} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="Os doze meses: os colaboradores, a média do ano; os valores, a soma">
                   Total
                 </th>
-                <th colSpan={4} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="A média dos doze meses (a soma ÷ 12)">
+                <th colSpan={CAMPOS_DA_MEDIA.length} className="border-l border-gray-300 px-3 !py-0 text-center whitespace-nowrap" style={{ height: ALTURA_DOS_MESES }} title="A média dos doze meses (a soma ÷ 12)">
                   Média
                 </th>
                 {pode ? <th rowSpan={2} className="px-2 py-2" aria-label="Ações" /> : null}
@@ -335,7 +366,8 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                   {/* Na edição (20/11/2026, pedido do Adão), clicar na Unidade, no Tipo, na Função ou no Centro de Custo abre o modal
                       Editar Linha do Quadro de Lotação, o mesmo do menu Ações. */}
                   {DESCRICAO.map((d, i) => {
-                    const texto = d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : String(l[d.chave]);
+                    // O Centro de Custo só com o nome (21/11/2026); o código fica na dica.
+                    const texto = d.chave === "vinculo" ? rotuloDoTipo(l.vinculo) : d.chave === "centro" ? l.nomeDoCentro : String(l[d.chave]);
                     const dica = d.chave === "centro" ? `${l.centro}${l.grupo ? ` · grupo ${l.grupo}` : " · fora dos grupos do cenário"}` : texto;
                     return (
                       <td
@@ -345,7 +377,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                         title={pode ? `${dica} · clique para editar a linha` : dica}
                         onClick={pode ? () => setDialogo({ linha: l }) : undefined}
                       >
-                        {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{l.centro}</span> : texto}
+                        {d.chave === "centro" && !l.grupo ? <span className="text-red-700">{texto}</span> : texto}
                       </td>
                     );
                   })}
@@ -365,6 +397,8 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                         marcada={pode && marcadas.has(l.id) && mesesMarcados.has(m.mes)}
                         onEditar={(campo) => setValor({ linha: l, mes: m.mes, campo })}
                         salarioTotal={total(e)}
+                        beneficios={e}
+                        nomesDosBeneficios={dados.beneficios}
                       />
                     );
                   })}
@@ -398,7 +432,14 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
               {linhas.length === 0 ? (
                 <tr>
                   <td colSpan={larguras.length} className="px-4 py-6 text-center text-sm text-gray-500">
-                    {dados.linhas.length ? "Nenhuma linha com essa busca." : pode ? "Nenhuma linha: inclua as linhas em Nova Entrada ou importe a aba Quadro de Lotação em Importar Valores." : "Nenhuma linha no Quadro de Lotação deste cenário."}
+                    {dados.linhas.length ? (
+                      <>
+                        Nenhuma linha com esses filtros.{" "}
+                        <button type="button" onClick={tabela.limpar} className="font-medium text-gray-900 underline underline-offset-2">
+                          Limpar Filtros
+                        </button>
+                      </>
+                    ) : pode ? "Nenhuma linha: inclua as linhas em Nova Entrada ou importe a aba Quadro de Lotação em Importar Valores." : "Nenhuma linha no Quadro de Lotação deste cenário."}
                   </td>
                 </tr>
               ) : (
@@ -415,6 +456,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                     const k = m.mes - 1;
                     const colaboradores = linhas.reduce((s, l) => s + efetivo(l, k).colaboradores, 0);
                     const folha = linhas.reduce((s, l) => s + total(efetivo(l, k)), 0);
+                    const beneficios = linhas.reduce((s, l) => s + efetivo(l, k).beneficios, 0);
                     return [
                       <td key={`${m.mes}c`} className="border-l border-gray-300 px-3 py-2 text-right">
                         {numero(colaboradores)}
@@ -423,6 +465,9 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                       <td key={`${m.mes}a`} />,
                       <td key={`${m.mes}t`} className="px-3 py-2 text-right whitespace-nowrap" title="A folha do mês: a soma do Salário Total das linhas">
                         {reais(folha)}
+                      </td>,
+                      <td key={`${m.mes}be`} className="px-3 py-2 text-right whitespace-nowrap" title="Os Benefícios do mês: a soma dos Benefícios das linhas">
+                        {beneficios ? reais(beneficios) : ""}
                       </td>,
                     ];
                   })}
@@ -457,6 +502,9 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
         />
       ) : null}
       {dialogo ? <LinhaDoQuadroDialog id={id} dados={dados} linha={dialogo.linha} onFechar={() => setDialogo(null)} /> : null}
+      {aplicandoBeneficios ? (
+        <BeneficiosDoQuadroDialog id={id} beneficios={dados.beneficios} linhas={linhasMarcadas} meses={mesesDaMarcacao} rotulos={meses} onFechar={() => setAplicandoBeneficios(false)} />
+      ) : null}
       {excluindo ? (
         <ExcluirLinhasDialog
           id={id}
@@ -531,10 +579,12 @@ function CelulasDoAno({ soma, meses, noTotal = false }: { soma: SomaDoAno; meses
       {celula("tb", noTotal ? "" : valor(soma.salarioBruto))}
       {celula("ta", noTotal ? "" : valor(soma.adicional))}
       {celula("tt", valor(soma.salarioTotal))}
+      {celula("tbe", valor(soma.beneficios))}
       {celula("mc", colaboradores ? numero(colaboradores, 1) : "", true)}
       {celula("mb", noTotal ? "" : valor(soma.salarioBruto / meses))}
       {celula("ma", noTotal ? "" : valor(soma.adicional / meses))}
       {celula("mt", valor(soma.salarioTotal / meses))}
+      {celula("mbe", valor(soma.beneficios / meses))}
     </>
   );
 }
@@ -551,13 +601,21 @@ function SubCabecalhos() {
       <th className="px-2 py-1.5 text-right whitespace-nowrap" style={{ width: LARGURA_TOTAL }} title="Salário Total (R$): Salário Bruto + Insalubridade / Periculosidade da linha (todos os colaboradores dela)">
         Salário Total
       </th>
+      <th
+        className="px-2 py-1.5 text-right whitespace-nowrap"
+        style={{ width: LARGURA_BENEFICIOS }}
+        title="Benefícios (R$): os Benefícios Padrão aplicados à linha no mês (o botão Benefícios) × os colaboradores dela, ou o valor digitado na importação"
+      >
+        Benefícios
+      </th>
     </>
   );
 }
 
 /**
- * As quatro células de um mês de uma linha: os três valores e o Salário Total. Na edição, clicar num valor abre o modal Editar
- * Valor (como nas tabelas das outras abas); o Salário Total é calculado.
+ * As cinco células de um mês de uma linha: os três valores, o Salário Total e os Benefícios (21/11/2026). Na edição, clicar num
+ * valor abre o modal Editar Valor (como nas tabelas das outras abas); o Salário Total e os Benefícios são calculados (os Benefícios,
+ * pelos Benefícios Padrão aplicados no botão Benefícios — a dica diz quais — ou o valor digitado na importação).
  */
 function CelulasDoMes({
   linha,
@@ -566,6 +624,8 @@ function CelulasDoMes({
   marcada,
   onEditar,
   salarioTotal,
+  beneficios,
+  nomesDosBeneficios,
 }: {
   linha: LinhaDoQuadroDoCenario;
   mes: number;
@@ -574,7 +634,15 @@ function CelulasDoMes({
   marcada: boolean;
   onEditar: (campo: CampoDoMes) => void;
   salarioTotal: number;
+  beneficios: MesDoQuadro;
+  nomesDosBeneficios: BeneficioPadrao[];
 }) {
+  const aplicados = nomesDosBeneficios.filter((b) => beneficios.beneficiosPadrao.includes(b.id));
+  const dica = aplicados.length
+    ? `${aplicados.map((b) => `${b.nome} (R$ ${reais(b.valorMensal)})`).join(" + ")} × ${numero(beneficios.colaboradores)} ${plural(beneficios.colaboradores, "colaborador", "colaboradores")}`
+    : beneficios.beneficiosDigitados
+      ? "Valor digitado na importação (sem Benefícios Padrão aplicados)"
+      : undefined;
   return (
     <>
       {CAMPOS.map((c, i) => {
@@ -591,7 +659,107 @@ function CelulasDoMes({
         );
       })}
       <td className="px-2 py-1 text-right whitespace-nowrap text-gray-600">{salarioTotal ? reais(salarioTotal) : ""}</td>
+      <td className="px-2 py-1 text-right whitespace-nowrap text-gray-600" title={dica}>
+        {beneficios.beneficios ? reais(beneficios.beneficios) : ""}
+      </td>
     </>
+  );
+}
+
+/**
+ * O modal do botão Benefícios (21/11/2026, pedido do Adão): os Benefícios Padrão do cenário (Configurações / Benefícios Padrão), cada
+ * um com a caixa; "Aplicar" faz dos marcados os Benefícios das linhas e dos meses marcados na tabela (no lugar dos que havia e do valor
+ * digitado; sem nenhum marcado, os meses ficam sem benefícios). Os Benefícios de cada mês são os colaboradores da linha × a soma do
+ * Valor Mensal dos marcados. A caixa vem marcada no benefício que já está em todos os valores marcados.
+ */
+function BeneficiosDoQuadroDialog({
+  id,
+  beneficios,
+  linhas,
+  meses,
+  rotulos,
+  onFechar,
+}: {
+  id: string;
+  beneficios: BeneficioPadrao[];
+  linhas: LinhaDoQuadroDoCenario[];
+  meses: number[];
+  rotulos: Dados["meses"];
+  onFechar: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const valoresMarcados = linhas.flatMap((l) => meses.map((m) => l.meses[m - 1]));
+  const [marcados, setMarcados] = useState<Set<string>>(() => new Set(beneficios.filter((b) => valoresMarcados.every((v) => v.beneficiosPadrao.includes(b.id))).map((b) => b.id)));
+  const porColaborador = beneficios.filter((b) => marcados.has(b.id)).reduce((s, b) => s + b.valorMensal, 0);
+  const colaboradores = valoresMarcados.reduce((s, v) => s + v.colaboradores, 0);
+  const aplicar = useMutation({
+    mutationFn: () => cenariosService.aplicarBeneficiosNoQuadro(id, { linhas: linhas.map((l) => l.id), meses, beneficios: [...marcados] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cenarios"] });
+      queryClient.invalidateQueries({ queryKey: ["relatorios"] });
+      toast.success(
+        marcados.size
+          ? `Benefícios aplicados a ${valoresMarcados.length} ${plural(valoresMarcados.length, "valor", "valores")}; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`
+          : `Benefícios tirados de ${valoresMarcados.length} ${plural(valoresMarcados.length, "valor", "valores")}; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`,
+      );
+      onFechar();
+    },
+  });
+  const alternar = (b: string) =>
+    setMarcados((s) => {
+      const n = new Set(s);
+      if (n.has(b)) n.delete(b);
+      else n.add(b);
+      return n;
+    });
+  const textoDosMeses = meses.length === 12 ? "todos os meses" : meses.map((m) => rotulos[m - 1]?.rotulo ?? String(m)).join(", ");
+  return (
+    <Dialog open onOpenChange={(o) => (!o && !aplicar.isPending ? onFechar() : undefined)}>
+      <DialogContent avisoAoSair className="flex max-h-[85vh] flex-col rounded-sm sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Benefícios das Linhas Marcadas</DialogTitle>
+          <DialogDescription>
+            Os Benefícios Padrão {linhas.length === 1 ? "da linha marcada" : `das ${linhas.length} linhas marcadas`} em {textoDosMeses}: em cada mês, os
+            colaboradores da linha × a soma do Valor Mensal dos marcados, no lugar dos que havia. Sem nenhum marcado, esses meses ficam sem
+            benefícios.
+          </DialogDescription>
+        </DialogHeader>
+        {beneficios.length ? (
+          <ul className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto rounded-sm border border-gray-200">
+            {beneficios.map((b) => (
+              <li key={b.id}>
+                <label className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm ${marcados.has(b.id) ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
+                  <input type="checkbox" className="size-4 accent-black" checked={marcados.has(b.id)} onChange={() => alternar(b.id)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-gray-900">{b.nome}</span>
+                    {b.descricao ? <span className="block truncate text-xs text-gray-500">{b.descricao}</span> : null}
+                  </span>
+                  <span className="shrink-0 text-right text-sm text-gray-700">R$ {reais(b.valorMensal)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-sm border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-600">
+            Nenhum Benefício Padrão no cenário: cadastre-os em Configurações / Benefícios Padrão.
+          </p>
+        )}
+        <p className="text-sm text-gray-700">
+          Por colaborador: <span className="font-bold text-gray-900">R$ {reais(porColaborador)}</span> por mês · {valoresMarcados.length}{" "}
+          {plural(valoresMarcados.length, "valor marcado", "valores marcados")} ({numero(colaboradores)} {plural(colaboradores, "colaborador", "colaboradores")} no total
+          dos meses): <span className="font-bold text-gray-900">R$ {reais(porColaborador * colaboradores)}</span>
+        </p>
+        <Erro erro={aplicar.isError ? mensagemDeErro(aplicar.error, "Não foi possível aplicar os benefícios.") : null} />
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-sm" onClick={onFechar} disabled={aplicar.isPending}>
+            Cancelar
+          </Button>
+          <Button type="button" className={botaoPrimario} disabled={aplicar.isPending || (!beneficios.length && !valoresMarcados.some((v) => v.beneficios))} onClick={() => aplicar.mutate()}>
+            {aplicar.isPending ? "Aplicando…" : "Aplicar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -627,7 +795,7 @@ function LinhaDoQuadroDialog({ id, dados, linha, onFechar }: { id: string; dados
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(linha ? "Linha alterada; os centros de custo e a DRE do cenário foram recalculados." : "Linha incluída; os centros de custo e a DRE do cenário foram recalculados.");
+      toast.success(linha ? "Linha alterada; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular)." : "Linha incluída; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).");
       onFechar();
     },
   });
@@ -727,7 +895,7 @@ function ExcluirLinhasDialog({ id, linhas, onFechar }: { id: string; linhas: Lin
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(`${linhas.length} ${plural(linhas.length, "linha excluída", "linhas excluídas")}; os centros de custo e a DRE do cenário foram recalculados.`);
+      toast.success(`${linhas.length} ${plural(linhas.length, "linha excluída", "linhas excluídas")}; os centros de custo foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`);
       onFechar(true);
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível excluir.")),

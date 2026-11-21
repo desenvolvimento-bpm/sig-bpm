@@ -40,7 +40,9 @@ const COLUNAS_DAS_JUSTIFICATIVAS: ColunaExportavel<ItemJustificativa>[] = [
  * máxima do total delas, os meses e a justificativa de cada uma.
  */
 export function JustificativasCenario({ id, podeEditar }: { id: string; podeEditar: boolean }) {
-  const { base } = useTipoDoCenario();
+  const { base, tipo } = useTipoDoCenario();
+  // Nos analíticos (21/11/2026), o cenário comparado fica na aba Comparativo e Reajustes.
+  const abaDoComparativo = tipo === "ANALITICO" ? "Configurações / Comparativo e Reajustes" : "Configurações / Comparativo";
   const consulta = useQuery({ queryKey: ["cenarios", id, "justificativas"], queryFn: () => cenariosService.justificativas(id) });
   const [visao, setVisao] = useAbaLembrada("justificativas", "0");
   const [soPendentes, setSoPendentes] = useState(false);
@@ -59,10 +61,10 @@ export function JustificativasCenario({ id, podeEditar }: { id: string; podeEdit
           O cenário não tem comparativo. Escolha um cenário para comparar em{" "}
           {podeEditar ? (
             <Link href={`${base}/${id}/configuracoes?aba=comparativo`} className="font-medium text-gray-900 underline underline-offset-2">
-              Configurações / Comparativo
+              {abaDoComparativo}
             </Link>
           ) : (
-            "Configurações / Comparativo"
+            abaDoComparativo
           )}
           .
         </p>

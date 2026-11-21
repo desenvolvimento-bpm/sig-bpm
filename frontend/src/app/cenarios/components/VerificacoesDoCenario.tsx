@@ -34,14 +34,15 @@ const COLUNAS: Coluna<VerificacaoDoCenario>[] = [
   { chave: "verificacao", rotulo: "Verificação", valor: (v) => v.titulo, texto: (v) => `${v.titulo}: ${v.descricao}` },
   { chave: "meses", rotulo: "Meses", valor: (v) => v.mesesTexto },
   // Todos os que podem justificar (20/11/2026, pedido do Adão).
-  { chave: "responsavel", rotulo: "Responsável", valor: (v) => v.podemJustificar.join(", ") || null },
+  { chave: "responsavel", rotulo: "Responsável", valor: (v) => v.responsaveis.join(", ") || null },
 ];
 const LARGURAS = [44, 120, 120, 240, 370, 130, 180];
 
 /**
  * A aba Verificações das Premissas (20/11/2026, pedido do Adão): as inconsistências nos valores digitados ou importados, cada uma
- * com a aba (o clique abre a aba, e nos Centros de Custo o grupo), a linha ou o centro de custo, os meses, o responsável (quem
- * alterou os valores por último, pelo Histórico; a coluna lista todos os que podem justificar) e a situação. Cada uma pede a
+ * com a aba (o clique abre a aba, e nos Centros de Custo o grupo), a linha ou o centro de custo, os meses, o responsável (desde
+ * 21/11/2026, o imediato: o Analista, o Coordenador, o Estratégico ou o Gestor do recorte; a dica diz quem alterou por último) e a
+ * situação. Cada uma pede a
  * correção ou o De Acordo do responsável (ou do Administrador): marque as caixas (ou “Marcar Todas”) e clique em “De Acordo” (ou “Retirar Acordo”). Com alguma pendente, a
  * versão não se congela.
  */
@@ -98,7 +99,7 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
         <>
           {dados.pendentes ? `${dados.pendentes} ${plural(dados.pendentes, "pendente", "pendentes")} de ${dados.verificacoes.length}` : dados.verificacoes.length ? "Nenhuma pendente" : "Nenhuma inconsistência"}
           {dados.pendentesNoCenario > dados.pendentes ? ` (${dados.pendentesNoCenario} no cenário inteiro)` : ""}. Corrija os valores na aba de cada uma ou, se estiverem certos, dê o De Acordo
-          (quem alterou os valores por último, ou o Administrador). Com alguma pendente, a versão do cenário não se congela.
+          (o responsável, ou o Administrador). Com alguma pendente, a versão do cenário não se congela.
         </>
       }
       abaixo={acordar.isError ? <Erro erro={mensagemDeErro(acordar.error, "Não foi possível gravar o De Acordo.")} /> : null}
@@ -150,7 +151,7 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
                   aria-label={`Marcar ${v.titulo}: ${v.alvo}`}
                   checked={marcadas.has(v.chave)}
                   disabled={!pode || !v.podeAcordar}
-                  title={v.podeAcordar ? undefined : `Só ${v.podemJustificar.join(", ") || "o responsável ou o Administrador"} dá ou retira o De Acordo desta verificação`}
+                  title={v.podeAcordar ? undefined : `Só ${v.responsaveis.join(", ") || "o responsável"} (ou o Administrador) dá ou retira o De Acordo desta verificação`}
                   onChange={() => alternar(v.chave)}
                   className="size-4 accent-black"
                 />
@@ -172,10 +173,7 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
               </td>
               <td className="px-3 py-1.5 text-gray-700">{v.mesesTexto}</td>
               <td className="px-3 py-1.5 text-gray-700" title={v.responsavel?.em ? `${v.responsavel.nome} alterou os valores por último em ${quando(v.responsavel.em)}` : "Sem alteração no Histórico: quem criou o cenário"}>
-                {v.podemJustificar.length ? v.podemJustificar.map((n) => <div key={n}>{n}</div>) : <span className="text-gray-400">—</span>}
-                {v.responsavel && !v.podemJustificar.includes(v.responsavel.nome) ? (
-                  <div className="text-xs text-gray-500">{`Alterou por último: ${v.responsavel.nome} (sem o De Acordo)`}</div>
-                ) : null}
+                {v.responsaveis.length ? v.responsaveis.map((n) => <div key={n}>{n}</div>) : <span className="text-gray-400">—</span>}
               </td>
             </tr>
           ))

@@ -88,7 +88,7 @@ export function CampoVisualizacao({
 }) {
   const { titulo } = useTipoDoCenario();
   const opcoes: Array<{ v: Visualizacao; rotulo: string; detalhe: string; Icone: typeof Lock; motivo?: string | null }> = [
-    { v: "PARTICULAR", rotulo: "Particular", detalhe: "Apenas você (quem criou) e os Administradores têm acesso.", Icone: Lock, motivo: semParticular },
+    { v: "PARTICULAR", rotulo: "Particular", detalhe: "Apenas quem criou o cenário, os Administradores e os usuários convidados no Compartilhar têm acesso.", Icone: Lock, motivo: semParticular },
     { v: "PUBLICA", rotulo: "Pública", detalhe: `Todos os usuários com permissão nos ${titulo} têm acesso.`, Icone: Globe },
   ];
   return (

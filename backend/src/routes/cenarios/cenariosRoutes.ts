@@ -32,6 +32,10 @@ cenariosRoutes.get("/:id/contas-do-balancete", autenticacao, ler, asyncHandler(c
 cenariosRoutes.patch("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.atualizar));
 cenariosRoutes.delete("/:id", autenticacao, tela("configuracoes", "editar", "cenario"), asyncHandler(c.excluir));
 cenariosRoutes.put("/:id/marcacao", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.marcar));
+// O Compartilhar do cenário particular (21/11/2026): os convidados a ver o cenário (quem criou ou o Administrador convida e remove).
+cenariosRoutes.get("/:id/compartilhamento", autenticacao, tela("configuracoes", "ler", "cenario"), asyncHandler(c.compartilhamento));
+cenariosRoutes.post("/:id/compartilhamento", autenticacao, tela("configuracoes", "editar", "cenario"), express.json(), asyncHandler(c.compartilhar));
+cenariosRoutes.delete("/:id/compartilhamento/:usuarioId", autenticacao, tela("configuracoes", "editar", "cenario"), asyncHandler(c.removerCompartilhamento));
 // A exportação (14/10/2026): a DRE (a aba de cada visão, conferida no controller) e os centros dos analíticos.
 cenariosRoutes.get("/:id/exportar", autenticacao, tela("resultados", "ler"), asyncHandler(c.exportar));
 cenariosRoutes.get("/:id/centros/exportar", autenticacao, tela("premissas", "ler", "centros"), asyncHandler(c.exportarCentros));
@@ -88,12 +92,26 @@ cenariosRoutes.post("/:id/verificacoes/acordos", autenticacao, tela("premissas",
 cenariosRoutes.get("/:id/quadro", autenticacao, tela("premissas", "ler", "quadro"), asyncHandler(c.quadro));
 cenariosRoutes.put("/:id/quadro/meses", autenticacao, tela("premissas", "editar", "quadro"), express.json({ limit: "4mb" }), asyncHandler(c.gravarMesesDoQuadro));
 cenariosRoutes.post("/:id/quadro/excluir", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.excluirLinhasDoQuadro));
+// O botão Benefícios da aba Quadro de Lotação (21/11/2026): os Benefícios Padrão das linhas e dos meses marcados.
+cenariosRoutes.put("/:id/quadro/beneficios", autenticacao, tela("premissas", "editar", "quadro"), express.json({ limit: "2mb" }), asyncHandler(c.aplicarBeneficiosNoQuadro));
 cenariosRoutes.post("/:id/quadro", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.put("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), express.json(), asyncHandler(c.gravarLinhaDoQuadro));
 cenariosRoutes.delete("/:id/quadro/:linhaId", autenticacao, tela("premissas", "editar", "quadro"), asyncHandler(c.gravarLinhaDoQuadro));
 // Cadastros por cenário (20/11/2026, etapa 1): as abas Unidades e Centros de Custo das Configurações dos analíticos.
 cenariosRoutes.get("/:id/cadastros/unidades", autenticacao, tela("configuracoes", "ler", "unidades"), asyncHandler(c.unidadesDoCenario));
 cenariosRoutes.put("/:id/cadastros/unidades/:unidadeId", autenticacao, tela("configuracoes", "editar", "unidades"), express.json(), asyncHandler(c.gravarUnidadeDoCenario));
+// A aba Benefícios Padrão (21/11/2026): o cadastro dos benefícios do cenário (o Valor Mensal por colaborador).
+cenariosRoutes.get("/:id/cadastros/beneficios", autenticacao, tela("configuracoes", "ler", "beneficios"), asyncHandler(c.beneficiosDoCenario));
+cenariosRoutes.post("/:id/cadastros/beneficios", autenticacao, tela("configuracoes", "editar", "beneficios"), express.json(), asyncHandler(c.gravarBeneficioDoCenario));
+cenariosRoutes.put("/:id/cadastros/beneficios/:beneficioId", autenticacao, tela("configuracoes", "editar", "beneficios"), express.json(), asyncHandler(c.gravarBeneficioDoCenario));
+cenariosRoutes.delete("/:id/cadastros/beneficios/:beneficioId", autenticacao, tela("configuracoes", "editar", "beneficios"), asyncHandler(c.excluirBeneficioDoCenario));
+// A aba Regras de Rateio (21/11/2026): a cópia das regras de rateio com que o cenário calcula.
+cenariosRoutes.get("/:id/cadastros/regras", autenticacao, tela("configuracoes", "ler", "regras_rateio"), asyncHandler(c.regrasDoCenario));
+cenariosRoutes.post("/:id/cadastros/regras", autenticacao, tela("configuracoes", "editar", "regras_rateio"), express.json(), asyncHandler(c.gravarRegraDoCenario));
+cenariosRoutes.put("/:id/cadastros/regras/fixos", autenticacao, tela("configuracoes", "editar", "regras_rateio"), express.json(), asyncHandler(c.gravarFixosDoCenario));
+cenariosRoutes.delete("/:id/cadastros/regras/fixos", autenticacao, tela("configuracoes", "editar", "regras_rateio"), asyncHandler(c.excluirFixosDoCenario));
+cenariosRoutes.put("/:id/cadastros/regras/:regraId", autenticacao, tela("configuracoes", "editar", "regras_rateio"), express.json(), asyncHandler(c.gravarRegraDoCenario));
+cenariosRoutes.delete("/:id/cadastros/regras/:regraId", autenticacao, tela("configuracoes", "editar", "regras_rateio"), asyncHandler(c.excluirRegraDoCenario));
 cenariosRoutes.get("/:id/cadastros/centros", autenticacao, tela("configuracoes", "ler", "centros_custo"), asyncHandler(c.centrosDoCadastroDoCenario));
 cenariosRoutes.post("/:id/cadastros/centros", autenticacao, tela("configuracoes", "editar", "centros_custo"), express.json(), asyncHandler(c.gravarCentroDoCadastroDoCenario));
 cenariosRoutes.post("/:id/cadastros/centros/renomear-grupo", autenticacao, tela("configuracoes", "editar", "centros_custo"), express.json(), asyncHandler(c.renomearGrupoDoCenario));
@@ -110,12 +128,11 @@ cenariosRoutes.get("/:id/cadastros/redistribuicoes/fornecedores", autenticacao, 
 cenariosRoutes.post("/:id/cadastros/redistribuicoes", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), express.json({ limit: "2mb" }), asyncHandler(c.gravarRedistribuicaoDoCenario));
 cenariosRoutes.put("/:id/cadastros/redistribuicoes/:redistribuicaoId", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), express.json({ limit: "2mb" }), asyncHandler(c.gravarRedistribuicaoDoCenario));
 cenariosRoutes.delete("/:id/cadastros/redistribuicoes/:redistribuicaoId", autenticacao, tela("configuracoes", "editar", "redistribuicoes"), asyncHandler(c.excluirRedistribuicaoDoCenario));
-// A aba Reajustes dos analíticos (11/11/2026; 12/11/2026: nas Configurações): os Índices de Reajuste e a Aplicação dos Reajustes.
+// Os Índices de Reajuste dos analíticos (11/11/2026; 21/11/2026: com as combinações, na aba Comparativo e Reajustes das Configurações).
 cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("configuracoes", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
 cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));
-cenariosRoutes.put("/:id/premissas/reajustes/aplicacao", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarAplicacaoDosReajustes));
-// Aplicar / Remover Reajustes (o botão do quadro Aplicação dos Reajustes): na DRE, nunca duas vezes seguidas.
-cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.aplicarReajustes));
+// A caixa Aplicar Reajustes dos Resultados (21/11/2026; antes, o botão do quadro Índices de Reajuste das Configurações), como o Recalcular.
+cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("resultados", "editar"), express.json(), asyncHandler(c.aplicarReajustes));
 // Os investimentos e o extra-operacional dos cenários analíticos (13/10/2026).
 cenariosRoutes.get("/:id/investimentos", autenticacao, tela("premissas", "ler", "investimentos"), asyncHandler(c.investimentos));
 cenariosRoutes.post("/:id/investimentos/excluir", autenticacao, tela("premissas", "editar", "investimentos"), express.json(), asyncHandler(c.excluirInvestimentos));

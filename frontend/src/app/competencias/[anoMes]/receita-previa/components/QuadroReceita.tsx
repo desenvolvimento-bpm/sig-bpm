@@ -3,6 +3,8 @@
 import { Fragment } from "react";
 import { Search } from "lucide-react";
 
+import { Destaque, TabelaComDestaque } from "@/app/cenarios/components/DestaqueDaAba";
+
 import { moeda } from "../../utils/formatacao";
 import {
   ROTULO_LINHA,
@@ -55,7 +57,7 @@ function Linha({
       title={onClick ? "Ver a memória de cálculo" : undefined}
     >
       <td
-        className={`px-4 ${detalhe ? "py-1 pl-14 text-xs text-gray-500" : "py-2 text-sm"} ${destaque ? "font-bold text-gray-900" : detalhe ? "" : "pl-8 text-gray-700"}`}
+        className={`px-3 ${detalhe ? "py-1 pl-12 text-xs text-gray-500" : "py-1.5 text-sm"} ${destaque ? "font-bold text-gray-900" : detalhe ? "" : "pl-7 text-gray-700"}`}
       >
         {onClick ? (
           <button
@@ -73,8 +75,8 @@ function Linha({
           rotulo
         )}
       </td>
-      <td className={`px-4 text-right ${detalhe ? "py-1 text-xs text-gray-500" : "py-2 text-sm"} ${destaque ? "font-bold" : ""}`}>{moeda(valor)}</td>
-      <td className={`px-4 text-right text-xs text-gray-500 ${detalhe ? "py-1" : "py-2"}`}>
+      <td className={`px-3 text-right ${detalhe ? "py-1 text-xs text-gray-500" : "py-1.5 text-sm"} ${destaque ? "font-bold" : ""}`}>{moeda(valor)}</td>
+      <td className={`px-3 text-right text-xs text-gray-500 ${detalhe ? "py-1" : "py-1.5"}`}>
         {pct === null ? "—" : `${(pct * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`}
       </td>
     </tr>
@@ -86,9 +88,11 @@ function Linha({
  * Na Matriz e na Filial, cada receita se abre em venda global e mercantil, e
  * os impostos em PIS/COFINS de cada venda, ISS e ICMS; em Obras, em PIS/COFINS
  * e ISS. As aberturas só existem aqui: a DRE continua com os totais.
- * Os três blocos ficam um embaixo do outro, na largura das demais tabelas,
- * com as mesmas colunas de largura fixa (E7 do levantamento de layout), para
- * os valores se alinharem entre eles.
+ * Os três blocos ficam um embaixo do outro, com as mesmas larguras, para os
+ * valores se alinharem entre eles. Desde 21/11/2026 (pedido do Adão), no padrão
+ * das telas com mais de uma tabela (como os Investimentos dos Cenários
+ * Analíticos): o destaque à parte, acima da tabela, que flutua sobre ela ao
+ * rolar, e os rótulos das colunas presos (TabelaComDestaque).
  */
 export function QuadroReceita({ unidade, receitas, porVenda, impostos, onAbrir }: Props) {
   const naturezas = NATUREZAS_DA_UNIDADE[unidade];
@@ -121,26 +125,20 @@ export function QuadroReceita({ unidade, receitas, porVenda, impostos, onAbrir }
   const variacao = Number(da("PRE_FABRICADO")?.variacaoEstoque ?? 0);
 
   return (
-    // Destaque amarelo-ouro à esquerda, como o dos cards da BSC (lá, no topo).
-    <div className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white">
-      <div className="border-b border-gray-200 bg-bpm-primary px-4 py-3">
-        {/* Título do quadro em caixa alta, como em Rateios e na DRE. */}
-        <h2 className="text-base font-bold tracking-wide text-gray-900 uppercase">{ROTULO_UNIDADE[unidade]}</h2>
-      </div>
-      <table className="tabela-sig w-full table-fixed border-collapse">
-        <colgroup>
-          <col />
-          <col className="w-48" />
-          <col className="w-24" />
-        </colgroup>
-        <thead className="sr-only">
-          <tr>
-            <th>Linha</th>
-            <th>Valor</th>
-            <th>Participação</th>
-          </tr>
-        </thead>
-        <tbody>
+    <TabelaComDestaque
+      destaque={
+        <Destaque
+          titulo={ROTULO_UNIDADE[unidade]}
+          descricao={`A receita bruta, os impostos e a receita líquida${separa ? ", com a abertura em venda global e mercantil" : ""}. Clique numa linha com lupa para abrir a memória de cálculo.`}
+        />
+      }
+      colunas={[
+        { rotulo: "Linha da Receita", largura: 720 },
+        { rotulo: "Valor", largura: 200, direita: true },
+        { rotulo: "%", largura: 100, direita: true },
+      ]}
+      corpo={
+        <>
           <Linha rotulo="RECEITA OPERACIONAL BRUTA (ROB)" valor={rob} base={rob} destaque />
           {naturezas.map((n) => (
             <Fragment key={`b-${n}`}>
@@ -166,8 +164,8 @@ export function QuadroReceita({ unidade, receitas, porVenda, impostos, onAbrir }
               <Linha rotulo="Variação do Estoque" valor={variacao} base={rob - rol} onClick={() => onAbrir(2, "PRE_FABRICADO", true)} />
             </>
           ) : null}
-        </tbody>
-      </table>
-    </div>
+        </>
+      }
+    />
   );
 }

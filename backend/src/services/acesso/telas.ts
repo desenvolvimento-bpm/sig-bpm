@@ -56,15 +56,19 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
               { codigo: "unidades", nome: "Unidades" },
               { codigo: "departamentos", nome: "Departamentos" },
               { codigo: "centros_custo", nome: "Centros de Custo" },
+              // Os Benefícios Padrão (21/11/2026): os perfis com a aba Centros de Custo a herdaram (migração 20261121200000).
+              { codigo: "beneficios", nome: "Benefícios Padrão" },
+              // A cópia das Regras de Rateio (21/11/2026): os perfis com a aba Centros de Custo a herdaram (migração 20261121170000).
+              { codigo: "regras_rateio", nome: "Regras de Rateio" },
               { codigo: "redistribuicoes", nome: "Redistribuições de Gastos" },
             ]
           : []),
-        // Os Índices de Referência dos analíticos (19/10/2026, a aba Índices; desde 11/11/2026, o quadro do meio da aba
-        // Comparativo), que as Variações Máximas deles usam no lugar da variação digitada.
-        ...(analitico ? [{ codigo: "indices", nome: "Comparativo · Índices de Referência" }] : []),
-        { codigo: "comparativo", nome: "Comparativo" },
-        // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; os perfis com a aba nas Premissas a herdaram).
-        ...(analitico ? [{ codigo: "reajustes", nome: "Reajustes" }] : []),
+        // Nos analíticos (21/11/2026, pedido do Adão), a aba Comparativo e Reajustes junta três quadros, cada um com a sua permissão:
+        // o Cenário Comparado (comparativo), os Índices de Comparação (indices; antes, de Referência) e os Índices de Reajuste
+        // (reajustes; antes, a aba Reajustes, de 12/11/2026).
+        ...(analitico ? [{ codigo: "indices", nome: "Comparativo e Reajustes · Índices de Comparação" }] : []),
+        { codigo: "comparativo", nome: analitico ? "Comparativo e Reajustes · Cenário Comparado" : "Comparativo" },
+        ...(analitico ? [{ codigo: "reajustes", nome: "Comparativo e Reajustes · Índices de Reajuste" }] : []),
       ],
     },
     ...(analitico

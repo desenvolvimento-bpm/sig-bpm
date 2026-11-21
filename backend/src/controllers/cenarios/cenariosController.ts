@@ -27,6 +27,21 @@ const descricaoSchema = z
   .transform((d) => d || null);
 const anoSchema = z.coerce.number().int().min(2020).max(2100);
 const visaoSchema = z.coerce.number().int().min(0).max(5);
+/**
+ * As combinações de um Índice de Comparação ou de Reajuste (21/11/2026): Unidade, Departamento, Atribuição, Conta e Venda, cada
+ * uma nula ("Todas") ou uma escolha; o serviço confere se existem e se não se repetem.
+ */
+const combinacoesSchema = z
+  .array(
+    z.object({
+      unidade: z.number().int().min(1).max(99).nullable(),
+      departamento: z.string().min(1).max(60).nullable(),
+      atribuicao: z.string().min(1).max(60).nullable(),
+      conta: z.string().min(1).max(200).nullable(),
+      venda: z.enum(["GLOBAL", "MERCANTIL"]).nullable().optional().transform((v) => v ?? null),
+    }),
+  )
+  .max(300);
 const marcacaoSchema = z.enum(["ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS", "PREVISAO"]).nullable();
 const visualizacaoSchema = z.enum(["PARTICULAR", "PUBLICA"]).optional();
 const tipoSchema = z.enum(["SINTETICO", "ANALITICO"]);
@@ -35,6 +50,14 @@ const mesDoQuadroSchema = z.object({
   colaboradores: z.number().finite().min(0, "Os colaboradores não podem ser negativos.").max(1e9),
   salarioBruto: z.number().finite().min(0, "O Salário Bruto não pode ser negativo.").max(1e9),
   adicional: z.number().finite().min(0, "A Insalubridade / Periculosidade não pode ser negativa.").max(1e9),
+});
+/**
+ * Um mês das linhas do Quadro de Lotação no Importar Valores (21/11/2026): com os Benefícios que a análise devolveu — os Benefícios
+ * Padrão aplicados (o serviço guarda só os do cenário) e o valor digitado na coluna Benefícios.
+ */
+const mesDoQuadroImportadoSchema = mesDoQuadroSchema.extend({
+  beneficiosPadrao: z.array(idSchema).max(100).optional(),
+  beneficiosDigitados: z.number().finite().min(0).max(1e9).nullable().optional(),
 });
 const linhaDoQuadroSchema = z.object({
   unidadeNegocioId: z.string().uuid("Escolha a unidade."),
@@ -482,8 +505,8 @@ export const cenariosController = {
               // que substitui as linhas dos departamentos do arquivo) as que saem.
               quadro: z
                 .object({
-                  novas: z.array(linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
-                  alteradas: z.array(linhaDoQuadroSchema.extend({ id: idSchema, meses: z.array(mesDoQuadroSchema).length(12) })).max(5000),
+                  novas: z.array(linhaDoQuadroSchema.extend({ meses: z.array(mesDoQuadroImportadoSchema).length(12) })).max(5000),
+                  alteradas: z.array(linhaDoQuadroSchema.extend({ id: idSchema, meses: z.array(mesDoQuadroImportadoSchema).length(12) })).max(5000),
                   excluidas: z.array(z.object({ id: idSchema })).max(5000).optional(),
                 })
                 .optional(),
@@ -679,9 +702,8 @@ export const cenariosController = {
     const corpo = z
       .object({
         comparadoComId: idSchema.nullable(),
-        // Nos sintéticos, a variação digitada; nos analíticos (19/10/2026), a chave do índice de cada conta.
+        // Nos sintéticos, a variação digitada; nos analíticos (21/11/2026), só o cenário comparado (os Índices de Comparação têm as combinações).
         limites: z.record(z.string(), z.number().finite().min(0, "A variação máxima não pode ser negativa.").max(100000).nullable()).optional(),
-        indices: z.record(z.string(), z.string().max(20).nullable()).optional(),
       })
       .safeParse(request.body);
     if (!corpo.success) return response.status(400).json({ error: corpo.error.issues[0]?.message ?? "Comparativo inválido." });
@@ -697,13 +719,37 @@ export const cenariosController = {
     return responder(response, () => cenariosService.gravarRealocacoes(c, corpo.data.decisoes, usuario(request)));
   },
 
-  /** Os Índices de Reajuste do cenário analítico (19/10/2026). */
+  /** O Compartilhar do cenário particular (21/11/2026): os usuários convidados e os que se podem convidar. */
+  compartilhamento(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.compartilhamento(c, usuario(request))) : undefined;
+  },
+
+  /** Convida usuários a ver o cenário particular: { usuarios: [id] }. */
+  compartilhar(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z.object({ usuarios: z.array(z.string().min(1).max(60)).min(1).max(200) }).safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Escolha os usuários." });
+    return responder(response, () => cenariosService.compartilhar(c, corpo.data.usuarios, usuario(request)));
+  },
+
+  /** Tira um usuário convidado do cenário. */
+  removerCompartilhamento(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const u = z.string().min(1).max(60).safeParse(request.params.usuarioId);
+    if (!u.success) return response.status(400).json({ error: "Usuário inválido." });
+    return responder(response, () => cenariosService.removerCompartilhamento(c, u.data, usuario(request)));
+  },
+
+  /** Os Índices de Comparação do cenário analítico (19/10/2026; 21/11/2026, com as combinações). */
   indices(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.indices(c, usuario(request))) : undefined;
   },
 
-  /** Grava a lista dos Índices de Reajuste: { indices: [{ chave?, descricao, observacao?, variacao (%) }] }. */
+  /** Grava a lista dos Índices de Comparação: { indices: [{ chave?, descricao, observacao?, variacao (%), combinacoes }] }. */
   gravarIndices(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
@@ -716,6 +762,7 @@ export const cenariosController = {
               descricao: z.string().trim().min(1, "Toda linha precisa da descrição.").max(120),
               observacao: z.string().max(500).nullable().optional(),
               variacao: z.number().finite().min(0, "A variação máxima não pode ser negativa.").max(100000),
+              combinacoes: combinacoesSchema,
             }),
           )
           .max(200),
@@ -740,6 +787,98 @@ export const cenariosController = {
     const corpo = z.object({ nome: z.string().trim().min(1).max(120), ordem: z.number().int().min(0).max(9999), ativo: z.boolean() }).safeParse(request.body);
     if (!unidade.success || !corpo.success) return response.status(400).json({ error: "Dados da unidade inválidos." });
     return responder(response, () => cenariosService.gravarUnidadeDoCenario(c, unidade.data, corpo.data, usuario(request)));
+  },
+
+  /** A aba Benefícios Padrão (21/11/2026): os benefícios do cenário. */
+  beneficiosDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.beneficiosDoCenario(c, usuario(request))) : undefined;
+  },
+
+  /** Inclui (POST) ou altera (PUT /:beneficioId) um Benefício Padrão: { nome, descricao, valorMensal }. */
+  gravarBeneficioDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const beneficio = request.params.beneficioId === undefined ? null : idSchema.safeParse(request.params.beneficioId);
+    const corpo = z
+      .object({ nome: z.string().trim().min(1, "Dê um nome ao benefício.").max(120), descricao: z.string().max(500).nullable(), valorMensal: z.number().finite().min(0, "O Valor Mensal não pode ser negativo.").max(1e7) })
+      .safeParse(request.body);
+    if ((beneficio && !beneficio.success) || !corpo.success) return response.status(400).json({ error: corpo.success ? "Benefício inválido." : (corpo.error.issues[0]?.message ?? "Benefício inválido.") });
+    return responder(response, () => cenariosService.gravarBeneficioDoCenario(c, beneficio ? beneficio.data! : null, corpo.data, usuario(request)));
+  },
+
+  /** Exclui um Benefício Padrão do cenário. */
+  excluirBeneficioDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const beneficio = idSchema.safeParse(request.params.beneficioId);
+    if (!beneficio.success) return response.status(400).json({ error: "Benefício inválido." });
+    return responder(response, () => cenariosService.excluirBeneficioDoCenario(c, beneficio.data, usuario(request)));
+  },
+
+  /** O botão Benefícios da aba Quadro de Lotação: { linhas: [id], meses: [1 a 12], beneficios: [id] }. */
+  aplicarBeneficiosNoQuadro(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z
+      .object({ linhas: z.array(idSchema).min(1).max(5000), meses: z.array(z.number().int().min(1).max(12)).min(1).max(12), beneficios: z.array(idSchema).max(100) })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Marque ao menos uma linha e um mês do Quadro de Lotação." });
+    return responder(response, () => cenariosService.aplicarBeneficiosNoQuadro(c, corpo.data, usuario(request)));
+  },
+
+  /** A aba Regras de Rateio (21/11/2026): a cópia das regras do cenário, as opções e os avisos. */
+  regrasDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.regrasDoCenarioAba(c, usuario(request))) : undefined;
+  },
+
+  /** Inclui (POST) ou altera (PUT /:regraId) uma regra paramétrica do cenário: { rotulo, chave, origemDoVolume, inicio, fim }. */
+  gravarRegraDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const regra = request.params.regraId === undefined ? null : idSchema.safeParse(request.params.regraId);
+    const corpo = z
+      .object({ rotulo: z.string().trim().min(1, "Dê um rótulo à regra.").max(200), chave: z.string().min(1).max(40), origemDoVolume: z.string().min(1).max(80), inicio: z.string().min(1).max(30), fim: z.string().max(30).nullable() })
+      .safeParse(request.body);
+    if ((regra && !regra.success) || !corpo.success) return response.status(400).json({ error: corpo.success ? "Regra inválida." : (corpo.error.issues[0]?.message ?? "Regra inválida.") });
+    return responder(response, () => cenariosService.gravarRegraDoCenario(c, regra ? regra.data! : null, corpo.data, usuario(request)));
+  },
+
+  /** Exclui uma regra paramétrica do cenário. */
+  excluirRegraDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const regra = idSchema.safeParse(request.params.regraId);
+    if (!regra.success) return response.status(400).json({ error: "Regra inválida." });
+    return responder(response, () => cenariosService.excluirRegraDoCenario(c, regra.data, usuario(request)));
+  },
+
+  /** Grava um conjunto de percentuais fixos do cenário: { chave, inicioAnterior, inicio, fim, percentuais: { destino: % }, rotulo }. */
+  gravarFixosDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const corpo = z
+      .object({
+        chave: z.string().min(1).max(40),
+        inicioAnterior: z.string().max(30).nullable(),
+        inicio: z.string().min(1).max(30),
+        fim: z.string().max(30).nullable(),
+        percentuais: z.record(z.string().max(20), z.number().finite()),
+        rotulo: z.string().max(200).nullable().optional().transform((r) => r ?? null),
+      })
+      .safeParse(request.body);
+    if (!corpo.success) return response.status(400).json({ error: "Percentuais fixos inválidos." });
+    return responder(response, () => cenariosService.gravarFixosDoCenario(c, corpo.data, usuario(request)));
+  },
+
+  /** Exclui um conjunto de percentuais fixos do cenário: ?chave=&inicio=AAAA-MM-DD. */
+  excluirFixosDoCenario(request: Request, response: Response) {
+    const c = id(request, response);
+    if (!c) return;
+    const q = z.object({ chave: z.string().min(1).max(40), inicio: z.string().min(10).max(10) }).safeParse(request.query);
+    if (!q.success) return response.status(400).json({ error: "Conjunto inválido." });
+    return responder(response, () => cenariosService.excluirFixosDoCenario(c, q.data.chave, q.data.inicio, usuario(request)));
   },
 
   /** A cópia dos centros de custo do cenário, com os grupos e as opções. */
@@ -876,13 +1015,13 @@ export const cenariosController = {
     return responder(response, () => cenariosService.excluirRedistribuicaoDoCenario(c, redistribuicao.data, usuario(request)));
   },
 
-  /** A aba Reajustes das Premissas dos analíticos (11/11/2026): os Índices de Reajuste e a Aplicação dos Reajustes. */
+  /** Os Índices de Reajuste dos analíticos (11/11/2026; 21/11/2026, com as combinações) e se estão aplicados na DRE. */
   reajustesDasPremissas(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.reajustesDasPremissas(c, usuario(request))) : undefined;
   },
 
-  /** Grava os Índices de Reajuste: { indices: [{ chave?, descricao, observacao?, reajustes: [{ valor (%), mes }] }] }. */
+  /** Grava os Índices de Reajuste: { indices: [{ chave?, descricao, observacao?, reajustes: [{ valor (%), mes }], combinacoes }] }. */
   gravarIndicesDosReajustes(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
@@ -898,6 +1037,7 @@ export const cenariosController = {
                 .array(z.object({ valor: z.number().finite().gt(-100, "O Valor (%) precisa ser maior que −100.").max(100000), mes: z.number().int().min(1).max(12) }))
                 .min(1, "Todo índice precisa de ao menos um reajuste (o Valor (%) e o Inicia Em).")
                 .max(4),
+              combinacoes: combinacoesSchema,
             }),
           )
           .max(200),
@@ -907,25 +1047,12 @@ export const cenariosController = {
     return responder(response, () => cenariosService.gravarIndicesDosReajustes(c, corpo.data.indices, usuario(request)));
   },
 
-  /**
-   * Grava a Aplicação dos Reajustes: { indices: { código da conta: [1º índice, 2º índice] } } (19/11/2026: até dois por conta;
-   * cada um, a chave ou nulo); a chave só (o formato de antes) vale como o 1º.
-   */
-  gravarAplicacaoDosReajustes(request: Request, response: Response) {
-    const c = id(request, response);
-    if (!c) return;
-    const chave = z.string().max(20).nullable();
-    const corpo = z.object({ indices: z.record(z.string().max(200), z.union([chave, z.tuple([chave, chave])])) }).safeParse(request.body);
-    if (!corpo.success) return response.status(400).json({ error: "Aplicação dos Reajustes inválida." });
-    return responder(response, () => cenariosService.gravarAplicacaoDosReajustes(c, corpo.data.indices, usuario(request)));
-  },
-
   /** Aplica ou remove os Reajustes das Premissas na DRE: { aplicados: true (Aplicar) | false (Remover) }. */
   aplicarReajustes(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const corpo = z.object({ aplicados: z.boolean() }).safeParse(request.body);
-    if (!corpo.success) return response.status(400).json({ error: "Escolha Aplicar Reajustes ou Remover Reajustes." });
+    if (!corpo.success) return response.status(400).json({ error: "Marque ou desmarque a caixa Aplicar Reajustes." });
     return responder(response, () => cenariosService.aplicarReajustes(c, corpo.data.aplicados, usuario(request)));
   },
 

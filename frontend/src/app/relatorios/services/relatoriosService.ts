@@ -37,6 +37,15 @@ export type Resultados = {
   rotuloComparado?: string;
   /** Nos cenários (13/10/2026): o cenário comparado, cujos totais vêm no lugar do orçado. */
   comparado?: { nome: string; ano: number } | null;
+  /**
+   * Nos Resultados dos cenários analíticos (21/11/2026, pedido do Adão): o Índice de Reajuste (a coluna antes de Janeiro) e, com
+   * um cenário comparado, o Índice de Comparação (antes do Comparativo) de cada linha, pelo código — o texto e a dica.
+   */
+  indices?: {
+    aplicados: boolean;
+    reajuste: Record<string, { texto: string; dica: string }>;
+    comparacao: Record<string, { texto: string; dica: string }> | null;
+  } | null;
   /** Nos Relatórios Executivos (31/10/2026, a Tabela PROVA): os cenários marcados que existem, na ordem do PROVA. */
   prova?: Array<{ marcacao: MarcacaoComparavel; rotulo: string; cenario: string }>;
   /** Nas visões das unidades (18/11/2026, a aba Variações): o valor de cada base do % em cada mês (null: o mês não apurado). */

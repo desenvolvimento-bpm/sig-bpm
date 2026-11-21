@@ -48,7 +48,7 @@ export function RealocacoesDialog({ cenario, podeEditar, onFechar }: { cenario: 
     mutationFn: () => cenariosService.gravarRealocacoes(cenario.id, Object.fromEntries(r.movimentacoes.map((m) => [m.chave, escolhas[m.chave] || null]))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
-      toast.success("Realocações gravadas; a DRE do cenário foi recalculada.");
+      toast.success("Realocações gravadas; a DRE fica pendente de recálculo (Resultados / Recalcular).");
       onFechar();
     },
   });

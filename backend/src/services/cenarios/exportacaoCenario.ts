@@ -178,7 +178,7 @@ function abaDoCentro(
   // Os encargos e benefícios: os percentuais (em fração, no formato %; no total, a média) e os Benefícios Adicionais (R$).
   secao(
     "Encargos e Benefícios",
-    "Conta Encargos e Benefícios = base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º); base = Remunerações CLT + Horas Extras − Salários dos Estagiários. Os Benefícios Adicionais ficam fora dela: a soma das duas linhas é a conta na DRE (o subtotal da atribuição e o Total do Centro os somam).",
+    "Conta Encargos e Benefícios = base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º); base = Remunerações CLT + Horas Extras − Salários dos Estagiários. Os Benefícios Adicionais e os Benefícios Padrão (a soma dos Benefícios das linhas do Quadro de Lotação do grupo) ficam fora dela: a soma das três linhas é a conta na DRE (o subtotal da atribuição e o Total do Centro os somam).",
   );
   const linhaDoItem = new Map<string, number>();
   for (const e of dados.encargos) {
@@ -202,6 +202,8 @@ function abaDoCentro(
 
   // Os Benefícios Adicionais do grupo (17/11/2026): a linha deles nos Encargos e Benefícios.
   const beneficiosDoGrupo = dados.encargos.find((e) => e.item === "BENEFICIOS") ?? null;
+  // E os Benefícios Padrão (21/11/2026), do Quadro de Lotação: somam como os Benefícios Adicionais.
+  const padraoDoGrupo = dados.encargos.find((e) => e.item === "BENEFICIOS_PADRAO") ?? null;
   // As contas por atribuição; a Encargos e Benefícios em fórmula, das linhas da mesma atribuição.
   const atribuicoes = [...new Set(dados.contas.map((x) => x.atribuicao))];
   const total = Array<number>(12).fill(0);
@@ -210,7 +212,8 @@ function abaDoCentro(
     const contas = dados.contas.filter((x) => x.atribuicao === a);
     // Os Benefícios Adicionais (17/11/2026): fora da conta Encargos e Benefícios, somam no subtotal da atribuição dela.
     const beneficios = contas.some((x) => x.comBeneficios) ? beneficiosDoGrupo : null;
-    const sub = Array.from({ length: 12 }, (_, k) => soma(contas.map((x) => x.valores[k])) + (beneficios?.valores[k] ?? 0));
+    const padrao = contas.some((x) => x.comBeneficios) ? padraoDoGrupo : null;
+    const sub = Array.from({ length: 12 }, (_, k) => soma(contas.map((x) => x.valores[k])) + (beneficios?.valores[k] ?? 0) + (padrao?.valores[k] ?? 0));
     sub.forEach((v, k) => (total[k] += v));
     const rSub = proxima();
     subtotais.push(rSub);
@@ -218,7 +221,9 @@ function abaDoCentro(
     linhas.push([
       { valor: a, estilo: ESTILO.destaque },
       { valor: null, estilo: ESTILO.destaque },
-      ...sub.map((v, k) => num(v, true, `SUM(${cMes(k)}${primeira}:${cMes(k)}${ultima})${beneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}`)),
+      ...sub.map((v, k) =>
+        num(v, true, `SUM(${cMes(k)}${primeira}:${cMes(k)}${ultima})${beneficios ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS")}` : ""}${padrao ? `+${cMes(k)}${linhaDoItem.get("BENEFICIOS_PADRAO")}` : ""}`),
+      ),
       num(soma(sub), true, `SUM(${cJan}${rSub}:${cDez}${rSub})`),
     ]);
     const linhaDaConta = new Map(contas.map((x, i) => [x.codigo, primeira + i]));
@@ -258,6 +263,7 @@ function abaDoCentro(
       contasDaAba.push({ codigo: x.codigo, linha: r, valores: x.valores.map(arred) });
       // Os Benefícios Adicionais (17/11/2026) somam na conta no Consolidado.
       if (x.comBeneficios && beneficiosDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS")!, valores: beneficiosDoGrupo.valores.map(arred) });
+      if (x.comBeneficios && padraoDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS_PADRAO")!, valores: padraoDoGrupo.valores.map(arred) });
     }
   }
   const rTotal = proxima();

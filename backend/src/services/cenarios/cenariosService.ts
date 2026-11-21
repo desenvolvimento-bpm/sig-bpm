@@ -50,7 +50,9 @@ import { limiteDaLinha, linhasDasVisoes, mesesAcima, totaisDaDRE } from "./compa
 import { ABAS_DRE, ABAS_METAS, acharAba, lerAbaDRE, lerAbaMetas, MESES, type AbaDRELida, type AbaMetasLida } from "./leituraCenario.js";
 import {
   C as CONTAS_DAS_PREMISSAS,
+  alteradoSemRecalcular,
   calcularAnalitico,
+  pendenciasDoRecalculo,
   calcularPremissas,
   calcularTabela,
   linhasDaTabela,
@@ -124,27 +126,52 @@ import {
 } from "./investimentosCenario.js";
 import { mediaDoPeriodo, mediaNoPeriodo, referenciaDoRealizado } from "./referenciaAnalitico.js";
 import { diferencasDasDecisoes, lerRealocacoes, type Realocacoes } from "./realocacoesCenario.js";
+import { erroDosReajustes, daChave, type ReajusteDoIndice } from "./reajustesCenario.js";
 import {
-  aplicacaoDosReajustes,
-  erroDosReajustes,
-  fatoresDasContas,
-  indicesDosReajustes,
-  daChave,
-  GRUPOS_POR_UNIDADE,
-  indicesDaLinha,
-  usosDosIndices,
-  type IndiceDosReajustes,
-  type IndicesDaConta,
-  type ReajusteDoIndice,
-} from "./reajustesCenario.js";
+  departamentosDosIndices,
+  errosDasCombinacoes,
+  fatoresDoCenario,
+  indicesDasLinhas,
+  indicesDeComparacao,
+  indicesDeReajuste,
+  lerCombinacao,
+  limitesDasCelulas,
+  limiteNaVisao,
+  remapearDepartamentosDosIndices,
+  type Combinacao,
+  type IndiceDeComparacao,
+  type IndiceDeReajusteComCombinacoes,
+  type Universo,
+} from "./indicesCenario.js";
 import { QUADROS_DE_LOTACAO, quadroDoGrupo, VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { basesDosProjetos, liberacaoTotal, LIBERACOES_DIGITADAS, ondeEstaoOsProjetos } from "./projetosCenario.js";
 import { beneficiosDaDiferenca, ehContaDeEncargos, itemDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
-import { copiarQuadro, linhasDoQuadro, mesesDaLinha, quadroDosGrupos, tipoDaLinha, type LinhaDoQuadro, type MesDaLinha, type TipoDeColaborador } from "./quadroDoCenario.js";
+import {
+  beneficiosDoMes,
+  beneficiosImportados,
+  copiarQuadro,
+  linhasDoQuadro,
+  mesesDaLinha,
+  quadroDosGrupos,
+  tipoDaLinha,
+  valoresDosBeneficios,
+  type LinhaDoQuadro,
+  type MesDaLinha,
+  type TipoDeColaborador,
+} from "./quadroDoCenario.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
 import { ROTULO_DO_TIPO, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "../colaboradores/tiposDoColaborador.js";
 import { assinaturaDasRegras, avisosDosRateios, bloqueioPorRateios, mesesDoAno, percentuaisPelasRegras, regrasDeRateio, type RegraDoMes } from "../volumes/vigenciaDosRateios.js";
+import {
+  abaDasRegras,
+  excluirConjuntoFixo,
+  excluirRegraParametrica,
+  gravarConjuntoFixo,
+  gravarRegraParametrica,
+  RegraDoCenarioError,
+  regrasDoCenario as regrasDeRateioDoCenario,
+} from "./regrasDoCenario.js";
 
 /**
  * Os cenários sintéticos (Criação de Cenários, 11/10/2026): a lista dos cenários gerados, a criação (vazio ou cópia
@@ -160,7 +187,7 @@ async function daRegra<T>(f: () => Promise<T>): Promise<T> {
   try {
     return await f();
   } catch (e) {
-    if (e instanceof RegraRedistribuicaoError) throw new CenarioError(e.status, e.message);
+    if (e instanceof RegraRedistribuicaoError || e instanceof RegraDoCenarioError) throw new CenarioError(e.status, e.message);
     throw e;
   }
 }
@@ -219,8 +246,16 @@ const SISTEMA: Usuario = { id: "", nome: "Sistema", admin: true };
 
 export const VISUALIZACOES: Record<VisualizacaoCenario, string> = { PARTICULAR: "Particular", PUBLICA: "Pública" };
 /** O usuário alcança o cenário? */
-const alcanca = (c: { visualizacao: VisualizacaoCenario; criadoPorId: string | null }, u: Usuario) =>
-  c.visualizacao === "PUBLICA" || !!u.admin || (!!c.criadoPorId && c.criadoPorId === u.id);
+/** Um usuário convidado a ver um cenário particular (21/11/2026, pedido do Adão: o Compartilhar das Configurações / Cenário). */
+type Compartilhamento = { usuarioId: string; convidadoPor: string; convidadoEm: string };
+const compartilhamentosDe = (c: { compartilhamentos?: unknown }): Compartilhamento[] =>
+  Array.isArray(c.compartilhamentos) ? (c.compartilhamentos as Compartilhamento[]).filter((x) => x && typeof x.usuarioId === "string") : [];
+/**
+ * Quem vê o cenário: todos, no público; no particular, quem o criou, o Administrador e (21/11/2026) os usuários convidados no
+ * Compartilhar — que usam as telas pelo seu perfil (o só de leitura só lê).
+ */
+const alcanca = (c: { visualizacao: VisualizacaoCenario; criadoPorId: string | null; compartilhamentos?: unknown }, u: Usuario) =>
+  c.visualizacao === "PUBLICA" || !!u.admin || (!!c.criadoPorId && c.criadoPorId === u.id) || (!!u.id && compartilhamentosDe(c).some((x) => x.usuarioId === u.id));
 /** Quem muda a visualização e a Edição das Configurações de um cenário: quem o criou e o Administrador. */
 const mudaVisualizacao = (c: { criadoPorId: string | null }, u: Usuario) => !!u.admin || (!!c.criadoPorId && c.criadoPorId === u.id);
 /**
@@ -250,9 +285,12 @@ export const rotuloVersao = (v: number) => `VER${String(v).padStart(2, "0")}`;
  * - a versão congelada (13/10/2026: Congelar Versão trava o cenário, como o fechamento de uma competência; para mudar,
  *   reabre-se a versão ou cria-se uma revisão).
  */
-/** Os rateios sem regra vigente em algum mês do exercício não deixam abrir nem fechar um cenário analítico (14/10/2026). */
-function exigirRateios(regras: RegraDoMes[], ano: number, acao: string) {
-  const bloqueio = bloqueioPorRateios(regras, mesesDoAno(ano), acao);
+/**
+ * Os rateios sem regra vigente em algum mês do exercício não deixam abrir nem fechar um cenário analítico (14/10/2026); desde
+ * 21/11/2026, as regras da cópia do cenário (Configurações / Regras de Rateio).
+ */
+function exigirRateios(regras: RegraDoMes[], ano: number, acao: string, onde?: string) {
+  const bloqueio = bloqueioPorRateios(regras, mesesDoAno(ano), acao, onde);
   if (bloqueio) throw new CenarioError(409, bloqueio);
 }
 
@@ -265,13 +303,13 @@ function exigirEditavel(c: { nome: string; marcacao: MarcacaoCenario | null; ver
  * Com os reajustes aplicados na DRE (Premissas / Reajustes, “Aplicar Reajustes”), as premissas não se editam: as abas das
  * unidades, o Quadro de Lotação, os Centros de Custo, os Investimentos e o Extra-Operacional, o Replicar Médias, o Apagar
  * Valores e o Importar Valores, e a referência (que as carrega) com as realocações. Os Indicadores Manuais e a própria aba
- * Reajustes continuam editáveis; “Remover Reajustes” destrava.
+ * Reajustes continuam editáveis; desmarcar a caixa Aplicar Reajustes (Resultados, 21/11/2026) destrava.
  */
 function exigirSemReajustes(c: { nome: string; reajustesAplicados: boolean }) {
   if (c.reajustesAplicados)
     throw new CenarioError(
       409,
-      `Os reajustes estão aplicados na DRE do cenário ${c.nome}: as premissas não se editam (menos os Indicadores Manuais). Para editá-las, use “Remover Reajustes”, em Premissas / Reajustes.`,
+      `A caixa Aplicar Reajustes está marcada no cenário ${c.nome}: as Configurações e as Premissas não se editam (menos os Indicadores Manuais). Para editá-las, desmarque “Aplicar Reajustes”, nos Resultados.`,
     );
 }
 
@@ -283,13 +321,42 @@ async function obterOuFalhar(id: string, usuario: Usuario) {
 }
 
 /**
- * As Verificações das Premissas de um cenário analítico (20/11/2026, pedido do Adão; verificacoesCenario.ts), com o responsável
- * (quem alterou os valores por último, pelo Histórico; sem ninguém, quem criou o cenário) e a situação: De Acordo (o da
- * assinatura de hoje) ou pendente (com o De Acordo anterior, se os valores mudaram depois dele).
+ * A ordem dos responsáveis imediatos das verificações (21/11/2026, pedido do Adão), pelo nome do perfil: o Analista; sem ele, o
+ * Coordenador; sem ele, o Estratégico; sem ele, o Gestor.
+ */
+const HIERARQUIA_DOS_RESPONSAVEIS = ["analista", "coordenador", "estrategico", "gestor"];
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/**
+ * Os responsáveis imediatos de cada verificação (21/11/2026, pedido do Adão): os usuários ativos do primeiro nível da hierarquia
+ * (Analista, Coordenador, Estratégico, Gestor) cujo recorte do perfil (os centros de custo, ou os departamentos do Gestor) alcança
+ * a verificação — a linha ou o centro dela. Vazio: ninguém da hierarquia a alcança.
+ */
+async function responsaveisImediatos() {
+  const usuarios = (await carregarUsuariosAtivos()).flatMap((u) => {
+    const nivel = HIERARQUIA_DOS_RESPONSAVEIS.indexOf(semAcento(u.perfil.nome));
+    const a = u.acesso;
+    const recorte = recorteDoPerfil({ recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null });
+    return nivel >= 0 && recorte ? [{ id: u.sub, nome: u.nome, nivel, recorte }] : [];
+  });
+  return (v: Pick<Verificacao, "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) => {
+    for (let nivel = 0; nivel < HIERARQUIA_DOS_RESPONSAVEIS.length; nivel++) {
+      const deste = usuarios.filter((u) => u.nivel === nivel && veVerificacao(u.recorte, v, grupos));
+      if (deste.length) return deste.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map((u) => ({ id: u.id as string | null, nome: u.nome }));
+    }
+    return [];
+  };
+}
+
+/**
+ * As Verificações das Premissas de um cenário analítico (20/11/2026, pedido do Adão; verificacoesCenario.ts), com os responsáveis
+ * (21/11/2026: os imediatos, pela hierarquia dos perfis; sem nenhum, quem alterou os valores por último, pelo Histórico, ou quem
+ * criou o cenário), quem alterou por último (`responsavel`) e a situação: De Acordo (o da assinatura de hoje) ou pendente (com o
+ * De Acordo anterior, se os valores mudaram depois dele).
  */
 async function verificacoesComSituacao(c: { id: string; ano: number; criadoPorId: string | null; criadoPor: string | null }) {
   const prisma = getPrismaClient();
-  const [dados, historico, acordos] = await Promise.all([
+  const [dados, historico, acordos, imediatos] = await Promise.all([
     dadosDasVerificacoes(c),
     prisma.cenarioReajuste.findMany({
       where: { cenarioId: c.id },
@@ -297,50 +364,27 @@ async function verificacoesComSituacao(c: { id: string; ano: number; criadoPorId
       select: { criadoEm: true, usuarioId: true, usuarioNome: true, tipo: true, visao: true, contas: true, alcance: true },
     }),
     prisma.cenarioVerificacaoAcordo.findMany({ where: { cenarioId: c.id } }),
+    responsaveisImediatos(),
   ]);
+  const grupos = new Map(dados.grupos.map((g) => [g.grupo, g]));
   const doAcordo = new Map(acordos.map((a) => [a.chave, a]));
   const lista = verificar(dados).map((v) => {
     const responsavel = responsavelDa(v, historico) ?? (c.criadoPor ? { id: c.criadoPorId, nome: c.criadoPor, em: null } : null);
+    const daHierarquia = imediatos(v, grupos);
+    const responsaveis = daHierarquia.length ? daHierarquia : responsavel ? [{ id: responsavel.id, nome: responsavel.nome }] : [];
     const a = doAcordo.get(v.chave);
     const quem = a ? { usuarioId: a.usuarioId, nome: a.usuarioNome, em: a.criadoEm } : null;
-    return { ...v, responsavel, acordo: a && a.assinatura === v.assinatura ? quem : null, acordoAnterior: a && a.assinatura !== v.assinatura ? quem : null };
+    return { ...v, responsavel, responsaveis, acordo: a && a.assinatura === v.assinatura ? quem : null, acordoAnterior: a && a.assinatura !== v.assinatura ? quem : null };
   });
-  return { lista, grupos: new Map(dados.grupos.map((g) => [g.grupo, g])) };
+  return { lista, grupos };
 }
 type VerificacaoComSituacao = Awaited<ReturnType<typeof verificacoesComSituacao>>["lista"][number];
 /** A verificação está no recorte do usuário: as das unidades pelos departamentos delas; as do Quadro e dos Centros, pelo grupo. */
 const veVerificacao = (r: Recorte | null, v: Pick<Verificacao, "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) =>
   !r || (["1", "2", "3"].includes(v.aba) ? veDepartamentos(r, departamentosDaUnidade(Number(v.aba))) : !!v.grupo && grupos.has(v.grupo) && veGrupo(r, grupos.get(v.grupo)!));
-/** Quem dá (e retira) o De Acordo: o responsável pela verificação ou o Administrador. */
-const daOAcordo = (v: Pick<VerificacaoComSituacao, "responsavel">, u: Usuario) =>
-  !!u.admin || (!!v.responsavel && (v.responsavel.id ? v.responsavel.id === u.id : v.responsavel.nome === u.nome));
-/**
- * Os usuários que podem justificar (dar o De Acordo) as verificações de um cenário (20/11/2026, pedido do Adão: a coluna
- * Responsável lista todos): os ativos que alcançam o cenário, com Editar na aba Verificações, e, em cada verificação, os do recorte
- * dela que são o responsável ou o Administrador (`podemJustificar`).
- */
-async function quemJustifica(c: { tipo: string; acessoInformacoes: string; criadoPorId: string | null; visualizacao: VisualizacaoCenario }) {
-  const usuarios = (await carregarUsuariosAtivos())
-    .filter((u) => u.permissions.includes("cenarios_analiticos_premissas.verificacoes:editar"))
-    .map((u): Usuario => {
-      const a = u.acesso;
-      return {
-        id: u.sub,
-        nome: u.nome,
-        admin: u.perfil.codigo === CODIGO_ADMINISTRADOR,
-        recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
-      };
-    })
-    .filter((u) => alcanca(c, u))
-    .map((u) => ({ usuario: u, recorte: recorteDoCenario(c, u) }));
-  return (v: Pick<VerificacaoComSituacao, "responsavel" | "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) => {
-    const podem = usuarios.filter((x) => daOAcordo(v, x.usuario) && veVerificacao(x.recorte, v, grupos)).map((x) => x.usuario);
-    // O responsável primeiro; depois os Administradores, pelo nome.
-    const ehResponsavel = (u: Usuario) => !!v.responsavel && (v.responsavel.id ? v.responsavel.id === u.id : v.responsavel.nome === u.nome);
-    return podem.sort((a, b) => Number(ehResponsavel(b)) - Number(ehResponsavel(a)) || a.nome.localeCompare(b.nome, "pt-BR")).map((u) => u.nome);
-  };
-}
-
+/** Quem dá (e retira) o De Acordo: um responsável pela verificação (o imediato, 21/11/2026) ou o Administrador. */
+const daOAcordo = (v: Pick<VerificacaoComSituacao, "responsaveis">, u: Usuario) =>
+  !!u.admin || v.responsaveis.some((r) => (r.id ? r.id === u.id : r.nome === u.nome));
 /** O que o cenário tem: as visões da DRE com valor e os indicadores com meta. */
 async function conteudo(ids: string[]) {
   const prisma = getPrismaClient();
@@ -401,91 +445,54 @@ async function familias() {
   };
 }
 
-/** O cenário comparado (o comparativo), se houver. */
-/** Um Índice de Reajuste do cenário analítico (19/10/2026; Configurações / Índices): a variação máxima em %. */
-export type IndiceDeReajuste = { chave: string; descricao: string; observacao: string | null; variacao: number };
 type ComVariacoes = { tipo: string; variacoesMaximas: unknown; indicesReajuste: unknown; indicesDoComparativo: unknown };
 
-/** Os Índices de Reajuste do cenário (vazio nos sintéticos e nos analíticos sem índices). */
-export function indicesDe(c: { indicesReajuste: unknown }): IndiceDeReajuste[] {
-  return Array.isArray(c.indicesReajuste) ? (c.indicesReajuste as IndiceDeReajuste[]) : [];
+/** Quantas contas (cada conta numa unidade) cada índice alcança, pelo índice de cada célula. */
+function contasPorIndice(porCelula: Map<string, string>, u: Universo): Map<string, number> {
+  const celula = new Map(u.celulas.map((c) => [c.chave, c]));
+  const porIndice = new Map<string, Set<string>>();
+  for (const [chave, indice] of porCelula) {
+    const c = celula.get(chave);
+    if (!c) continue;
+    if (!porIndice.has(indice)) porIndice.set(indice, new Set());
+    porIndice.get(indice)!.add(`${c.unidade}|${c.codigo}`);
+  }
+  return new Map([...porIndice].map(([k, v]) => [k, v.size]));
 }
+
+/** Os percentuais com duas casas ("4,00%"), como na tela. */
+const pctDoIndice = (v: number) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
 /**
- * As variações máximas (em %) de cada linha verificada no comparativo: nos analíticos (19/10/2026), a do índice escolhido
- * para a conta (Configurações / Índices); nos sintéticos, a digitada.
+ * Os índices de cada linha numa visão dos Resultados dos analíticos (21/11/2026, pedido do Adão): o Índice de Reajuste (a coluna
+ * antes de Janeiro) e, com um cenário comparado, o Índice de Comparação (a coluna antes do Comparativo) — o texto e a dica.
  */
-export function limitesDe(c: ComVariacoes): Record<string, number> {
-  if (c.tipo !== "ANALITICO") return (c.variacoesMaximas ?? {}) as Record<string, number>;
-  const variacao = new Map(indicesDe(c).map((i) => [i.chave, Number(i.variacao)]));
-  const escolhidos = (c.indicesDoComparativo ?? {}) as Record<string, string>;
-  return Object.fromEntries(Object.entries(escolhidos).flatMap(([codigo, chave]) => (variacao.has(chave) ? [[codigo, variacao.get(chave)!]] : [])));
+async function indicesDosResultados(
+  c: { id: string; ano: number; reajustesAplicados: boolean; indicesDosReajustes: unknown; aplicacaoDosReajustes: unknown; indicesReajuste: unknown; indicesDoComparativo: unknown },
+  visao: number,
+  comComparado: boolean,
+) {
+  const prisma = getPrismaClient();
+  const est = await estruturaDRE();
+  const [reajuste, comparacao] = await Promise.all([indicesDeReajuste(prisma, c, est), comComparado ? indicesDeComparacao(prisma, c, est) : null]);
+  const comObservacao = (i: { observacao: string | null }) => (i.observacao ? ` (${i.observacao})` : "");
+  const dosReajustes = new Map(
+    reajuste.indices.map((i) => [i.chave, { texto: i.descricao, dica: `${i.descricao}: ${i.reajustes.map((r) => `${pctDoIndice(Number(r.valor))} em ${rotuloMes(c.ano, r.mes)}`).join(", ")}${comObservacao(i)}` }]),
+  );
+  const dasComparacoes = new Map(
+    (comparacao?.indices ?? []).map((i) => [
+      i.chave,
+      { texto: `${i.descricao} (${pctDoIndice(i.variacao)})`, dica: `${i.descricao}: variação máxima de ${pctDoIndice(i.variacao)}, para mais ou para menos${comObservacao(i)}` },
+    ]),
+  );
+  return {
+    aplicados: c.reajustesAplicados,
+    reajuste: indicesDasLinhas(est, reajuste.universo, reajuste.porCelula, visao, (k) => dosReajustes.get(k) ?? null),
+    comparacao: comparacao ? indicesDasLinhas(est, comparacao.universo, comparacao.porCelula, visao, (k) => dasComparacoes.get(k) ?? null) : null,
+  };
 }
 
-/** O índice de uma linha verificada no Comparativo dos analíticos: o dela ou, sem ele, o do total ou da atribuição acima. */
-function indiceDaLinha(escolhidos: Record<string, string>, chaves: Set<string>, codigo: string, acima: string[]): string | null {
-  for (const k of [codigo, ...[...acima].reverse()]) if (escolhidos[k] && chaves.has(escolhidos[k])) return escolhidos[k];
-  return null;
-}
-
-/** Quantas contas (linhas verificadas) do Comparativo usam cada índice, contando as que o herdam de um total. */
-async function contasPorIndice(c: { indicesReajuste: unknown; indicesDoComparativo: unknown }): Promise<Map<string, number>> {
-  const chaves = new Set(indicesDe(c).map((i) => i.chave));
-  const escolhidos = (c.indicesDoComparativo ?? {}) as Record<string, string>;
-  const n = new Map<string, number>();
-  for (const l of totaisDaDRE(await estruturaDRE()).linhas) {
-    if (!l.folha) continue;
-    const chave = indiceDaLinha(escolhidos, chaves, l.linha.codigo, l.acima);
-    if (chave) n.set(chave, (n.get(chave) ?? 0) + 1);
-  }
-  return n;
-}
-
-/**
- * As linhas da Aplicação dos Reajustes (11/11/2026): as da Variação Máxima (totais, atribuições e contas), sem a seção
- * Produção e Serviços (os volumes não se reajustam). Recebem índice as contas (as linhas ITEM sem nada embaixo).
- */
-function linhasDosReajustes(est: Awaited<ReturnType<typeof estruturaDRE>>) {
-  const { linhas } = totaisDaDRE(est);
-  const ps = linhas.find((l) => l.linha.tipo === "SECAO" && l.linha.codigo.startsWith("PS."))?.linha.codigo;
-  // Produção e Serviços (12/11/2026, pedido do Adão: aparece, como em Resultados Empresariais; antes, ficava fora): só para
-  // leitura — os volumes não são contas que se reajustam.
-  const comConta = linhas.map((l) => ({ ...l, conta: l.folha && l.linha.tipo === "ITEM" && l.linha.codigo !== ps && l.acima[0] !== ps }));
-  // Os Custos de Produção (19/11/2026, pedido do Adão): um grupo de linhas da Matriz e um da Filial, no lugar do grupo CPP; desde
-  // 21/11/2026 (pedido do Adão), cada unidade em dois, Global e Mercantil, com a unidade e a venda no código ("1|GLOBAL|CPP…") e
-  // no nome do total ("CUSTOS DE PRODUÇÃO: MATRIZ GLOBAL (CPP)").
-  const grupoDe = (codigo: string) => codigo.split(".")[0];
-  const resultado: typeof comConta = [];
-  const feitos = new Set<string>();
-  for (const l of comConta) {
-    const g = grupoDe(l.linha.codigo);
-    const unidades = GRUPOS_POR_UNIDADE[g];
-    if (!unidades) {
-      resultado.push(l);
-      continue;
-    }
-    if (feitos.has(g)) continue;
-    feitos.add(g);
-    const doGrupo = comConta.filter((x) => grupoDe(x.linha.codigo) === g);
-    for (const u of unidades) {
-      for (const v of u.vendas) {
-        const prefixo = `${u.unidade}|${v.chave}|`;
-        const rotulo = `${u.nome} ${v.nome}`;
-        for (const x of doGrupo) {
-          const nome = x.linha.tipo !== "ITEM" && x.nivel === 0 ? (/^(.*?):.*?(\([^)]*\))\s*$/.exec(x.linha.descricao) ?? null) : null;
-          resultado.push({
-            ...x,
-            linha: { ...x.linha, codigo: `${prefixo}${x.linha.codigo}`, descricao: nome ? `${nome[1]}: ${rotulo} ${nome[2]}` : x.nivel === 0 ? `${x.linha.descricao} · ${rotulo}` : x.linha.descricao },
-            acima: x.acima.map((a) => (grupoDe(a) === g ? `${prefixo}${a}` : a)),
-          });
-        }
-      }
-    }
-  }
-  return resultado;
-}
-
-type ComReajustes = { reajustesAplicados: boolean; indicesDosReajustes: unknown; aplicacaoDosReajustes: unknown };
+type ComReajustes = { id: string; reajustesAplicados: boolean; indicesDosReajustes: unknown; aplicacaoDosReajustes: unknown };
 
 /**
  * A soma das contas dadas na DRE gravada do cenário, nas unidades (o histórico do recálculo com os reajustes). As chaves são
@@ -514,48 +521,48 @@ function nomeDaChave(chave: string, nome: Map<string, string>) {
 }
 
 /**
- * Grava `dados` no cenário e recalcula a DRE com os reajustes (11/11/2026), registrando no histórico (tela Histórico, aba
- * Alterações) as contas que os reajustes alcançam, antes ou depois, e a soma delas antes e depois. `descricao` recebe o
- * número dessas contas. Só grava se os reajustes ainda estão como em `antes` (aplicados ou não): dois cliques seguidos em
- * Aplicar (ou em Remover) não aplicam (nem removem) duas vezes.
+ * O Recalcular com os reajustes mudados (21/11/2026: a caixa Aplicar Reajustes dos Resultados, ou os Índices de Reajuste gravados
+ * com ela marcada): recalcula a DRE e registra no histórico (tela Histórico, aba Alterações) as contas com Índice de Reajuste e a
+ * soma delas antes e depois do cálculo. `descricao` recebe o número dessas contas.
  */
-async function calcularComReajustes(
-  id: string,
-  usuario: Usuario,
-  antes: ComReajustes,
-  dados: Prisma.CenarioUncheckedUpdateManyInput,
-  descricao: (contas: number) => string,
-) {
+async function recalcularComReajustes(tx: Prisma.TransactionClient, c: ComReajustes, usuario: Usuario, descricao: (contas: number) => string) {
   const est = await estruturaDRE();
   const nome = new Map(est.map((l) => [l.codigo, l.descricao]));
-  await getPrismaClient().$transaction(
-    async (tx) => {
-      const { count } = await tx.cenario.updateMany({ where: { id, reajustesAplicados: antes.reajustesAplicados }, data: dados });
-      if (!count) throw new CenarioError(409, `Os reajustes já foram ${antes.reajustesAplicados ? "removidos" : "aplicados"} por outra gravação: atualize a tela.`);
-      const depois = await tx.cenario.findUniqueOrThrow({ where: { id }, select: { reajustesAplicados: true, indicesDosReajustes: true, aplicacaoDosReajustes: true } });
-      const codigos = new Set([...(antes.reajustesAplicados ? fatoresDasContas(antes).keys() : []), ...(depois.reajustesAplicados ? fatoresDasContas(depois).keys() : [])]);
-      const somaAntes = await somaDasContas(tx, id, est, codigos);
-      const { reajustes } = await calcularAnalitico(tx, id);
-      const somaDepois = await somaDasContas(tx, id, est, codigos);
-      await tx.cenarioReajuste.create({
-        data: {
-          cenarioId: id,
-          usuarioId: usuario.id || null,
-          usuarioNome: usuario.nome,
-          tipo: "RECALCULO",
-          descricao: descricao(codigos.size),
-          contas: [...codigos].map((c) => ({ codigo: daChave(c).codigo, descricao: nomeDaChave(c, nome) })),
-          meses: [...reajustes.meses].sort((a, b) => a - b),
-          valores: codigos.size ? reajustes.valores : 0,
-          somaAntes: codigos.size ? somaAntes : null,
-          somaDepois: codigos.size ? somaDepois : null,
-        },
-      });
+  const codigos = new Set((await fatoresDoCenario(tx, c, est)).keys());
+  const somaAntes = await somaDasContas(tx, c.id, est, codigos);
+  const { reajustes } = await calcularAnalitico(tx, c.id);
+  const somaDepois = await somaDasContas(tx, c.id, est, codigos);
+  await tx.cenarioReajuste.create({
+    data: {
+      cenarioId: c.id,
+      usuarioId: usuario.id || null,
+      usuarioNome: usuario.nome,
+      tipo: "RECALCULO",
+      descricao: descricao(codigos.size),
+      contas: [...codigos].map((k) => ({ codigo: daChave(k).codigo, descricao: nomeDaChave(k, nome) })),
+      meses: [...reajustes.meses].sort((a, b) => a - b),
+      valores: codigos.size ? reajustes.valores : 0,
+      somaAntes: codigos.size ? somaAntes : null,
+      somaDepois: codigos.size ? somaDepois : null,
     },
-    { timeout: 120_000 },
-  );
+  });
+}
+
+/** O texto do Recalcular no histórico (21/11/2026): as alterações recalculadas de cada tela. */
+function textoDoRecalculo(p: ReturnType<typeof pendenciasDoRecalculo>, aplicados: boolean) {
+  const itens = ([[p.configuracoes, "nas Configurações"], [p.premissas, "nas Premissas"], [p.reajustes, "nos Reajustes"]] as const).filter(([n]) => n > 0);
+  const partes = itens.map(([n, onde], k) => (k === 0 ? `${n} ${n === 1 ? "alteração" : "alterações"} ${onde}` : `${n} ${onde}`));
+  const lista = partes.length > 1 ? `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}` : (partes[0] ?? "");
+  return `Recalculado (Resultados)${lista ? `: ${lista}` : " com as regras de rateio do cenário"}${aplicados ? ", com os reajustes aplicados" : ""}`;
 }
 const deContas = (n: number) => `${n} ${n === 1 ? "conta" : "contas"}`;
+
+/** Recusa `acao` (congelar, marcar) com alterações ainda não recalculadas na DRE do analítico (21/11/2026). */
+function exigirRecalculado(c: Parameters<typeof pendenciasDoRecalculo>[0], acao: string) {
+  const { total } = pendenciasDoRecalculo(c);
+  if (total)
+    throw new CenarioError(409, `${total === 1 ? "Há 1 alteração pendente" : `Há ${total} alterações pendentes`} de recálculo: clique em “Recalcular”, nos Resultados, antes de ${acao}.`);
+}
 
 async function comparadoDe(c: { comparadoComId: string | null }) {
   return c.comparadoComId ? getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true } }) : null;
@@ -963,13 +970,18 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
   ]);
   // Os grupos com linhas no Quadro de Lotação do cenário (09/11/2026): os colaboradores, os salários e as remunerações calculados.
   const quadro = quadroDosGrupos(linhasDoQuadroDoCenario, grupos);
-  const limites = limitesDe(c);
-  const acimaDe = new Map(totaisDaDRE(est).linhas.map((l) => [l.linha.codigo, l.acima]));
-  const limiteDa = (conta: string | null) => (conta && acimaDe.has(conta) ? limiteDaLinha(limites, conta, acimaDe.get(conta)!) : null);
+  // A variação máxima de cada conta: a do Índice de Comparação dela na unidade (21/11/2026: pelas combinações dos índices); nas
+  // linhas de uma unidade (as premissas, a depreciação base e o extra-operacional: P|, B| e X|unidade|…), a da unidade; nas outras
+  // (as dos centros de custo), a maior das unidades.
+  const limites = await limitesDasCelulas(prisma, c, est);
+  const limiteDa = (conta: string | null, chave: string) => {
+    const u = /^[PBX]\|(\d+)\|/.exec(chave)?.[1];
+    return conta ? limiteNaVisao(limites, conta, u ? Number(u) : null) : null;
+  };
   const justificativa = new Map(justificativas.map((j) => [j.chave, j.texto]));
   const doze = (ler: (mes: number) => number | undefined) => MESES_1_A_12.map((m) => ler(m) ?? null);
   const linhas: LinhaDaPlanilha[] = [];
-  const add = (l: Omit<LinhaDaPlanilha, "limite" | "justificativa">) => linhas.push({ ...l, limite: limiteDa(l.conta), justificativa: justificativa.get(l.chave) ?? null });
+  const add = (l: Omit<LinhaDaPlanilha, "limite" | "justificativa">) => linhas.push({ ...l, limite: limiteDa(l.conta, l.chave), justificativa: justificativa.get(l.chave) ?? null });
   const prem = new Map(premissas.map((p) => [`${p.unidade}|${p.venda}|${p.chave}|${p.mes}`, Number(p.valor)]));
   // Os meses da referência (11/11/2026): as mesmas chaves, nas tabelas da referência.
   const refP = (chave: string) => (fonte ? doze((mes) => fonte.prem.get(`${chave}|${mes}`)) : undefined);
@@ -1080,6 +1092,24 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     const contaDosBeneficios = maosDoGrupo.find((m) => m.beneficios)?.encargos ?? null;
     const vendaDosBeneficios = itemDosEncargos("BENEFICIOS")!.venda;
     for (const i of ITENS_DOS_ENCARGOS) {
+      // Os Benefícios Padrão (21/11/2026): a soma dos Benefícios das linhas dos centros do grupo na aba Quadro de Lotação; no
+      // Excel, em fórmula sobre a aba Quadro de Lotação do arquivo. Calculados (não se importam), somam na conta no Consolidado.
+      if (i.calculado) {
+        add({
+          aba: "centros",
+          grupo: g.grupo,
+          chave: `E|${g.grupo}|${i.item}`,
+          descricao: [g.grupo, "Encargos e Benefícios", i.rotulo],
+          und: i.und,
+          conta: null,
+          media: null,
+          meses: doze((mes) => q?.beneficios[mes - 1]),
+          calculada: true,
+          doQuadro: { centros: codigos, tipo: null, soma: "BENEFICIOS" },
+          ...(contaDosBeneficios ? { somaNaConta: contaDosBeneficios } : {}),
+        });
+        continue;
+      }
       const ler = (mes: number) => prem.get(`0|${i.venda}|${g.grupo}|${mes}`);
       add({
         aba: "centros",
@@ -1109,7 +1139,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
       const atribuicao = totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "";
       // Na conta dos Benefícios Adicionais (17/11/2026), o valor gravado menos eles (no cenário e na referência).
       const semBeneficios = (v: number | undefined, beneficios: number | undefined) => (v === undefined || l.codigo !== contaDosBeneficios ? v : v - (beneficios ?? 0));
-      const ler = (mes: number) => semBeneficios(cen.get(`${g.grupo}|${l.codigo}|${mes}`), prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`));
+      // Sem os Benefícios Adicionais e (21/11/2026) os Benefícios Padrão do grupo: as linhas deles ficam à parte.
+      const ler = (mes: number) =>
+        semBeneficios(cen.get(`${g.grupo}|${l.codigo}|${mes}`), (prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`) ?? 0) + (mes >= 1 ? (q?.beneficios[mes - 1] ?? 0) : 0));
       // A conta Encargos e Benefícios é calculada (19/10/2026): em fórmula, das Remunerações CLT, das Horas Extras e dos
       // Encargos e Benefícios do grupo; o mês em branco dos percentuais vale a Média de Referência (o padrão).
       const mo = maos.get(l.codigo);
@@ -1264,7 +1296,14 @@ async function quadroVigente(cenarioId: string) {
       vinculo: vinculo as TipoDoColaborador,
       funcaoId,
       centroCustoId: c.id,
-      meses: Array.from({ length: 12 }, (_, m) => ({ colaboradores: n, salarioBruto: s?.[m].salarioBruto ?? 0, adicional: s?.[m].adicional ?? 0 })),
+      // Os Benefícios das linhas que já havia (21/11/2026) também ficam.
+      meses: Array.from({ length: 12 }, (_, m) => ({
+        colaboradores: n,
+        salarioBruto: s?.[m].salarioBruto ?? 0,
+        adicional: s?.[m].adicional ?? 0,
+        beneficiosPadrao: s?.[m].beneficiosPadrao ?? [],
+        beneficiosDigitados: s?.[m].beneficiosDigitados ?? null,
+      })),
     });
     total += n;
   }
@@ -1281,16 +1320,26 @@ function recusaDaLinha(d: DadosDaLinhaDoQuadro, cad: Awaited<ReturnType<typeof c
   if (!TIPOS_DO_COLABORADOR.includes(d.vinculo)) return "O tipo é CLT, PJ, Aprendiz ou Estagiário.";
   if (!mantido("funcaoId") && !cad.funcoes.some((x) => x.id === d.funcaoId)) return "Escolha uma função ativa da Gestão de Colaboradores.";
   if (!mantido("centroCustoId") && !cad.centros.some((x) => x.id === d.centroCustoId)) return "Escolha um centro de custo ativo, com código, de um grupo do cenário.";
-  if (d.meses.length !== 12 || d.meses.some((m) => [m.colaboradores, m.salarioBruto, m.adicional].some((v) => !Number.isFinite(v) || v < 0 || v > 1e9)))
-    return "Os colaboradores e os salários de cada mês são números de zero para cima.";
+  if (d.meses.length !== 12 || d.meses.some((m) => [m.colaboradores, m.salarioBruto, m.adicional, m.beneficiosDigitados ?? 0].some((v) => !Number.isFinite(v) || v < 0 || v > 1e9)))
+    return "Os colaboradores, os salários e os benefícios de cada mês são números de zero para cima.";
   return null;
 }
 
-/** Os meses de uma linha para gravar (os meses com algum valor). */
+/** Os meses de uma linha para gravar (os meses com algum valor), com os Benefícios Padrão aplicados e o valor digitado (21/11/2026). */
 const mesesParaGravar = (linhaId: string, meses: MesDaLinha[]) =>
   meses.flatMap((m, k) =>
-    m.colaboradores || m.salarioBruto || m.adicional
-      ? [{ linhaId, mes: k + 1, colaboradores: new Prisma.Decimal(m.colaboradores.toFixed(4)), salarioBruto: new Prisma.Decimal(m.salarioBruto.toFixed(2)), adicional: new Prisma.Decimal(m.adicional.toFixed(2)) }]
+    m.colaboradores || m.salarioBruto || m.adicional || m.beneficiosPadrao?.length || m.beneficiosDigitados
+      ? [
+          {
+            linhaId,
+            mes: k + 1,
+            colaboradores: new Prisma.Decimal(m.colaboradores.toFixed(4)),
+            salarioBruto: new Prisma.Decimal(m.salarioBruto.toFixed(2)),
+            adicional: new Prisma.Decimal(m.adicional.toFixed(2)),
+            beneficiosPadrao: m.beneficiosPadrao ?? [],
+            beneficios: m.beneficiosDigitados === null || m.beneficiosDigitados === undefined ? null : new Prisma.Decimal(m.beneficiosDigitados.toFixed(2)),
+          },
+        ]
       : [],
   );
 /** O nome de uma linha do Quadro de Lotação no histórico: a função e o centro. */
@@ -1383,9 +1432,21 @@ export const cenariosService = {
   async obter(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     // Nos analíticos (14/10/2026): os rateios sem regra no exercício e se as regras mudaram depois do último cálculo.
-    const regras = c.tipo === "ANALITICO" ? await regrasDeRateio() : null;
-    const rateios = regras ? { avisos: avisosDosRateios(regras, mesesDoAno(c.ano)), desatualizados: c.rateiosAssinatura !== assinaturaDasRegras(regras) } : null;
-    return { ...c, ...(await conteudo([id]))(id), ...(await familias())(c), podeMudarVisualizacao: mudaVisualizacao(c, usuario), podeEditarConfiguracoes: editaConfiguracoes(c, usuario), recorte: recorteParaTela(recorteDoCenario(c, usuario)), rateios };
+    // As regras da cópia do cenário (21/11/2026: Configurações / Regras de Rateio).
+    const regras = c.tipo === "ANALITICO" ? await regrasDeRateioDoCenario(getPrismaClient(), c.id) : null;
+    const rateios = regras ? { avisos: avisosDosRateios(regras, mesesDoAno(c.ano), "Configurações / Regras de Rateio"), desatualizados: c.rateiosAssinatura !== assinaturaDasRegras(regras) } : null;
+    // As alterações ainda não recalculadas (21/11/2026): o destaque Pendente de Recálculo e o Recalcular dos Resultados.
+    const recalculo = c.tipo === "ANALITICO" ? pendenciasDoRecalculo(c) : null;
+    return {
+      ...c,
+      ...(await conteudo([id]))(id),
+      ...(await familias())(c),
+      podeMudarVisualizacao: mudaVisualizacao(c, usuario),
+      podeEditarConfiguracoes: editaConfiguracoes(c, usuario),
+      recorte: recorteParaTela(recorteDoCenario(c, usuario)),
+      rateios,
+      recalculo,
+    };
   },
 
   /**
@@ -1396,8 +1457,12 @@ export const cenariosService = {
     const prisma = getPrismaClient();
     const tipo = dados.tipo ?? "SINTETICO";
     // Os analíticos usam as regras de rateio: sem regra vigente em algum mês do exercício, não se abrem (14/10/2026).
-    if (tipo === "ANALITICO") exigirRateios(await regrasDeRateio(), dados.ano, `abrir um cenário analítico de ${dados.ano}`);
     const origem = dados.copiarDe ? await obterOuFalhar(dados.copiarDe, usuario) : null;
+    // As regras que o cenário novo leva (21/11/2026): as da cópia do cenário de origem ou, sem ela, as de Cadastros Gerais.
+    if (tipo === "ANALITICO") {
+      const daOrigem = origem ? await regrasDeRateioDoCenario(getPrismaClient(), origem.id) : [];
+      exigirRateios(daOrigem.length ? daOrigem : await regrasDeRateio(), origem?.ano ?? dados.ano, `abrir um cenário analítico de ${origem?.ano ?? dados.ano}`, daOrigem.length ? "Configurações / Regras de Rateio" : undefined);
+    }
     if (origem && origem.tipo !== tipo) throw new CenarioError(400, `${TIPOS[tipo]} só copiam de ${TIPOS[tipo]}: ${origem.nome} é de outro tipo.`);
     const cenario = await prisma.$transaction(
       async (tx) => {
@@ -1424,6 +1489,11 @@ export const cenariosService = {
             indicesDosReajustes: origem?.indicesDosReajustes ?? undefined,
             aplicacaoDosReajustes: origem?.aplicacaoDosReajustes ?? undefined,
             reajustesAplicados: origem?.reajustesAplicados ?? false,
+            // As alterações ainda não recalculadas da origem (21/11/2026): a DRE copiada também não as tem.
+            recalculoConfiguracoes: origem?.recalculoConfiguracoes ?? 0,
+            recalculoPremissas: origem?.recalculoPremissas ?? 0,
+            recalculoReajustes: origem?.recalculoReajustes ?? 0,
+            reajustesCalculados: origem?.reajustesCalculados ?? false,
           },
         });
         if (origem) {
@@ -1440,6 +1510,8 @@ export const cenariosService = {
           await gravarEmLotes(investimentos, (lote) => tx.cenarioInvestimento.createMany({ data: lote.map(({ id: _id, ...x }) => ({ ...x, cenarioId: c.id })) }));
           // O Quadro de Lotação do analítico (09/11/2026), nos centros da cópia nova (20/11/2026).
           const mapa = tipo === "ANALITICO" ? await copiarCadastros(tx, c.id, origem.id) : undefined;
+          // Os departamentos das combinações dos índices (21/11/2026): os da cópia nova.
+          if (tipo === "ANALITICO") await remapearDepartamentosDosIndices(tx, origem.id, c.id);
           await copiarQuadro(tx, origem.id, c.id, mapa);
         } else if (tipo === "ANALITICO") {
           // As cópias de Unidades e de Centros de Custo (20/11/2026, Cadastros por cenário): as dos Cadastros Gerais de hoje.
@@ -1509,6 +1581,8 @@ export const cenariosService = {
     if (marcacao && antes.visualizacao === "PARTICULAR") {
       throw new CenarioError(409, `O cenário ${antes.nome} é particular: a marcação vale para todos os usuários. Torne-o público (Editar) antes de marcá-lo.`);
     }
+    // A DRE do analítico marcado é a de todos (o orçado dos Resultados Empresariais): com todas as alterações (21/11/2026).
+    if (marcacao && antes.tipo === "ANALITICO") exigirRecalculado(antes, `marcar ${antes.nome}`);
     const anterior = marcacao ? await prisma.cenario.findFirst({ where: { marcacao, id: { not: id } }, select: { id: true, nome: true } }) : null;
     await prisma.$transaction(async (tx) => {
       if (anterior) await tx.cenario.update({ where: { id: anterior.id }, data: { marcacao: null } });
@@ -1632,6 +1706,8 @@ export const cenariosService = {
       linhas: montar(linhas, visao, d.comValor, d.valores, d.consolidado, ACESSO_TOTAL, totais ? new Set(totais.keys()) : undefined).map((l) =>
         comTotalComparado({ ...l, podeDetalhar: false }, totais),
       ),
+      // As colunas dos índices (21/11/2026) só nas unidades: no Consolidado, não (pedido do Adão).
+      indices: c.tipo === "ANALITICO" && visao !== 0 ? await indicesDosResultados(c, visao, !!comparado) : null,
     };
   },
 
@@ -1954,7 +2030,7 @@ export const cenariosService = {
         });
         const semQuadros = [...medias, ...(media || manter ? [] : indicadores)].filter((v) => !QUADROS_DE_LOTACAO.has(v.nome));
         await gravarEmLotes(semQuadros, (lote) => tx.cenarioIndicador.createMany({ data: lote.map((v) => ({ cenarioId: id, ...v, origem: "IMPORTADO" as const })) }));
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
         // O detalhe da referência (11/11/2026): o ano e os meses do período, para os realizados do Exportar Premissas.
         const referenciaDetalhe: DetalheDaReferencia = { tipo: "REALIZADO", ano, meses: fechadas.map((f) => f.mes) };
         await tx.cenario.update({ where: { id }, data: { nomeArquivo, importadoEm: new Date(), realocacoes: realocacoes as unknown as Prisma.InputJsonValue, referenciaDetalhe } });
@@ -2141,7 +2217,7 @@ export const cenariosService = {
             if (atual) await tx.cenarioCentro.delete({ where: { cenarioId_grupo_linhaDREId_mes: chave } });
           } else await tx.cenarioCentro.upsert({ where: { cenarioId_grupo_linhaDREId_mes: chave }, create: { ...chave, valor }, update: { valor } });
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
         const novas: Realocacoes = { ...r, decisoes: { ...r.decisoes, ...decisoes }, aplicadas, atualizadoEm: new Date().toISOString(), atualizadoPor: usuario.nome };
         await tx.cenario.update({ where: { id }, data: { realocacoes: novas as unknown as Prisma.InputJsonValue } });
       },
@@ -2199,7 +2275,7 @@ export const cenariosService = {
         }
         const indicadores = await tx.cenarioIndicador.findMany({ where: { cenarioId: origem.id, ...soMedias } });
         await gravarEmLotes(indicadores, (lote) => tx.cenarioIndicador.createMany({ data: lote.map((r) => ({ ...r, cenarioId: id })) }));
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
         // As realocações da origem vêm junto: os centros copiados já têm o que ela realocou (14/10/2026).
         const referenciaDetalhe: DetalheDaReferencia = { tipo: "CENARIO", cenarioId: origem.id };
         await tx.cenario.update({ where: { id }, data: { nomeArquivo, importadoEm: new Date(), realocacoes: origem.realocacoes ?? Prisma.DbNull, referenciaDetalhe } });
@@ -2304,7 +2380,9 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     if (c.versaoSalvaEm) throw new CenarioError(409, `A ${rotuloVersao(c.versao)} do cenário ${c.nome} já está congelada.`);
     if (c.tipo === "ANALITICO") {
-      exigirRateios(await regrasDeRateio(), c.ano, `congelar a ${rotuloVersao(c.versao)} de ${c.nome}`);
+      exigirRateios(await regrasDeRateioDoCenario(getPrismaClient(), c.id), c.ano, `congelar a ${rotuloVersao(c.versao)} de ${c.nome}`, "Configurações / Regras de Rateio");
+      // A DRE com todas as alterações (21/11/2026): o Recalcular antes de congelar.
+      exigirRecalculado(c, `congelar a ${rotuloVersao(c.versao)} de ${c.nome}`);
       // As Verificações das Premissas (20/11/2026): todas corrigidas ou com o De Acordo.
       const pendentes = (await verificacoesComSituacao(c)).lista.filter((v) => !v.acordo).length;
       if (pendentes)
@@ -2335,7 +2413,7 @@ export const cenariosService = {
   async reabrirVersao(id: string, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
     if (!c.versaoSalvaEm) throw new CenarioError(409, `A ${rotuloVersao(c.versao)} do cenário ${c.nome} não está congelada.`);
-    if (c.tipo === "ANALITICO") exigirRateios(await regrasDeRateio(), c.ano, `reabrir a ${rotuloVersao(c.versao)} de ${c.nome}`);
+    if (c.tipo === "ANALITICO") exigirRateios(await regrasDeRateioDoCenario(getPrismaClient(), c.id), c.ano, `reabrir a ${rotuloVersao(c.versao)} de ${c.nome}`, "Configurações / Regras de Rateio");
     await getPrismaClient().cenario.update({ where: { id }, data: { versaoSalvaEm: null, versaoSalvaPor: null } });
     await auditar({
       usuarioId: usuario.id,
@@ -2359,7 +2437,7 @@ export const cenariosService = {
     const prisma = getPrismaClient();
     const origem = await obterOuFalhar(id, usuario);
     if (!origem.versaoSalvaEm) throw new CenarioError(409, `Congele a ${rotuloVersao(origem.versao)} (Congelar Versão) antes de criar uma revisão.`);
-    if (origem.tipo === "ANALITICO") exigirRateios(await regrasDeRateio(), origem.ano, `criar uma revisão de ${origem.nome}`);
+    if (origem.tipo === "ANALITICO") exigirRateios(await regrasDeRateioDoCenario(getPrismaClient(), origem.id), origem.ano, `criar uma revisão de ${origem.nome}`, "Configurações / Regras de Rateio");
     const familia = origem.familiaId ?? origem.id;
     const ultima = await prisma.cenario.aggregate({ where: { OR: [{ id: familia }, { familiaId: familia }] }, _max: { versao: true } });
     const versao = (ultima._max.versao ?? origem.versao) + 1;
@@ -2376,6 +2454,8 @@ export const cenariosService = {
             edicaoConfiguracoes: origem.edicaoConfiguracoes,
             // E o Acesso às Informações (12/11/2026).
             acessoInformacoes: origem.acessoInformacoes,
+            // E os usuários convidados a vê-lo (21/11/2026).
+            compartilhamentos: origem.compartilhamentos ?? undefined,
             criadoPor: usuario.nome,
             criadoPorId: usuario.id || null,
             nomeArquivo: origem.nomeArquivo,
@@ -2389,6 +2469,7 @@ export const cenariosService = {
             indicesDosReajustes: origem.indicesDosReajustes ?? undefined,
             aplicacaoDosReajustes: origem.aplicacaoDosReajustes ?? undefined,
             reajustesAplicados: origem.reajustesAplicados,
+            reajustesCalculados: origem.reajustesCalculados,
             realocacoes: origem.realocacoes ?? undefined,
             versao,
             familiaId: familia,
@@ -2409,6 +2490,8 @@ export const cenariosService = {
         await gravarEmLotes(investimentos, (lote) => tx.cenarioInvestimento.createMany({ data: lote.map(({ id: _id, ...x }) => ({ ...x, cenarioId: c.id })) }));
         // As cópias de Unidades e de Centros de Custo do cenário de origem (20/11/2026) e o Quadro de Lotação nos centros delas.
         const mapa = origem.tipo === "ANALITICO" ? await copiarCadastros(tx, c.id, origem.id) : undefined;
+        // Os departamentos das combinações dos índices (21/11/2026): os da cópia nova.
+        if (origem.tipo === "ANALITICO") await remapearDepartamentosDosIndices(tx, origem.id, c.id);
         await copiarQuadro(tx, origem.id, c.id, mapa);
         // Os De Acordo das Verificações (20/11/2026): valem na revisão enquanto os valores não mudam.
         const acordos = await tx.cenarioVerificacaoAcordo.findMany({ where: { cenarioId: origem.id } });
@@ -2508,7 +2591,7 @@ export const cenariosService = {
             await tx.cenarioPremissa.upsert({ where: { cenarioId_unidade_venda_chave_mes: chave }, create: { ...chave, valor }, update: { valor } });
           }
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -2665,6 +2748,8 @@ export const cenariosService = {
     ]);
     // O Quadro de Lotação do cenário (09/11/2026): com linhas dos centros do grupo, os colaboradores e as remunerações são calculados.
     const q = quadroDosGrupos(linhasDoCenario, [g]).get(grupo);
+    // Os Benefícios Padrão do grupo (21/11/2026): a soma dos Benefícios das linhas dele no Quadro de Lotação.
+    const beneficiosPadrao = (mes: number) => (mes >= 1 ? (q?.beneficios[mes - 1] ?? 0) : 0);
     const maos = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
     // As Remunerações vêm da aba Quadro de Lotação em todos os grupos (11/11/2026, pedido do Adão; antes, só nos com linhas).
     const doQuadro = new Set(maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
@@ -2698,10 +2783,24 @@ export const cenariosService = {
       // mão de obra), em todos os grupos (sem linhas, zero), e a mão de obra principal, que recebe as remunerações deles.
       salarios: SALARIOS_DO_QUADRO.map((s) => ({ tipo: s.tipo, rotulo: s.rotulo, valores: q ? [...q.salarios[s.tipo]] : Array<number>(12).fill(0) })),
       principal: maos.find((m) => m.principal)?.prefixo ?? null,
-      encargos: ITENS_DOS_ENCARGOS.map((i) => ({ item: i.item, rotulo: i.rotulo, und: i.und, ...serie(i.venda, i.padrao, i.und === "%" ? 100 : 1) })),
+      // Os Benefícios Padrão (21/11/2026): calculados pela aba Quadro de Lotação, não se digitam.
+      encargos: ITENS_DOS_ENCARGOS.map((i) =>
+        i.calculado
+          ? {
+              item: i.item,
+              rotulo: i.rotulo,
+              und: i.und,
+              calculado: true,
+              referencia: null,
+              valores: Array.from({ length: 12 }, (_, k) => beneficiosPadrao(k + 1)),
+              gravados: Array<boolean>(12).fill(false),
+            }
+          : { item: i.item, rotulo: i.rotulo, und: i.und, calculado: false, ...serie(i.venda, i.padrao, i.und === "%" ? 100 : 1) },
+      ),
       contas: contasDoGrupo(est, g).map((l) => {
         const comBeneficios = l.codigo === contaDosBeneficios;
-        const menos = (mes: number) => (comBeneficios ? beneficiosDoMes(mes) : 0);
+        // Sem os Benefícios Adicionais e (21/11/2026) os Benefícios Padrão: as linhas deles ficam à parte.
+        const menos = (mes: number) => (comBeneficios ? beneficiosDoMes(mes) + beneficiosPadrao(mes) : 0);
         const referencia = porLinha.get(`${l.id}|0`);
         return {
           codigo: l.codigo,
@@ -2742,8 +2841,9 @@ export const cenariosService = {
     const premissa = (linha: string) => {
       const [tipo, x] = linha.split("|");
       if (tipo === "LOTACAO" && (x === "CLT" || x === "PJ")) return { venda: x === "CLT" ? VENDA_LOTACAO_CLT : VENDA_LOTACAO_PJ, rotulo: `Quadro de Lotação · Colaboradores ${x}`, escala: 1 };
+      // Os Benefícios Padrão (21/11/2026) vêm da aba Quadro de Lotação e não se digitam.
       const i = tipo === "ENCARGOS" ? itemDosEncargos(x) : undefined;
-      return i ? { venda: i.venda, rotulo: `Encargos e Benefícios · ${i.rotulo}`, escala: i.und === "%" ? 100 : 1 } : undefined;
+      return i && !i.calculado ? { venda: i.venda, rotulo: `Encargos e Benefícios · ${i.rotulo}`, escala: i.und === "%" ? 100 : 1 } : undefined;
     };
     const fora = [...new Set(alteracoes.filter((a) => !premissa(a.linha) && (!contas.has(a.linha) || ehContaDeEncargos(a.linha))).map((a) => a.linha))];
     if (fora.length) throw new CenarioError(400, `Não são linhas que se digitam no grupo ${grupo}: ${fora.slice(0, 3).join(", ")}.`);
@@ -2794,7 +2894,7 @@ export const cenariosService = {
             await tx.cenarioCentro.upsert({ where: { cenarioId_grupo_linhaDREId_mes: chave }, create: { ...chave, valor }, update: { valor } });
           }
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -2966,7 +3066,7 @@ export const cenariosService = {
             await tx.cenarioPremissa.upsert({ where: { cenarioId_unidade_venda_chave_mes: chave }, create: { ...chave, valor }, update: { valor } });
           }
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -3059,7 +3159,7 @@ export const cenariosService = {
           // Quem incluiu (19/11/2026): fica com ele, também quando outro o altera.
           else await tx.cenarioInvestimento.create({ data: { ...valores, cenarioId: id, criadoPorId: usuario.id || null, ordem: await tx.cenarioInvestimento.count({ where: { cenarioId: id } }) } });
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas", false);
       },
       { timeout: 120_000 },
     );
@@ -3108,7 +3208,7 @@ export const cenariosService = {
     await prisma.$transaction(
       async (tx) => {
         await tx.cenarioInvestimento.deleteMany({ where: { cenarioId: id, id: { in: ids } } });
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas", false);
       },
       { timeout: 120_000 },
     );
@@ -3136,12 +3236,15 @@ export const cenariosService = {
   async quadro(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const [linhas, cad, referencia] = await Promise.all([
+    const [linhas, cad, referencia, beneficios] = await Promise.all([
       getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO }),
       cadastrosDoQuadro(id),
       // Os colaboradores de cada linha na referência (16/11/2026): a coluna Colab. Ref. e o Replicar Referências da tela.
       detalheDaReferencia(c).then((d) => colunaDoQuadroDe(d, id)),
+      // Os Benefícios Padrão do cenário (21/11/2026): o modal do botão Benefícios e o valor de cada mês.
+      getPrismaClient().cenarioBeneficioPadrao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { nome: "asc" }] }),
     ]);
+    const valores = new Map(beneficios.map((b) => [b.id, Number(b.valorMensal)]));
     // O recorte (12/11/2026): as linhas e os centros dos grupos dele.
     const r = recorteDoCenario(c, usuario);
     exigirNoRecorte(!r || abasDoRecorte(r)!.includes("quadro"));
@@ -3161,12 +3264,16 @@ export const cenariosService = {
         funcao: l.funcao.nome,
         centroCustoId: l.centroCustoId,
         centro: rotuloDoCentro(l.centroCusto),
+        // Só o nome (21/11/2026, pedido do Adão: a coluna Centro de Custo da tabela, sem o código RM).
+        nomeDoCentro: l.centroCusto.nomeRM,
         // O grupo do centro (null: fora dos grupos do cenário; a linha não conta).
         grupo: cad.grupoDoCentro.get(l.centroCustoId)?.grupo ?? null,
-        meses: mesesDaLinha(l.meses),
+        // Os Benefícios de cada mês (21/11/2026): o valor e os Benefícios Padrão aplicados (ou o valor digitado na importação).
+        meses: mesesDaLinha(l.meses).map((m) => ({ ...m, beneficios: beneficiosDoMes(m, valores) })),
         // Os colaboradores da linha na referência (nulo: a linha não está nela, ou o cenário não tem referência).
         referencia: referencia ? referencia.daLinha(l) : null,
       })),
+      beneficios: beneficios.map((b) => ({ id: b.id, nome: b.nome, descricao: b.descricao, valorMensal: Number(b.valorMensal) })),
       opcoes: { unidades: cad.unidades, funcoes: cad.funcoes, centros: cad.centros.filter((x) => q.ve(x.id)) },
     };
   },
@@ -3204,7 +3311,7 @@ export const cenariosService = {
           }
           gravada = l;
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -3248,7 +3355,7 @@ export const cenariosService = {
     await prisma.$transaction(
       async (tx) => {
         await tx.cenarioLotacao.deleteMany({ where: { cenarioId: id, id: { in: ids } } });
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -3311,7 +3418,7 @@ export const cenariosService = {
           const novo = mesesParaGravar(linhaId, meses.get(linhaId)!).find((x) => x.mes === mes);
           if (novo) await tx.cenarioLotacaoMes.create({ data: novo });
         }
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 120_000 },
     );
@@ -3366,7 +3473,7 @@ export const cenariosService = {
     // A base do rateio de Projeto (16/11/2026): a Liberação de Projetos dos Indicadores Manuais.
     for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
     // Os percentuais pelas regras de rateio do mês (14/10/2026; antes, só as bases das premissas).
-    const percentuais = percentuaisPelasRegras(await regrasDeRateio(), c.ano, bases);
+    const percentuais = percentuaisPelasRegras(await regrasDeRateioDoCenario(getPrismaClient(), c.id), c.ano, bases);
     // O recorte (12/11/2026): as chaves dos grupos de centros dele e, para o Gestor, os destinos dos departamentos dele.
     const recorte = recorteDoCenario(c, usuario);
     const visiveis = gruposDoRecorte(recorte, grupos);
@@ -3408,7 +3515,7 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     const recorte = recorteDoCenario(c, usuario);
-    const [{ lista, grupos }, podemJustificar] = await Promise.all([verificacoesComSituacao(c), quemJustifica(c)]);
+    const { lista, grupos } = await verificacoesComSituacao(c);
     const editavel = !c.marcacao && !c.versaoSalvaEm;
     const visiveis = lista.filter((v) => veVerificacao(recorte, v, grupos));
     return {
@@ -3427,9 +3534,10 @@ export const cenariosService = {
         descricao: v.descricao,
         meses: v.meses,
         mesesTexto: textoDosMeses(v.meses),
+        // Quem alterou os valores por último (a dica da coluna Responsável).
         responsavel: v.responsavel ? { nome: v.responsavel.nome, em: v.responsavel.em } : null,
-        // Todos os que podem justificar (o responsável, se tem Editar na aba e a vê, e os Administradores).
-        podemJustificar: podemJustificar(v, grupos),
+        // O responsável imediato (21/11/2026, pedido do Adão: só ele na coluna; mais de um só no mesmo nível da hierarquia).
+        responsaveis: v.responsaveis.map((r) => r.nome),
         acordo: v.acordo ? { nome: v.acordo.nome, em: v.acordo.em } : null,
         acordoAnterior: v.acordoAnterior ? { nome: v.acordoAnterior.nome, em: v.acordoAnterior.em } : null,
         podeAcordar: editavel && daOAcordo(v, usuario),
@@ -3438,8 +3546,9 @@ export const cenariosService = {
   },
 
   /**
-   * O De Acordo (ou a retirada dele) nas verificações marcadas (20/11/2026): só o responsável por cada uma (quem alterou os
-   * valores por último) ou o Administrador, no cenário editável. O De Acordo guarda a assinatura dos valores de hoje.
+   * O De Acordo (ou a retirada dele) nas verificações marcadas (20/11/2026): só o responsável imediato por cada uma (21/11/2026: o
+   * Analista, o Coordenador, o Estratégico ou o Gestor do recorte dela) ou o Administrador, no cenário editável. O De Acordo guarda
+   * a assinatura dos valores de hoje.
    */
   async acordarVerificacoes(id: string, chaves: string[], deAcordo: boolean, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
@@ -3452,10 +3561,10 @@ export const cenariosService = {
     if (!alvo.length || alvo.length !== pedidas.size) throw new CenarioError(409, "As verificações mudaram (corrigidas ou com outros valores): atualize a aba Verificações e marque de novo.");
     const deOutros = alvo.filter((v) => !daOAcordo(v, usuario));
     if (deOutros.length) {
-      const nomes = [...new Set(deOutros.map((v) => v.responsavel?.nome ?? "quem criou o cenário"))];
+      const nomes = [...new Set(deOutros.flatMap((v) => (v.responsaveis.length ? v.responsaveis.map((r) => r.nome) : ["quem criou o cenário"])))];
       throw new CenarioError(
         403,
-        `Só quem alterou os valores por último (ou o Administrador) dá ou retira o De Acordo: ${deOutros.length} ${deOutros.length === 1 ? "das marcadas é" : "das marcadas são"} de ${nomes.join(", ")}.`,
+        `Só o responsável (ou o Administrador) dá ou retira o De Acordo: ${deOutros.length} ${deOutros.length === 1 ? "das marcadas é" : "das marcadas são"} de ${nomes.join(", ")}.`,
       );
     }
     const prisma = getPrismaClient();
@@ -3510,7 +3619,7 @@ export const cenariosService = {
     await prisma.$transaction(
       async (tx) => {
         await aplicarMudancas(tx, id, mudancas, est);
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 300_000 },
     );
@@ -3575,6 +3684,7 @@ export const cenariosService = {
       ? await (async () => {
           const cad = await cadastrosDoQuadro(id);
           const ls = await getPrismaClient().cenarioLotacao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }], include: INCLUIR_DO_QUADRO });
+          const valores = await valoresDosBeneficios(getPrismaClient(), id);
           return {
             listas: { unidades: cad.unidades.map((u) => u.nome) },
             linhas: ls
@@ -3589,6 +3699,8 @@ export const cenariosService = {
                 funcao: l.funcao.nome,
                 centro: rotuloDoCentro(l.centroCusto),
                 meses: mesesDaLinha(l.meses),
+                // Os Benefícios de cada mês (21/11/2026): o valor, que no Excel se digita.
+                beneficios: mesesDaLinha(l.meses).map((m) => beneficiosDoMes(m, valores)),
                 // A coluna da referência (11/11/2026): o QL Realizado ou o último mês do cenário de origem.
                 referencia: fonte?.colunaDoQuadro ? fonte.colunaDoQuadro.daLinha(l) : null,
               })),
@@ -3743,6 +3855,12 @@ export const cenariosService = {
       : [null, null, []];
     const doCenario = new Map(linhasDoCenario.map((l) => [l.id, l]));
     const q = cad ? recorteDoQuadroCom(recorte, cad) : null;
+    // Os Benefícios Padrão do cenário (21/11/2026): o valor de cada mês das linhas de antes, para comparar com a coluna Benefícios.
+    const valoresDosBeneficiosDoCenario = comQuadro ? await valoresDosBeneficios(getPrismaClient(), id) : new Map<string, number>();
+    const comBeneficios = (lidos: MesDaLinha[], atuais: MesDaLinha[] | undefined) => lidos.map((m, k) => ({ ...m, ...beneficiosImportados(m, atuais?.[k], valoresDosBeneficiosDoCenario) }));
+    // O mesmo valor dos Benefícios (sem a coluna no arquivo, igual).
+    const beneficiosIguais = (atual: MesDaLinha, lido: MesDaLinha) =>
+      lido.beneficiosDigitados === undefined || Math.abs((lido.beneficiosDigitados ?? 0) - beneficiosDoMes(atual, valoresDosBeneficiosDoCenario)) < 0.005;
     // O item de cada mudança na tabela do Importar Valores (20/11/2026, pedido do Adão), que o usuário desmarca para não importar:
     // nas abas Matriz, Filial e Serviços, a aba e a linha de produto ou de obra (ou os Dias Úteis); nos Centros de Custo, o grupo;
     // nos Indicadores Manuais (mesmo dia, pedido do Adão), o indicador; nas demais, o trecho. As linhas do Quadro de Lotação vão
@@ -3794,7 +3912,7 @@ export const cenariosService = {
           continue;
         }
         if (!l.id) {
-          novasDoQuadro.push(dados);
+          novasDoQuadro.push({ ...dados, meses: comBeneficios(dados.meses, undefined) });
           continue;
         }
         const atual = doCenario.get(l.id);
@@ -3805,8 +3923,8 @@ export const cenariosService = {
         const antes = mesesDaLinha(atual.meses);
         const mudou =
           (["unidadeNegocioId", "vinculo", "funcaoId", "centroCustoId"] as const).some((k) => atual[k] !== dados[k]) ||
-          antes.some((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).some((x) => !iguais(m[x], dados.meses[k][x])));
-        if (mudou) alteradasDoQuadro.push({ ...dados, id: l.id });
+          antes.some((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).some((x) => !iguais(m[x], dados.meses[k][x])) || !beneficiosIguais(m, dados.meses[k]));
+        if (mudou) alteradasDoQuadro.push({ ...dados, id: l.id, meses: comBeneficios(dados.meses, antes) });
       }
       // A aba sem o Código da Linha (11/11/2026, pedido do Adão) substitui as linhas do cenário dos departamentos do arquivo
       // (e as dos centros fora dos grupos, que vão em todos): a linha igual (os cadastros e os meses) fica; a de mesmos
@@ -3815,7 +3933,8 @@ export const cenariosService = {
         const deps = r.substituiQuadro;
         const cadastrosDe = (x: Pick<DadosDaLinhaDoQuadro, "unidadeNegocioId" | "vinculo" | "funcaoId" | "centroCustoId">) =>
           [x.unidadeNegocioId, x.vinculo, x.funcaoId, x.centroCustoId].join("|");
-        const mesesIguais = (a: MesDaLinha[], b: MesDaLinha[]) => a.every((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).every((f) => iguais(m[f], b[k][f])));
+        const mesesIguais = (a: MesDaLinha[], b: MesDaLinha[]) =>
+          a.every((m, k) => (["colaboradores", "salarioBruto", "adicional"] as const).every((f) => iguais(m[f], b[k][f])) && beneficiosIguais(m, b[k]));
         const doEscopo = linhasDoCenario
           .filter((x) => {
             const d = departamentoDoCentro(x.centroCustoId, x.centroCusto.codigoRM);
@@ -3832,8 +3951,8 @@ export const cenariosService = {
           const par = doEscopo.find((y) => !y.usada && cadastrosDe(y.x) === cadastrosDe(d));
           if (par) {
             par.usada = true;
-            alteradasDoQuadro.push({ ...d, id: par.x.id });
-          } else novasDoQuadro.push(d);
+            alteradasDoQuadro.push({ ...d, id: par.x.id, meses: comBeneficios(d.meses, par.meses) });
+          } else novasDoQuadro.push({ ...d, meses: comBeneficios(d.meses, undefined) });
         }
         for (const y of doEscopo)
           if (!y.usada)
@@ -4121,23 +4240,26 @@ export const cenariosService = {
         const ordem = await tx.cenarioInvestimento.count({ where: { cenarioId: id } });
         for (const [k, i] of novos.entries()) await tx.cenarioInvestimento.create({ data: { ...camposDoInvestimento(i), cenarioId: id, criadoPorId: usuario.id || null, ordem: ordem + k } });
         const camposDaLinha = (l: DadosDaLinhaDoQuadro) => ({ unidadeNegocioId: l.unidadeNegocioId, vinculo: l.vinculo, funcaoId: l.funcaoId, centroCustoId: l.centroCustoId });
+        // Os Benefícios Padrão das linhas (21/11/2026), como a análise os devolveu: só os do cenário (um excluído depois da análise sai).
+        const doCenario = nQuadro ? new Set((await valoresDosBeneficios(tx, id)).keys()) : new Set<string>();
+        const comOsDoCenario = (meses: MesDaLinha[]) => meses.map((m) => ({ ...m, beneficiosPadrao: (m.beneficiosPadrao ?? []).filter((b) => doCenario.has(b)) }));
         // As linhas que saem (11/11/2026: a aba que substitui; os meses vão junto).
         if (excluidasDoQuadro.size) await tx.cenarioLotacao.deleteMany({ where: { cenarioId: id, id: { in: [...excluidasDoQuadro] } } });
         for (const l of alteradasDoQuadro.values()) {
           await tx.cenarioLotacao.update({ where: { id: l.id }, data: camposDaLinha(l) });
           await tx.cenarioLotacaoMes.deleteMany({ where: { linhaId: l.id } });
-          await tx.cenarioLotacaoMes.createMany({ data: mesesParaGravar(l.id, l.meses) });
+          await tx.cenarioLotacaoMes.createMany({ data: mesesParaGravar(l.id, comOsDoCenario(l.meses)) });
         }
         const ordemDoQuadro = await tx.cenarioLotacao.count({ where: { cenarioId: id } });
         for (const [k, l] of novasDoQuadro.entries()) {
           const nova = await tx.cenarioLotacao.create({ data: { ...camposDaLinha(l), cenarioId: id, ordem: ordemDoQuadro + k } });
-          await tx.cenarioLotacaoMes.createMany({ data: mesesParaGravar(nova.id, l.meses) });
+          await tx.cenarioLotacaoMes.createMany({ data: mesesParaGravar(nova.id, comOsDoCenario(l.meses)) });
         }
         for (const [chave, texto] of justificativas) {
           if (texto) await tx.cenarioPremissaJustificativa.upsert({ where: { cenarioId_chave: { cenarioId: id, chave } }, create: { cenarioId: id, chave, texto, usuarioNome: usuario.nome }, update: { texto, usuarioNome: usuario.nome } });
           else await tx.cenarioPremissaJustificativa.deleteMany({ where: { cenarioId: id, chave } });
         }
-        if (mudancas.size || nInvestimentos || nQuadro) await calcularAnalitico(tx, id);
+        if (mudancas.size || nInvestimentos || nQuadro) await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 300_000 },
     );
@@ -4168,56 +4290,65 @@ export const cenariosService = {
   },
 
   /**
-   * Recalcula a DRE do cenário analítico (14/10/2026: o botão Recalcular dos Resultados), com as regras de rateio de
-   * hoje: depois de editar uma regra com o cenário em aberto. Só nos cenários em aberto (sem marcação nem versão
-   * congelada). Os Reajustes das Premissas (11/11/2026) ficam como estão: aplicados ou não (Premissas / Reajustes).
+   * Recalcula a DRE do cenário analítico (14/10/2026: o botão Recalcular dos Resultados). Desde 21/11/2026 (pedido do Adão), as
+   * gravações das Configurações, das Premissas e dos Índices de Reajuste não refazem a DRE — só contam as alterações
+   * (`pendenciasDoRecalculo`) —, e é aqui que ela se refaz com todas, com os reajustes da caixa Aplicar Reajustes (aplicados ou
+   * removidos, com o registro das contas e das somas). Só nos cenários em aberto (sem marcação nem versão congelada).
    */
   async recalcular(id: string, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     exigirEditavel(c);
-    await getPrismaClient().$transaction(async (tx) => calcularAnalitico(tx, id), { timeout: 120_000 });
+    const p = pendenciasDoRecalculo(c);
+    // Os reajustes mudados: a caixa (aplicar ou remover) ou os Índices de Reajuste gravados com ela marcada.
+    const reajustesMudados = p.reajustes > 0 && (c.reajustesAplicados || c.reajustesCalculados);
+    await getPrismaClient().$transaction(
+      async (tx) => {
+        if (reajustesMudados)
+          await recalcularComReajustes(tx, c, usuario, (n) =>
+            !c.reajustesAplicados
+              ? `Reajustes removidos: ${deContas(n)} ${n === 1 ? "volta" : "voltam"} aos valores das premissas`
+              : c.reajustesCalculados
+                ? `Reajustes recalculados com os Índices de Reajuste gravados: ${deContas(n)}`
+                : `Reajustes aplicados: ${deContas(n)}`,
+          );
+        else await calcularAnalitico(tx, id);
+        await tx.cenarioReajuste.create({ data: { cenarioId: id, usuarioId: usuario.id || null, usuarioNome: usuario.nome, tipo: "RECALCULO", descricao: textoDoRecalculo(p, c.reajustesAplicados) } });
+      },
+      { timeout: 120_000 },
+    );
     await auditar({
       usuarioId: usuario.id,
       usuarioNome: usuario.nome,
       acao: "ALTERACAO",
       entidade: "cenario",
       entidadeId: id,
-      metadados: { cenario: c.nome, recalculo: "regras de rateio", reajustes: c.reajustesAplicados ? "aplicados" : "sem reajustes" },
-    });
-    await getPrismaClient().cenarioReajuste.create({
-      data: {
-        cenarioId: id,
-        usuarioId: usuario.id || null,
-        usuarioNome: usuario.nome,
-        tipo: "RECALCULO",
-        descricao: c.reajustesAplicados ? "Recalculado com as regras de rateio de hoje e os reajustes aplicados" : "Recalculado com as regras de rateio de hoje",
-      },
+      metadados: { cenario: c.nome, recalculo: p, reajustes: c.reajustesAplicados ? "aplicados" : "sem reajustes" },
     });
     return this.obter(id, usuario);
   },
 
   /**
-   * Aplica ou remove os Reajustes das Premissas na DRE (11/11/2026, pedido do Adão: o botão do quadro Aplicação dos
-   * Reajustes, depois de “Gravar Aplicação”). Aplicar multiplica cada conta com índice, em cada unidade e mês, pelo fator
-   * do mês; Remover faz o inverso (a DRE volta aos valores das premissas). Nunca duas vezes seguidas: aplicar o que já está
-   * aplicado (ou remover o que não está) é recusado.
+   * A caixa Aplicar Reajustes dos Resultados (21/11/2026, pedido do Adão; antes, o botão Aplicar / Remover Reajustes do quadro
+   * Índices de Reajuste das Configurações): marca ou desmarca os Reajustes das Premissas, que o Recalcular aplica na DRE (cada
+   * conta com índice, em cada unidade e mês, multiplicada pelo fator do mês) ou remove (a DRE volta aos valores das premissas).
+   * Marcada, as Configurações e as Premissas não se editam (como com os reajustes aplicados). A caixa já como pedida é recusada.
    */
   async aplicarReajustes(id: string, aplicar: boolean, usuario: Usuario) {
     const c = await obterOuFalhar(id, usuario);
-    // Uma ação da aba Reajustes das Configurações (12/11/2026): a Edição das Configurações vale para ela.
+    // A Edição das Configurações (12/11/2026) vale para ela: os reajustes travam as Configurações e as Premissas.
     exigirQuemCriou(c, usuario);
     exigirAnalitico(c);
     exigirEditavel(c);
     if (c.reajustesAplicados === aplicar) {
-      throw new CenarioError(409, aplicar ? "Os reajustes já estão aplicados na DRE: remova-os antes de aplicá-los de novo." : "Os reajustes não estão aplicados na DRE: não há o que remover.");
+      throw new CenarioError(409, aplicar ? "A caixa Aplicar Reajustes já está marcada: atualize a tela." : "A caixa Aplicar Reajustes já está desmarcada: atualize a tela.");
     }
-    if (aplicar && !fatoresDasContas(c).size) {
-      throw new CenarioError(409, "Nenhuma conta com índice na Aplicação dos Reajustes: escolha os índices das contas e grave a aplicação antes de aplicar.");
+    if (aplicar && !(await fatoresDoCenario(getPrismaClient(), c)).size) {
+      throw new CenarioError(409, "Nenhuma conta com Índice de Reajuste: inclua as combinações dos índices (Configurações / Comparativo e Reajustes) antes de aplicar.");
     }
-    await calcularComReajustes(id, usuario, c, { reajustesAplicados: aplicar }, (n) =>
-      aplicar ? `Reajustes aplicados (Premissas / Reajustes): ${deContas(n)}` : `Reajustes removidos: ${deContas(n)} ${n === 1 ? "volta" : "voltam"} aos valores das premissas`,
-    );
+    // Só se a caixa ainda está como estava: dois cliques seguidos não marcam (nem desmarcam) duas vezes.
+    const { count } = await getPrismaClient().cenario.updateMany({ where: { id, reajustesAplicados: c.reajustesAplicados }, data: { reajustesAplicados: aplicar } });
+    if (!count) throw new CenarioError(409, `A caixa Aplicar Reajustes já foi ${aplicar ? "marcada" : "desmarcada"} por outra gravação: atualize a tela.`);
     await auditar({
       usuarioId: usuario.id,
       usuarioNome: usuario.nome,
@@ -4226,29 +4357,100 @@ export const cenariosService = {
       entidadeId: id,
       antes: { reajustesAplicados: c.reajustesAplicados },
       depois: { reajustesAplicados: aplicar },
-      metadados: { cenario: c.nome, reajustes: aplicar ? "aplicados" : "removidos" },
+      metadados: { cenario: c.nome, reajustes: aplicar ? "marcados para aplicar no Recalcular" : "marcados para remover no Recalcular" },
     });
-    return this.reajustesDasPremissas(id, usuario);
+    return this.obter(id, usuario);
   },
 
   /**
-   * O comparativo do cenário (12/10/2026): o cenário comparado, os cenários que o usuário pode escolher e as linhas da
-   * DRE (14/10/2026: totais, atribuições e contas; antes, só os totais), com a variação máxima (em %) de cada linha
-   * verificada (nula: a linha não se verifica).
+   * O Compartilhar do cenário particular (21/11/2026, pedido do Adão; Configurações / Cenário, depois da Visualização; como o dos
+   * Painéis e Apresentações): os usuários convidados a ver o cenário — o perfil, quem convidou e quando, e se o perfil só lê os
+   * cenários — e, para quem muda a visualização (quem criou o cenário e o Administrador), os que ele pode convidar: os ativos que
+   * leem os cenários do tipo, menos os Administradores (que já veem todos), quem criou o cenário e os já convidados.
+   */
+  async compartilhamento(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    const base = c.tipo === "ANALITICO" ? "cenarios_analiticos" : "cenarios";
+    const podeCompartilhar = mudaVisualizacao(c, usuario);
+    const lista = compartilhamentosDe(c);
+    const [ativos, nomes] = await Promise.all([
+      carregarUsuariosAtivos(),
+      getPrismaClient().usuario.findMany({ where: { id: { in: lista.map((x) => x.usuarioId) } }, select: { id: true, nome: true, email: true } }),
+    ]);
+    const doId = new Map(ativos.map((a) => [a.sub, a]));
+    const cadastro = new Map(nomes.map((n) => [n.id, n]));
+    // Os sintéticos (cenarios_…) sem as permissões dos analíticos (cenarios_analiticos_…).
+    const doTipo = (p: string) => p.startsWith(`${base}_`) && (base === "cenarios_analiticos" || !p.startsWith("cenarios_analiticos"));
+    const soLe = (permissoes: string[]) => !permissoes.some((p) => doTipo(p) && p.endsWith(":editar"));
+    return {
+      podeCompartilhar,
+      particular: c.visualizacao === "PARTICULAR",
+      criadoPor: c.criadoPor,
+      usuarios: lista.map((x) => {
+        const a = doId.get(x.usuarioId);
+        const n = cadastro.get(x.usuarioId);
+        return {
+          id: x.usuarioId,
+          nome: n?.nome ?? "Usuário excluído",
+          email: n?.email ?? "",
+          perfil: a?.perfil.nome ?? null,
+          convidadoPor: x.convidadoPor,
+          convidadoEm: x.convidadoEm,
+          // Ativo e com a leitura dos cenários do tipo: vê o cenário; só lê, se o perfil não edita nenhuma tela deles.
+          ve: !!a?.permissions.includes(`${base}:ler`),
+          soLe: a ? soLe(a.permissions) : true,
+        };
+      }),
+      candidatos: podeCompartilhar
+        ? ativos
+            .filter((a) => a.permissions.includes(`${base}:ler`) && a.perfil.codigo !== CODIGO_ADMINISTRADOR && a.sub !== c.criadoPorId && !lista.some((x) => x.usuarioId === a.sub))
+            .map((a) => ({ id: a.sub, nome: a.nome, email: a.email, perfil: a.perfil.nome, soLe: soLe(a.permissions) }))
+            .sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"))
+        : [],
+    };
+  },
+
+  /** Convida usuários a ver o cenário particular (quem criou o cenário ou o Administrador): os da lista de candidatos do Compartilhar. */
+  async compartilhar(id: string, usuarios: string[], usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    if (!mudaVisualizacao(c, usuario)) throw new CenarioError(403, "Só quem criou o cenário ou o Administrador compartilha o cenário.");
+    if (c.visualizacao !== "PARTICULAR") throw new CenarioError(400, "O cenário é público: todos com acesso aos cenários já o veem.");
+    const { candidatos } = await this.compartilhamento(id, usuario);
+    const validos = candidatos.filter((x) => usuarios.includes(x.id));
+    if (!validos.length || validos.length !== new Set(usuarios).size) throw new CenarioError(400, "Convide só usuários ativos com acesso aos cenários (e que ainda não veem o cenário).");
+    const agora = new Date().toISOString();
+    const lista = [...compartilhamentosDe(c), ...validos.map((x) => ({ usuarioId: x.id, convidadoPor: usuario.nome, convidadoEm: agora }))];
+    await getPrismaClient().cenario.update({ where: { id }, data: { compartilhamentos: lista as unknown as Prisma.InputJsonValue } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, compartilhado: validos.map((x) => x.nome) } });
+    return this.compartilhamento(id, usuario);
+  },
+
+  /** Tira um usuário convidado do cenário (quem criou o cenário ou o Administrador): com o cenário particular, ele deixa de vê-lo. */
+  async removerCompartilhamento(id: string, usuarioId: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    if (!mudaVisualizacao(c, usuario)) throw new CenarioError(403, "Só quem criou o cenário ou o Administrador muda o compartilhamento do cenário.");
+    const lista = compartilhamentosDe(c);
+    if (!lista.some((x) => x.usuarioId === usuarioId)) throw new CenarioError(404, "O usuário não está no compartilhamento do cenário.");
+    const nome = (await getPrismaClient().usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }))?.nome ?? usuarioId;
+    await getPrismaClient().cenario.update({ where: { id }, data: { compartilhamentos: lista.filter((x) => x.usuarioId !== usuarioId) as unknown as Prisma.InputJsonValue } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, compartilhamentoRemovido: nome } });
+    return this.compartilhamento(id, usuario);
+  },
+
+  /**
+   * O comparativo do cenário (12/10/2026): o cenário comparado, os cenários que o usuário pode escolher e, nos sintéticos, as
+   * linhas da DRE (14/10/2026: totais, atribuições e contas; antes, só os totais), com a variação máxima (em %) de cada linha
+   * verificada (nula: a linha não se verifica). Nos analíticos (21/11/2026, pedido do Adão), a variação de cada conta vem das
+   * combinações dos Índices de Comparação (indicesCenario.ts): sem as linhas aqui.
    */
   async comparativo(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     // Os dois tipos (13/10/2026): o analítico se compara também com um sintético (o Orçamento Empresarial, por exemplo).
     const outros = (await getPrismaClient().cenario.findMany({ where: { id: { not: id } }, orderBy: [{ ano: "desc" }, { criadoEm: "desc" }] })).filter((o) => alcanca(o, usuario));
-    const limites = limitesDe(c);
-    const { linhas } = totaisDaDRE(await estruturaDRE());
-    const comparado = c.comparadoComId ? await getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true } }) : null;
-    // Nos analíticos (19/10/2026), o índice escolhido em cada linha (o da conta ou, sem ele, o do total ou da atribuição acima).
     const analitico = c.tipo === "ANALITICO";
-    const indices = indicesDe(c);
-    const escolhidos = (c.indicesDoComparativo ?? {}) as Record<string, string>;
-    const chaves = new Set(indices.map((i) => i.chave));
-    const indiceDa = (codigo: string, acima: string[]) => indiceDaLinha(escolhidos, chaves, codigo, acima);
+    const limites = (c.variacoesMaximas ?? {}) as Record<string, number>;
+    const linhas = analitico ? [] : totaisDaDRE(await estruturaDRE()).linhas;
+    const comparado = c.comparadoComId ? await getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true } }) : null;
     // A versão vigente (13/10/2026): a maior da família (o filtro "Apenas Vigentes" do modal de escolha).
     const ultimas = new Map<string, number>();
     for (const v of await getPrismaClient().cenario.findMany({ select: { id: true, familiaId: true, versao: true } })) {
@@ -4264,42 +4466,29 @@ export const cenariosService = {
         tipo: l.linha.tipo,
         verificada: l.folha,
         limite: l.folha ? limiteDaLinha(limites, l.linha.codigo, l.acima) : null,
-        indice: analitico && l.folha ? indiceDa(l.linha.codigo, l.acima) : null,
       })),
-      /** Os Índices de Reajuste (só nos analíticos; nulo nos sintéticos, que digitam a variação). */
-      indices: analitico ? indices : null,
     };
   },
 
   /**
-   * Grava o comparativo: o cenário comparado (nulo desliga o comparativo; as variações máximas ficam guardadas) e as
-   * variações máximas das linhas verificadas (as contas, e os totais e atribuições sem contas). Não vale para o cenário
-   * travado (14/10/2026: marcado ou com a versão congelada; antes, valia).
+   * Grava o comparativo: o cenário comparado (nulo desliga o comparativo; as variações máximas ficam guardadas) e, nos sintéticos,
+   * as variações máximas das linhas verificadas (as contas, e os totais e atribuições sem contas); nos analíticos (21/11/2026), só o
+   * cenário comparado — as variações vêm dos Índices de Comparação. Não vale para o cenário travado (14/10/2026: marcado ou com a
+   * versão congelada; antes, valia).
    */
-  async gravarComparativo(
-    id: string,
-    dados: { comparadoComId: string | null; limites?: Record<string, number | null>; indices?: Record<string, string | null> },
-    usuario: Usuario,
-  ) {
+  async gravarComparativo(id: string, dados: { comparadoComId: string | null; limites?: Record<string, number | null> }, usuario: Usuario) {
     const antes = await obterOuFalhar(id, usuario);
     exigirQuemCriou(antes, usuario);
     exigirEditavel(antes);
     if (dados.comparadoComId === id) throw new CenarioError(400, "Escolha outro cenário para comparar.");
     if (dados.comparadoComId) await obterOuFalhar(dados.comparadoComId, usuario);
-    const codigos = new Set(totaisDaDRE(await estruturaDRE()).verificadas.map((v) => v.linha.codigo));
-    // Nos analíticos (19/10/2026), o índice de cada conta (Configurações / Índices); nos sintéticos, a variação digitada.
     const analitico = antes.tipo === "ANALITICO";
-    const escolhas = analitico ? (dados.indices ?? {}) : (dados.limites ?? {});
-    const fora = Object.keys(escolhas).filter((k) => !codigos.has(k));
-    if (fora.length) throw new CenarioError(400, `Não são contas da DRE: ${fora.slice(0, 3).join(", ")}.`);
     let data: Prisma.CenarioUncheckedUpdateInput;
-    if (analitico) {
-      const chaves = new Set(indicesDe(antes).map((i) => i.chave));
-      const desconhecido = Object.values(dados.indices ?? {}).find((v) => v !== null && !chaves.has(v));
-      if (desconhecido) throw new CenarioError(400, "Um dos índices escolhidos não existe mais: atualize a tela (Configurações / Comparativo).");
-      const indicesDoComparativo = Object.fromEntries(Object.entries(dados.indices ?? {}).filter((e): e is [string, string] => e[1] !== null));
-      data = { comparadoComId: dados.comparadoComId, indicesDoComparativo };
-    } else {
+    if (analitico) data = { comparadoComId: dados.comparadoComId };
+    else {
+      const codigos = new Set(totaisDaDRE(await estruturaDRE()).verificadas.map((v) => v.linha.codigo));
+      const fora = Object.keys(dados.limites ?? {}).filter((k) => !codigos.has(k));
+      if (fora.length) throw new CenarioError(400, `Não são contas da DRE: ${fora.slice(0, 3).join(", ")}.`);
       const variacoesMaximas = Object.fromEntries(Object.entries(dados.limites ?? {}).filter((e): e is [string, number] => e[1] !== null));
       data = { comparadoComId: dados.comparadoComId, variacoesMaximas };
     }
@@ -4310,124 +4499,109 @@ export const cenariosService = {
       acao: "ALTERACAO",
       entidade: "cenario",
       entidadeId: id,
-      antes: { comparadoComId: antes.comparadoComId, ...(analitico ? { indicesDoComparativo: antes.indicesDoComparativo } : { variacoesMaximas: antes.variacoesMaximas }) },
-      depois: { comparadoComId: depois.comparadoComId, ...(analitico ? { indicesDoComparativo: depois.indicesDoComparativo } : { variacoesMaximas: depois.variacoesMaximas }) },
+      antes: { comparadoComId: antes.comparadoComId, ...(analitico ? {} : { variacoesMaximas: antes.variacoesMaximas }) },
+      depois: { comparadoComId: depois.comparadoComId, ...(analitico ? {} : { variacoesMaximas: depois.variacoesMaximas }) },
       metadados: { comparativo: true },
     });
     return this.comparativo(id, usuario);
   },
 
   /**
-   * Os Índices de Reajuste do cenário analítico (19/10/2026; Configurações / Índices), com quantas contas do Comparativo
-   * usam cada um.
+   * Os Índices de Comparação do cenário analítico (19/10/2026, de Referência; 21/11/2026, pedido do Adão: de Comparação, com as
+   * combinações de Unidade, Departamento, Atribuição e Conta), com quantas contas cada um alcança e o universo das combinações.
    */
   async indices(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
-    if (c.tipo !== "ANALITICO") throw new CenarioError(400, "Os Índices de Referência são dos cenários analíticos.");
-    const usos = await contasPorIndice(c);
-    return { indices: indicesDe(c).map((i) => ({ ...i, contas: usos.get(i.chave) ?? 0 })) };
+    if (c.tipo !== "ANALITICO") throw new CenarioError(400, "Os Índices de Comparação são dos cenários analíticos.");
+    const { universo, indices, porCelula } = await indicesDeComparacao(getPrismaClient(), c);
+    const usos = contasPorIndice(porCelula, universo);
+    return { indices: indices.map((i) => ({ ...i, contas: usos.get(i.chave) ?? 0 })), universo };
   },
 
   /**
-   * Grava a lista inteira dos Índices de Reajuste (19/10/2026): os de chave conhecida mudam, os sem chave entram (com uma
-   * chave nova) e os que faltam saem — menos os que o Comparativo usa (troque o índice das contas antes). Vale o que vale
-   * para o comparativo: só quem criou o cenário (ou o Administrador) e com o cenário editável.
+   * Grava a lista inteira dos Índices de Comparação (19/10/2026; 21/11/2026, com as combinações): os de chave conhecida mudam, os
+   * sem chave entram (com uma chave nova) e os que faltam saem, com as combinações deles. As combinações se conferem: cada uma com
+   * ao menos uma conta, e nenhuma conta em duas (do mesmo índice ou de outro). Só quem criou o cenário (ou o Administrador), com o
+   * cenário editável.
    */
-  async gravarIndices(id: string, lista: Array<{ chave?: string | null; descricao: string; observacao?: string | null; variacao: number }>, usuario: Usuario) {
+  async gravarIndices(id: string, lista: Array<{ chave?: string | null; descricao: string; observacao?: string | null; variacao: number; combinacoes: Combinacao[] }>, usuario: Usuario) {
     const antes = await obterOuFalhar(id, usuario);
-    if (antes.tipo !== "ANALITICO") throw new CenarioError(400, "Os Índices de Referência são dos cenários analíticos.");
+    if (antes.tipo !== "ANALITICO") throw new CenarioError(400, "Os Índices de Comparação são dos cenários analíticos.");
     exigirQuemCriou(antes, usuario);
     exigirEditavel(antes);
-    const atuais = indicesDe(antes);
+    const { indices: atuais, universo } = await indicesDeComparacao(getPrismaClient(), antes);
     const conhecidas = new Set(atuais.map((i) => i.chave));
     const repetida = lista.find((i, k) => lista.findIndex((x) => x.descricao.trim().toLowerCase() === i.descricao.trim().toLowerCase()) !== k);
     if (repetida) throw new CenarioError(400, `O índice ${repetida.descricao.trim()} aparece duas vezes.`);
     let proxima = Math.max(0, ...atuais.map((i) => Number(/^i(\d+)$/.exec(i.chave)?.[1] ?? 0))) + 1;
-    const novos: IndiceDeReajuste[] = lista.map((i) => ({
+    const novos: IndiceDeComparacao[] = lista.map((i) => ({
       chave: i.chave && conhecidas.has(i.chave) ? i.chave : `i${proxima++}`,
       descricao: i.descricao.trim(),
       observacao: i.observacao?.trim() || null,
       variacao: i.variacao,
+      combinacoes: i.combinacoes.map(lerCombinacao),
     }));
-    const ficam = new Set(novos.map((i) => i.chave));
-    // Em uso: escolhido em alguma linha do Comparativo (a contagem é a das contas, com as que o herdam de um total).
-    const usos = await contasPorIndice(antes);
-    const escolhidos = new Set(Object.values((antes.indicesDoComparativo ?? {}) as Record<string, string>));
-    const emUso = atuais.filter((i) => !ficam.has(i.chave) && escolhidos.has(i.chave));
-    if (emUso.length) {
-      throw new CenarioError(
-        409,
-        `${emUso.map((i) => `${i.descricao} (${usos.get(i.chave) ?? 0} ${usos.get(i.chave) === 1 ? "conta" : "contas"})`).join(", ")}: ${emUso.length === 1 ? "o índice está" : "os índices estão"} no Comparativo. Troque o índice dessas contas antes de excluir.`,
-      );
-    }
-    const depois = await getPrismaClient().cenario.update({ where: { id }, data: { indicesReajuste: novos as unknown as Prisma.InputJsonValue } });
+    const erros = errosDasCombinacoes(novos, universo);
+    if (erros.length) throw new CenarioError(400, erros.slice(0, 4).join(" "));
+    // O formato das combinações (21/11/2026): a escolha por conta de antes (indicesDoComparativo) deixa de valer.
+    const depois = await getPrismaClient().cenario.update({ where: { id }, data: { indicesReajuste: novos as unknown as Prisma.InputJsonValue, indicesDoComparativo: {} } });
     await auditar({
       usuarioId: usuario.id,
       usuarioNome: usuario.nome,
       acao: "ALTERACAO",
       entidade: "cenario",
       entidadeId: id,
-      antes: { indicesReajuste: antes.indicesReajuste },
+      antes: { indicesReajuste: antes.indicesReajuste, indicesDoComparativo: antes.indicesDoComparativo },
       depois: { indicesReajuste: depois.indicesReajuste },
-      metadados: { indices: true },
+      metadados: { indices: "comparação" },
     });
     return this.indices(id, usuario);
   },
 
   /**
-   * A aba Reajustes das Premissas do cenário analítico (11/11/2026, pedido do Adão): os Índices de Reajuste (com até
-   * quatro reajustes, o Valor (%) e o Inicia Em, e quantas contas usam cada um), as linhas da Aplicação dos Reajustes (os
-   * índices de cada conta: o 1º e, desde 19/11/2026, o 2º) e se os reajustes estão aplicados na DRE.
+   * Os Índices de Reajuste do cenário analítico (11/11/2026, pedido do Adão; 21/11/2026, com as combinações de Unidade,
+   * Departamento, Atribuição, Conta e Venda): cada um com até quatro reajustes (o Valor (%) e o Inicia Em) e quantas contas
+   * alcança, o universo das combinações e se os reajustes estão aplicados na DRE.
    */
   async reajustesDasPremissas(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
-    const indices = indicesDosReajustes(c);
-    const chaves = new Set(indices.map((i) => i.chave));
-    const aplicacao = aplicacaoDosReajustes(c);
-    const linhas = linhasDosReajustes(await estruturaDRE());
-    const contas = new Set(linhas.filter((l) => l.conta).map((l) => l.linha.codigo));
-    // O 1º e o 2º índice de uma conta (os que ainda existem): nos Custos de Produção, os da conta na unidade (19/11/2026) ou,
-    // sem eles, os gravados antes para a conta.
-    const indiceDa = (codigo: string, k: 0 | 1) => {
-      const chave = contas.has(codigo) ? indicesDaLinha(aplicacao, codigo)?.[k] : null;
-      return chave && chaves.has(chave) ? chave : null;
-    };
-    // Quantas contas usam cada índice (no 1º ou no 2º; a da Matriz e a da Filial contam cada uma).
-    const usos = new Map<string, number>();
-    for (const codigo of contas) {
-      for (const chave of new Set([indiceDa(codigo, 0), indiceDa(codigo, 1)].filter((x): x is string => !!x))) usos.set(chave, (usos.get(chave) ?? 0) + 1);
-    }
+    const prisma = getPrismaClient();
+    const est = await estruturaDRE();
+    const [{ universo, indices, porCelula }, fatores] = await Promise.all([indicesDeReajuste(prisma, c, est), fatoresDoCenario(prisma, c, est)]);
+    const usos = contasPorIndice(porCelula, universo);
     return {
       ano: c.ano,
       meses: MESES_1_A_12.map((m) => ({ mes: m, rotulo: rotuloMes(c.ano, m) })),
       editavel: !c.marcacao && !c.versaoSalvaEm,
       aplicados: c.reajustesAplicados,
-      /** As contas que os reajustes mudam (as com um índice que muda algum mês): sem nenhuma, não há o que aplicar. */
-      contasComReajuste: fatoresDasContas(c).size,
+      /** As contas que os reajustes mudam (as com um índice que muda algum mês, cada uma numa unidade): sem nenhuma, não há o que aplicar. */
+      contasComReajuste: new Set(
+        [...fatores.keys()].map((k) => {
+          const d = daChave(k);
+          return `${d.unidade}|${d.codigo}`;
+        }),
+      ).size,
       indices: indices.map((i) => ({ ...i, contas: usos.get(i.chave) ?? 0 })),
-      linhas: linhas.map((l) => ({
-        codigo: l.linha.codigo,
-        descricao: l.linha.descricao,
-        tipo: l.linha.tipo,
-        verificada: l.conta,
-        indice: indiceDa(l.linha.codigo, 0),
-        indice2: indiceDa(l.linha.codigo, 1),
-      })),
+      universo,
     };
   },
 
   /**
-   * Grava a lista inteira dos Índices de Reajuste das Premissas (11/11/2026), como a dos Índices de Referência: os de chave
-   * conhecida mudam, os sem chave entram e os que faltam saem — menos os que a Aplicação dos Reajustes usa. Com os
-   * reajustes aplicados, a DRE se recalcula com os índices novos.
+   * Grava a lista inteira dos Índices de Reajuste (11/11/2026; 21/11/2026, com as combinações), como a dos Índices de Comparação:
+   * os de chave conhecida mudam, os sem chave entram e os que faltam saem, com as combinações deles (conferidas: nenhuma conta em
+   * dois índices). Com os reajustes aplicados, a DRE se recalcula com os índices novos.
    */
-  async gravarIndicesDosReajustes(id: string, lista: Array<{ chave?: string | null; descricao: string; observacao?: string | null; reajustes: ReajusteDoIndice[] }>, usuario: Usuario) {
+  async gravarIndicesDosReajustes(
+    id: string,
+    lista: Array<{ chave?: string | null; descricao: string; observacao?: string | null; reajustes: ReajusteDoIndice[]; combinacoes: Combinacao[] }>,
+    usuario: Usuario,
+  ) {
     const antes = await obterOuFalhar(id, usuario);
     exigirQuemCriou(antes, usuario);
     exigirAnalitico(antes);
     exigirEditavel(antes);
-    const atuais = indicesDosReajustes(antes);
+    const { indices: atuais, universo } = await indicesDeReajuste(getPrismaClient(), antes);
     const conhecidas = new Set(atuais.map((i) => i.chave));
     const repetida = lista.find((i, k) => lista.findIndex((x) => x.descricao.trim().toLowerCase() === i.descricao.trim().toLowerCase()) !== k);
     if (repetida) throw new CenarioError(400, `O índice ${repetida.descricao.trim()} aparece duas vezes.`);
@@ -4436,74 +4610,28 @@ export const cenariosService = {
       if (erro) throw new CenarioError(400, erro);
     }
     let proxima = Math.max(0, ...atuais.map((i) => Number(/^r(\d+)$/.exec(i.chave)?.[1] ?? 0))) + 1;
-    const novos: IndiceDosReajustes[] = lista.map((i) => ({
+    const novos: IndiceDeReajusteComCombinacoes[] = lista.map((i) => ({
       chave: i.chave && conhecidas.has(i.chave) ? i.chave : `r${proxima++}`,
       descricao: i.descricao.trim(),
       observacao: i.observacao?.trim() || null,
       reajustes: i.reajustes.map((r) => ({ valor: r.valor, mes: r.mes })),
+      combinacoes: i.combinacoes.map(lerCombinacao),
     }));
-    const ficam = new Set(novos.map((i) => i.chave));
-    const usos = usosDosIndices(aplicacaoDosReajustes(antes));
-    const emUso = atuais.filter((i) => !ficam.has(i.chave) && usos.has(i.chave));
-    if (emUso.length) {
-      throw new CenarioError(
-        409,
-        `${emUso.map((i) => `${i.descricao} (${deContas(usos.get(i.chave) ?? 0)})`).join(", ")}: ${emUso.length === 1 ? "o índice está" : "os índices estão"} na Aplicação dos Reajustes. Troque o índice dessas contas antes de excluir.`,
-      );
-    }
-    const data = { indicesDosReajustes: novos as unknown as Prisma.InputJsonValue };
-    if (antes.reajustesAplicados) await calcularComReajustes(id, usuario, antes, data, (n) => `Índices de Reajuste gravados, com os reajustes aplicados (${deContas(n)})`);
-    else await getPrismaClient().cenario.update({ where: { id }, data });
+    const erros = errosDasCombinacoes(novos, universo);
+    if (erros.length) throw new CenarioError(400, erros.slice(0, 4).join(" "));
+    // O formato das combinações (21/11/2026): a Aplicação dos Reajustes de antes (por conta) deixa de valer.
+    const data = { indicesDosReajustes: novos as unknown as Prisma.InputJsonValue, aplicacaoDosReajustes: {} };
+    // Com a caixa Aplicar Reajustes marcada (21/11/2026), a DRE fica pendente do Recalcular (os Reajustes).
+    await getPrismaClient().cenario.update({ where: { id }, data: { ...data, ...(antes.reajustesAplicados ? { recalculoReajustes: { increment: 1 } } : {}) } });
     await auditar({
       usuarioId: usuario.id,
       usuarioNome: usuario.nome,
       acao: "ALTERACAO",
       entidade: "cenario",
       entidadeId: id,
-      antes: { indicesDosReajustes: antes.indicesDosReajustes },
+      antes: { indicesDosReajustes: antes.indicesDosReajustes, aplicacaoDosReajustes: antes.aplicacaoDosReajustes },
       depois: { indicesDosReajustes: novos },
       metadados: { reajustes: "índices" },
-    });
-    return this.reajustesDasPremissas(id, usuario);
-  },
-
-  /**
-   * Grava a Aplicação dos Reajustes (11/11/2026): os índices de cada conta — desde 19/11/2026 (pedido do Adão), até dois, o
-   * 1º e o 2º, que rodam nessa ordem; um só (o formato de antes) vale como o 1º; nulo: sem reajuste. Sem o 1º, o 2º vira o 1º;
-   * o mesmo índice nas duas colunas é recusado. Com os reajustes aplicados, a DRE se recalcula.
-   */
-  async gravarAplicacaoDosReajustes(id: string, indices: Record<string, string | null | [string | null, string | null]>, usuario: Usuario) {
-    const antes = await obterOuFalhar(id, usuario);
-    exigirQuemCriou(antes, usuario);
-    exigirAnalitico(antes);
-    exigirEditavel(antes);
-    const linhasDaDRE = linhasDosReajustes(await estruturaDRE()).filter((l) => l.conta);
-    // As chaves das contas (nos Custos de Produção, "unidade|código", 19/11/2026) e o nome de cada uma, com a unidade.
-    const nome = new Map(linhasDaDRE.map((l) => [daChave(l.linha.codigo).codigo, l.linha.descricao]));
-    const contas = new Map(linhasDaDRE.map((l) => [l.linha.codigo, nomeDaChave(l.linha.codigo, nome)]));
-    const fora = Object.keys(indices).filter((k) => !contas.has(k));
-    if (fora.length) throw new CenarioError(400, `Não são contas da DRE: ${fora.slice(0, 3).join(", ")}.`);
-    const chaves = new Set(indicesDosReajustes(antes).map((i) => i.chave));
-    const aplicacao: Record<string, IndicesDaConta> = {};
-    for (const [codigo, valor] of Object.entries(indices)) {
-      const escolhidos = (Array.isArray(valor) ? valor : [valor]).filter((x): x is string => !!x);
-      if (!escolhidos.length) continue;
-      if (escolhidos.some((v) => !chaves.has(v))) throw new CenarioError(400, "Um dos índices escolhidos não existe mais: atualize a tela (Configurações / Reajustes).");
-      if (escolhidos.length > 1 && escolhidos[0] === escolhidos[1]) throw new CenarioError(400, `${contas.get(codigo)}: o 1º e o 2º Índice de Reajuste são o mesmo; escolha outro no 2º ou deixe-o em branco.`);
-      aplicacao[codigo] = [escolhidos[0], escolhidos[1] ?? null];
-    }
-    const data = { aplicacaoDosReajustes: aplicacao };
-    if (antes.reajustesAplicados) await calcularComReajustes(id, usuario, antes, data, (n) => `Aplicação dos Reajustes gravada, com os reajustes aplicados (${deContas(n)})`);
-    else await getPrismaClient().cenario.update({ where: { id }, data });
-    await auditar({
-      usuarioId: usuario.id,
-      usuarioNome: usuario.nome,
-      acao: "ALTERACAO",
-      entidade: "cenario",
-      entidadeId: id,
-      antes: { aplicacaoDosReajustes: antes.aplicacaoDosReajustes },
-      depois: { aplicacaoDosReajustes: aplicacao },
-      metadados: { reajustes: "aplicação" },
     });
     return this.reajustesDasPremissas(id, usuario);
   },
@@ -4668,7 +4796,7 @@ export const cenariosService = {
         if (apagar) await apagarValoresDoGrupo(tx, id, apagar);
         if (atual) await tx.cenarioCentroCusto.update({ where: { id: atual.id }, data: campos });
         else await tx.cenarioCentroCusto.create({ data: { ...campos, cenarioId: id, origemId: null, ordem: (await tx.cenarioCentroCusto.count({ where: { cenarioId: id } })) + 1 } });
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
       },
       { timeout: 120_000 },
     );
@@ -4705,7 +4833,7 @@ export const cenariosService = {
       async (tx) => {
         if (apagar) await apagarValoresDoGrupo(tx, id, apagar);
         await tx.cenarioCentroCusto.delete({ where: { id: centroId } });
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
       },
       { timeout: 120_000 },
     );
@@ -4737,7 +4865,7 @@ export const cenariosService = {
       async (tx) => {
         await tx.cenarioCentroCusto.updateMany({ where: { id: { in: doGrupo.map((x) => x.id) } }, data: { nomeControladoria: novo } });
         await renomearValoresDoGrupo(tx, id, de, novo);
-        await calcularAnalitico(tx, id);
+        await alteradoSemRecalcular(tx, id, "configuracoes");
       },
       { timeout: 120_000 },
     );
@@ -4756,17 +4884,18 @@ export const cenariosService = {
     const trazidos = await getPrismaClient().$transaction(
       async (tx) => {
         const r = await trazerNovosDosCadastros(tx, id);
-        if (r.centros.length) await calcularAnalitico(tx, id);
+        if (r.centros.length || r.regras.length) await alteradoSemRecalcular(tx, id, "configuracoes");
         return r;
       },
       { timeout: 120_000 },
     );
-    if (trazidos.unidades.length || trazidos.centros.length || trazidos.departamentos.length || trazidos.redistribuicoes.length) {
+    if (trazidos.unidades.length || trazidos.centros.length || trazidos.departamentos.length || trazidos.redistribuicoes.length || trazidos.regras.length) {
       const partes = [
         trazidos.unidades.length ? `${trazidos.unidades.length} ${trazidos.unidades.length === 1 ? "unidade" : "unidades"}` : "",
         trazidos.departamentos.length ? `${trazidos.departamentos.length} ${trazidos.departamentos.length === 1 ? "departamento" : "departamentos"}` : "",
         trazidos.centros.length ? `${trazidos.centros.length} ${trazidos.centros.length === 1 ? "centro de custo" : "centros de custo"}` : "",
         trazidos.redistribuicoes.length ? `${trazidos.redistribuicoes.length} ${trazidos.redistribuicoes.length === 1 ? "redistribuição de gastos" : "redistribuições de gastos"}` : "",
+        trazidos.regras.length ? `${trazidos.regras.length} ${trazidos.regras.length === 1 ? "regra de rateio" : "regras de rateio"}` : "",
       ].filter(Boolean);
       await this.registrarCadastroNoHistorico(id, usuario, `Cadastros do cenário (Configurações): ${partes.join(" e ")} dos Cadastros Gerais`);
       await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, trazerNovos: trazidos } });
@@ -4774,6 +4903,223 @@ export const cenariosService = {
     return trazidos;
   },
 
+
+  // Os Benefícios Padrão (21/11/2026, pedido do Adão): a aba Benefícios Padrão das Configurações dos analíticos, depois de Centros de
+  // Custo (o cadastro do cenário: o Nome, a Descrição e o Valor Mensal por colaborador), e o botão Benefícios da aba Quadro de Lotação
+  // das Premissas, que os aplica às linhas e aos meses marcados (quadroDoCenario.ts). Editam como as outras cópias dos cadastros; a
+  // mudança num benefício em uso recalcula a DRE.
+
+  /** A aba Benefícios Padrão: os benefícios do cenário, com os valores (as linhas × os meses) do Quadro de Lotação que usam cada um. */
+  async beneficiosDoCenario(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const prisma = getPrismaClient();
+    const [bs, meses] = await Promise.all([
+      prisma.cenarioBeneficioPadrao.findMany({ where: { cenarioId: id }, orderBy: [{ ordem: "asc" }, { nome: "asc" }] }),
+      prisma.cenarioLotacaoMes.findMany({ where: { linha: { cenarioId: id }, NOT: { beneficiosPadrao: { isEmpty: true } } }, select: { linhaId: true, beneficiosPadrao: true } }),
+    ]);
+    const uso = (b: string) => {
+      const ms = meses.filter((m) => m.beneficiosPadrao.includes(b));
+      return { valores: ms.length, linhas: new Set(ms.map((m) => m.linhaId)).size };
+    };
+    return {
+      editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
+      beneficios: bs.map((b) => ({ id: b.id, nome: b.nome, descricao: b.descricao, valorMensal: Number(b.valorMensal), ...uso(b.id) })),
+    };
+  },
+
+  /** Inclui (beneficioId nulo) ou altera um Benefício Padrão do cenário: o Nome (único no cenário), a Descrição e o Valor Mensal (/ Colab.). */
+  async gravarBeneficioDoCenario(id: string, beneficioId: string | null, dados: { nome: string; descricao: string | null; valorMensal: number }, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = beneficioId ? await prisma.cenarioBeneficioPadrao.findFirst({ where: { id: beneficioId, cenarioId: id } }) : null;
+    if (beneficioId && !antes) throw new CenarioError(404, "Benefício não encontrado no cenário.");
+    const nome = dados.nome.trim();
+    if (!nome) throw new CenarioError(400, "Dê um nome ao benefício.");
+    if (!Number.isFinite(dados.valorMensal) || dados.valorMensal < 0 || dados.valorMensal > 1e7) throw new CenarioError(400, "O Valor Mensal (/ Colab.) é um número de zero para cima.");
+    const mesmoNome = await prisma.cenarioBeneficioPadrao.findFirst({ where: { cenarioId: id, nome: { equals: nome, mode: "insensitive" }, ...(beneficioId ? { id: { not: beneficioId } } : {}) } });
+    if (mesmoNome) throw new CenarioError(409, `Já há o benefício ${mesmoNome.nome} no cenário.`);
+    const campos = { nome, descricao: dados.descricao?.trim() || null, valorMensal: new Prisma.Decimal(dados.valorMensal.toFixed(2)) };
+    // O valor de um benefício em uso muda os Encargos e Benefícios dos grupos: a DRE se recalcula.
+    const emUso = antes ? await prisma.cenarioLotacaoMes.count({ where: { linha: { cenarioId: id }, beneficiosPadrao: { has: antes.id } } }) : 0;
+    await prisma.$transaction(
+      async (tx) => {
+        if (antes) await tx.cenarioBeneficioPadrao.update({ where: { id: antes.id }, data: campos });
+        else await tx.cenarioBeneficioPadrao.create({ data: { ...campos, cenarioId: id, ordem: (await tx.cenarioBeneficioPadrao.count({ where: { cenarioId: id } })) + 1 } });
+        if (emUso && Number(antes!.valorMensal) !== dados.valorMensal) await alteradoSemRecalcular(tx, id, "configuracoes");
+      },
+      { timeout: 120_000 },
+    );
+    const valor = dados.valorMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    await this.registrarCadastroNoHistorico(id, usuario, `Benefícios Padrão (Configurações): ${antes ? "alterado" : "incluído"} o benefício ${nome} (R$ ${valor} por colaborador)`);
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: antes ? "ALTERACAO" : "CRIACAO", entidade: "cenario_beneficio_padrao", entidadeId: beneficioId ?? id, antes: antes ?? undefined, depois: dados, metadados: { cenario: c.nome } });
+    return this.beneficiosDoCenario(id, usuario);
+  },
+
+  /** Exclui um Benefício Padrão do cenário: ele sai também dos meses do Quadro de Lotação em que está aplicado (e a DRE se recalcula). */
+  async excluirBeneficioDoCenario(id: string, beneficioId: string, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const antes = await prisma.cenarioBeneficioPadrao.findFirst({ where: { id: beneficioId, cenarioId: id } });
+    if (!antes) throw new CenarioError(404, "Benefício não encontrado no cenário.");
+    const meses = await prisma.cenarioLotacaoMes.findMany({ where: { linha: { cenarioId: id }, beneficiosPadrao: { has: beneficioId } }, select: { linhaId: true, mes: true, beneficiosPadrao: true } });
+    await prisma.$transaction(
+      async (tx) => {
+        for (const m of meses)
+          await tx.cenarioLotacaoMes.update({ where: { linhaId_mes: { linhaId: m.linhaId, mes: m.mes } }, data: { beneficiosPadrao: m.beneficiosPadrao.filter((b) => b !== beneficioId) } });
+        await tx.cenarioBeneficioPadrao.delete({ where: { id: beneficioId } });
+        if (meses.length) await alteradoSemRecalcular(tx, id, "configuracoes");
+      },
+      { timeout: 120_000 },
+    );
+    await this.registrarCadastroNoHistorico(
+      id,
+      usuario,
+      `Benefícios Padrão (Configurações): excluído o benefício ${antes.nome}${meses.length ? `, que saiu de ${meses.length} ${meses.length === 1 ? "valor" : "valores"} do Quadro de Lotação` : ""}`,
+    );
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_beneficio_padrao", entidadeId: beneficioId, antes, metadados: { cenario: c.nome, meses: meses.length } });
+    return this.beneficiosDoCenario(id, usuario);
+  },
+
+  /**
+   * O botão Benefícios da aba Quadro de Lotação (21/11/2026, pedido do Adão): os Benefícios Padrão marcados no modal passam a ser os
+   * de cada linha marcada nos meses marcados (no lugar dos que havia e do valor digitado; sem nenhum marcado, os meses ficam sem
+   * benefícios). Os Benefícios do mês são os colaboradores da linha × a soma do Valor Mensal deles; a DRE se recalcula.
+   */
+  async aplicarBeneficiosNoQuadro(id: string, dados: { linhas: string[]; meses: number[]; beneficios: string[] }, usuario: Usuario) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const prisma = getPrismaClient();
+    const ids = [...new Set(dados.linhas)];
+    const meses = [...new Set(dados.meses)].filter((m) => Number.isInteger(m) && m >= 1 && m <= 12).sort((a, b) => a - b);
+    if (!ids.length || !meses.length) throw new CenarioError(400, "Marque ao menos uma linha e um mês do Quadro de Lotação.");
+    const [linhas, beneficios] = await Promise.all([
+      prisma.cenarioLotacao.findMany({ where: { cenarioId: id, id: { in: ids } }, include: INCLUIR_DO_QUADRO }),
+      prisma.cenarioBeneficioPadrao.findMany({ where: { cenarioId: id } }),
+    ]);
+    if (linhas.length !== ids.length) throw new CenarioError(404, "Alguma linha do Quadro de Lotação não foi encontrada: atualize a tela.");
+    const escolhidos = [...new Set(dados.beneficios)];
+    if (escolhidos.some((b) => !beneficios.some((x) => x.id === b))) throw new CenarioError(400, "Algum benefício não existe mais: atualize a tela (Configurações / Benefícios Padrão).");
+    const q = await recorteDoQuadro(recorteDoCenario(c, usuario), id);
+    exigirNoRecorte(linhas.every((l) => q.ve(l.centroCustoId)));
+    const valores = new Map(beneficios.map((b) => [b.id, Number(b.valorMensal)]));
+    let somaAntes = 0;
+    let somaDepois = 0;
+    for (const l of linhas) {
+      const ms = mesesDaLinha(l.meses);
+      for (const mes of meses) {
+        somaAntes += beneficiosDoMes(ms[mes - 1], valores);
+        somaDepois += beneficiosDoMes({ ...ms[mes - 1], beneficiosPadrao: escolhidos, beneficiosDigitados: null }, valores);
+      }
+    }
+    await prisma.$transaction(
+      async (tx) => {
+        for (const l of linhas)
+          for (const mes of meses)
+            await tx.cenarioLotacaoMes.upsert({
+              where: { linhaId_mes: { linhaId: l.id, mes } },
+              create: { linhaId: l.id, mes, beneficiosPadrao: escolhidos, beneficios: null },
+              update: { beneficiosPadrao: escolhidos, beneficios: null },
+            });
+        await alteradoSemRecalcular(tx, id, "premissas");
+      },
+      { timeout: 120_000 },
+    );
+    const nomes = beneficios.filter((b) => escolhidos.includes(b.id)).map((b) => b.nome);
+    await prisma.cenarioReajuste.create({
+      data: {
+        cenarioId: id,
+        usuarioId: usuario.id || null,
+        usuarioNome: usuario.nome,
+        tipo: "MARCADOS",
+        modo: "DIGITADO",
+        contas: linhas.map((l) => ({ codigo: `QUADRO|${l.id}`, descricao: nomeDaLinha(l) })),
+        alcance: trechos(linhas.map((l) => q.trecho(l.centroCustoId))),
+        meses,
+        valores: linhas.length * meses.length,
+        somaAntes,
+        somaDepois,
+        descricao: `Quadro de Lotação · Benefícios: ${nomes.length ? nomes.join(", ") : "nenhum (os meses ficaram sem benefícios)"}`.slice(0, 900),
+      },
+    });
+    await auditar({
+      usuarioId: usuario.id,
+      usuarioNome: usuario.nome,
+      acao: "ALTERACAO",
+      entidade: "cenario_lotacao",
+      entidadeId: id,
+      metadados: { cenario: c.nome, beneficios: nomes, meses, linhas: linhas.map(nomeDaLinha).slice(0, 50) },
+    });
+    return this.quadro(id, usuario);
+  },
+
+  // Cadastros por cenário (21/11/2026, pedido do Adão): a aba Regras de Rateio das Configurações dos analíticos, depois de Centros
+  // de Custo (regrasDoCenario.ts): a cópia das regras de Cadastros Gerais com que o cenário calcula os rateios. Edita como as
+  // outras cópias (a Edição das Configurações, com o cenário em aberto e sem os reajustes aplicados); cada mudança recalcula a DRE
+  // do cenário e fica no Histórico (aba Alterações).
+
+  /** A aba Regras de Rateio: as regras da cópia, os conjuntos fixos, as opções do Novo Rateio e os avisos do exercício. */
+  async regrasDoCenarioAba(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    return { editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados, ...(await abaDasRegras(getPrismaClient(), id, c.ano)) };
+  },
+
+  /** Grava uma mudança nas regras do cenário (`mudar`, na transação) e recalcula a DRE, com o registro no Histórico. */
+  async mudarRegrasDoCenario(id: string, usuario: Usuario, mudar: (tx: Prisma.TransactionClient) => Promise<string>) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirQuemCriou(c, usuario);
+    exigirAnalitico(c);
+    exigirEditavel(c);
+    exigirSemReajustes(c);
+    const descricao = await daRegra(() =>
+      getPrismaClient().$transaction(
+        async (tx) => {
+          const d = await mudar(tx);
+          await alteradoSemRecalcular(tx, id, "configuracoes", false);
+          return d;
+        },
+        { timeout: 120_000 },
+      ),
+    );
+    await this.registrarCadastroNoHistorico(id, usuario, descricao);
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario_regra_rateio", entidadeId: id, metadados: { cenario: c.nome, regras: descricao } });
+    return this.regrasDoCenarioAba(id, usuario);
+  },
+
+  /** Inclui (regraId nulo) ou altera uma regra paramétrica do cenário. */
+  async gravarRegraDoCenario(id: string, regraId: string | null, dados: { rotulo: string; chave: string; origemDoVolume: string; inicio: string; fim: string | null }, usuario: Usuario) {
+    return this.mudarRegrasDoCenario(id, usuario, (tx) => gravarRegraParametrica(tx, id, regraId, dados));
+  },
+
+  /** Exclui uma regra paramétrica do cenário. */
+  async excluirRegraDoCenario(id: string, regraId: string, usuario: Usuario) {
+    return this.mudarRegrasDoCenario(id, usuario, (tx) => excluirRegraParametrica(tx, id, regraId));
+  },
+
+  /** Grava um conjunto de percentuais fixos do cenário (novo, ou o de inicioAnterior). */
+  async gravarFixosDoCenario(
+    id: string,
+    dados: { chave: string; inicioAnterior: string | null; inicio: string; fim: string | null; percentuais: Record<string, number>; rotulo: string | null },
+    usuario: Usuario,
+  ) {
+    return this.mudarRegrasDoCenario(id, usuario, (tx) => gravarConjuntoFixo(tx, id, dados));
+  },
+
+  /** Exclui um conjunto de percentuais fixos do cenário. */
+  async excluirFixosDoCenario(id: string, chave: string, inicio: string, usuario: Usuario) {
+    return this.mudarRegrasDoCenario(id, usuario, (tx) => excluirConjuntoFixo(tx, id, chave, inicio));
+  },
 
   // Cadastros por cenário, etapa 2 (20/11/2026): as abas Departamentos e Redistribuições de Gastos das Configurações dos
   // analíticos (redistribuicoesDoCenario.ts). Editam como as da etapa 1; valem na próxima carga do realizado da referência.
@@ -4826,6 +5172,10 @@ export const cenariosService = {
     const prisma = getPrismaClient();
     const antes = departamentoId ? await prisma.cenarioDepartamento.findFirst({ where: { id: departamentoId, cenarioId: id } }) : null;
     if (departamentoId && !antes) throw new CenarioError(404, "Departamento não encontrado no cenário.");
+    // O departamento das combinações dos índices (21/11/2026) é de uma unidade: não muda de unidade.
+    if (antes && antes.unidadeNegocioId !== dados.unidadeNegocioId && departamentosDosIndices(c).has(antes.id)) {
+      throw new CenarioError(409, "O departamento está nas combinações de Índices de Comparação ou de Reajuste do cenário (Configurações / Comparativo e Reajustes): tire-o delas antes de mudar a unidade dele.");
+    }
     const campos = await daRegra(() => prepararDepartamento(prisma, id, dados, departamentoId));
     const { ordem, ...resto } = campos;
     if (antes) await prisma.cenarioDepartamento.update({ where: { id: antes.id }, data: { ...resto, ...(ordem !== null ? { ordem } : {}) } });
@@ -4846,6 +5196,9 @@ export const cenariosService = {
     if (!antes) throw new CenarioError(404, "Departamento não encontrado no cenário.");
     const usos = await prisma.cenarioRedistribuicao.count({ where: { cenarioId: id, departamentoId } });
     if (usos) throw new CenarioError(409, `O departamento está em ${usos} ${usos === 1 ? "redistribuição" : "redistribuições"} de gastos do cenário: troque o departamento delas (ou inative-o) antes de excluir.`);
+    if (departamentosDosIndices(c).has(departamentoId)) {
+      throw new CenarioError(409, "O departamento está nas combinações de Índices de Comparação ou de Reajuste do cenário (Configurações / Comparativo e Reajustes): tire-o delas antes de excluir.");
+    }
     await prisma.cenarioDepartamento.delete({ where: { id: departamentoId } });
     await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_departamento", entidadeId: departamentoId, antes, metadados: { cenario: c.nome } });
     return this.departamentosDoCenario(id, usuario);
@@ -5006,8 +5359,11 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     const comparado = c.comparadoComId ? await prisma.cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true } }) : null;
     if (!comparado) return { comparadoCom: null, visoes: [] };
-    const limites = limitesDe(c);
     const est = await estruturaDRE();
+    // Nos analíticos (21/11/2026), a variação da conta em cada unidade, pelas combinações dos Índices de Comparação (no
+    // Consolidado, a maior das unidades); nos sintéticos, a digitada.
+    const variacoes = (c.variacoesMaximas ?? {}) as Record<string, number>;
+    const doIndice = c.tipo === "ANALITICO" ? await limitesDasCelulas(prisma, c, est) : null;
     const { verificadas, linhas } = totaisDaDRE(est);
     const acimaDe = new Map(linhas.map((l) => [l.linha.codigo, l.acima]));
     const dasVisoes = linhasDasVisoes(est);
@@ -5038,7 +5394,7 @@ export const cenariosService = {
         nome,
         itens: verificadas.flatMap(({ linha, total }) => {
           if (!veDepartamentos(recorte, departamentosDaConta(linha.codigo))) return [];
-          const limite = limiteDaLinha(limites, linha.codigo, acimaDe.get(linha.codigo) ?? []);
+          const limite = doIndice ? limiteNaVisao(doIndice, linha.codigo, visao) : limiteDaLinha(variacoes, linha.codigo, acimaDe.get(linha.codigo) ?? []);
           if (typeof limite !== "number" || !dasVisoes.get(visao)!.has(linha.codigo)) return [];
           const k = `${visao}|${linha.id}`;
           const meses = mesesAcima(doCenario.get(k) ?? vazio, doComparado.get(k) ?? vazio, limite);
@@ -5140,7 +5496,7 @@ export const cenariosService = {
         }),
       });
       // A Liberação de Projetos muda os percentuais do rateio de Projeto: a DRE do cenário se recalcula.
-      if (projeto) await calcularAnalitico(tx, id);
+      if (projeto) await alteradoSemRecalcular(tx, id, "premissas", false);
     }, { timeout: 300_000 });
     await auditar({
       usuarioId: usuario.id,

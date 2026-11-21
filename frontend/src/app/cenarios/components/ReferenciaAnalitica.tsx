@@ -85,12 +85,12 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
     onSuccess: ({ avisos: lista, vigente }) =>
       aoCarregar(
         (manterMeses
-          ? `Médias de Referência de ${tipo === "cenario" ? origem!.nome : `${ano} (${modo === "MEDIA" ? `${abrev(de)} a ${abrev(ate)}` : "Mês a Mês"})`} carregadas; os meses do cenário ficaram como estavam, e a DRE foi recalculada.`
+          ? `Médias de Referência de ${tipo === "cenario" ? origem!.nome : `${ano} (${modo === "MEDIA" ? `${abrev(de)} a ${abrev(ate)}` : "Mês a Mês"})`} carregadas; os meses do cenário ficaram como estavam, e a DRE fica pendente de recálculo (Resultados / Recalcular).`
           : tipo === "cenario"
-            ? `${origem!.nome} carregado no cenário; a DRE foi recalculada.`
+            ? `${origem!.nome} carregado no cenário; a DRE fica pendente de recálculo (Resultados / Recalcular).`
             : modo === "MEDIA"
               ? `Médias do realizado de ${ano} (${abrev(de)} a ${abrev(ate)}) carregadas: os meses do cenário ficaram em branco (use Replicar Médias, aqui na Referência).`
-              : `Resultado realizado de ${ano} carregado; a DRE foi recalculada.`) + vigente,
+              : `Resultado realizado de ${ano} carregado; a DRE fica pendente de recálculo (Resultados / Recalcular).`) + vigente,
         lista,
       ),
   });
@@ -316,7 +316,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                         Os doze meses do cenário (digitados ou importados), os investimentos e as linhas do Quadro de Lotação ficam como estão; o
                         Justificar? do Exportar Premissas passa a comparar os meses com as médias novas.
                       </li>
-                      <li>A DRE do cenário é recalculada.</li>
+                      <li>A DRE do cenário fica pendente de recálculo (Resultados / Recalcular).</li>
                     </>
                   ) : tipo === "cenario" ? (
                     <>
@@ -324,7 +324,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                         As premissas, os centros de custo, os investimentos e os indicadores do cenário são substituídos pelos de {origem?.nome}
                         {origem && origem.ano !== cenario.ano ? ` (de ${origem.ano}: os meses vão para os mesmos meses de ${cenario.ano})` : ""}.
                       </li>
-                      <li>A DRE do cenário é recalculada.</li>
+                      <li>A DRE do cenário fica pendente de recálculo (Resultados / Recalcular).</li>
                     </>
                   ) : (
                     <>
@@ -337,7 +337,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
                         Os centros de custo, a depreciação base e o extra-operacional são substituídos pelos do realizado
                         {modo === "MEDIA" ? ": só as Médias de Referência, com os meses em branco" : ": as Médias de Referência e cada mês fechado no seu mês"}; os indicadores manuais, do mesmo jeito.
                       </li>
-                      <li>Os investimentos ficam. A DRE do cenário é recalculada.</li>
+                      <li>Os investimentos ficam. A DRE do cenário fica pendente de recálculo (Resultados / Recalcular).</li>
                     </>
                   )}
                   {tipo === "realizado" ? (

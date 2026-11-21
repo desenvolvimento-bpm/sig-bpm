@@ -88,8 +88,8 @@ export function CenarioPainelContent() {
               de cada um. Se o navegador não deixar copiar, a imagem é baixada.
             </li>
             <li>
-              O comparado é o cenário escolhido em Configurações / Comparativo; sem ele, essa parte fica vazia (—), e o aviso traz o botão
-              “Adicionar Comparativo” (para quem edita a aba Comparativo das Configurações).
+              O comparado é o cenário escolhido em Configurações / {analitico ? "Comparativo e Reajustes" : "Comparativo"}; sem ele, essa parte fica
+              vazia (—), e o aviso traz o botão “Adicionar Comparativo” (para quem edita o cenário comparado nas Configurações).
             </li>
             <li>Sem os Rótulos, a escala à esquerda de cada gráfico usa marcas práticas, sem casas decimais: múltiplos de 1, 2, 5, 10, 25, 50, 100, 250, 500, 1.000… (ou 0,1, 0,2, 0,5 quando os valores são pequenos), na unidade do card (milhões, milhares, %, m³…).</li>
           </ul>
@@ -161,7 +161,9 @@ export function CenarioPainelContent() {
                       Adicionar Comparativo
                     </Button>
                   ) : (
-                    <span className="text-gray-500">Peça a quem edita a aba Comparativo para escolher um em Configurações / Comparativo.</span>
+                    <span className="text-gray-500">
+                      Peça a quem edita o cenário comparado para escolher um em Configurações / {t.tipo === "ANALITICO" ? "Comparativo e Reajustes" : "Comparativo"}.
+                    </span>
                   )}
                 </div>
               )

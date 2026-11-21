@@ -28,6 +28,115 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 21/11/2026: o Recalcular dos analíticos (as alterações pendentes de recálculo e a caixa Aplicar Reajustes) e os filtros do Quadro de Lotação.
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "As gravações das Configurações, das Premissas e dos Índices de Reajuste ficam mais rápidas: elas não refazem a DRE na hora. O destaque Pendente de Recálculo, com a borda vermelha, conta as alterações ainda fora da DRE (Configurações, Premissas e Reajustes), e o “Recalcular” — clicável só com alguma pendente — refaz a DRE com todas.",
+      "A caixa “Aplicar Reajustes”, antes do “Recalcular”, ocupa o lugar do botão Aplicar / Remover Reajustes das Configurações: marcada, o Recalcular aplica os reajustes na DRE; desmarcada, os tira.",
+      "Congelar a versão e marcar o cenário pedem o Recalcular antes, se houver alterações pendentes.",
+    ],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Quadro de Lotação, os rótulos Unidade, Tipo, Função e Centro de Custo ordenam e filtram as linhas, como nas demais tabelas (no lugar da busca), e o Centro de Custo aparece só com o nome.",
+    ],
+  },
+  // 21/11/2026: os Benefícios Padrão dos cenários analíticos (a aba das Configurações e o botão Benefícios do Quadro de Lotação).
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "A aba Benefícios Padrão, depois de Centros de Custo: os benefícios do cenário (Cesta Básica, Vale-Transporte, Seguro de Vida, Plano de Saúde…), com o Nome, a Descrição e o Valor Mensal (/ Colab.). “Novo Benefício” inclui um, e o clique numa linha o edita ou exclui.",
+    ],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Quadro de Lotação, o botão Benefícios, depois de “Nova Entrada”: com linhas e meses marcados, aplica a eles os Benefícios Padrão escolhidos no modal. Cada mês ganha a coluna Benefícios, depois do Salário Total: os colaboradores da linha × a soma dos benefícios aplicados.",
+      "Nos Encargos e Benefícios de cada grupo, na aba Centros de Custo, a linha Benefícios Padrão soma os Benefícios das linhas do Quadro de Lotação dos centros do grupo e entra na conta Encargos e Benefícios da DRE, com os Benefícios Adicionais.",
+      "No Exportar Premissas, a aba Quadro de Lotação traz a coluna Benefícios em cada mês (o valor se digita) e os centros de custo, a linha Benefícios Padrão em fórmula. As planilhas sem essa coluna e sem essa linha continuam se importando.",
+    ],
+  },
+  // 21/11/2026: as Regras de Rateio de cada cenário analítico, o Compartilhar dos cenários particulares, o Responsável das
+  // Verificações, a Vigência com calendário nas Redistribuições e as tabelas das Prévias.
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "A aba Regras de Rateio, depois de Centros de Custo: a cópia das regras de Cadastros Gerais / Regras de Rateio neste cenário, que o cálculo dos rateios do cenário passa a usar no lugar das de Cadastros Gerais. Os cenários que já existiam ganharam a cópia das regras de hoje (nada muda nos valores). “Novo Rateio” inclui uma regra Paramétrica ou um conjunto Fixo, o clique numa regra a edita, e cada mudança fica no Histórico; “Trazer Novos” traz as regras que surgirem em Cadastros Gerais.",
+      "Com a visualização Particular, o Compartilhar, logo depois dela, convida outros usuários a ver o cenário. Cada convidado usa as telas pelo seu perfil: o perfil só de leitura só vê.",
+      "No modal Redistribuição de Gastos, a Vigência (Início e Fim) tem o calendário, como nas Regras de Rateio: a data escolhida vale o mês inteiro dela.",
+    ],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Sintéticos",
+    tela: "Configurações",
+    rota: "/cenarios/sinteticos/0/configuracoes",
+    itens: ["Com a visualização Particular, o Compartilhar, logo depois dela, convida outros usuários a ver o cenário. Cada convidado usa as telas pelo seu perfil: o perfil só de leitura só vê."],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Verificações, a coluna Responsável traz só o responsável imediato pela linha ou pelo centro: o Analista; sem ele, o Coordenador; sem ele, o Estratégico; sem ele, o Gestor. Ele (ou o Administrador) dá o De Acordo.",
+    ],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: ["No modal Redistribuição de Gastos, a Vigência (Início e Fim) tem o calendário, como nas Regras de Rateio: a data escolhida vale o mês inteiro dela."],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Fechamento Mensal",
+    tela: "Prévias",
+    rota: "/competencias/0000-00/receita-previa",
+    itens: [
+      "As tabelas das abas Receita e Estoque seguem o padrão das telas com mais de uma tabela: o destaque de cada uma (o título, a descrição e os botões, com o Exportar por último), que flutua sobre a tabela ao rolar, e os rótulos das colunas presos.",
+    ],
+  },
+  // 21/11/2026: os Índices de Comparação e de Reajuste com as combinações, na aba Comparativo e Reajustes.
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "As abas Comparativo e Reajustes viraram uma só, Comparativo e Reajustes: o Cenário Comparado, os Índices de Comparação (antes, de Referência) e, abaixo deles, os Índices de Reajuste.",
+      "Os índices ficam numa tabela, como os Centros de Custo: clique numa linha para abrir o índice no modal (ou em “Novo Índice”) e grave; a tabela se atualiza. Na tabela dos Índices de Reajuste, a coluna Reajustes descreve do 1º ao 4º numa linha só.",
+      "No modal, as Combinações dizem onde o índice vale: Unidade, Departamento, Atribuição e Conta, cada uma “Todas” ou uma escolha — uma unidade inteira, um departamento, uma atribuição ou só uma conta, quantas combinações precisar. Nos Índices de Reajuste, a Venda (Todas, Global ou Mercantil): Global ou Mercantil fica só com as contas dos Custos de Produção da Matriz e da Filial, na parte daquela venda. A mesma conta não pode estar em duas combinações nem em dois índices: o aviso no rodapé do modal impede a gravação.",
+      "As tabelas Linha da DRE (Variações Máximas e Aplicação dos Reajustes) e os botões “Gravar Índices” saíram. Os índices que já estavam escolhidos nas contas aparecem com as combinações que alcançam as mesmas contas: nada muda nos valores.",
+    ],
+  },
+  {
+    publicada: "2026-11-21T14:52",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Nas abas das unidades (no Consolidado, não), a coluna Índice de Reajuste, antes de Janeiro, traz o índice de cada linha da DRE; com um cenário comparado, a coluna Índice de Comparação, antes do Comparativo e nas cores dele, traz o de comparação. Com índices diferentes nas contas de um total, “Vários”: passe o mouse para ver o de cada conta.",
+    ],
+  },
   // 21/11/2026 (publicada às 01:39): os Custos de Produção por venda nos Reajustes.
   {
     publicada: "2026-11-21T01:39",

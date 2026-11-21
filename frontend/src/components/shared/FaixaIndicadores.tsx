@@ -15,12 +15,20 @@ export type Indicador = {
 
 /**
  * Os números da tela numa faixa só (E4 do levantamento de layout), em vez de
- * um cartão grande para cada número.
+ * um cartão grande para cada número. `titulo` (21/11/2026: o Pendente de Recálculo dos cenários) vem antes dos números, em
+ * negrito e no tamanho deles; `borda` "atencao" pinta a borda de vermelho.
  */
-export function FaixaIndicadores({ itens }: { itens: Indicador[] }) {
+export function FaixaIndicadores({ itens, titulo, borda }: { itens: Indicador[]; titulo?: string; borda?: "atencao" }) {
   return (
-    // Destaque amarelo-ouro à esquerda, como nos quadros das tabelas.
-    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2.5">
+    // Destaque amarelo-ouro à esquerda, como nos quadros das tabelas (vermelho no de atenção).
+    <dl
+      className={`flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-sm border border-l-4 bg-white px-4 py-2.5 ${borda === "atencao" ? "border-red-300 border-l-red-600" : "border-gray-200 border-l-bpm-primary"}`}
+    >
+      {titulo ? (
+        <div className="flex items-baseline">
+          <dt className="text-base font-extrabold text-gray-900">{titulo}</dt>
+        </div>
+      ) : null}
       {itens.map((i) => (
         <div key={i.rotulo} className="flex items-baseline gap-1.5" title={i.dica}>
           <dt className={`text-xs text-gray-600 ${i.rotuloAntes ? "" : "order-2"}`}>{iniciaisMaiusculas(i.rotulo)}</dt>

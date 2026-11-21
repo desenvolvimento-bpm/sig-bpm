@@ -143,17 +143,19 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Quadro de Lotação, as linhas do quadro do cenário, como as do Lançamento Inicial da Gestão de Colaboradores: a Unidade, o Tipo
-              (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, quatro colunas — os
-              Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um) e o
-              Salário Total (a soma) —, com o Total (os Colaboradores, a média do ano; o Salário Bruto, a Insalubridade / Periculosidade e o Salário
-              Total, a soma dos doze meses: o custo da linha no ano) e a Média (a soma ÷ 12) e, na última linha, o Total: os colaboradores e a folha de
-              cada mês, do Total e da Média. No destaque acima da tabela,
-              com o nome dela, busque as linhas pela função, pelo centro, pela unidade ou pelo tipo. Com a referência carregada (Configurações /
+              (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, cinco colunas — os
+              Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um), o
+              Salário Total (a soma) e os Benefícios (os Benefícios Padrão aplicados à linha × os colaboradores dela; parado sobre o valor, a dica diz
+              quais são, ou que o valor foi digitado na importação) —, com o Total (os Colaboradores, a média do ano; o Salário Bruto, a Insalubridade /
+              Periculosidade, o Salário Total e os Benefícios, a soma dos doze meses: o custo da linha no ano) e a Média (a soma ÷ 12) e, na última
+              linha, o Total: os colaboradores, a folha e os benefícios de cada mês, do Total e da Média. Os rótulos Unidade, Tipo,
+              Função e Centro de Custo ordenam e filtram as linhas, como nas demais tabelas do SIG (o Centro de Custo aparece só com o nome; o
+              código fica na dica). Com a referência carregada (Configurações /
               Referência), a coluna da Referência, depois do Centro de Custo, traz os Colaboradores da linha nela: os do QL Realizado da competência
               mais recente da Gestão de Colaboradores (referência realizada) ou os do último mês do Quadro de Lotação do outro cenário (em branco, a
               linha não está na referência). Os salários não têm referência.
               {podeEditar
-                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários da linha a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo e a DRE e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. Clicar na Unidade, no Tipo, na Função ou no Centro de Custo de uma linha abre o modal Editar Linha do Quadro de Lotação, com os cadastros dela; o menu Ações de cada linha também a edita, ou a exclui."
+                ? " “Nova Entrada” abre o modal com os cadastros e os colaboradores e os salários da linha a partir do mês escolhido; na tabela, clique num valor (os Colaboradores, o Salário Bruto ou a Insalubridade / Periculosidade de um mês) para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”); cada gravação recalcula os centros de custo, deixa a DRE pendente de recálculo (Resultados / Recalcular) e fica no histórico. Como nas outras abas, as caixas das linhas e as dos meses (no rótulo de cada mês, ou “Marcar Todos os Meses”) marcam valores, e “Limpar Seleção” desmarca tudo; “Replicar Referências”, logo antes de “Nova Entrada”, leva os Colaboradores da referência de cada linha marcada (a coluna da Referência) aos meses marcados, depois da confirmação; os salários e as linhas sem a referência ficam como estão. “Benefícios”, logo depois de “Nova Entrada” (clicável com ao menos uma linha e um mês marcados), abre o modal Benefícios das Linhas Marcadas, com os Benefícios Padrão do cenário (Configurações / Benefícios Padrão), cada um com a caixa (já marcada no que está em todos os valores marcados): “Aplicar” faz dos marcados os benefícios das linhas e dos meses marcados, no lugar dos que havia (sem nenhum marcado, esses meses ficam sem benefícios), e recalcula os centros de custo (a DRE fica pendente de recálculo). Clicar na Unidade, no Tipo, na Função ou no Centro de Custo de uma linha abre o modal Editar Linha do Quadro de Lotação, com os cadastros dela; o menu Ações de cada linha também a edita, ou a exclui."
                 : null}{" "}
               O grupo de centros com linhas conta por elas, pelo Tipo, na aba Centros de Custo, os Colaboradores Aprendizes (o Jovem Aprendiz), os
               Colaboradores Estagiários (os estagiários e os bolsistas), os Colaboradores CLT e os PJ, os Salários de cada um dos quatro (a soma do Salário Total das linhas, sem multiplicar pelos colaboradores) e as Remunerações, que não se digitam ali:
@@ -162,6 +164,8 @@ export function PremissasContent() {
               daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
               colaboradores, os salários e as Remunerações CLT e PJ vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
               “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
+              Os Benefícios das linhas, somados pelos centros de cada grupo, são a linha Benefícios Padrão dos Encargos e Benefícios do grupo, na aba
+              Centros de Custo.
             </li>
             <li>
               Na aba Centros de Custo, escolha o grupo de centros da Controladoria na lista à esquerda (com a busca e o total do exercício; os centros de
@@ -169,7 +173,8 @@ export function PremissasContent() {
               Estagiários, CLT e PJ, o Total de Colaboradores, a soma, e os Salários dos Aprendizes, dos Estagiários, CLT e PJ — vem da aba Quadro de
               Lotação e não se digita): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
-              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
+              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$; a linha Benefícios Padrão, a soma dos Benefícios das linhas do Quadro de
+              Lotação dos centros do grupo, não se digita); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
               sempre dos Salários do Quadro de Lotação, na mão de obra da atribuição do grupo — as CLT, os Salários dos Aprendizes, dos Estagiários e
               CLT; as PJ, os Salários PJ —, e na outra mão de obra e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
@@ -177,7 +182,7 @@ export function PremissasContent() {
               (Remunerações CLT + Horas Extras − Salários dos Estagiários) × [INSS + FGTS CLT + Férias + Décimo Terceiro + (INSS + FGTS CLT) × (Férias +
               Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) (os Salários dos
               Aprendizes e dos Estagiários, só na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ
-              e os estagiários não têm encargos. Os Benefícios Adicionais ficam fora da conta: somados a ela (a da mão de obra da atribuição do
+              e os estagiários não têm encargos. Os Benefícios Adicionais e os Benefícios Padrão ficam fora da conta: somados a ela (a da mão de obra da atribuição do
               grupo), dão o total de encargos e benefícios, que é o que vai para a DRE — também na Média de Referência —, e o Total do Centro os soma. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem da aba Centros de Custo das
               Configurações, a cópia do cadastro com que o cenário calcula). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
@@ -202,7 +207,7 @@ export function PremissasContent() {
             <li>
               Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE, e a Liberação de Projetos: Matriz e a
               Liberação de Projetos: Filial (em m³; a Liberação de Projetos: Total é a soma das duas e não se digita), a base do rateio de Projeto — gravá-las
-              recalcula a DRE do cenário
+              deixa a DRE do cenário pendente de recálculo
               {podeEditar
                 ? ". Clique no valor de um mês para editá-lo no mesmo modal das outras abas (o Valor Atual, o reajuste e o Valor Recalculado, com a chave “Replicar aos meses posteriores”; em branco, o mês fica sem valor); os valores digitados ficam em amarelo"
                 : ""}
@@ -213,7 +218,7 @@ export function PremissasContent() {
               Na aba Rateios, a última, a base de cada mês (das demais abas) e o percentual de cada destino: Produção pelo m³ produzido (abas Matriz e
               Filial); Projeto pela Liberação de Projetos: Matriz e Filial (aba Indicadores Manuais), como no Fechamento Mensal; Metalurgia e Armadura pelo kg
               de cada linha (o volume × a Metalúrgica (Interno) Unit. ou a Armadura (Interno) Unit.); Acompanhamento pelos Acompanhamentos por Dia das linhas
-              de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio (Cadastros Gerais), valem eles. Sem base no mês, o
+              de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio do cenário (Configurações / Regras de Rateio), valem eles. Sem base no mês, o
               percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário). A tabela tem
               uma linha por chave, destino e Base ou Percentual, com os filtros e a ordenação nos rótulos das colunas (Chave, Destino, Linha, Und. e
               cada mês), como nas outras tabelas do SIG.
@@ -221,9 +226,9 @@ export function PremissasContent() {
             <li>
               Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Situação (Pendente ou De Acordo), a
               Aba (clique nela para abri-la; nos Centros de Custo, já no grupo), a Linha / Centro de Custo, a Verificação (com a explicação), os Meses
-              e o Responsável: todos os usuários que podem justificar (dar o De Acordo) — quem alterou os valores por último, pelo Histórico (sem
-              alteração, quem criou o cenário), se tem Editar na aba Verificações e a vê, e os Administradores; quem alterou por último e não pode
-              justificar aparece em cinza, embaixo. Com o Acesso às Informações Por Recorte (Configurações / Cenário), cada um vê as verificações do
+              e o Responsável: o responsável imediato pela linha ou pelo centro — o Analista cujo recorte o alcança; sem ele, o Coordenador;
+              sem ele, o Estratégico; sem ele, o Gestor (mais de um só quando são do mesmo nível); sem nenhum, quem alterou os valores por último,
+              pelo Histórico (passe o mouse para ver quem alterou e quando). Ele (com Editar na aba Verificações) ou o Administrador dá o De Acordo. Com o Acesso às Informações Por Recorte (Configurações / Cenário), cada um vê as verificações do
               seu recorte (o Gestor, as dos seus departamentos; o recorte por centro, as do Quadro de Lotação e dos Centros de Custo dos grupos com
               um centro seu); com Geral, todos veem todas. As abas com verificações
               pendentes (e a própria Verificações) mostram o sinal de alerta ao lado do nome. As verificações: nas abas Matriz, Filial e Serviços,
@@ -240,9 +245,14 @@ export function PremissasContent() {
               alguma verificação pendente no cenário, a versão não se congela (Congelar Versão, na tela Resultados).
             </li>
             <li>
-              Com os reajustes aplicados (Configurações / Reajustes), as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição,
-              com o aviso em cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações / Referência) não se carrega.
-              “Remover Reajustes” as deixa editáveis de novo.
+              As gravações das Premissas (os valores, o Quadro de Lotação, os investimentos, os indicadores manuais, as importações) refazem na hora
+              as linhas calculadas das próprias Premissas (os colaboradores, as Remunerações e os Encargos e Benefícios dos centros), mas não a DRE:
+              cada uma conta como uma Premissa no destaque Pendente de Recálculo da tela Resultados, cujo “Recalcular” refaz a DRE com todas.
+            </li>
+            <li>
+              Com a caixa Aplicar Reajustes marcada (nos Resultados, antes do “Recalcular”), as abas das Premissas (menos Indicadores Manuais) ficam
+              bloqueadas para edição, com o aviso em cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações / Referência)
+              não se carrega. Desmarcar a caixa as deixa editáveis de novo.
             </li>
             <li>
               A base das premissas pode vir da referência (Configurações / Referência): o resultado realizado (as Médias de Referência, os centros de
@@ -275,10 +285,13 @@ export function PremissasContent() {
               Estagiários, CLT e PJ, em fórmula sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e o
               Total de Colaboradores, a soma; as Remunerações CLT e PJ da mão de obra da atribuição do grupo, em fórmula sobre os Salários, e as da
               outra, zero: incluir ou mudar as linhas ou os salários da aba Quadro de Lotação muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
-              Referência, o padrão) e as contas, com a Encargos e Benefícios em fórmula, sem os Benefícios Adicionais (a soma das duas linhas é a
-              conta na DRE, também nos meses da referência; no Consolidado, a conta soma as duas) — as linhas calculadas não se importam nem se replicam. A aba
+              Referência, o padrão; a linha Benefícios Padrão, em fórmula: a soma da coluna Benefícios das linhas dos centros do grupo na aba Quadro
+              de Lotação) e as contas, com a Encargos e Benefícios em fórmula, sem os Benefícios Adicionais e os Benefícios Padrão (a soma das três
+              linhas é a conta na DRE, também nos meses da referência; no Consolidado, a conta soma as três) — as linhas calculadas não se importam nem se replicam. A aba
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
-              em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade (os da linha) e o Salário Total (em fórmula), o Custo no Ano em fórmula
+              em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade (os da linha), o Salário Total (em fórmula) e os
+              Benefícios (os da linha no mês, que se digitam: com outro valor, ele fica digitado no lugar dos Benefícios Padrão aplicados; igual, eles
+              ficam e seguem os colaboradores), o Custo no Ano em fórmula
               e linhas em branco para as novas; com a referência, depois do Centro de Custo, os colaboradores da linha no QL Realizado da competência
               mais recente da Gestão de Colaboradores (referência realizada) ou no último mês do Quadro de Lotação do outro cenário (não se importam); ela leva as linhas dos centros dos departamentos marcados. A aba Investimentos traz todos os investimentos do cenário (qualquer departamento), com a Unidade e a Conta em listas suspensas, a Condição de
               Pagamento e a Depreciação Mensal em fórmula, e linhas em branco para os novos; no Importar Valores, ela substitui os seus investimentos (os
@@ -307,9 +320,10 @@ export function PremissasContent() {
               de Lotação, as linhas da planilha substituem as do cenário nos departamentos do arquivo: as iguais ficam, as de mesmos cadastros com
               outros valores são alteradas, as novas entram e as que não estão na planilha saem (a prévia mostra quantas; os cadastros conferidos
               como no Lançamento Inicial: uma unidade, função ou centro de custo que não existe, ou um tipo fora de CLT, PJ, Aprendiz e Estagiário,
-              recusa o arquivo). “Importar” grava os
-              meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, recalcula a DRE
-              e registra no histórico (tela Histórico, aba Alterações).
+              recusa o arquivo). Os arquivos sem a coluna Benefícios no Quadro de Lotação ou sem a linha Benefícios Padrão nos centros de custo também
+              se importam: os benefícios das linhas ficam como estão. “Importar” grava os
+              meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, deixa a DRE
+              pendente de recálculo e registra no histórico (tela Histórico, aba Alterações).
             </li>
             <li>
               Cada tabela traz, mês a mês: a Jornada (os dias úteis, já calculados pelo calendário — segunda a sexta, menos os feriados nacionais), a
@@ -348,7 +362,7 @@ export function PremissasContent() {
                   Também nas abas Centros de Custo, Investimentos (a Depreciação), Extra-Operacional e Quadro de Lotação (os Colaboradores, pela coluna da
                   Referência); a aba Rateios não tem a Média de Referência.
                 </li>
-                <li>Os valores em cinza-claro são os padrões (os dias úteis do calendário, ou zero), ainda não gravados. Cada gravação recalcula a DRE do cenário (tela Resultados) e fica no histórico (tela Reajustes).</li>
+                <li>Os valores em cinza-claro são os padrões (os dias úteis do calendário, ou zero), ainda não gravados. Cada gravação deixa a DRE do cenário pendente de recálculo (o “Recalcular” da tela Resultados) e fica no histórico (tela Histórico).</li>
               </>
             ) : null}
           </ul>
@@ -412,11 +426,13 @@ export function PremissasContent() {
               Estagiários entram só na mão de obra da atribuição do grupo, a que recebe as remunerações do Quadro de Lotação; na outra, a base é
               Remunerações CLT + Horas Extras. Os percentuais têm o mesmo padrão
               em todos os cenários (29% — a confirmar com a contabilidade —, 2%, 8%, 1/12 × 4/3 = 11,11% e 1/12 = 8,33%) e se editam por grupo e mês; os
-              Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo.
+              Benefícios Adicionais (vale-transporte, alimentação, plano de saúde…) se digitam em R$ e entram na mão de obra da atribuição do grupo,
+              como os Benefícios Padrão (os de Configurações / Benefícios Padrão aplicados às linhas na aba Quadro de Lotação: os colaboradores × o
+              Valor Mensal, somados pelos centros do grupo).
               Na referência realizada, os Benefícios Adicionais de cada mês fechado e a Média de Referência deles são a diferença entre os encargos
               realizados do grupo e o cálculo com os percentuais padrão (negativa quando o realizado fica abaixo dele). Nas Premissas, a conta
-              Encargos e Benefícios aparece sem os Benefícios Adicionais (só o cálculo pelos percentuais), nos meses, na Média de Referência e nos
-              meses da referência do Exportar Premissas: a soma das duas linhas é o total da conta, que vai para a DRE e, na referência realizada,
+              Encargos e Benefícios aparece sem os Benefícios Adicionais e os Benefícios Padrão (só o cálculo pelos percentuais), nos meses, na Média de
+              Referência e nos meses da referência do Exportar Premissas: a soma das três linhas é o total da conta, que vai para a DRE e, na referência realizada,
               é o realizado.
             </p>
             <p>

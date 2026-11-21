@@ -45,7 +45,7 @@ const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-1
  * O "Trazer Novos dos Cadastros Gerais", com a confirmação (as quatro abas): o botão vai no destaque (que aparece duas vezes, no
  * lugar e flutuando) e a confirmação fica na aba, uma só.
  */
-function useTrazerNovos(id: string) {
+export function useTrazerNovos(id: string) {
   const queryClient = useQueryClient();
   const [confirmando, setConfirmando] = useState(false);
   const trazer = useMutation({
@@ -54,7 +54,7 @@ function useTrazerNovos(id: string) {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       setConfirmando(false);
       const partes = textoDosTrazidos(r);
-      toast.success(partes ? `Trazidos dos Cadastros Gerais: ${partes}.` : "Nada novo nos Cadastros Gerais: o cenário já tem as unidades, os departamentos, os centros de custo e as redistribuições de lá.");
+      toast.success(partes ? `Trazidos dos Cadastros Gerais: ${partes}.` : "Nada novo nos Cadastros Gerais: o cenário já tem as unidades, os departamentos, os centros de custo, as regras de rateio e as redistribuições de lá.");
     },
   });
   const botao = (
@@ -66,7 +66,7 @@ function useTrazerNovos(id: string) {
   const dialogo = confirmando ? (
     <ConfirmacaoDialog
       titulo="Trazer Novos dos Cadastros Gerais"
-      descricao="Inclui no cenário as unidades, os departamentos, os centros de custo e as redistribuições de gastos dos Cadastros Gerais que surgiram depois da cópia (os que o cenário não tem). O que foi editado aqui fica como está; com centros novos, a DRE do cenário é recalculada."
+      descricao="Inclui no cenário as unidades, os departamentos, os centros de custo, as regras de rateio e as redistribuições de gastos dos Cadastros Gerais que surgiram depois da cópia (os que o cenário não tem). O que foi editado aqui fica como está; com centros ou regras novas, a DRE do cenário fica pendente de recálculo (Resultados / Recalcular)."
       acao="Trazer Novos"
       acaoPendente="Trazendo…"
       pendente={trazer.isPending}
@@ -87,6 +87,7 @@ function textoDosTrazidos(r: TrazidosDosCadastros) {
     r.departamentos.length ? `${r.departamentos.length} ${plural(r.departamentos.length, "departamento", "departamentos")}` : "",
     r.centros.length ? `${r.centros.length} ${plural(r.centros.length, "centro de custo", "centros de custo")}` : "",
     r.redistribuicoes.length ? `${r.redistribuicoes.length} ${plural(r.redistribuicoes.length, "redistribuição de gastos", "redistribuições de gastos")}` : "",
+    r.regras.length ? `${r.regras.length} ${plural(r.regras.length, "regra de rateio", "regras de rateio")}` : "",
   ].filter(Boolean);
   return partes.length > 1 ? `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}` : (partes[0] ?? "");
 }
@@ -207,7 +208,7 @@ const rotuloDoCentro = (c: Pick<CentroDoCadastroDoCenario, "codigoRM" | "nomeRM"
 
 /**
  * A aba Centros de Custo: a cópia dos centros do cenário, com o grupo de cada um (o Nome da Controladoria; os de estoque e de
- * investimento ficam fora do cenário). Incluir, alterar, excluir e renomear um grupo recalculam a DRE do cenário.
+ * investimento ficam fora do cenário). Incluir, alterar, excluir e renomear um grupo deixam a DRE do cenário pendente de recálculo (21/11/2026).
  */
 export function CentrosDoCadastroDoCenarioAba({ id, podeEditar }: { id: string; podeEditar: boolean }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "cadastros", "centros"], queryFn: () => cenariosService.centrosDoCadastroDoCenario(id) });
@@ -225,7 +226,7 @@ export function CentrosDoCadastroDoCenarioAba({ id, podeEditar }: { id: string; 
   const destaque = (
     <Destaque
       titulo="Centros de Custo"
-      descricao="A cópia dos centros de custo neste cenário. Cada mudança recalcula a DRE do cenário."
+      descricao="A cópia dos centros de custo neste cenário. Cada mudança deixa a DRE do cenário pendente de recálculo (Resultados / Recalcular)."
       abaixo={
         <span className="text-xs text-gray-500">
           {tabela.total} de {dados.centros.length} {plural(dados.centros.length, "centro", "centros")} · {grupos.length} {plural(grupos.length, "grupo", "grupos")} no cenário
@@ -348,7 +349,7 @@ function CentroDialog({ id, dados, centro, onFechar }: { id: string; dados: Cent
   };
   const gravar = useMutation({
     mutationFn: (confirmado: boolean) => cenariosService.gravarCentroDoCadastroDoCenario(id, centro?.id ?? null, valores(), confirmado),
-    onSuccess: () => concluir(centro ? "Centro de custo alterado no cenário; a DRE do cenário foi recalculada." : "Centro de custo incluído no cenário; a DRE do cenário foi recalculada."),
+    onSuccess: () => concluir(centro ? "Centro de custo alterado no cenário; a DRE fica pendente de recálculo (Resultados / Recalcular)." : "Centro de custo incluído no cenário; a DRE fica pendente de recálculo (Resultados / Recalcular)."),
     onError: (e) => {
       const grupo = grupoSemCentrosDe(e);
       if (grupo) setConfirmar({ acao: "gravar", grupo });
@@ -356,7 +357,7 @@ function CentroDialog({ id, dados, centro, onFechar }: { id: string; dados: Cent
   });
   const apagar = useMutation({
     mutationFn: (confirmado: boolean) => cenariosService.excluirCentroDoCadastroDoCenario(id, centro!.id, confirmado),
-    onSuccess: () => concluir("Centro de custo excluído do cenário; a DRE do cenário foi recalculada."),
+    onSuccess: () => concluir("Centro de custo excluído do cenário; a DRE fica pendente de recálculo (Resultados / Recalcular)."),
     onError: (e) => {
       const grupo = grupoSemCentrosDe(e);
       if (grupo) setConfirmar({ acao: "excluir", grupo });
@@ -380,7 +381,7 @@ function CentroDialog({ id, dados, centro, onFechar }: { id: string; dados: Cent
             {centro?.doCenario === false
               ? "Copiado dos Cadastros Gerais: a mudança vale só neste cenário (o realizado do centro continua chegando a ele)."
               : "O centro vale só neste cenário (sem realizado nos Cadastros Gerais)."}{" "}
-            Gravar recalcula a DRE do cenário.
+            Gravar deixa a DRE do cenário pendente de recálculo (Resultados / Recalcular).
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -495,7 +496,7 @@ function RenomearGrupoDialog({ id, grupos, onFechar }: { id: string; grupos: str
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(`O grupo ${de} passou a ${para.trim()}, com os valores; a DRE do cenário foi recalculada.`);
+      toast.success(`O grupo ${de} passou a ${para.trim()}, com os valores; a DRE fica pendente de recálculo (Resultados / Recalcular).`);
       onFechar();
     },
   });

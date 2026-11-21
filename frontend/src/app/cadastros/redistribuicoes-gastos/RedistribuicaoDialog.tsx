@@ -86,6 +86,15 @@ const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
   { chave: "competencias", rotulo: "Competências", valor: (f) => f.competencias },
 ];
 
+/** O mês gravado ("AAAA-MM") no calendário do Início: o primeiro dia dele. */
+const diaDoInicio = (mes: string) => (/^\d{4}-\d{2}$/.test(mes) ? `${mes}-01` : mes);
+/** O mês gravado no calendário do Fim: o último dia dele. */
+const diaDoFim = (mes: string) => {
+  if (!/^\d{4}-\d{2}$/.test(mes)) return mes;
+  const [a, m] = mes.split("-").map(Number);
+  return `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, "0")}`;
+};
+
 /**
  * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Departamento da DRE (ou Todos), a Unidade (ou Todas; só
  * filtra as contas) e as Contas da DRE (20/11/2026: uma ou mais, pela busca ou pela lupa, listadas abaixo do campo), os
@@ -117,8 +126,11 @@ export function RedistribuicaoDialog({
   const [destinos, setDestinos] = useState<Array<{ centroCustoId: string; texto: string }>>(() =>
     registro ? registro.destinos.map((d) => ({ centroCustoId: d.centroCustoId, texto: d.percentual.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) })) : [{ centroCustoId: "", texto: "" }],
   );
-  const [inicio, setInicio] = useState(registro?.vigenciaInicio ?? "");
-  const [fim, setFim] = useState(registro?.vigenciaFim ?? "");
+  // A vigência no calendário (21/11/2026, pedido do Adão: como nas Regras de Rateio): o dia escolhido vale o mês dele.
+  const [inicio, setInicio] = useState(diaDoInicio(registro?.vigenciaInicio ?? ""));
+  const [fim, setFim] = useState(diaDoFim(registro?.vigenciaFim ?? ""));
+  const mesDoInicio = inicio.slice(0, 7);
+  const mesDoFim = fim.slice(0, 7);
   const [descricao, setDescricao] = useState(registro?.descricao ?? "");
   const [ativo, setAtivo] = useState(registro?.ativo ?? true);
   const [excluindo, setExcluindo] = useState(false);
@@ -190,7 +202,7 @@ export function RedistribuicaoDialog({
   const percentualInvalido = lidos.some((d) => d.valor === undefined || (typeof d.valor === "number" && (d.valor <= 0 || d.valor > 100)));
   const centrosRepetidos = new Set(lidos.filter((d) => d.centroCustoId).map((d) => d.centroCustoId)).size !== lidos.filter((d) => d.centroCustoId).length;
   const destinosCompletos = lidos.length > 0 && lidos.every((d) => d.centroCustoId && typeof d.valor === "number");
-  const vigenciaCerta = !!inicio && (!fim || fim >= inicio);
+  const vigenciaCerta = !!mesDoInicio && (!mesDoFim || mesDoFim >= mesDoInicio);
   const pronto = pode && linhasDREIds.length > 0 && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
 
   const concluir = (msg: string, efeito: string) => {
@@ -205,8 +217,8 @@ export function RedistribuicaoDialog({
         linhasDREIds,
         fornecedores: marcadosNaLista.map((f) => nomes.get(chave(f.fornecedor)) ?? f.fornecedor),
         destinos: lidos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: d.valor as number })),
-        vigenciaInicio: inicio,
-        vigenciaFim: fim || null,
+        vigenciaInicio: mesDoInicio,
+        vigenciaFim: mesDoFim || null,
         descricao: descricao.trim() || null,
         ativo,
       }),
@@ -451,12 +463,21 @@ export function RedistribuicaoDialog({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="rd-inicio">Vigência: Início</Label>
-            <Input id="rd-inicio" type="month" placeholder="AAAA-MM" value={inicio} onChange={(e) => setInicio(e.target.value)} disabled={!pode} className="rounded-sm" />
+            <Input id="rd-inicio" type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} disabled={!pode} className="rounded-sm" title="A redistribuição vale a partir do mês da data escolhida" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="rd-fim">Vigência: Fim (opcional)</Label>
-            <Input id="rd-fim" type="month" placeholder="AAAA-MM" value={fim} onChange={(e) => setFim(e.target.value)} disabled={!pode} className={`rounded-sm ${fim && inicio && fim < inicio ? "border-red-400" : ""}`} />
+            <Input
+              id="rd-fim"
+              type="date"
+              value={fim}
+              onChange={(e) => setFim(e.target.value)}
+              disabled={!pode}
+              title="A redistribuição vale até o mês da data escolhida, inteiro"
+              className={`rounded-sm ${mesDoFim && mesDoInicio && mesDoFim < mesDoInicio ? "border-red-400" : ""}`}
+            />
           </div>
+          <p className="-mt-2 text-xs text-gray-500 sm:col-span-2">A vigência é por mês: a data escolhida vale o mês inteiro dela, do primeiro ao último dia.</p>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="rd-descricao">Descrição (opcional)</Label>
             <Input id="rd-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} disabled={!pode} className="rounded-sm" />

@@ -266,6 +266,17 @@ export function useTabelaFiltravel<T>(linhas: T[] | undefined, colunas: Coluna<T
     </tr>
   );
   const montar = (extras: Record<string, ReactNode> = {}, antes: Record<string, ReactNode> = {}): ReactNode => <thead>{linha(extras, antes)}</thead>;
+  // O rótulo de uma coluna com o filtro (21/11/2026), para as tabelas de cabeçalho próprio (o Quadro de Lotação dos cenários).
+  const rotuloDe = (chave: string): ReactNode => {
+    const c = colunas.find((x) => x.chave === chave);
+    if (!c) return null;
+    return (
+      <span className={`inline-flex items-center gap-1 ${c.alinhamento === "direita" ? "flex-row-reverse" : ""}`}>
+        {iniciaisMaiusculas(c.rotulo)}
+        <FiltroDeColuna coluna={c} linhas={todas} colunas={colunas} estado={estado} onMudar={mudar} />
+      </span>
+    );
+  };
 
   return {
     cabecalho: montar(),
@@ -275,6 +286,8 @@ export function useTabelaFiltravel<T>(linhas: T[] | undefined, colunas: Coluna<T
     linhaDoCabecalho: linha(),
     /** A linha dos rótulos com conteúdo próprio (como `cabecalhoCom`), sem o <thead>. */
     linhaDoCabecalhoCom: linha,
+    /** O rótulo de uma coluna com o filtro, para pôr no <th> de um cabeçalho próprio. */
+    rotuloDe,
     /** As linhas da página atual, já filtradas e ordenadas. */
     visiveis,
     /** Todas as que passam nos filtros (para totais e exportação). */

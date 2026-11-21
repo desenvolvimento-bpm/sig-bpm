@@ -10,9 +10,12 @@ import { useAbaLembrada } from "@/hooks/useAbaLembrada";
 import { Abas } from "@/components/shared/Abas";
 import { ExportarRelatorio, type OpcaoExportar } from "@/app/relatorios/components/ExportarRelatorio";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
+import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
+import { FaixaIndicadores } from "@/components/shared/FaixaIndicadores";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/context/PermissionContext";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
+import { plural } from "@/lib/texto";
 
 import { TabelaResultados } from "@/app/relatorios/resultados/ResultadosContent";
 import { InfoAgrupamento } from "@/app/competencias/[anoMes]/dre/components/InfoAgrupamento";
@@ -195,7 +198,8 @@ export function CenarioResultadosContent() {
   // centros de custo (em Excel).
   const leTodas = VISOES.every((v) => hasPermission(t.perm("resultados", "ler", v.aba)));
   const leCentros = analitico && hasPermission(t.perm("premissas", "ler", "centros"));
-  // O Recalcular (14/10/2026): nos analíticos em aberto, refaz a DRE com as regras de rateio de hoje.
+  // O Recalcular (14/10/2026; 21/11/2026: com a caixa Aplicar Reajustes antes dele): nos analíticos em aberto, refaz a DRE com as
+  // alterações ainda não recalculadas.
   const podeRecalcular = analitico && !!cenario.data && !travado && hasPermission(t.perm("resultados", "editar"));
   const opcoesExportar: OpcaoExportar[] = [
     ...(daVisao ? [{ chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { escopo: "atual", visao } }] : []),
@@ -217,7 +221,7 @@ export function CenarioResultadosContent() {
         titulo="Resultados"
         acoes={
           <div className="flex flex-wrap items-center gap-2">
-            {podeRecalcular ? <BotaoRecalcular id={id} /> : null}
+            {podeRecalcular && cenario.data ? <ControlesDoRecalculo cenario={cenario.data} /> : null}
             {hasPermission(t.perm("resultados", "editar")) && cenario.data ? <BotoesDeVersao cenario={cenario.data} /> : null}
             {opcoesExportar.length ? <ExportarRelatorio
                 endereco={`/proxy/cenarios/${id}/exportar`}
@@ -264,17 +268,36 @@ export function CenarioResultadosContent() {
             )}
             {analitico ? (
               <li>
-                Nos analíticos, os rateios dos centros de custo seguem as regras de rateio de cada mês (o percentual fixo, ou as bases das premissas
-                entre os destinos das regras por volume). Se uma regra mudar com o cenário em aberto, o aviso pede o “Recalcular”, que refaz a DRE com
-                as regras de hoje. Os avisos em vermelho listam os meses do exercício com rateios sem regra vigente: sem regra, o cenário não se
-                abre nem se fecha (Congelar e Reabrir Versão, Criar Revisão).
+                Nos analíticos, os rateios dos centros de custo seguem as regras de rateio do cenário (Configurações / Regras de Rateio) de cada
+                mês (o percentual fixo, ou as bases das premissas entre os destinos das regras por volume). Os avisos em
+                vermelho listam os meses do exercício com rateios sem regra vigente: sem regra, o cenário não se abre nem se fecha (Congelar e
+                Reabrir Versão, Criar Revisão).
               </li>
             ) : null}
             {analitico ? (
+              <>
               <li>
-                “Recalcular” só refaz a DRE (as premissas e as regras de rateio de hoje), com os Reajustes das Premissas como estão: aplicados ou
-                removidos antes, na tela Configurações, aba Reajustes (com eles aplicados, a etiqueta Reajustes Aplicados aparece na barra do cenário).
+                As gravações das Configurações, das Premissas e dos Índices de Reajuste não refazem a DRE: abaixo das abas, o destaque Pendente
+                de Recálculo, com a borda vermelha, conta as alterações ainda fora dela, por tela (Configurações, Premissas e Reajustes; parado
+                sobre o número, o que cada um conta). “Recalcular” só fica clicável com alguma alteração pendente: ele refaz a DRE com todas (as
+                premissas, as regras de rateio e os cadastros do cenário), zera o destaque e fica no histórico (tela Histórico). Congelar a
+                versão e marcar o cenário pedem o Recalcular antes.
               </li>
+              <li>
+                A caixa “Aplicar Reajustes”, antes do “Recalcular”, marca os Reajustes das Premissas (os Índices de Reajuste de Configurações /
+                Comparativo e Reajustes): marcá-la confirma num modal e conta como um Reajuste pendente; o Recalcular os aplica na DRE (e,
+                desmarcada, os tira). Marcada, a etiqueta Reajustes Aplicados aparece na barra do cenário, e as Configurações e as Premissas (menos
+                Indicadores Manuais) ficam bloqueadas para edição. Ela segue a Edição das Configurações: com ela Particular, só quem criou o
+                cenário (ou o Administrador) a muda.
+              </li>
+              <li>
+                Nas abas das unidades (no Consolidado, não), a coluna Índice de Reajuste, antes de Janeiro, traz o índice de cada linha (as
+                combinações dos Índices de Reajuste, em Configurações / Comparativo e Reajustes): numa conta, o dela na unidade da aba; num total
+                ou numa atribuição, o das contas abaixo dele. Com índices diferentes (ou contas sem índice), “Vários”: passe o mouse para ver o
+                de cada conta. Com um cenário comparado, a coluna Índice de Comparação, antes do Comparativo e nas cores dele, traz do mesmo
+                jeito o Índice de Comparação de cada linha, com a variação máxima dele.
+              </li>
+              </>
             ) : null}
             <li>
               Use “Exportar” para baixar em Excel ou PDF, como em Resultados Empresariais: a visão atual ou todas as unidades (uma por aba ou por
@@ -287,7 +310,7 @@ export function CenarioResultadosContent() {
               fica na versão de origem: remarque a revisão à mão em Configurações / Cenário.
             </li>
             <li>
-              Com um cenário comparado (Configurações / Comparativo), depois do total do exercício vêm, em preto e cinza, o total do cenário comparado (valor, % e
+              Com um cenário comparado (Configurações / {analitico ? "Comparativo e Reajustes" : "Comparativo"}), depois do total do exercício vêm, em preto e cinza, o total do cenário comparado (valor, % e
               R$/m³) e, no amarelo, a Diferença (o cenário menos o comparado), o Atingimento (o cenário sobre o comparado) e a Eficiência (a diferença
               dos %, em pontos percentuais), como o orçado em Resultados Empresariais — sem o mês vigente, porque o cenário se olha nos 12 meses.
             </li>
@@ -327,8 +350,10 @@ export function CenarioResultadosContent() {
         }
       />
       <Abas rotulo="Visão dos resultados do cenário" ativa={visao} onMudar={setVisao} abas={abas} />
+      {/* As alterações ainda não recalculadas (21/11/2026, pedido do Adão), como o resumo da Conferência com a Planilha. */}
+      {analitico && cenario.data ? <PendenteDeRecalculo cenario={cenario.data} /> : null}
       {cenario.data && travado && hasPermission(t.perm("resultados", "editar")) && !analitico && !naManuais ? <AvisoMarcado cenario={cenario.data} oQue="a DRE" /> : null}
-      {analitico && cenario.data ? <AvisosDosRateios cenario={cenario.data} podeRecalcular={podeRecalcular} /> : null}
+      {analitico && cenario.data ? <AvisosDosRateios cenario={cenario.data} /> : null}
       {/* No analítico, o aviso dos rateios sem base nas premissas (13/10/2026): esse valor não entra na DRE. */}
       {analitico ? <AvisoRateiosSemBase id={id} /> : null}
       {naManuais ? (
@@ -346,38 +371,126 @@ export function CenarioResultadosContent() {
   );
 }
 
+/** O cenário tem alterações fora da DRE: as contadas (21/11/2026) ou as regras de rateio mudadas depois do cálculo. */
+const pendente = (c: Cenario) => (c.recalculo?.total ?? 0) > 0 || !!c.rateios?.desatualizados;
+
 /**
- * O botão Recalcular (14/10/2026): refaz a DRE do analítico em aberto com as regras de rateio de hoje, com os Reajustes das
- * Premissas como estão (aplicados ou removidos em Configurações / Reajustes).
+ * A caixa Aplicar Reajustes e o botão Recalcular (21/11/2026, pedido do Adão; antes, o Aplicar / Remover Reajustes ficava no quadro
+ * Índices de Reajuste das Configurações). A caixa só marca: o Recalcular aplica (ou remove) os reajustes na DRE. Marcá-la confirma
+ * antes, porque as Configurações e as Premissas ficam bloqueadas para edição; ela segue a Edição das Configurações (só quem criou
+ * o cenário, ou o Administrador, com ela Particular). O Recalcular só fica clicável com alguma alteração ainda não recalculada.
  */
-function BotaoRecalcular({ id }: { id: string }) {
+function ControlesDoRecalculo({ cenario }: { cenario: Cenario }) {
   const queryClient = useQueryClient();
+  const [confirmando, setConfirmando] = useState(false);
   const recalcular = useMutation({
-    mutationFn: () => cenariosService.recalcular(id),
+    mutationFn: () => cenariosService.recalcular(cenario.id),
     onSuccess: (c) => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
-      toast.success(c.reajustesAplicados ? "Cenário recalculado com as regras de rateio de hoje e os reajustes aplicados." : "Cenário recalculado com as regras de rateio de hoje.");
+      queryClient.invalidateQueries({ queryKey: ["relatorios"] });
+      toast.success(c.reajustesAplicados ? "Cenário recalculado, com os reajustes aplicados." : "Cenário recalculado.");
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível recalcular o cenário.")),
   });
+  const caixa = useMutation({
+    mutationFn: (aplicar: boolean) => cenariosService.aplicarReajustes(cenario.id, aplicar),
+    onSuccess: (c) => {
+      queryClient.invalidateQueries({ queryKey: ["cenarios"] });
+      setConfirmando(false);
+      toast.success(
+        c.reajustesAplicados
+          ? "Aplicar Reajustes marcado: clique em “Recalcular” para aplicá-los na DRE. As Configurações e as Premissas ficam bloqueadas para edição."
+          : "Aplicar Reajustes desmarcado: clique em “Recalcular” para tirá-los da DRE. As Configurações e as Premissas voltam a ser editáveis.",
+      );
+    },
+    onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível mudar a caixa Aplicar Reajustes.")),
+  });
+  const temPendencia = pendente(cenario);
+  const motivoDaCaixa = !cenario.podeEditarConfiguracoes
+    ? `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) aplica os reajustes.`
+    : "Marcada, o Recalcular aplica os Reajustes das Premissas (Configurações / Comparativo e Reajustes) na DRE";
   return (
-    <Button type="button" className={botaoPrimario} disabled={recalcular.isPending} onClick={() => recalcular.mutate()}>
-      <RefreshCw className={`size-4 ${recalcular.isPending ? "animate-spin" : ""}`} />
-      {recalcular.isPending ? "Recalculando…" : "Recalcular"}
-    </Button>
+    <>
+      <label
+        className={`flex items-center gap-2 rounded-sm border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 ${cenario.podeEditarConfiguracoes ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+        title={motivoDaCaixa}
+      >
+        <input
+          type="checkbox"
+          className="size-4 accent-black"
+          checked={cenario.reajustesAplicados}
+          disabled={!cenario.podeEditarConfiguracoes || caixa.isPending || recalcular.isPending}
+          onChange={(e) => (e.target.checked ? (caixa.reset(), setConfirmando(true)) : caixa.mutate(false))}
+        />
+        Aplicar Reajustes
+      </label>
+      <Button
+        type="button"
+        className={botaoPrimario}
+        disabled={!temPendencia || recalcular.isPending}
+        title={temPendencia ? "Refaz a DRE com as alterações pendentes de recálculo" : "Nenhuma alteração pendente de recálculo"}
+        onClick={() => recalcular.mutate()}
+      >
+        <RefreshCw className={`size-4 ${recalcular.isPending ? "animate-spin" : ""}`} />
+        {recalcular.isPending ? "Recalculando…" : "Recalcular"}
+      </Button>
+      {confirmando ? (
+        <ConfirmacaoDialog
+          titulo="Aplicar Reajustes"
+          descricao="No próximo “Recalcular”, a DRE do cenário passa a ter os Reajustes das Premissas: nas contas das combinações dos Índices de Reajuste (Configurações / Comparativo e Reajustes), cada mês a partir do Inicia Em de cada reajuste vira o valor × (1 + Valor), cada reajuste sobre os anteriores. Marcada a caixa, as Configurações e as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição; para voltar a editar, desmarque-a."
+          acao="Marcar"
+          acaoPendente="Marcando…"
+          pendente={caixa.isPending}
+          destrutiva={false}
+          onConfirmar={() => caixa.mutate(true)}
+          onFechar={() => (caixa.isPending ? undefined : setConfirmando(false))}
+        />
+      ) : null}
+    </>
   );
 }
 
-/** Os avisos dos rateios de um analítico (14/10/2026): as regras mudaram depois do cálculo e os meses sem regra. */
-function AvisosDosRateios({ cenario, podeRecalcular }: { cenario: Cenario; podeRecalcular: boolean }) {
+/**
+ * O destaque Pendente de Recálculo (21/11/2026, pedido do Adão), no formato do resumo da Conferência com a Planilha, com a borda
+ * vermelha: as alterações das Configurações, das Premissas e dos Reajustes que a DRE ainda não tem (o Recalcular as leva).
+ */
+function PendenteDeRecalculo({ cenario }: { cenario: Cenario }) {
+  const r = cenario.recalculo;
+  if (!r || !pendente(cenario)) return null;
+  const itens = [
+    {
+      rotulo: plural(r.configuracoes, "Configuração", "Configurações"),
+      valor: r.configuracoes,
+      dica: "Gravações nas Configurações (a referência, os centros de custo, os benefícios padrão, as regras de rateio…) ainda fora da DRE",
+    },
+    { rotulo: plural(r.premissas, "Premissa", "Premissas"), valor: r.premissas, dica: "Gravações nas Premissas (os valores, o Quadro de Lotação, os investimentos, as importações…) ainda fora da DRE" },
+    {
+      rotulo: plural(r.reajustes, "Reajuste", "Reajustes"),
+      valor: r.reajustes,
+      dica: "A caixa Aplicar Reajustes mudada ou os Índices de Reajuste gravados com ela marcada, ainda fora da DRE",
+    },
+  ].filter((i) => i.valor > 0);
+  return (
+    <FaixaIndicadores
+      titulo="Pendente de Recálculo:"
+      borda="atencao"
+      itens={
+        itens.length
+          ? itens.map((i) => ({ ...i, tom: "atencao" as const }))
+          : [{ rotulo: "Regras de Rateio Alteradas", valor: "", tom: "atencao" as const, dica: "As regras de rateio do cenário mudaram depois do último cálculo" }]
+      }
+    />
+  );
+}
+
+/** Os avisos dos rateios de um analítico (14/10/2026): os meses sem regra (as regras mudadas ficam no Pendente de Recálculo). */
+function AvisosDosRateios({ cenario }: { cenario: Cenario }) {
   const avisos = cenario.rateios?.avisos ?? [];
-  const desatualizado = !!cenario.rateios?.desatualizados && podeRecalcular;
-  if (!avisos.length && !desatualizado) return null;
+  if (!avisos.length) return null;
   return (
     <div className="rounded-sm border border-l-4 border-gray-200 border-l-red-600 bg-white px-4 py-3 text-sm text-gray-700">
       <p className="font-medium text-gray-900">Rateios do Cenário</p>
       <ul className="mt-1 list-disc space-y-1 pl-5">
-        {desatualizado ? <li>As regras de rateio mudaram depois do último cálculo deste cenário: clique em “Recalcular”.</li> : null}
         {avisos.map((a) => (
           <li key={a}>{a}</li>
         ))}

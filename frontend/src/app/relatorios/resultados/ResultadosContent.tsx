@@ -270,6 +270,11 @@ export function TabelaResultados({
   ].filter((v) => !comparados && (estatico?.colunas?.[v.chave as "diferenca" | "atingimento" | "eficiencia"] ?? true));
   const LARGURAS_DA_VARIACAO = variacoes.map((v) => v.largura);
   const th = "px-1.5 py-2 text-right text-xs font-bold whitespace-nowrap text-gray-900";
+  // Os índices dos cenários analíticos (21/11/2026, pedido do Adão): o Índice de Reajuste de cada linha antes de Janeiro e, com um
+  // cenário comparado, o Índice de Comparação antes do comparativo (Configurações / Comparativo e Reajustes).
+  const indicesDoCenario = dados.indices ?? null;
+  const comIndiceDeComparacao = !!indicesDoCenario?.comparacao && comOrcado && !comparados;
+  const LARGURA_DO_INDICE = 160;
   // A visão dos lançamentos da consulta aberta: a da tabela ou, numa venda, a do mês (nula: o mês sem os lançamentos).
   const visaoDaConsulta = consulta ? (consultaDaVenda ? consultaDaVenda.visao(dados.meses.indexOf(consulta.mes)) : visao) : null;
   // O mês (1 a 12) do exercício ou, no Realizado por Obra, cujos meses passam do exercício, o ano e o mês (AAAAMM).
@@ -280,12 +285,20 @@ export function TabelaResultados({
   // NÃO CORRENTES (RFNC) (+)) terminam em reticências, com o nome inteiro na dica.
   const larguras = [
     420,
+    ...(indicesDoCenario ? [LARGURA_DO_INDICE] : []),
     ...dados.meses.flatMap((_, i) =>
       !mostra(i) ? [] : i === referencia ? [96, 52, ...(unitarioNoMes ? [64] : []), ...(comOrcadoNoMes ? Array.from({ length: grupos }).flatMap(() => LARGURAS_DO_ORCADO) : [])] : [96, 52],
     ),
     ...(soOMes ? [] : [104, 52, ...(comUnitario ? [64] : [])]),
+    ...(comIndiceDeComparacao ? [LARGURA_DO_INDICE] : []),
     ...(comOrcado ? [...Array.from({ length: grupos }).flatMap(() => [104, ...LARGURAS_DO_ORCADO.slice(1)]), ...LARGURAS_DA_VARIACAO] : []),
   ];
+  /** A célula de um índice (o texto, com a dica do índice ou de cada conta, em "Vários"). */
+  const celulaDoIndice = (i: { texto: string; dica: string } | undefined, fundo: string) => (
+    <td className={`border-l border-gray-100 px-1.5 py-1.5 text-left whitespace-nowrap ${fundo}`} title={i?.dica}>
+      <span className="block truncate">{i?.texto ?? ""}</span>
+    </td>
+  );
   /**
    * Os rótulos do orçado (pretos, ou na cor do cenário) e, nos totais, da variação (amarelo-ouro, como os demais). Na
    * Tabela PROVA, os grupos dos cenários se separam por uma linha.
@@ -334,6 +347,14 @@ export function TabelaResultados({
                 {aoLadoDoTitulo}
               </span>
             </th>
+            {indicesDoCenario ? (
+              <th
+                className={`${th} border-l border-gray-300 !text-left`}
+                title={indicesDoCenario.aplicados ? "O Índice de Reajuste de cada linha: os reajustes estão aplicados na DRE." : "O Índice de Reajuste de cada linha: os reajustes não estão aplicados na DRE."}
+              >
+                ÍNDICE DE REAJUSTE
+              </th>
+            ) : null}
             {dados.meses.map((m, i) =>
               !mostra(i) ? null : (
               <Fragment key={m.mes}>
@@ -368,6 +389,11 @@ export function TabelaResultados({
                 {comUnitario ? <th className={th}>R$/m³</th> : null}
               </>
             )}
+            {comIndiceDeComparacao ? (
+              <th className={`${th} ${doOrcado.rotulo} border-l border-gray-300 !text-left`} title="O Índice de Comparação de cada linha: a variação máxima aceita contra o cenário comparado.">
+                ÍNDICE DE COMPARAÇÃO
+              </th>
+            ) : null}
             {comOrcado
               ? comparados
                 ? comparados.map((c) => <Fragment key={c.chave}>{rotulosDoOrcado(`${c.rotulo.toUpperCase()} TOTAL/${ano}`, true, c.estilo.rotulo, c.dica, true)}</Fragment>)
@@ -432,6 +458,7 @@ export function TabelaResultados({
                     {acaoDaLinha ? acaoDaLinha(l) : null}
                   </span>
                 </td>
+                {indicesDoCenario ? celulaDoIndice(indicesDoCenario.reajuste[l.codigo], fundo) : null}
                 {l.meses.map((c, i) => {
                   if (!mostra(i)) return null;
                   const m = dados.meses[i];
@@ -465,6 +492,8 @@ export function TabelaResultados({
                     {comUnitario ? <td className={`${pct} ${fundo}`}>{unitario(l, l.total.unitario)}</td> : null}
                   </>
                 )}
+                {/* Com as cores do comparado (21/11/2026, pedido do Adão): o rótulo e o fundo da coluna do total dele. */}
+                {comIndiceDeComparacao ? celulaDoIndice(indicesDoCenario!.comparacao![l.codigo], doOrcado.fundo(l)) : null}
                 {comOrcado
                   ? comparados
                     ? comparados.map((x) => <Fragment key={x.chave}>{celulasDoOrcado(l, l.total, x.celulas(l)?.total, true, x.estilo.fundo(l), true)}</Fragment>)

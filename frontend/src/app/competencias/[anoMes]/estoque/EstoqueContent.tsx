@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
 import { Vazio } from "@/components/shared/Estados";
-import { QuadroTabela } from "@/components/shared/QuadroTabela";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import { Destaque, TabelaComDestaque } from "@/app/cenarios/components/DestaqueDaAba";
 import type { Coluna } from "@/lib/filtrosDeTabela";
 
 import { AvisoCongelado } from "../../components/AvisoCongelado";
@@ -79,7 +79,6 @@ export function EstoqueContent() {
     <div className="space-y-6">
       <CabecalhoDaTela
         titulo="Estoque Prévio"
-        exportar={<ExportarTabela titulo={`Estoque Prévio · ${anoMes.slice(5)}/${anoMes.slice(0, 4)}`} colunas={COLUNAS} linhas={tabela.filtradas} />}
         selo={
           dados?.congelado || dados?.competencia.status === "FECHADA" ? (
             <AvisoCongelado anoMes={anoMes} fechada={dados?.competencia.status === "FECHADA"} oQue="do saldo de estoque" />
@@ -90,6 +89,7 @@ export function EstoqueContent() {
             <li>A tela Prévias (Prévias de Receita e Estoque) tem duas abas: Receita (a receita prévia do mês) e Estoque (esta, com o saldo de estoque prévio).</li>
             <li>Os cards no alto trazem o saldo de cada linha (Estrutura, Alveolares, Estacas) e o geral, em m³ e em reais, com o Preço Médio.</li>
             <li>Use os filtros nos rótulos das colunas; nas colunas de Movimento, por exemplo, para ver só as obras que se moveram no mês. A coluna Valoração diz como o saldo da obra foi valorado.</li>
+            <li>A tabela dos saldos tem o destaque acima dela — o título, a descrição e o “Exportar” (Excel ou PDF, o que está filtrado) —, que flutua sobre a tabela ao rolar a tela, com os rótulos das colunas presos logo abaixo.</li>
             <li>Use “Apurar Estoque” para calcular o saldo; o mês seguinte parte dele.</li>
             <li>Depois da apuração, a aba fica congelada: o que mudar só entra ao reapurar a competência, na tela Resultados.</li>
           </ul>
@@ -150,36 +150,43 @@ export function EstoqueContent() {
             ))}
           </div>
 
-          <QuadroTabela>
-              <table className="tabela-sig w-full border-collapse text-sm">
-                {tabela.cabecalho}
-                <tbody>
-                  {saldos.length > 0 && tabela.total === 0 ? <SemResultado colunas={COLUNAS.length} onLimpar={tabela.limpar} /> : null}
-                  {tabela.visiveis.map((s) => (
-                    <tr key={`${s.obra}|${s.linha}`} className="border-b border-gray-100">
-                      <td className="px-4 py-2">
-                        <div className="font-medium text-gray-900">{s.obra}</div>
-                        {s.nomeObra !== s.obra ? (
-                          <div className="max-w-32 truncate text-xs text-gray-500" title={s.nomeObra}>
-                            {s.nomeObra}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-2 text-gray-700">{s.linha}</td>
-                      <td className="px-4 py-2 text-right text-gray-700">{m3(s.movimentoVolume)}</td>
-                      <td className="px-4 py-2 text-right text-gray-700">{moeda(s.movimentoValor)}</td>
-                      <td className="px-4 py-2 text-xs whitespace-nowrap text-gray-600">
-                        {s.criterio ? ROTULO_CRITERIO_ESTOQUE[s.criterio] ?? s.criterio : "—"}
-                        {s.precoMovimento ? <div>{moeda(s.precoMovimento)}/m³</div> : null}
-                      </td>
-                      <td className="px-4 py-2 text-right text-gray-700">{m3(s.saldoVolume)}</td>
-                      <td className="px-4 py-2 text-right text-gray-700">{moeda(s.saldoValor)}</td>
-                      <td className="px-4 py-2 text-right text-gray-600">{moeda(s.precoMedio)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-          </QuadroTabela>
+          {/* Os saldos (21/11/2026, pedido do Adão: o padrão das telas com tabela, como os Investimentos dos Cenários Analíticos). */}
+          <TabelaComDestaque
+            destaque={
+              <Destaque titulo="Saldos por Obra" descricao="O saldo do mês anterior mais a produção, menos a expedição, por obra e linha, com o movimento do mês e a valoração.">
+                <ExportarTabela titulo={`Estoque Prévio · ${anoMes.slice(5)}/${anoMes.slice(0, 4)}`} colunas={COLUNAS} linhas={tabela.filtradas} />
+              </Destaque>
+            }
+            larguras={[230, 140, 140, 160, 190, 130, 160, 130]}
+            cabecalho={tabela.linhaDoCabecalho}
+            corpo={
+              <>
+                {saldos.length > 0 && tabela.total === 0 ? <SemResultado colunas={COLUNAS.length} onLimpar={tabela.limpar} /> : null}
+                {tabela.visiveis.map((s) => (
+                  <tr key={`${s.obra}|${s.linha}`} className="border-t border-gray-100">
+                    <td className="px-3 py-1.5">
+                      <div className="font-medium text-gray-900">{s.obra}</div>
+                      {s.nomeObra !== s.obra ? (
+                        <div className="truncate text-xs text-gray-500" title={s.nomeObra}>
+                          {s.nomeObra}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700">{s.linha}</td>
+                    <td className="px-3 py-1.5 text-right text-gray-700">{m3(s.movimentoVolume)}</td>
+                    <td className="px-3 py-1.5 text-right text-gray-700">{moeda(s.movimentoValor)}</td>
+                    <td className="px-3 py-1.5 text-xs whitespace-nowrap text-gray-600">
+                      {s.criterio ? ROTULO_CRITERIO_ESTOQUE[s.criterio] ?? s.criterio : "—"}
+                      {s.precoMovimento ? <div>{moeda(s.precoMovimento)}/m³</div> : null}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-gray-700">{m3(s.saldoVolume)}</td>
+                    <td className="px-3 py-1.5 text-right text-gray-700">{moeda(s.saldoValor)}</td>
+                    <td className="px-3 py-1.5 text-right text-gray-600">{moeda(s.precoMedio)}</td>
+                  </tr>
+                ))}
+              </>
+            }
+          />
         </>
       ) : (
         <div className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">

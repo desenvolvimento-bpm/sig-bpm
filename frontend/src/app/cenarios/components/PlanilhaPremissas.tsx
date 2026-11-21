@@ -75,8 +75,8 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
       invalidar(queryClient);
       toast.success(
         replicar
-          ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")}); a DRE do cenário foi recalculada.`
-          : `Valores apagados em ${r.linhas} ${plural(r.linhas, "linha", "linhas")}; a DRE do cenário foi recalculada.`,
+          ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")}); a DRE fica pendente de recálculo (Resultados / Recalcular).`
+          : `Valores apagados em ${r.linhas} ${plural(r.linhas, "linha", "linhas")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`,
       );
       onFechar();
     },
@@ -101,7 +101,7 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
                 </>
               )}
               <li>Vale para todas as abas das premissas: {ABAS_DA_PLANILHA}.</li>
-              <li>A DRE do cenário se recalcula, e a mudança fica no histórico (tela Histórico, aba Alterações).</li>
+              <li>A DRE do cenário fica pendente de recálculo (Resultados / Recalcular), e a mudança fica no histórico (tela Histórico, aba Alterações).</li>
             </ul>
           </DialogDescription>
         </DialogHeader>
@@ -390,7 +390,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
       const inv = r.investimentosNovos + r.investimentosAlterados + r.investimentosExcluidos;
       const ql = r.quadroNovas + r.quadroAlteradas + r.quadroExcluidas;
       toast.success(
-        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")}, ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")} e ${r.investimentosExcluidos} ${plural(r.investimentosExcluidos, "excluído", "excluídos")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE do cenário foi recalculada.`,
+        `${r.valores} ${plural(r.valores, "valor importado", "valores importados")}, ${r.justificativas} ${plural(r.justificativas, "justificativa", "justificativas")}${inv ? `, ${r.investimentosNovos} ${plural(r.investimentosNovos, "investimento novo", "investimentos novos")}, ${r.investimentosAlterados} ${plural(r.investimentosAlterados, "alterado", "alterados")} e ${r.investimentosExcluidos} ${plural(r.investimentosExcluidos, "excluído", "excluídos")}` : ""}${ql ? `, ${r.quadroNovas} ${plural(r.quadroNovas, "linha nova", "linhas novas")}, ${r.quadroAlteradas} ${plural(r.quadroAlteradas, "alterada", "alteradas")} e ${r.quadroExcluidas} ${plural(r.quadroExcluidas, "excluída", "excluídas")} no Quadro de Lotação` : ""}; a DRE fica pendente de recálculo (Resultados / Recalcular).`,
       );
       onFechar();
     },

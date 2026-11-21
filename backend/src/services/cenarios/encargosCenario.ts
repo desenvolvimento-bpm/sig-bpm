@@ -36,10 +36,17 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  * Os Salários dos Aprendizes e dos Estagiários (12/11/2026, pedido do Adão: um por grupo, como os Salários CLT e PJ; antes,
  * um de cada por mão de obra) entram só na mão de obra da atribuição do grupo, a que recebe as remunerações do Quadro de
  * Lotação (quadroDoCenario.ts); na outra, a base é Remunerações CLT + Horas Extras.
+ *
+ * Os Benefícios Padrão (21/11/2026, pedido do Adão): a soma dos Benefícios das linhas do grupo na aba Quadro de Lotação (os
+ * Benefícios Padrão aplicados × os colaboradores, ou o valor digitado na importação). Calculados, não se digitam; entram, como os
+ * Benefícios Adicionais, na conta Encargos e Benefícios da mão de obra principal:
+ *
+ *   Encargos e Benefícios = (o cálculo acima) + Benefícios Adicionais + Benefícios Padrão.
  */
 
-export type ItemDosEncargos = "INSS" | "FGTS_APRENDIZ" | "FGTS" | "FERIAS" | "DECIMO_TERCEIRO" | "BENEFICIOS";
-export const ITENS_DOS_ENCARGOS: Array<{ item: ItemDosEncargos; venda: string; rotulo: string; und: "%" | "R$"; padrao: number | null }> = [
+export type ItemDosEncargos = "INSS" | "FGTS_APRENDIZ" | "FGTS" | "FERIAS" | "DECIMO_TERCEIRO" | "BENEFICIOS" | "BENEFICIOS_PADRAO";
+/** Os itens dos Encargos e Benefícios; `calculado` (os Benefícios Padrão, 21/11/2026): vem da aba Quadro de Lotação e não se digita. */
+export const ITENS_DOS_ENCARGOS: Array<{ item: ItemDosEncargos; venda: string; rotulo: string; und: "%" | "R$"; padrao: number | null; calculado?: boolean }> = [
   { item: "INSS", venda: "ENCARGOS_INSS", rotulo: "Previdência Social (INSS)", und: "%", padrao: 0.29 },
   { item: "FGTS_APRENDIZ", venda: "ENCARGOS_FGTS_APRENDIZ", rotulo: "Fundo de Garantia: Aprendiz (FGTS)", und: "%", padrao: 0.02 },
   { item: "FGTS", venda: "ENCARGOS_FGTS", rotulo: "Fundo de Garantia: CLT (FGTS)", und: "%", padrao: 0.08 },
@@ -47,6 +54,8 @@ export const ITENS_DOS_ENCARGOS: Array<{ item: ItemDosEncargos; venda: string; r
   { item: "FERIAS", venda: "ENCARGOS_FERIAS", rotulo: "Férias (+1/3)", und: "%", padrao: 1 / 9 },
   { item: "DECIMO_TERCEIRO", venda: "ENCARGOS_13", rotulo: "Décimo Terceiro", und: "%", padrao: 1 / 12 },
   { item: "BENEFICIOS", venda: "BENEFICIOS", rotulo: "Benefícios Adicionais", und: "R$", padrao: null },
+  // A venda não se grava (os Benefícios Padrão saem do Quadro de Lotação em cada cálculo): só o nome do item.
+  { item: "BENEFICIOS_PADRAO", venda: "BENEFICIOS_PADRAO", rotulo: "Benefícios Padrão", und: "R$", padrao: null, calculado: true },
 ];
 export const VENDAS_DOS_ENCARGOS = new Set(ITENS_DOS_ENCARGOS.map((i) => i.venda));
 export const itemDosEncargos = (item: string) => ITENS_DOS_ENCARGOS.find((i) => i.item === item);
@@ -114,8 +123,8 @@ export function valorDoItem(item: (typeof ITENS_DOS_ENCARGOS)[number], gravado: 
 /**
  * Os Encargos e Benefícios de um grupo nos doze meses (conta → os doze meses): `conta(codigo, mes)` lê o valor das contas
  * do grupo; `gravado(venda, mes)`, as premissas dos encargos; `aprendizes(mes)`, os Salários dos Aprendizes do grupo
- * (09/11/2026; sem eles, zero); `estagiarios(mes)`, os dos Estagiários, que saem da base (11/11/2026). Os dois, só na mão
- * de obra principal (12/11/2026).
+ * (09/11/2026; sem eles, zero); `estagiarios(mes)`, os dos Estagiários, que saem da base (11/11/2026); `beneficiosPadrao(mes)`,
+ * os Benefícios do Quadro de Lotação do grupo (21/11/2026). Os três, só na mão de obra principal (12/11/2026).
  */
 export function encargosDoGrupo(
   codigos: string[],
@@ -124,6 +133,7 @@ export function encargosDoGrupo(
   gravado: (venda: string, mes: number) => number | undefined,
   aprendizes: (mes: number) => number = () => 0,
   estagiarios: (mes: number) => number = () => 0,
+  beneficiosPadrao: (mes: number) => number = () => 0,
 ) {
   const r = new Map<string, number[]>();
   const beneficios = ITENS_DOS_ENCARGOS.find((i) => i.item === "BENEFICIOS")!;
@@ -134,7 +144,7 @@ export function encargosDoGrupo(
         const mes = k + 1;
         const base = conta(mo.remuneracoes, mes) + conta(mo.horasExtras, mes) - (mo.principal ? estagiarios(mes) : 0);
         const valor = (item: ItemDosEncargos) => valorDoItem(itemDosEncargos(item)!, gravado, mes);
-        return encargosDaBase(base, mo.principal ? aprendizes(mes) : 0, valor) + (mo.beneficios ? valorDoItem(beneficios, gravado, mes) : 0);
+        return encargosDaBase(base, mo.principal ? aprendizes(mes) : 0, valor) + (mo.beneficios ? valorDoItem(beneficios, gravado, mes) + beneficiosPadrao(mes) : 0);
       }),
     );
   }

@@ -9,8 +9,10 @@ import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VE
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
-import { fatoresDasContas, fatorNaUnidade, fatorNaVenda, GRUPOS_POR_UNIDADE, reajustarPorVenda, resumoVazio } from "./reajustesCenario.js";
-import { assinaturaDasRegras, percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
+import { fatorNaUnidade, fatorNaVenda, GRUPOS_POR_UNIDADE, reajustarPorVenda, resumoVazio } from "./reajustesCenario.js";
+import { fatoresDoCenario } from "./indicesCenario.js";
+import { assinaturaDasRegras, percentuaisPelasRegras } from "../volumes/vigenciaDosRateios.js";
+import { regrasDoCenario } from "./regrasDoCenario.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
 
 type Tx = Prisma.TransactionClient;
@@ -429,6 +431,8 @@ async function materializarEncargos(
       (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`),
       (mes) => q?.salarios.aprendizes[mes - 1] ?? 0,
       (mes) => q?.salarios.estagiarios[mes - 1] ?? 0,
+      // Os Benefícios Padrão do Quadro de Lotação do grupo (21/11/2026).
+      (mes) => q?.beneficios[mes - 1] ?? 0,
     );
     for (const [codigo, lista] of r) lista.forEach((v, k) => (Math.abs(v) >= 0.00005 ? calculados.push({ grupo: g.grupo, codigo, mes: k + 1, valor: v }) : undefined));
   }
@@ -506,13 +510,51 @@ async function materializarQuadro(
   return [...meses.filter((x) => !remuneracoesDo.get(x.grupo)?.has(x.codigo)), ...centros];
 }
 
+/** As telas das alterações que a DRE ainda não tem (21/11/2026): o Recalcular dos Resultados conta cada uma. */
+export type TelaDoRecalculo = "configuracoes" | "premissas" | "reajustes";
+const CAMPO_DO_RECALCULO = { configuracoes: "recalculoConfiguracoes", premissas: "recalculoPremissas", reajustes: "recalculoReajustes" } as const;
+
+/**
+ * As linhas calculadas das premissas do analítico (21/11/2026, o Recalcular dos Resultados), sem a DRE: os colaboradores e as
+ * Remunerações do Quadro de Lotação e a conta Encargos e Benefícios dos grupos — o que as abas das Premissas mostram calculado.
+ * A DRE (os rateios, a depreciação, os reajustes e os totais) só se refaz no calcularAnalitico.
+ */
+export async function materializarPremissas(tx: Tx, cenarioId: string) {
+  const [est, gravadas, grupos, valoresCentros] = await Promise.all([
+    estrutura(),
+    tx.cenarioPremissa.findMany({ where: { cenarioId } }),
+    gruposDoCenario(cenarioId, tx),
+    tx.cenarioCentro.findMany({ where: { cenarioId, mes: { gte: 1, lte: 12 } }, include: { linhaDRE: { select: { codigo: true } } } }),
+  ]);
+  const meses = valoresCentros.map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
+  const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos);
+  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses);
+  await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro);
+}
+
+/**
+ * Uma gravação que muda a DRE do analítico (21/11/2026, pedido do Adão): refaz as linhas calculadas das premissas
+ * (`materializarPremissas`, com `materializar`) e conta a alteração da tela para o Recalcular dos Resultados — a DRE fica como
+ * estava até ele.
+ */
+export async function alteradoSemRecalcular(tx: Tx, cenarioId: string, tela: TelaDoRecalculo, materializar = true) {
+  if (materializar) await materializarPremissas(tx, cenarioId);
+  await tx.cenario.update({ where: { id: cenarioId }, data: { [CAMPO_DO_RECALCULO[tela]]: { increment: 1 } } });
+}
+
+/** As alterações ainda não recalculadas do analítico, por tela (os Reajustes com a caixa Aplicar Reajustes mudada). */
+export function pendenciasDoRecalculo(c: { recalculoConfiguracoes: number; recalculoPremissas: number; recalculoReajustes: number; reajustesAplicados: boolean; reajustesCalculados: boolean }) {
+  const reajustes = c.recalculoReajustes + (c.reajustesAplicados !== c.reajustesCalculados ? 1 : 0);
+  return { configuracoes: c.recalculoConfiguracoes, premissas: c.recalculoPremissas, reajustes, total: c.recalculoConfiguracoes + c.recalculoPremissas + reajustes };
+}
+
 /**
  * Recalcula a DRE do cenário analítico (13/10/2026): as contas das premissas de cada unidade (as de Global e Mercantil
  * somadas), as dos grupos de centros de custo, alocadas às unidades pelo balde e pelos rateios — com os percentuais
  * das bases das premissas (centrosCenario.ts) —, e a depreciação (a base e a dos investimentos) e o extra-operacional
  * (investimentosCenario.ts) substituem a DRE inteira do cenário, e os totais e o Consolidado se
  * recalculam pela Estrutura da DRE. Como a DRE do analítico não se edita, ela é sempre a soma das premissas e dos centros.
- * Com os reajustes aplicados (11/11/2026, reajustesCenario.ts), as contas com índice na Aplicação dos Reajustes saem
+ * Com os reajustes aplicados (11/11/2026, reajustesCenario.ts), as contas com Índice de Reajuste (as combinações dele) saem
  * multiplicadas pelo fator do índice em cada mês; devolve o resumo deles (as contas, os meses e as somas sem e com).
  */
 export async function calcularAnalitico(tx: Tx, cenarioId: string) {
@@ -525,7 +567,8 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     gruposDoCenario(cenarioId, tx),
     tx.cenarioCentro.findMany({ where: { cenarioId }, include: { linhaDRE: { select: { codigo: true } } } }),
     tx.cenarioInvestimento.findMany({ where: { cenarioId } }),
-    regrasDeRateio(tx),
+    // As regras da cópia do cenário (21/11/2026: Configurações / Regras de Rateio), no lugar das de Cadastros Gerais.
+    regrasDoCenario(tx, cenarioId),
     tx.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
   ]);
   const porCodigo = new Map(est.map((l) => [l.codigo, l]));
@@ -545,8 +588,12 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     // Os percentuais pelas regras de rateio de cada mês (14/10/2026): o fixo, ou as bases entre os destinos das por volume.
     percentuaisPelasRegras(regras, cenario.ano, bases),
   );
-  // As regras deste cálculo: se mudarem depois, a tela Resultados pede o Recalcular.
-  await tx.cenario.update({ where: { id: cenarioId }, data: { rateiosAssinatura: assinaturaDasRegras(regras) } });
+  // As regras deste cálculo: se mudarem depois, a tela Resultados pede o Recalcular. A DRE fica com todas as alterações
+  // (21/11/2026): as pendências do Recalcular zeram, e os reajustes do cálculo são os da caixa Aplicar Reajustes.
+  await tx.cenario.update({
+    where: { id: cenarioId },
+    data: { rateiosAssinatura: assinaturaDasRegras(regras), recalculoConfiguracoes: 0, recalculoPremissas: 0, recalculoReajustes: 0, reajustesCalculados: cenario.reajustesAplicados },
+  });
   for (const [k, lista] of alocados) juntar(somas, k, lista);
   // A depreciação base, a dos investimentos e o extra-operacional (etapa 4).
   const outros = calcularInvestimentosEExtra(
@@ -556,7 +603,8 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   for (const [k, lista] of outros) juntar(somas, k, lista);
   // Os reajustes (11/11/2026): o fator do índice de cada conta em cada mês. O resumo diz o que eles mudam (aplicados
   // ou não); só com eles aplicados os valores gravados saem reajustados.
-  const fatores = fatoresDasContas(cenario);
+  // Desde 21/11/2026, pelas combinações dos Índices de Reajuste (indicesCenario.ts), com a cópia dos Departamentos do cenário.
+  const fatores = await fatoresDoCenario(tx, { id: cenarioId, ...cenario }, est);
   const resumo = resumoVazio();
   const novos: Array<{ cenarioId: string; visao: number; linhaDREId: string; mes: number; valor: Prisma.Decimal }> = [];
   for (const [k, lista] of somas) {

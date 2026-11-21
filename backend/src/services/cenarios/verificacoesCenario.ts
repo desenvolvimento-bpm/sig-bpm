@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { getPrismaClient } from "../../config/prisma.js";
 import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 import { estrutura as estruturaDRE } from "../dre/dreService.js";
-import { percentuaisPelasRegras, regrasDeRateio } from "../volumes/vigenciaDosRateios.js";
+import { percentuaisPelasRegras } from "../volumes/vigenciaDosRateios.js";
+import { regrasDoCenario } from "./regrasDoCenario.js";
 import { alocarCentros, gruposDoCenario, type GrupoDoCenario, type Percentuais } from "./centrosCenario.js";
 import { C, calcularPremissas, calcularTabela, linhasDaTabela, linhasDoCadastro, VENDAS_DA_UNIDADE, type LinhaDoCadastro, type UnidadePremissa } from "./premissasCenario.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
@@ -143,7 +144,7 @@ export async function dadosDasVerificacoes(c: { id: string; ano: number }): Prom
     gruposDoCenario(c.id),
     prisma.cenarioCentro.findMany({ where: { cenarioId: c.id, mes: { gte: 1, lte: 12 } }, select: { grupo: true, mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
     prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(c.id), select: { nome: true, mes: true, valor: true } }),
-    regrasDeRateio(),
+    regrasDoCenario(prisma, c.id),
     prisma.cenarioLotacao.findMany({
       where: { cenarioId: c.id },
       orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],

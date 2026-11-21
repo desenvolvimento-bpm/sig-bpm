@@ -425,6 +425,7 @@ model UnidadeNegocio {
   unidadesDosCenarios   CenarioUnidade[]
   centrosDosCenarios    CenarioCentroCusto[] @relation("UnidadeDoCentroDoCenario")
   departamentosDosCenarios CenarioDepartamento[] @relation("UnidadeDoDepartamentoDoCenario")
+  regrasDosCenarios        CenarioRegraRateio[]  @relation("UnidadeDaRegraDoCenario")
   /// LISTA: as linhas da unidade (cadastro Linhas).
   linhas         Linha[]
   /// LISTA: linhas da DRE que se aplicam a esta unidade.
@@ -667,6 +668,7 @@ model RegraRateio {
 
   volumesOperacionais VolumeOperacional[]
   linhas              RegraRateioLinha[]
+  copiasNosCenarios   CenarioRegraRateio[] @relation("RegraDoCenario")
 
   @@unique([chave, destino, vigenciaInicio])
   @@index([chave])
@@ -2318,6 +2320,10 @@ model Cenario {
   criadoPorId  String?          @map("criado_por_id")
   /// Particular ou pública; um cenário marcado é sempre público (o Orçamento Empresarial dá o orçado a todos).
   visualizacao VisualizacaoCenario @default(PUBLICA)
+  /// O compartilhamento do cenário particular (21/11/2026, pedido do Adão; como o Compartilhar dos Painéis e Apresentações): os
+  /// usuários que quem criou o cenário (ou o Administrador) convidou a vê-lo — [{ usuarioId, convidadoPor, convidadoEm }]. Cada um
+  /// usa as telas pelo seu perfil: o perfil só de leitura só lê. Na visualização Pública, todos já veem.
+  compartilhamentos Json?  @map("compartilhamentos")
   /// A Edição das Configurações (12/11/2026, pedido do Adão): Particular (o padrão, a regra de antes), só quem criou o cenário
   /// e o Administrador alteram a tela Configurações (todas as abas e ações); Pública, todos com a permissão do perfil.
   edicaoConfiguracoes VisualizacaoCenario @default(PARTICULAR) @map("edicao_configuracoes")
@@ -2342,6 +2348,14 @@ model Cenario {
   /// Os reajustes aplicados na DRE (o Recalcular dos Resultados: Aplicar ou Remover Reajustes). Ligado, todo cálculo da DRE
   /// multiplica as contas com índice pelos fatores de cada mês (calcularAnalitico).
   reajustesAplicados Boolean @default(false) @map("reajustes_aplicados")
+  /// O Recalcular dos Resultados (21/11/2026, pedido do Adão): as gravações das Configurações, das Premissas e dos Índices de
+  /// Reajuste não refazem a DRE (só as linhas calculadas das premissas); cada uma soma 1 aqui, e o Recalcular refaz a DRE e zera.
+  recalculoConfiguracoes Int @default(0) @map("recalculo_configuracoes")
+  recalculoPremissas     Int @default(0) @map("recalculo_premissas")
+  recalculoReajustes     Int @default(0) @map("recalculo_reajustes")
+  /// Os reajustes no último cálculo da DRE: diferente de reajustesAplicados (a caixa Aplicar Reajustes dos Resultados), o
+  /// Recalcular aplica ou remove os reajustes.
+  reajustesCalculados Boolean @default(false) @map("reajustes_calculados")
   /// As movimentações do realizado fora dos padrões das premissas (cenário analítico, 14/10/2026): as da última carga
   /// do resultado realizado, as decisões de realocação (o grupo de centros de custo de cada conta; mantidas entre as
   /// cargas) e o que está somado nos centros por elas. Ver services/cenarios/realocacoesCenario.ts.
@@ -2382,6 +2396,8 @@ model Cenario {
   centrosCusto   CenarioCentroCusto[]
   departamentos  CenarioDepartamento[]
   redistribuicoes CenarioRedistribuicao[]
+  regrasRateio   CenarioRegraRateio[]
+  beneficiosPadrao CenarioBeneficioPadrao[]
 
   @@unique([marcacao])
   @@map("cenarios")
@@ -2661,6 +2677,58 @@ model CenarioDepartamento {
   @@map("cenarios_departamentos")
 }
 
+/// Os Benefícios Padrão de um cenário analítico (21/11/2026, pedido do Adão: a aba Benefícios Padrão das Configurações, depois
+/// de Centros de Custo): o Nome, a Descrição e o Valor Mensal por colaborador (Cesta Básica, Vale-Transporte, Seguro de Vida,
+/// Plano de Saúde…). O botão Benefícios da aba Quadro de Lotação das Premissas os aplica às linhas e aos meses marcados.
+model CenarioBeneficioPadrao {
+  id           String   @id @default(uuid())
+  cenarioId    String   @map("cenario_id")
+  nome         String
+  descricao    String?
+  /// O valor mensal por colaborador (R$).
+  valorMensal  Decimal  @map("valor_mensal")
+  ordem        Int      @default(0)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  cenario Cenario @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([cenarioId, nome])
+  @@index([cenarioId])
+  @@map("cenarios_beneficios_padrao")
+}
+
+/// A cópia de uma Regra de Rateio num cenário analítico (21/11/2026, pedido do Adão: a aba Regras de Rateio das Configurações,
+/// depois de Centros de Custo). O cenário calcula os rateios pelas regras da cópia, no lugar das de Cadastros Gerais / Regras de
+/// Rateio; os campos são os do cadastro (sem os percentuais por linha, que só a etapa Linhas do fechamento usa). A cópia é tirada
+/// na criação do cenário (a revisão e a cópia de um cenário levam as dele; os de antes, na migração de 21/11/2026), com a data de
+/// alteração da regra de origem: a assinatura das regras do cálculo segue a mesma enquanto a cópia for igual.
+model CenarioRegraRateio {
+  id               String        @id @default(uuid())
+  cenarioId        String        @map("cenario_id")
+  origemId         String?       @map("origem_id")
+  chave            BaldeAlocacao
+  destino          DestinoRateio
+  unidadeDestinoId String        @map("unidade_destino_id")
+  rotulo           String
+  baseFisica       BaseFisica    @map("base_fisica")
+  origemDoVolume   String        @map("origem_do_volume")
+  vigenciaInicio   DateTime      @map("vigencia_inicio")
+  vigenciaFim      DateTime?     @map("vigencia_fim")
+  /// O percentual fixo do destino (0 a 1): as regras fixas de uma chave e de um período somam 100%.
+  percentualFixo   Decimal?      @map("percentual_fixo")
+  ordem            Int           @default(0)
+  criadoEm         DateTime      @default(now()) @map("criado_em")
+  atualizadoEm     DateTime      @updatedAt @map("atualizado_em")
+
+  cenario        Cenario        @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
+  origem         RegraRateio?   @relation("RegraDoCenario", fields: [origemId], references: [id], onDelete: SetNull)
+  unidadeDestino UnidadeNegocio @relation("UnidadeDaRegraDoCenario", fields: [unidadeDestinoId], references: [id])
+
+  @@index([cenarioId])
+  @@map("cenarios_regras_rateio")
+}
+
 /// A cópia de uma Redistribuição de Gastos num cenário analítico (20/11/2026, Cadastros por cenário, etapa 2): a aba
 /// Redistribuições de Gastos das Configurações. Os campos são os do cadastro; o departamento e os centros dos destinos são os
 /// das cópias do cenário. Vale na carga do realizado da referência do cenário, no lugar das redistribuições dos Cadastros Gerais.
@@ -2730,6 +2798,11 @@ model CenarioLotacaoMes {
   salarioBruto  Decimal @default(0) @map("salario_bruto")
   /// A Insalubridade / Periculosidade de cada colaborador (R$).
   adicional     Decimal @default(0)
+  /// Os Benefícios Padrão aplicados no mês (21/11/2026, pedido do Adão: o botão Benefícios da aba Quadro de Lotação): os ids
+  /// dos benefícios do cenário. Com eles, os Benefícios do mês são os colaboradores × a soma do Valor Mensal deles.
+  beneficiosPadrao String[] @default([]) @map("beneficios_padrao")
+  /// Os Benefícios do mês digitados na importação (a coluna Benefícios da aba Quadro de Lotação do Excel), sem benefícios aplicados.
+  beneficios       Decimal?
 
   linha CenarioLotacao @relation(fields: [linhaId], references: [id], onDelete: Cascade)
 

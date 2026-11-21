@@ -58,7 +58,7 @@ export function EditarIndicadorDialog({
       // Se o cenário é o Orçamento Empresarial, o orçado de Resultados Empresariais muda.
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
       const n = replicar ? meses.length - mes : 1;
-      toast.success(`${indicador.nome}: ${n} ${plural(n, "valor gravado", "valores gravados")}${recalculaDRE ? "; a DRE do cenário foi recalculada" : ""}.`);
+      toast.success(`${indicador.nome}: ${n} ${plural(n, "valor gravado", "valores gravados")}${recalculaDRE ? "; a DRE fica pendente de recálculo (Resultados / Recalcular)" : ""}.`);
       onFechar();
     },
   });
@@ -84,7 +84,7 @@ export function EditarIndicadorDialog({
  * Os Indicadores Manuais de um cenário (14/10/2026: também a aba das Premissas dos analíticos): os quadros de lotação e
  * os indicadores do Comercial e do Administrativo, que não saem da DRE. Clicar no valor de um mês abre o modal Editar Valor
  * (16/11/2026), como nas demais tabelas dos cenários. Nos analíticos (16/11/2026), também a Liberação de Projetos: Matriz e
- * Filial, a base do rateio de Projeto (gravar recalcula a DRE do cenário).
+ * Filial, a base do rateio de Projeto (gravar deixa a DRE do cenário pendente de recálculo).
  */
 export function IndicadoresManuais({ id, podeEditar, comReferencia = false }: { id: string; podeEditar: boolean; comReferencia?: boolean }) {
   const [editando, setEditando] = useState<MesEmEdicao | null>(null);

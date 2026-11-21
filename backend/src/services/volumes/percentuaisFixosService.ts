@@ -40,7 +40,8 @@ async function linhasDosDestinos() {
 }
 /** O rótulo de cada regra do conjunto: "Produção: Matriz (Fixo)", com a base escolhida no lugar do nome da chave. */
 const rotuloDaRegra = (base: string, destino: string) => `${base}: ${NOME_DO_DESTINO[destino] ?? destino} (Fixo)`;
-const baseDoRotulo = (rotulo: string) => rotulo.replace(/: [^:]+ (Fixo)$/, "");
+// O "(Fixo)" com os parênteses escapados (21/11/2026: sem eles, o sufixo não saía e o rótulo crescia a cada gravação).
+const baseDoRotulo = (rotulo: string) => rotulo.replace(/: [^:]+ \(Fixo\)$/, "");
 
 async function regras() {
   const rs = await getPrismaClient().regraRateio.findMany({

@@ -42,11 +42,14 @@ const nome = (c: string) => NOME_DA_CHAVE[c] ?? c;
 export const chavesSemRegra = (regras: RegraDoMes[], ano: number, mes: number) =>
   CHAVES_DE_RATEIO.filter((c) => !regras.some((r) => r.chave === c && valeNoMes(vigencia(r), ano, mes)));
 
+/** Onde se cadastram as regras: em Cadastros Gerais; nos cenários analíticos (21/11/2026), na aba Regras de Rateio das Configurações. */
+const CADASTRO_GERAL = "Cadastros Gerais / Regras de Rateio";
+
 /**
  * Os avisos dos meses: por chave, os meses sem regra (em períodos seguidos), e os conjuntos de percentuais fixos que
  * valem em algum dos meses e não somam 100%.
  */
-export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: number; mes: number }>) {
+export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: number; mes: number }>, onde = CADASTRO_GERAL) {
   const avisos: string[] = [];
   for (const chave of CHAVES_DE_RATEIO) {
     const sem = meses.filter((m) => chavesSemRegra(regras, m.ano, m.mes).includes(chave)).map((m) => m.ano * 12 + m.mes - 1).sort((a, b) => a - b);
@@ -58,7 +61,7 @@ export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: numbe
       else periodos.push([m, m]);
     }
     const texto = periodos.map(([a, b]) => (a === b ? rotuloDoMes(a) : `${rotuloDoMes(a)} a ${rotuloDoMes(b)}`)).join(", ");
-    avisos.push(`Rateio de ${nome(chave)} sem regra vigente em ${texto}: cadastre a regra em Cadastros Gerais / Regras de Rateio.`);
+    avisos.push(`Rateio de ${nome(chave)} sem regra vigente em ${texto}: cadastre a regra em ${onde}.`);
   }
   const somas = new Map<string, { soma: number; regra: RegraDoMes }>();
   for (const r of regras.filter((x) => x.percentualFixo !== null && meses.some((m) => valeNoMes(vigencia(x), m.ano, m.mes)))) {
@@ -72,9 +75,9 @@ export function avisosDosRateios(regras: RegraDoMes[], meses: Array<{ ano: numbe
 }
 
 /** Por que abrir ou fechar (`acao`) não pode (nulo se pode): os rateios sem regra vigente em algum dos meses. */
-export function bloqueioPorRateios(regras: RegraDoMes[], meses: Array<{ ano: number; mes: number }>, acao: string) {
-  const sem = avisosDosRateios(regras, meses).filter((a) => a.includes("sem regra vigente"));
-  return sem.length ? `Não é possível ${acao}: ${sem.map((a) => a.replace(/: cadastre a regra.*$/, "")).join("; ")}. Cadastre as regras em Cadastros Gerais / Regras de Rateio.` : null;
+export function bloqueioPorRateios(regras: RegraDoMes[], meses: Array<{ ano: number; mes: number }>, acao: string, onde = CADASTRO_GERAL) {
+  const sem = avisosDosRateios(regras, meses, onde).filter((a) => a.includes("sem regra vigente"));
+  return sem.length ? `Não é possível ${acao}: ${sem.map((a) => a.replace(/: cadastre a regra.*$/, "")).join("; ")}. Cadastre as regras em ${onde}.` : null;
 }
 
 /** Os doze meses de um exercício. */

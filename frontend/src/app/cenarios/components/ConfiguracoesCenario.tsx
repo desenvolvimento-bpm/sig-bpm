@@ -21,12 +21,14 @@ import { cenariosService, rotuloMarcacao, type AcessoInformacoes, type Cenario, 
 import { useTipoDoCenario } from "./tipoDoCenario";
 import { AvisoMarcado, estaTravado } from "./AvisoMarcado";
 import { botaoPrimario, CampoVisualizacao, Erro, ExcluirCenarioDialog, OpcaoEmLinha } from "./CenarioDialog";
-import { ComparativoCenario } from "./ComparativoCenario";
-import { IndicesCenario } from "./IndicesCenario";
+import { BeneficiosDoCenarioAba } from "./BeneficiosDoCenario";
+import { CenarioComparado, ComparativoCenario } from "./ComparativoCenario";
+import { CompartilharCenario } from "./CompartilharCenario";
+import { IndicesDeComparacao, IndicesDeReajuste } from "./IndicesDoCenario";
 import { MarcarCenarioDialog } from "./MarcarCenarioDialog";
 import { ReferenciaAnalitica } from "./ReferenciaAnalitica";
 import { ReferenciaSintetica } from "./ReferenciaSintetica";
-import { ReajustesDoCenario } from "./ReajustesDoCenario";
+import { RegrasDoCenarioAba } from "./RegrasDoCenario";
 import { CentrosDoCadastroDoCenarioAba, DepartamentosDoCenarioAba, RedistribuicoesDoCenarioAba, UnidadesDoCenarioAba } from "./CadastrosDoCenario";
 
 /**
@@ -35,9 +37,9 @@ import { CentrosDoCadastroDoCenarioAba, DepartamentosDoCenarioAba, Redistribuico
  * resultado realizado ou outro analítico). Os quadros ocupam a largura da tela, com o
  * destaque amarelo-ouro à esquerda, e as opções ficam uma embaixo da outra, com o texto ao lado (13/10/2026).
  */
-export type AbaDasConfiguracoes = "cenario" | "referencia" | "unidades" | "departamentos" | "centros_custo" | "redistribuicoes" | "indices" | "comparativo" | "reajustes";
+export type AbaDasConfiguracoes = "cenario" | "referencia" | "unidades" | "departamentos" | "centros_custo" | "beneficios" | "regras_rateio" | "redistribuicoes" | "indices" | "comparativo" | "reajustes";
 /** As abas das cópias dos cadastros do cenário (20/11/2026) e o que cada uma edita, para os avisos. */
-const DOS_CADASTROS = { unidades: "as unidades", departamentos: "os departamentos", centros_custo: "os centros de custo", redistribuicoes: "as redistribuições de gastos" } as const;
+const DOS_CADASTROS = { unidades: "as unidades", departamentos: "os departamentos", centros_custo: "os centros de custo", beneficios: "os benefícios padrão", regras_rateio: "as regras de rateio", redistribuicoes: "as redistribuições de gastos" } as const;
 
 export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cenario: Cenario; abaInicial?: AbaDasConfiguracoes }) {
   const queryClient = useQueryClient();
@@ -61,18 +63,18 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
       ? `Seu perfil só lê ${oQue}.`
       : `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) altera ${oQue}.`;
   const analitico = t.tipo === "ANALITICO";
-  // Os Índices de Referência dos analíticos (11/11/2026, pedido do Adão; antes, a aba Índices) são o quadro do meio da aba
-  // Comparativo, com a permissão deles: a aba aparece com uma das duas.
+  // Nos analíticos (21/11/2026, pedido do Adão), a aba Comparativo e Reajustes junta o Cenário Comparado, os Índices de Comparação
+  // (antes, de Referência) e os Índices de Reajuste (antes, a aba Reajustes), cada quadro com a sua permissão: a aba aparece com uma
+  // das três.
   const lerIndices = analitico && pode("indices");
-  // A aba Reajustes dos analíticos (12/11/2026, pedido do Adão; antes, nas Premissas), depois do Comparativo.
+  const lerReajustes = analitico && pode("reajustes");
   // As cópias dos cadastros dos analíticos (20/11/2026, Cadastros por cenário, etapas 1 e 2), depois da Referência.
-  const abas = (
-    ["cenario", "referencia", ...(analitico ? ["unidades", "departamentos", "centros_custo", "redistribuicoes"] : []), "comparativo", ...(analitico ? ["reajustes"] : [])] as AbaDasConfiguracoes[]
-  ).filter(
-    (a) => pode(a) || (a === "comparativo" && lerIndices),
+  // Os Benefícios Padrão e as Regras de Rateio do cenário (21/11/2026, pedidos do Adão), logo depois de Centros de Custo.
+  const abas = (["cenario", "referencia", ...(analitico ? ["unidades", "departamentos", "centros_custo", "beneficios", "regras_rateio", "redistribuicoes"] : []), "comparativo"] as AbaDasConfiguracoes[]).filter(
+    (a) => pode(a) || (a === "comparativo" && (lerIndices || lerReajustes)),
   );
-  // A aba Índices lembrada (ou num endereço) abre o Comparativo.
-  const pedida = escolhida === "indices" ? "comparativo" : escolhida;
+  // As abas Índices e Reajustes lembradas (ou num endereço) abrem o Comparativo (e Reajustes).
+  const pedida = escolhida === "indices" || escolhida === "reajustes" ? "comparativo" : escolhida;
   const aba: AbaDasConfiguracoes | null = abas.includes(pedida) ? pedida : (abas[0] ?? null);
   // A marcação vale para os dois tipos (uma só por vez): o diálogo de marcar olha os sintéticos e os analíticos.
   const sinteticos = useQuery({ queryKey: ["cenarios", "SINTETICO"], queryFn: () => cenariosService.listar("SINTETICO") });
@@ -112,10 +114,12 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
           { chave: "unidades", rotulo: "Unidades" },
           { chave: "departamentos", rotulo: "Departamentos" },
           { chave: "centros_custo", rotulo: "Centros de Custo" },
+          { chave: "beneficios", rotulo: "Benefícios Padrão" },
+          { chave: "regras_rateio", rotulo: "Regras de Rateio" },
           { chave: "redistribuicoes", rotulo: "Redistribuições de Gastos" },
-          // O comparativo com outro cenário (13/10/2026; antes, a aba Referência da tela Comparativo).
-          { chave: "comparativo", rotulo: "Comparativo" },
-          { chave: "reajustes", rotulo: "Reajustes" },
+          // O comparativo com outro cenário (13/10/2026; antes, a aba Referência da tela Comparativo); nos analíticos (21/11/2026),
+          // com os reajustes.
+          { chave: "comparativo", rotulo: analitico ? "Comparativo e Reajustes" : "Comparativo" },
         ].filter((a) => abas.includes(a.chave as AbaDasConfiguracoes))}
       />
       {aba === null ? (
@@ -160,6 +164,18 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
                 emLinhas
               />
             </div>
+            {/* O Compartilhar do cenário particular (21/11/2026, pedido do Adão): os usuários convidados a vê-lo. */}
+            {cenario.visualizacao === "PARTICULAR" ? (
+              <div className="sm:col-span-2">
+                {visualizacao === "PARTICULAR" ? (
+                  <CompartilharCenario id={cenario.id} />
+                ) : (
+                  <p className="rounded-sm border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">Com a visualização Pública, todos com acesso aos cenários veem o cenário: o Compartilhar vale só no particular.</p>
+                )}
+              </div>
+            ) : visualizacao === "PARTICULAR" ? (
+              <p className="rounded-sm border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 sm:col-span-2">Grave as configurações com a visualização Particular para compartilhar o cenário com outros usuários.</p>
+            ) : null}
             {/* A Edição das Configurações (12/11/2026, pedido do Adão): quem altera esta tela, em todas as abas e ações. */}
             <fieldset className="space-y-1.5 sm:col-span-2" disabled={!cenario.podeMudarVisualizacao || !edita("cenario")}>
               <legend className="text-sm leading-none font-medium">Edição das Configurações</legend>
@@ -255,26 +271,46 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
           </div>
           )}
         </section>
+      ) : aba === "comparativo" && analitico ? (
+        // A aba Comparativo e Reajustes dos analíticos (21/11/2026, pedido do Adão): o Cenário Comparado, os Índices de Comparação e,
+        // abaixo deles, os Índices de Reajuste, cada quadro com a sua permissão e os avisos de quem só lê.
+        <div className="space-y-8">
+          {(
+            [
+              ["comparativo", "o cenário comparado"],
+              ["indices", "os Índices de Comparação"],
+              ["reajustes", "os Índices de Reajuste"],
+            ] as const
+          ).some(([a]) => pode(a) && !edita(a)) ? (
+            <div className="space-y-2">
+              {(
+                [
+                  ["comparativo", "o cenário comparado"],
+                  ["indices", "os Índices de Comparação"],
+                  ["reajustes", "os Índices de Reajuste"],
+                ] as const
+              )
+                .filter(([a]) => pode(a) && !edita(a))
+                .map(([a, oQue]) => (
+                  <p key={a} className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
+                    {soLe(a, oQue)}
+                  </p>
+                ))}
+            </div>
+          ) : null}
+          {travado && (edita("comparativo") || edita("indices") || edita("reajustes")) ? <AvisoMarcado cenario={cenario} oQue="o comparativo e os índices" varios /> : null}
+          {pode("comparativo") ? <CenarioComparado id={cenario.id} podeEditar={edita("comparativo") && !travado} /> : null}
+          {lerIndices ? <IndicesDeComparacao id={cenario.id} podeEditar={edita("indices") && !travado} /> : null}
+          {lerReajustes ? <IndicesDeReajuste id={cenario.id} podeEditar={edita("reajustes") && !travado} /> : null}
+        </div>
       ) : aba === "comparativo" ? (
         <div className="space-y-4">
-          {/* Os avisos de quem só lê: o comparativo e, nos analíticos, os Índices de Referência (cada um com a sua permissão). */}
-          {pode("comparativo") && !edita("comparativo") ? (
+          {!edita("comparativo") ? (
             <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("comparativo", "o comparativo")}</p>
+          ) : travado ? (
+            <AvisoMarcado cenario={cenario} oQue="o comparativo" />
           ) : null}
-          {lerIndices && !edita("indices") ? (
-            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("indices", "os Índices de Referência")}</p>
-          ) : null}
-          {travado && (edita("comparativo") || (lerIndices && edita("indices"))) ? <AvisoMarcado cenario={cenario} oQue={analitico ? "o comparativo e os índices" : "o comparativo"} varios={analitico} /> : null}
-          {pode("comparativo") ? (
-            <ComparativoCenario
-              id={cenario.id}
-              podeEditar={edita("comparativo") && !travado}
-              // Nos analíticos (11/11/2026), os Índices de Referência entre o Cenário Comparado e as Variações Máximas.
-              indices={lerIndices ? <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} /> : null}
-            />
-          ) : (
-            <IndicesCenario id={cenario.id} podeEditar={edita("indices") && !travado} />
-          )}
+          <ComparativoCenario id={cenario.id} podeEditar={edita("comparativo") && !travado} />
         </div>
       ) : aba in DOS_CADASTROS ? (
         // As cópias dos cadastros do cenário (20/11/2026, Cadastros por cenário): Unidades, Departamentos, Centros de Custo e
@@ -293,19 +329,13 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
             <DepartamentosDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
           ) : aba === "centros_custo" ? (
             <CentrosDoCadastroDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
+          ) : aba === "beneficios" ? (
+            <BeneficiosDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
+          ) : aba === "regras_rateio" ? (
+            <RegrasDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
           ) : (
             <RedistribuicoesDoCenarioAba id={cenario.id} podeEditar={edita(aba) && !travado} />
           )}
-        </div>
-      ) : aba === "reajustes" ? (
-        // A aba Reajustes dos analíticos (12/11/2026; antes, nas Premissas): os Índices de Reajuste e a Aplicação dos Reajustes.
-        <div className="space-y-4">
-          {!edita("reajustes") ? (
-            <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("reajustes", "os reajustes")}</p>
-          ) : travado ? (
-            <AvisoMarcado cenario={cenario} oQue="os reajustes" varios />
-          ) : null}
-          <ReajustesDoCenario id={cenario.id} podeEditar={edita("reajustes") && !travado} />
         </div>
       ) : analitico ? (
         // A referência dos analíticos (14/10/2026): o realizado (com as Médias de Referência e os centros de custo) ou outro analítico.

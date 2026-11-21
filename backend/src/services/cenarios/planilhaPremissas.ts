@@ -67,7 +67,8 @@ export type LinhaDaPlanilha = {
    * linha é, em fórmula — os centros (os códigos) e o Tipo das linhas que entram e o que somar (os Colaboradores ou os
    * salários, Salário Bruto + Insalubridade / Periculosidade; desde 17/11/2026, sem multiplicar pelos colaboradores).
    */
-  doQuadro?: { centros: string[]; tipo: "CLT" | "PJ" | "APRENDIZ" | "ESTAGIARIO"; soma: "COLABORADORES" | "SALARIOS" };
+  /** O tipo nulo (21/11/2026): todos os tipos (os Benefícios Padrão do grupo). */
+  doQuadro?: { centros: string[]; tipo: "CLT" | "PJ" | "APRENDIZ" | "ESTAGIARIO" | null; soma: "COLABORADORES" | "SALARIOS" | "BENEFICIOS" };
   /** A conta da DRE (a variação máxima do Comparativo); nula nas linhas sem conta (volumes, dias úteis, quadros). */
   conta: string | null;
   limite: number | null;
@@ -203,14 +204,16 @@ export type ReferenciaDasAbas = { rotulo: string; meses: string[]; descricao: st
 const colunasDaReferencia = (r: ReferenciaDasAbas | undefined) => (r ? 12 : 0);
 
 /** A aba Quadro de Lotação no arquivo (11/11/2026): o nome, as linhas (da primeira à última, com as em branco) e as colunas de cada mês. */
-export type QuadroDoArquivo = { aba: string; primeira: number; ultima: number; doMes: (k: number, campo: 0 | 1 | 2) => string };
+export type QuadroDoArquivo = { aba: string; primeira: number; ultima: number; doMes: (k: number, campo: 0 | 1 | 2 | 4) => string };
+/** As colunas de cada mês na aba Quadro de Lotação: Colaboradores, Salário Bruto, Insalubridade, Salário Total e (21/11/2026) Benefícios. */
+const COLUNAS_DO_MES = 5;
 /**
  * A aba Quadro de Lotação de um arquivo com `linhas` linhas do cenário (as em branco depois delas) e, com a referência, a coluna
  * dela (só os colaboradores; 17/11/2026, pedido do Adão: sem os salários na referência).
  */
 export function quadroDoArquivo(linhas: number, comReferencia: boolean): QuadroDoArquivo {
   const R = comReferencia ? 1 : 0;
-  return { aba: NOME_DA_ABA.quadro, primeira: PRIMEIRA_LINHA, ultima: PRIMEIRA_LINHA + linhas + LINHAS_NOVAS - 1, doMes: (k, campo) => coluna(CAMPOS_DO_QUADRO.length + R + k * 4 + campo) };
+  return { aba: NOME_DA_ABA.quadro, primeira: PRIMEIRA_LINHA, ultima: PRIMEIRA_LINHA + linhas + LINHAS_NOVAS - 1, doMes: (k, campo) => coluna(CAMPOS_DO_QUADRO.length + R + k * COLUNAS_DO_MES + campo) };
 }
 
 /**
@@ -230,10 +233,11 @@ export function formulaDoQuadro(d: NonNullable<LinhaDaPlanilha["doQuadro"]>, q: 
     ? `((${d.centros.map((c) => `(${centro}=${texto(c)})+(LEFT(${centro},${c.length + 3})=${texto(`${c} - `)})`).join("+")})>0)`
     : "0";
   // O Tipo como o Exportar escreve (o Excel compara sem diferença de maiúsculas; o Estagiário também sem o acento).
-  const doTipo = d.tipo === "ESTAGIARIO" ? `((${tipo}="Estagiário")+(${tipo}="Estagiario"))` : `(${tipo}=${texto(ROTULO_DO_TIPO[d.tipo])})`;
-  const filtros = [centros, doTipo];
-  const doMes = (campo: 0 | 1 | 2) => faixa(q.doMes(k, campo));
-  const valor = d.soma === "COLABORADORES" ? doMes(0) : `(${doMes(1)}+${doMes(2)})`;
+  // Sem o tipo (21/11/2026: os Benefícios Padrão do grupo), todas as linhas dos centros.
+  const doTipo = d.tipo === null ? null : d.tipo === "ESTAGIARIO" ? `((${tipo}="Estagiário")+(${tipo}="Estagiario"))` : `(${tipo}=${texto(ROTULO_DO_TIPO[d.tipo])})`;
+  const filtros = doTipo ? [centros, doTipo] : [centros];
+  const doMes = (campo: 0 | 1 | 2 | 4) => faixa(q.doMes(k, campo));
+  const valor = d.soma === "COLABORADORES" ? doMes(0) : d.soma === "BENEFICIOS" ? doMes(4) : `(${doMes(1)}+${doMes(2)})`;
   return `SUMPRODUCT(${filtros.join("*")}*${valor})`;
 }
 
@@ -650,8 +654,11 @@ const CAMPOS_DO_QUADRO: Array<[keyof CamposDoQuadro, string, number]> = [
  * até 16/11/2026 tem a Senioridade no meio deles).
  */
 const rotulosDoQuadro = (cs: string[]) => cs[0] === CAMPOS_DO_QUADRO[0][1] && CAMPOS_DO_QUADRO.every(([, c]) => cs.slice(0, CAMPOS_DO_QUADRO.length + 1).includes(c));
-/** As quatro colunas de cada mês (o mês antes: "JAN/26 · Colaboradores"); o Salário Total é uma fórmula. */
-const DO_MES = ["Colaboradores", "Salário Bruto (R$)", "Insalubridade / Periculosidade (R$)", "Salário Total (R$)"] as const;
+/**
+ * As colunas de cada mês (o mês antes: "JAN/26 · Colaboradores"); o Salário Total é uma fórmula. Os Benefícios (21/11/2026, pedido
+ * do Adão), depois do Salário Total: o valor da linha no mês, que se digita (os arquivos de antes, sem a coluna, ainda valem).
+ */
+const DO_MES = ["Colaboradores", "Salário Bruto (R$)", "Insalubridade / Periculosidade (R$)", "Salário Total (R$)", "Benefícios (R$)"] as const;
 const COLUNA_CUSTO_ANUAL = "Custo no Ano (R$)";
 /** Uma linha do Quadro de Lotação do cenário para a planilha: o id e os nomes dos cadastros. */
 export type LinhaDoQuadroDaPlanilha = {
@@ -661,6 +668,8 @@ export type LinhaDoQuadroDaPlanilha = {
   funcao: string;
   centro: string;
   meses: MesDaLinha[];
+  /** Os Benefícios de cada mês (21/11/2026): o valor da linha (os Benefícios Padrão aplicados ou o digitado). */
+  beneficios?: number[];
   /** A coluna da referência (11/11/2026): o QL Realizado ou os colaboradores do último mês do cenário de origem. */
   referencia?: number | null;
 };
@@ -686,11 +695,10 @@ export function abaDoQuadroDeLotacao(
   // Os rótulos com a quebra de texto automática (11/11/2026).
   const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoQuebra });
   const n = CAMPOS_DO_QUADRO.length;
-  // A coluna de um campo do mês k (0 a 11): f = 0 Colaboradores, 1 Salário Bruto, 2 Insalubridade, 3 Salário Total.
+  // A coluna de um campo do mês k (0 a 11): f = 0 Colaboradores, 1 Salário Bruto, 2 Insalubridade, 3 Salário Total, 4 Benefícios.
   const R = referencia ? 1 : 0;
   // 11/11/2026: sem o Código da Linha antes dos campos.
-  const col = (k: number, f: number) => coluna(n + R + k * 4 + f);
-  const cCusto = coluna(n + R + 48);
+  const col = (k: number, f: number) => coluna(n + R + k * COLUNAS_DO_MES + f);
   const formulas = (r: number) => ({
     total: (k: number) => `IF(AND(${col(k, 1)}${r}="",${col(k, 2)}${r}=""),"",N(${col(k, 1)}${r})+N(${col(k, 2)}${r}))`,
     custo: Array.from({ length: 12 }, (_, k) => `N(${col(k, 1)}${r})+N(${col(k, 2)}${r})`).join("+"),
@@ -702,7 +710,7 @@ export function abaDoQuadroDeLotacao(
     [
       {
         valor:
-          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um); o Salário Total e o Custo no Ano são fórmulas e não se importam. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
+          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um); o Salário Total e o Custo no Ano são fórmulas e não se importam. Os Benefícios, depois do Salário Total, são os da linha no mês (os Benefícios Padrão aplicados × os colaboradores, no SIG): digite o valor para mudá-lo — com outro valor, ele fica digitado no lugar dos Benefícios Padrão aplicados; igual, eles ficam (e seguem os colaboradores). Nos centros de custo deste arquivo, a linha Benefícios Padrão de cada grupo soma esta coluna das linhas dos centros dele. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
           (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
         estilo: ESTILO.informacao,
       },
@@ -730,6 +738,8 @@ export function abaDoQuadroDeLotacao(
         { valor: vazio(m.salarioBruto), estilo: ESTILO.itemNumero },
         { valor: vazio(m.adicional), estilo: ESTILO.itemNumero },
         { valor: vazio(salarioTotal(m)), estilo: ESTILO.itemNumero, formula: f.total(k) },
+        // Os Benefícios do mês (21/11/2026): o valor, que se digita.
+        { valor: vazio(Math.round((l.beneficios?.[k] ?? 0) * 100) / 100), estilo: ESTILO.itemNumero },
       ]),
       { valor: Math.round(l.meses.reduce((s, m) => s + salarioTotal(m), 0) * 100) / 100, estilo: ESTILO.itemNumero, formula: f.custo },
     ]);
@@ -744,6 +754,7 @@ export function abaDoQuadroDeLotacao(
         { valor: null, estilo: ESTILO.itemNumero },
         { valor: null, estilo: ESTILO.itemNumero },
         { valor: null, estilo: ESTILO.itemNumero, formula: f.total(m) },
+        { valor: null, estilo: ESTILO.itemNumero },
       ]).flat(),
       { valor: null, estilo: ESTILO.itemNumero, formula: f.custo },
     ]);
@@ -754,7 +765,7 @@ export function abaDoQuadroDeLotacao(
   const cabe = (xs: string[]) => xs.length > 0 && xs.join(",").length <= 250 && !xs.some((x) => x.includes(","));
   return {
     nome: NOME_DA_ABA.quadro,
-    larguras: [...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...(referencia ? [15] : []), ...meses.flatMap(() => [13, 15, 17, 15]), 17],
+    larguras: [...CAMPOS_DO_QUADRO.map(([, , w]) => w), ...(referencia ? [15] : []), ...meses.flatMap(() => [13, 15, 17, 15, 14]), 17],
     linhas: linhasDaAba,
     linhaCabecalho: 5,
     rodape: `Premissas · ${NOME_DA_ABA.quadro}`,
@@ -791,6 +802,9 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
   // As colunas de cada campo do mês, na ordem dos meses.
   const doMes = (d: string) => rotulos.flatMap((x, k) => (x.endsWith(` · ${d}`) ? [k] : []));
   const [iColaboradores, iBruto, iAdicional] = [doMes(DO_MES[0]), doMes(DO_MES[1]), doMes(DO_MES[2])];
+  // Os Benefícios (21/11/2026): opcionais — os arquivos de antes não têm a coluna (os Benefícios das linhas ficam como estão).
+  const iBeneficios = doMes(DO_MES[4]);
+  const comBeneficios = iBeneficios.length === 12;
   if (iCampos.some((k) => k < 0) || [iColaboradores, iBruto, iAdicional].some((x) => x.length !== 12)) {
     r.erros.push(`A aba ${nome} não tem as colunas do padrão (${CAMPOS_DO_QUADRO.map(([, c]) => `“${c}”`).join(", ")} e, em cada um dos doze meses, ${DO_MES.slice(0, 3).map((d) => `“${d}”`).join(", ")}).`);
     return;
@@ -800,7 +814,7 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
   r.abas.push(nome);
   for (const l of linhas.slice(i + 1)) {
     const c = l.celulas;
-    const doMesLido = [...iColaboradores, ...iBruto, ...iAdicional];
+    const doMesLido = [...iColaboradores, ...iBruto, ...iAdicional, ...(comBeneficios ? iBeneficios : [])];
     if ((!comCodigo || texto(c[0]) === "") && iCampos.every((k) => texto(c[k]) === "") && doMesLido.every((k) => texto(c[k]) === "")) continue;
     const erro = (m: string) => r.erros.push(`${nome}, linha ${l.numero}: ${m}`);
     const id = comCodigo ? texto(c[0]) || null : null;
@@ -827,7 +841,13 @@ function lerQuadroDeLotacao(nome: string, linhas: Array<{ numero: number; celula
       }
       return v ?? 0;
     };
-    const meses = Array.from({ length: 12 }, (_, k) => ({ colaboradores: num(iColaboradores[k]), salarioBruto: num(iBruto[k]), adicional: num(iAdicional[k]) }));
+    const meses = Array.from({ length: 12 }, (_, k) => ({
+      colaboradores: num(iColaboradores[k]),
+      salarioBruto: num(iBruto[k]),
+      adicional: num(iAdicional[k]),
+      // Os Benefícios digitados (21/11/2026); sem a coluna, não informados (undefined).
+      ...(comBeneficios ? { beneficiosDigitados: numeroDa(c[iBeneficios[k]] ?? null) === null ? null : num(iBeneficios[k]) } : {}),
+    }));
     if (!invalida) r.quadro.push({ aba: nome, numero: l.numero, id, campos, meses });
   }
 }

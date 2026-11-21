@@ -116,7 +116,7 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
           item={["linha", "linhas"]}
           cabecalho="PREMISSAS"
           aoGravar={(alteracoes, origem) => cenariosService.gravarCentro(id, doGrupo.grupo.grupo, alteracoes, origem)}
-          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; a DRE e os quadros de lotação do cenário foram recalculados.`}
+          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; os encargos do centro foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`}
           // As Contas do Balancete de cada conta (13/11/2026; não nas linhas do quadro de lotação, dos encargos e do total).
           acaoDaLinha={(l) => (doGrupo.contas.some((c) => c.codigo === l.chave) ? <BotaoContasDoBalancete id={id} linha={l.chave} descricao={l.rotulo} /> : null)}
         />
@@ -185,7 +185,8 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
       }),
     ),
   ];
-  const encargos = dados.encargos.map((e) => premissa(`ENCARGOS|${e.item}`, "ENCARGOS E BENEFÍCIOS", e.rotulo, e.und, 2, e));
+  // Os Benefícios Padrão (21/11/2026): calculados pela aba Quadro de Lotação (os benefícios das linhas dos centros do grupo), não se digitam.
+  const encargos = dados.encargos.map((e) => ({ ...premissa(`ENCARGOS|${e.item}`, "ENCARGOS E BENEFÍCIOS", e.rotulo, e.und, 2, e), ...(e.calculado ? { tipo: "CALCULO" as const, negrito: false } : {}) }));
   const contas = dados.contas;
   const linhas: LinhaDaPremissa[] = contas.map((c) => ({
     chave: c.codigo,
@@ -203,9 +204,11 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     valores: c.valores,
     gravados: c.gravados,
   }));
-  // Os Benefícios Adicionais (17/11/2026): fora da conta Encargos e Benefícios, entram no Total do Centro (como na DRE).
+  // Os Benefícios Adicionais (17/11/2026) e os Benefícios Padrão (21/11/2026): fora da conta Encargos e Benefícios, entram no Total do
+  // Centro (como na DRE).
   const beneficios = contas.some((c) => c.comBeneficios) ? dados.encargos.find((e) => e.item === "BENEFICIOS") : undefined;
-  const total = Array.from({ length: 12 }, (_, k) => contas.reduce((s, c) => s + (c.valores[k] ?? 0), 0) + (beneficios?.valores[k] ?? 0));
+  const padrao = contas.some((c) => c.comBeneficios) ? dados.encargos.find((e) => e.item === "BENEFICIOS_PADRAO") : undefined;
+  const total = Array.from({ length: 12 }, (_, k) => contas.reduce((s, c) => s + (c.valores[k] ?? 0), 0) + (beneficios?.valores[k] ?? 0) + (padrao?.valores[k] ?? 0));
   const totalReferencia = contas.some((c) => c.referencia !== null) ? contas.reduce((s, c) => s + (c.referencia ?? 0), 0) + (beneficios?.referencia ?? 0) : null;
   return [...lotacao, ...encargos, ...linhas, { chave: "TOTAL", secao: "TOTAL DO CENTRO", grupo: null, rotulo: "Total do Centro", und: "R$", tipo: "CALCULO", casas: 2, referencia: totalReferencia, valores: total, gravados: total.map(() => false) }];
 }

@@ -118,7 +118,7 @@ export function TabelaPremissas({ id, dados, tabela, editavel }: { id: string; d
           origem,
         )
       }
-      mensagem={(n) => `${n} ${plural(n, "premissa gravada", "premissas gravadas")}; a DRE do cenário foi recalculada.`}
+      mensagem={(n) => `${n} ${plural(n, "premissa gravada", "premissas gravadas")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`}
     />
   );
 }

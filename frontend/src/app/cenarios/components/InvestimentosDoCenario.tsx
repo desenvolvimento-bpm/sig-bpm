@@ -52,7 +52,7 @@ const autorDoInvestimento = (i: InvestimentoDoCenario) => i.incluidoPor ?? "—"
 const departamentoDoInvestimento = (i: InvestimentoDoCenario) =>
   i.unidade !== 4 ? "—" : i.departamento ? NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[i.departamento] : "Todos";
 
-/** A confirmação do Excluir Selecionados (15/10/2026): a lista dos marcados e a soma do valor total; recalcula a DRE. */
+/** A confirmação do Excluir Selecionados (15/10/2026): a lista dos marcados e a soma do valor total; a DRE fica pendente de recálculo (21/11/2026). */
 function ExcluirInvestimentosDialog({ id, investimentos, onFechar }: { id: string; investimentos: InvestimentoDoCenario[]; onFechar: (excluiu: boolean) => void }) {
   const queryClient = useQueryClient();
   const excluir = useMutation({
@@ -60,7 +60,7 @@ function ExcluirInvestimentosDialog({ id, investimentos, onFechar }: { id: strin
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(`${investimentos.length} ${plural(investimentos.length, "investimento excluído", "investimentos excluídos")}; a DRE do cenário foi recalculada.`);
+      toast.success(`${investimentos.length} ${plural(investimentos.length, "investimento excluído", "investimentos excluídos")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`);
       onFechar(true);
     },
   });
@@ -72,7 +72,7 @@ function ExcluirInvestimentosDialog({ id, investimentos, onFechar }: { id: strin
           <DialogTitle>Excluir Investimentos Selecionados</DialogTitle>
           <DialogDescription>
             {investimentos.length} {plural(investimentos.length, "investimento", "investimentos")}, com o valor total de {reais(total)}. A depreciação {plural(investimentos.length, "dele", "deles")} sai da DRE do
-            cenário, que se recalcula, e a exclusão fica no histórico (tela Histórico, aba Alterações).
+            cenário no Recalcular dos Resultados, e a exclusão fica no histórico (tela Histórico, aba Alterações).
           </DialogDescription>
         </DialogHeader>
         <ul className="list-disc space-y-1 pl-5 text-sm text-gray-700">
@@ -192,7 +192,7 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
           item={["conta", "contas"]}
           cabecalho="CONTA"
           aoGravar={(alteracoes, origem) => cenariosService.gravarMensais(id, "BASE", alteracoes, origem)}
-          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
+          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} da depreciação base ${plural(n, "gravado", "gravados")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`}
         />
       ) : null}
       <section className="space-y-2">
@@ -339,7 +339,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
     onSuccess: (_, apagar) => {
       queryClient.invalidateQueries({ queryKey: ["cenarios"] });
       queryClient.invalidateQueries({ queryKey: ["relatorios"] });
-      toast.success(apagar ? "Investimento excluído; a DRE do cenário foi recalculada." : investimento ? "Investimento alterado; a DRE do cenário foi recalculada." : "Investimento incluído; a DRE do cenário foi recalculada.");
+      toast.success(apagar ? "Investimento excluído; a DRE fica pendente de recálculo (Resultados / Recalcular)." : investimento ? "Investimento alterado; a DRE fica pendente de recálculo (Resultados / Recalcular)." : "Investimento incluído; a DRE fica pendente de recálculo (Resultados / Recalcular).");
       onFechar();
     },
   });
@@ -477,7 +477,7 @@ export function ExtraDoCenario({ id, editavel }: { id: string; editavel: boolean
           item={["conta", "contas"]}
           cabecalho="CONTA"
           aoGravar={(alteracoes, origem) => cenariosService.gravarMensais(id, "EXTRA", alteracoes, origem)}
-          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do extra-operacional ${plural(n, "gravado", "gravados")}; a DRE do cenário foi recalculada.`}
+          mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do extra-operacional ${plural(n, "gravado", "gravados")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`}
         />
       ))}
     </div>

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { nomeDasContas } from "../redistribuicoes/redistribuicoesService.js";
 import { lerRealocacoes } from "./realocacoesCenario.js";
+import { copiarRegras, trazerNovasRegras } from "./regrasDoCenario.js";
+import { copiarBeneficios } from "./quadroDoCenario.js";
 
 /**
  * Os cadastros de cada cenário analítico (20/11/2026, pedido do Adão: Cadastros por cenário): as cópias de Unidades, de Centros de
@@ -98,6 +100,10 @@ export async function copiarCadastros(tx: Tx, cenarioId: string, de: string | nu
       mapa,
     );
   }
+  // As Regras de Rateio (21/11/2026): as do cenário `de`, quando ele tem a cópia; senão, as de Cadastros Gerais.
+  await copiarRegras(tx, cenarioId, de);
+  // Os Benefícios Padrão (21/11/2026): os do cenário `de`, antes do Quadro de Lotação (que os leva pelo nome).
+  if (de) await copiarBeneficios(tx, de, cenarioId);
   return mapa;
 }
 
@@ -256,6 +262,8 @@ export async function trazerNovosDosCadastros(tx: Tx, cenarioId: string) {
     centros: novosCentros.map((c) => `${c.codigoRM ? `${c.codigoRM} - ` : ""}${c.nomeRM}`),
     departamentos: novosDepartamentos.map((d) => `${d.nome} (${d.unidadeNegocio.nome})`),
     redistribuicoes: novasRedistribuicoes.filter((r) => !semCentro.includes(r.id)).map(rotuloDaRegra),
+    // As Regras de Rateio (21/11/2026): as de Cadastros Gerais ainda sem cópia no cenário.
+    regras: await trazerNovasRegras(tx, cenarioId),
   };
 }
 

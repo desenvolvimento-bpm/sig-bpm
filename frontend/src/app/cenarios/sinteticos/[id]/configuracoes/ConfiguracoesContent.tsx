@@ -31,6 +31,13 @@ export function ConfiguracoesContent() {
           <ul>
             <li>Na aba Cenário, mude o nome, a descrição, a visualização (Particular ou Pública) e a Edição das Configurações (Particular: só quem criou o cenário e os Administradores alteram esta tela; Pública: todos com permissão de editar as Configurações) e clique em “Gravar Configurações”; a visualização e a Edição das Configurações só mudam por quem criou o cenário ou pelo Administrador. Depois da primeira revisão, o nome fica travado: é o mesmo em todas as versões do cenário. Com o cenário marcado ou com a versão congelada, o nome e a descrição não mudam (a visualização, sim).</li>
             <li>
+              Com a visualização Particular (gravada), o Compartilhar, logo abaixo dela, lista os usuários convidados a ver o cenário: quem criou
+              o cenário (ou o Administrador) clica em “Convidar”, marca os usuários (os ativos com acesso aos cenários; os Administradores já veem
+              todos) e confirma; “Remover” tira um deles, depois da confirmação. Cada convidado usa as telas do cenário pelo seu perfil — Só
+              Leitura: o perfil só lê os cenários e só vê, sem editar —, e a Edição das Configurações continua valendo nesta tela. Com a
+              visualização Pública, todos com acesso aos cenários já o veem.
+            </li>
+            <li>
               Também na aba Cenário: “Marcar Cenário” marca o cenário como Orçamento, Anterior, Vendido ou Forecast (cada
               marcação fica ativa em um cenário só: marcar este tira a do anterior), e “Excluir Cenário” o exclui (um cenário marcado não se exclui).
             </li>
@@ -51,8 +58,8 @@ export function ConfiguracoesContent() {
                   novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das
                   Premissas, alimentada pela Gestão de Colaboradores: no realizado, marque “Importar Quadro de Lotação Vigente” para trocar as linhas
                   dela pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim da competência mais recente, em todos
-                  os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com os reajustes aplicados na DRE
-                  (Premissas / Reajustes), a referência não se carrega nem se realoca, com o aviso na aba: use “Remover Reajustes” antes.
+                  os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com a caixa Aplicar Reajustes marcada
+                  (nos Resultados), a referência não se carrega nem se realoca, com o aviso na aba: desmarque-a antes.
                 </li>
                 <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros Gerais / Linhas, no botão “Tarefas”.</li>
                 <li>
@@ -61,7 +68,7 @@ export function ConfiguracoesContent() {
                   Padrões” aparece na aba Referência, e o “Realocar” fica depois do “Carregar Realizado”. Nele, cada conta mostra a alocação na DRE (Departamento, Atribuição e Conta de Resultado),
                   o valor do período e o centro de custo que a recebe (só os grupos com a mesma atribuição e conta; num centro de outro departamento,
                   ela entra como do departamento dele). Sem centro, a conta fica fora do cenário, e gravar assim pede confirmação. As realocações ficam
-                  registradas no quadro, entram na Média de Referência dos centros do cenário (no Mês a Mês, também nos meses; a DRE se recalcula) e valem nas próximas cargas do realizado, ainda editáveis.
+                  registradas no quadro, entram na Média de Referência dos centros do cenário (no Mês a Mês, também nos meses; a DRE fica pendente de recálculo) e valem nas próximas cargas do realizado, ainda editáveis.
                 </li>
                 <li>
                   “Aplicar Padrão”, no pé do modal, preenche os centros pelo padrão (pela filial em que a conta mais lançou): Produção Matriz — MOD,
@@ -70,10 +77,10 @@ export function ConfiguracoesContent() {
                   Administrativo em Financeiro. Ele só preenche: confira e clique em “Gravar”.
                 </li>
                 <li>
-                  As abas Unidades, Departamentos, Centros de Custo e Redistribuições de Gastos, depois da Referência, são as cópias dos cadastros com que
+                  As abas Unidades, Departamentos, Centros de Custo, Regras de Rateio e Redistribuições de Gastos, depois da Referência, são as cópias dos cadastros com que
                   o cenário calcula: a cópia é tirada na criação do cenário (a revisão e a cópia de um cenário levam as do cenário de origem) e não muda
                   com os Cadastros Gerais — “Trazer Novos”, nessas abas, inclui as unidades, os departamentos, os centros e as redistribuições que
-                  surgiram lá depois, sem mexer no que foi editado aqui. Nas quatro abas, os rótulos das colunas ordenam e filtram a tabela, como nas
+                  surgiram lá depois, sem mexer no que foi editado aqui. Nas cinco abas, os rótulos das colunas ordenam e filtram a tabela, como nas
                   outras tabelas do SIG (em Centros de Custo, a coluna Ativo filtra a situação), e o Exportar leva o que está filtrado. Em Unidades, clique
                   numa linha para mudar o Nome no Cenário, a Ordem e se está Ativa (as unidades não se incluem nem se excluem). Em Centros de Custo,
                   clique numa linha para editar o centro, ou em “Novo Centro” para um que vale só no cenário: o Centro de Custo (Controladoria) é o grupo
@@ -82,9 +89,34 @@ export function ConfiguracoesContent() {
                   centro sem linhas no Quadro de Lotação do cenário (inative os outros). “Renomear Grupo” muda o nome de um grupo em todos os centros
                   dele, e os valores do grupo (as premissas, os encargos, os benefícios, as justificativas e as realocações) vão junto; levar o último
                   centro de um grupo para um grupo novo faz o mesmo. Se a mudança deixar um grupo sem centros, o SIG avisa antes de gravar: os valores
-                  dele saem do cenário. Cada mudança nos centros recalcula a DRE do cenário e fica no Histórico (aba Alterações); para a Média de
+                  dele saem do cenário. Cada mudança nos centros deixa a DRE do cenário pendente de recálculo e fica no Histórico (aba Alterações); para a Média de
                   Referência seguir os grupos novos, carregue a referência de novo. O realizado dos centros dos Cadastros Gerais chega à cópia de cada
                   um; o resto do SIG segue os Cadastros Gerais.
+                </li>
+                <li>
+                  As gravações das Configurações (a referência e as realocações, os centros de custo, os benefícios padrão, as regras de rateio) e
+                  dos Índices de Reajuste não refazem a DRE: cada uma conta no destaque Pendente de Recálculo da tela Resultados (como uma
+                  Configuração, ou um Reajuste, com a caixa Aplicar Reajustes marcada), cujo “Recalcular” refaz a DRE com todas. Os Índices de
+                  Comparação, as unidades, os departamentos e as redistribuições não mudam a DRE.
+                </li>
+                <li>
+                  Em Benefícios Padrão, depois de Centros de Custo, os benefícios do cenário (Cesta Básica, Vale-Transporte, Seguro de Vida, Plano de
+                  Saúde, Plano Odontológico…): o Nome, a Descrição e o Valor Mensal (/ Colab.), com a coluna Em Uso no Quadro de Lotação (as linhas e os
+                  valores — linha × mês — em que o benefício está aplicado). “Novo Benefício” inclui um; clique numa linha para editá-lo, com “Excluir”
+                  no modal (o benefício em uso sai também do Quadro de Lotação). Na aba Quadro de Lotação das Premissas, o botão Benefícios aplica os
+                  marcados às linhas e aos meses marcados: os Benefícios de cada mês da linha são os colaboradores dela × a soma do Valor Mensal dos
+                  aplicados, e a linha Benefícios Padrão dos Encargos e Benefícios de cada grupo, na aba Centros de Custo, soma os dos centros dele.
+                  Mudar o valor de um benefício em uso deixa a DRE do cenário pendente de recálculo; cada mudança fica no Histórico (aba Alterações). A revisão e a cópia
+                  de um cenário levam os benefícios do cenário de origem, aplicados nas mesmas linhas.
+                </li>
+                <li>
+                  Em Regras de Rateio, a cópia das regras de Cadastros Gerais / Regras de Rateio: o cálculo dos rateios do cenário (e a conferência
+                  dos meses sem regra no Congelar, no Reabrir e no Criar Revisão) usa estas regras, e não as de Cadastros Gerais. “Novo Rateio”
+                  inclui uma regra Paramétrica (o Rótulo, a Chave, o Destino — a linha dos Totais das Listas — e a Vigência, no calendário: o
+                  percentual sai das bases das premissas do cenário) ou um conjunto Fixo (os percentuais de Matriz, Filial, Montagem e
+                  Complementar, somando 100%); clique numa regra para editá-la (a fixa abre o conjunto da chave e do período), com “Excluir” no
+                  modal. Rateios com a mesma chave não podem ter vigências sobrepostas. Os avisos no destaque listam os meses do exercício sem regra
+                  e os conjuntos fixos que não somam 100%. Cada mudança deixa a DRE do cenário pendente de recálculo e fica no Histórico (aba Alterações).
                 </li>
                 <li>
                   Em Departamentos, clique numa linha para editar a unidade, o nome, os Departamentos da DRE (os grupos da DRE com linhas na unidade; cada
@@ -129,29 +161,50 @@ export function ConfiguracoesContent() {
                   criou o cenário ou o Administrador muda o Acesso às Informações.
                 </li>
                 <li>
-                  Na aba Reajustes, dois quadros. Em Índices de Reajuste, cada índice tem a Descrição, a Observação e até quatro reajustes, cada um com o
-                  Valor (%) e o mês em que Inicia Em, em meses crescentes; cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro e
-                  2% a partir de abril dão +4% de janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante). Use “Incluir Índice” para uma
-                  linha nova e a lixeira para excluir (um índice escolhido em contas da Aplicação dos Reajustes só se exclui depois de trocá-lo nelas: a
-                  coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Aplicação dos Reajustes, cada conta da DRE escolhe até dois índices, nas
-                  colunas 1º Índice de Reajuste e 2º Índice de Reajuste (o 2º só depois do 1º e diferente dele; os Custos de Produção vêm em quatro grupos de linhas, CUSTOS DE
-                  PRODUÇÃO: MATRIZ GLOBAL, MATRIZ MERCANTIL, FILIAL GLOBAL e FILIAL MERCANTIL, cada um com os índices daquela unidade e venda — cada
-                  conta reajusta a parte de cada venda: os valores das premissas da tabela dela e, nas contas dos centros de custo e na depreciação,
-                  que não têm venda, a parte do volume produzido dela no mês (sem volume no mês, tudo na Global); com o mesmo índice nas duas vendas,
-                  é como reajustar a conta inteira da unidade; Produção e Serviços aparece, recolhida em
-                  Totais e em Atribuições como em Resultados Empresariais, só para leitura: os volumes não se reajustam); o de um total ou de uma
-                  atribuição vale para as contas abaixo dele, e “Preencher Selecionados” aplica um índice às contas marcadas, no 1º ou no 2º (o Limpar no
-                  1º faz o 2º passar a ser o 1º); “Gravar Aplicação” grava os índices das contas.
+                  Na aba Comparativo e Reajustes, três quadros, um embaixo do outro: Cenário Comparado, Índices de Comparação e Índices de Reajuste
+                  (cada um com a sua permissão no perfil). Em Cenário Comparado, “Escolher Cenário” abre a lista dos cenários; escolha um (ou
+                  “Nenhum”, que desliga o comparativo) e clique em “Gravar”.
                 </li>
                 <li>
-                  Os reajustes entram na DRE pelo botão depois de “Gravar Aplicação”, que confirma num modal: “Aplicar Reajustes” multiplica cada conta
-                  com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado — com dois índices, na ordem: o 1º sobre o valor das premissas e
-                  o 2º sobre o valor já reajustado pelo 1º; com eles aplicados, o botão vira “Remover Reajustes”, que faz o
-                  inverso e volta aos valores das premissas — nunca duas vezes seguidas (grave a aplicação antes, se mudou). O aviso no topo da aba diz
-                  se os reajustes estão aplicados. Com eles aplicados, a barra do cenário mostra a etiqueta Reajustes Aplicados, as abas das Premissas
-                  (menos Indicadores Manuais) ficam bloqueadas para edição, “Importar Valores” sai da tela Premissas, a referência não se carrega,
-                  gravar um quadro recalcula a DRE e o “Recalcular” da tela Resultados os mantém; o histórico registra cada aplicação e remoção (tela
-                  Histórico). As premissas não mudam: o reajuste fica só na DRE.
+                  Os Índices de Comparação e os Índices de Reajuste ficam numa tabela cada, como os Centros de Custo: clique numa linha para abrir o
+                  índice no modal, ou em “Novo Índice”; “Gravar”, no modal, grava o índice e atualiza a tabela (“Excluir”, no modal, o tira do
+                  cenário). Cada índice de comparação tem a Descrição, a Observação e a Variação Máxima (em %, para mais ou para menos); cada
+                  índice de reajuste, a Descrição, a Observação e até quatro reajustes, cada um com o Valor (%) e o mês em que Inicia Em, em meses
+                  crescentes — cada reajuste vale sobre os anteriores, até dezembro (4% a partir de janeiro e 2% a partir de abril dão +4% de
+                  janeiro a março e +4% e mais 2% sobre o reajustado, de abril em diante); a coluna Reajustes da tabela os descreve numa linha só
+                  (“4,00% em JAN/27, 2,00% em ABR/27”). Para considerar percentuais cumulativos, use o cálculo “((1+R1)*(1+R2)*(1+RN...))-1”
+                  antes de inserir o percentual adotado.
+                </li>
+                <li>
+                  No modal, as Combinações dizem onde o índice vale: “Incluir Combinação” abre uma linha com a Unidade (Todas, ou uma unidade do
+                  cenário), o Departamento (Todos, ou um departamento da unidade escolhida: Configurações / Departamentos), a Atribuição (Todas, ou
+                  uma atribuição do departamento — com o Departamento Todos, a mesma atribuição de todos os departamentos da unidade) e a Conta
+                  (Todas, ou uma conta da atribuição e do departamento). Assim, o índice vale numa unidade inteira, num departamento de uma
+                  unidade, numa atribuição de um departamento ou só numa conta, e um índice tem quantas combinações precisar; a coluna Contas de
+                  cada linha diz quantas contas (cada conta numa unidade) ela alcança. Nos Índices de Reajuste, a Venda (Todas, Global ou
+                  Mercantil): Global ou Mercantil deixa na combinação só as contas dos Custos de Produção da Matriz e da Filial, na parte daquela
+                  venda — cada conta reajusta a parte de cada venda: os valores das premissas
+                  da tabela dela e, nas contas dos centros de custo e na depreciação, que não têm venda, a parte do volume produzido dela no mês
+                  (sem volume no mês, tudo na Global). Os volumes de Produção e Serviços recebem só Índices de Comparação: não se reajustam. A
+                  mesma conta não pode estar em duas combinações do índice nem em dois índices do mesmo tipo: o aviso no rodapé do modal diz quais
+                  contas se repetem, e o “Gravar” só volta com elas corrigidas. Um departamento usado numa combinação não se exclui nem muda de
+                  unidade (Configurações / Departamentos).
+                </li>
+                <li>
+                  Os reajustes entram na DRE pela caixa “Aplicar Reajustes”, na tela Resultados, antes do “Recalcular” (marcá-la confirma num
+                  modal): o Recalcular multiplica cada conta com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; desmarcada a
+                  caixa, o Recalcular faz o inverso e volta aos valores das premissas. O aviso acima do quadro diz se a caixa está marcada. Marcada,
+                  a barra do cenário mostra a etiqueta Reajustes Aplicados, as Configurações e as abas das Premissas (menos Indicadores Manuais)
+                  ficam bloqueadas para edição, “Importar Valores” sai da tela Premissas, a referência não se carrega e gravar um Índice de Reajuste
+                  deixa a DRE pendente de recálculo; o histórico registra cada aplicação e remoção no Recalcular (tela Histórico). As premissas não
+                  mudam: o reajuste fica só na DRE.
+                </li>
+                <li>
+                  Na tela Resultados, nas abas das unidades (no Consolidado, não), a coluna Índice de Reajuste, antes de Janeiro, traz o
+                  índice de cada linha da DRE, e, com um cenário comparado, a coluna Índice de Comparação, antes do Comparativo, nas cores
+                  dele, o de comparação. A variação máxima de cada conta, nas
+                  Justificativas (tela Histórico) e no Justificar? do Exportar Premissas, é a do Índice de Comparação dela na unidade; no
+                  Consolidado, a maior das unidades. Sem índice, a conta não se verifica.
                 </li>
               </>
             ) : null}
@@ -164,19 +217,8 @@ export function ConfiguracoesContent() {
               cenário. Pública: todos os usuários com permissão de editar as Configurações as alteram.
             </li>
             <li>Na Referência, os meses fechados do exercício aparecem resumidos (por exemplo, “Fechada: de Janeiro a Agosto.”).</li>
-            {analitico ? (
+            {analitico ? null : (
               <li>
-                A aba Comparativo dos analíticos tem três quadros: Cenário Comparado, Índices de Referência e Variações Máximas. Em Índices de
-                Referência, cadastre os índices do cenário: a Descrição, a Observação e a Variação Máxima (em %, para mais ou para menos). Use “Incluir
-                Índice” para uma linha nova e a lixeira para excluir (um índice escolhido em contas das Variações Máximas só se exclui depois de
-                trocá-lo nelas: a coluna Contas diz quantas o usam); “Gravar Índices” grava a lista. Em Variações Máximas, cada conta escolhe um índice
-                no lugar da variação digitada.
-              </li>
-            ) : null}
-            <li>
-              {analitico
-                ? "Nas Variações Máximas dos analíticos, a coluna Índice de Referência traz, em cada conta (ou num total ou numa atribuição, para as contas abaixo dele), a lista dos Índices de Referência, acima; o “Preencher Selecionados” aplica um índice às contas marcadas, e “Gravar Comparativo” grava o Cenário Comparado e as Variações Máximas. O resto funciona como abaixo. "
-                : ""}
               Na aba Comparativo, escolha o cenário com que este se compara e a variação máxima (em %, para mais ou para menos) de cada conta, na
               estrutura da DRE vigente (totais, atribuições e contas, desde Produção e Serviços (PS), com os volumes; sem os totais que só somam
               outros, como CPV, MB, MC, DFO, EBITDA, EBIT, NOPAT, RF, DF e RL; a seta no rótulo da coluna escolhe até que nível mostrar — em Totais e em Atribuições, Produção e Serviços (PS) aparece
@@ -185,18 +227,17 @@ export function ConfiguracoesContent() {
               linhas (a caixa de um total ou de uma atribuição marca as contas abaixo dele; a do rótulo, todas), digite o percentual em
               “Preencher Selecionados” e clique em “Aplicar”; “Limpar” deixa as marcadas em branco. Clique em “Gravar Comparativo”. “Nenhum” desliga o comparativo (as variações ficam guardadas). Com o cenário
               marcado ou com a versão congelada, o comparativo só se lê.
-            </li>
+              </li>
+            )}
             <li>
               Com um cenário comparado, a tela Resultados e a aba Indicadores do Painel de Bordo trazem, em preto e cinza depois do total, os totais dele (e, nos Resultados, a
               Diferença, o Atingimento e a Eficiência), e a tela {analitico ? "Histórico" : "Reajustes"} ganha a aba Justificativas, com as contas acima da variação.
             </li>
             <li>
-              Nas abas com tabela (as cópias dos cadastros, o Comparativo e os Reajustes), o destaque acima de cada tabela — o título, a descrição e, à
-              direita, os botões dela, como Incluir, Gravar e “Exportar” — é um cartão à parte que, ao rolar a tela, flutua sobre a tabela, logo abaixo
-              dos rótulos presos, com as mesmas funções (como nas Premissas). “Exportar”, o último botão do destaque, leva o que está gravado em Excel ou PDF.
-              Os rótulos das colunas têm os filtros e a ordenação padrão (também nos Índices de Referência, nas Variações Máximas, nos Índices de
-              Reajuste e na Aplicação dos Reajustes, sobre o que está na tela, ainda não gravado); nas tabelas da DRE, com um filtro ou uma ordem, aparecem
-              as linhas que passam, de todos os níveis, e sem eles a tabela volta à árvore. “Incluir Índice” tira os filtros, para o índice novo aparecer.
+              Nas abas com tabela ({analitico ? "as cópias dos cadastros e os índices" : "o Comparativo"}), o destaque acima de cada tabela — o título, a descrição e, à
+              direita, os botões dela, como Novo, Gravar e “Exportar” — é um cartão à parte que, ao rolar a tela, flutua sobre a tabela, logo abaixo
+              dos rótulos presos, com as mesmas funções (como nas Premissas). “Exportar”, o último botão do destaque, leva o que está na tabela em Excel ou PDF.
+              Os rótulos das colunas têm os filtros e a ordenação padrão{analitico ? "" : " (na tabela da DRE, com um filtro ou uma ordem, aparecem as linhas que passam, de todos os níveis, e sem eles a tabela volta à árvore)"}.
             </li>
           </ul>
         }

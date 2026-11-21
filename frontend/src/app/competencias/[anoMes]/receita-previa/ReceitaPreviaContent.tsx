@@ -8,14 +8,13 @@ import { toast } from "sonner";
 
 import { ExportarTabela } from "@/components/shared/ExportarTabela";
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
-import { DataTable } from "@/components/shared/DataTable";
 import { PermissionGuard } from "@/components/shared/PermissionGuard";
 import { Button } from "@/components/ui/button";
 import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 import { atualizarCompetencia } from "@/lib/atualizarCompetencia";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
-import { QuadroTabela } from "@/components/shared/QuadroTabela";
-import { useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
+import { Destaque, LinhaVazia, TabelaComDestaque } from "@/app/cenarios/components/DestaqueDaAba";
 import type { Coluna } from "@/lib/filtrosDeTabela";
 
 import { AvisoCongelado } from "../../components/AvisoCongelado";
@@ -115,7 +114,8 @@ export function ReceitaPreviaContent() {
             <li>Cada quadro (Matriz, Filial e Serviços) mostra a receita bruta, os impostos e a receita líquida, com a abertura em venda global e mercantil.</li>
             <li>Clique numa linha com lupa para abrir a memória de cálculo, com uma aba por origem (Produção, Expedição, Saídas, Devoluções, Serviços e Lanç. Manuais). Filtre e ordene pelos rótulos das colunas; o total acompanha o filtro.</li>
             <li>A linha Variação do Estoque abre só as estacas que a movimentam.</li>
-            <li>Em Lançamentos Manuais de Receita, “Novo Lançamento” inclui ajustes, que entram na próxima apuração; a lixeira os exclui, depois da confirmação num modal; “Exportar”, ao lado, leva a tabela em Excel ou PDF.</li>
+            <li>Em Lançamentos Manuais de Receita, “Novo Lançamento” inclui ajustes, que entram na próxima apuração; o lápis os edita e a lixeira os exclui, depois da confirmação num modal; “Exportar”, o último botão do destaque, leva a tabela em Excel ou PDF.</li>
+            <li>Cada tabela (os quadros de cada unidade e os Lançamentos Manuais) tem o destaque acima dela — o título, a descrição e os botões —, que flutua sobre a tabela ao rolar a tela, com os rótulos das colunas presos logo abaixo; os rótulos dos Lançamentos Manuais filtram e ordenam a tabela.</li>
             <li>Depois da apuração, a aba fica congelada: o que mudar só entra ao reapurar a competência, na tela Resultados.</li>
           </ul>
         }
@@ -180,75 +180,64 @@ export function ReceitaPreviaContent() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Lançamentos Manuais de Receita</h2>
-            <p className="text-sm text-gray-600">Entram na receita na próxima apuração.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      {/*
+        Os Lançamentos Manuais de Receita (21/11/2026, pedido do Adão: o padrão das telas com mais de uma tabela, como os Investimentos
+        dos Cenários Analíticos): o destaque com o título, a descrição, o Novo Lançamento e o Exportar, por último, e a tabela com os
+        rótulos presos e os filtros padrão.
+      */}
+      <TabelaComDestaque
+        destaque={
+          <Destaque titulo="Lançamentos Manuais de Receita" descricao="Correções da prévia contra o contábil, redistribuições e inventário: entram na receita na próxima apuração.">
             {!fechada ? (
               <PermissionGuard permission="lancamentos_manuais:editar">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setEditando(null)}
-                  className="rounded-sm border border-black text-black hover:bg-gray-100"
-                >
+                <Button type="button" onClick={() => setEditando(null)} className="bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font-bold text-black shadow-sm">
                   <Plus className="size-4" />
                   Novo Lançamento
                 </Button>
               </PermissionGuard>
             ) : null}
-            {/* O Exportar dos lançamentos de receita (30/10/2026), junto da tabela deles, por último. */}
+            {/* O Exportar dos lançamentos de receita (30/10/2026), por último. */}
             <ExportarTabela titulo={`Receita Prévia · Lançamentos Manuais de Receita · ${anoMes.slice(5)}/${anoMes.slice(0, 4)}`} colunas={COLUNAS} linhas={tabela.filtradas} />
-          </div>
-        </div>
-        <QuadroTabela>
-          <DataTable<LancamentoReceita>
-            data={tabela.visiveis}
-            cabecalho={tabela.cabecalho}
-            filtrosAtivos={tabela.ativos}
-            onLimparFiltros={tabela.limpar}
-            isLoading={lancamentos.isPending}
-            error={lancamentos.isError ? mensagemDeErro(lancamentos.error, "Erro ao carregar os lançamentos.") : null}
-            emptyMessage="Nenhum lançamento de receita nesta competência"
-            emptyHint="Correções da prévia contra o contábil, redistribuições e inventário."
-            columns={["Unidade", "Linha da receita", "Observação", "Valor", ""]}
-            renderRow={(l) => (
-              <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 text-sm whitespace-nowrap">{ROTULO_UNIDADE[l.unidade]}</td>
-                <td className="px-4 text-sm text-gray-900">{rotuloLancamento(l.natureza, l.componente)}</td>
-                <td className="px-4 text-sm whitespace-nowrap text-gray-700">{l.venda ? ROTULO_VENDA[l.venda] : "—"}</td>
-                <td className="px-4 text-sm text-gray-600">
-                  <div className="max-w-md truncate" title={l.observacao}>
-                    {l.observacao}
-                  </div>
+          </Destaque>
+        }
+        larguras={[150, 300, 130, 460, 160, 100]}
+        cabecalho={tabela.linhaDoCabecalho}
+        corpo={
+          lancamentos.isError ? (
+            <LinhaVazia colunas={COLUNAS.length} texto={mensagemDeErro(lancamentos.error, "Erro ao carregar os lançamentos.")} />
+          ) : lancamentos.isPending ? (
+            <LinhaVazia colunas={COLUNAS.length} texto="Carregando…" />
+          ) : (lancamentos.data?.itens.length ?? 0) === 0 ? (
+            <LinhaVazia colunas={COLUNAS.length} texto="Nenhum lançamento de receita nesta competência." />
+          ) : tabela.visiveis.length === 0 ? (
+            <SemResultado colunas={COLUNAS.length} onLimpar={tabela.limpar} />
+          ) : (
+            tabela.visiveis.map((l) => (
+              <tr key={l.id} className="border-t border-gray-100 hover:bg-gray-50">
+                <td className="px-3 py-1.5 whitespace-nowrap">{ROTULO_UNIDADE[l.unidade]}</td>
+                <td className="truncate px-3 py-1.5 text-gray-900">{rotuloLancamento(l.natureza, l.componente)}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap text-gray-700">{l.venda ? ROTULO_VENDA[l.venda] : "—"}</td>
+                <td className="truncate px-3 py-1.5 text-gray-600" title={l.observacao}>
+                  {l.observacao}
                 </td>
-                <td className="px-4 text-right text-sm whitespace-nowrap">{moeda(l.valor)}</td>
-                <td className="px-4 py-0 text-right whitespace-nowrap">
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">{moeda(l.valor)}</td>
+                <td className="px-3 py-0 text-right whitespace-nowrap">
                   {!fechada ? (
                     <PermissionGuard permission="lancamentos_manuais:editar">
                       <Button type="button" variant="ghost" size="icon" onClick={() => setEditando(l)} aria-label="Editar">
                         <Pencil className="size-4" />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Excluir"
-                        onClick={() => setExcluindo(l)}
-                      >
+                      <Button type="button" variant="ghost" size="icon" aria-label="Excluir" onClick={() => setExcluindo(l)}>
                         <Trash2 className="size-4 text-red-700" />
                       </Button>
                     </PermissionGuard>
                   ) : null}
                 </td>
               </tr>
-            )}
-          />
-        </QuadroTabela>
-      </div>
+            ))
+          )
+        }
+      />
 
       {memoria ? <MemoriaCalculoDialog anoMes={anoMes} {...memoria} onFechar={() => setMemoria(null)} /> : null}
       {editando !== undefined ? (

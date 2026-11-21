@@ -113,12 +113,13 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.deepEqual(aba.validacoes?.[0].lista, ["CLT", "PJ", "Aprendiz", "Estagiário"]);
     // O Custo no Ano (17/11/2026): a soma do Salário Total dos doze meses, sem multiplicar pelos colaboradores.
     assert.equal(aba.linhas[5].at(-1)?.valor, 12 * 1_500);
-    assert.equal(aba.linhas[5].at(-1)?.formula?.startsWith("N(F6)+N(G6)+N(J6)+N(K6)"), true);
+    // 21/11/2026: cinco colunas por mês (com os Benefícios depois do Salário Total).
+    assert.equal(aba.linhas[5].at(-1)?.formula?.startsWith("N(F6)+N(G6)+N(K6)+N(L6)"), true);
     // Uma linha nova, preenchida na primeira linha em branco: só março.
     const nova = aba.linhas[5 + linhas.length];
     ["Matriz", "CLT", "Analista", "1.01"].forEach((v, k) => (nova[k] = { valor: v }));
-    nova[4 + 2 * 4] = { valor: 1 };
-    nova[4 + 2 * 4 + 1] = { valor: "4.000,00" };
+    nova[4 + 2 * 5] = { valor: 1 };
+    nova[4 + 2 * 5 + 1] = { valor: "4.000,00" };
     const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
     assert.deepEqual(lido.erros, []);
     assert.deepEqual(lido.abas, ["Quadro de Lotação"]);
@@ -126,17 +127,19 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.equal(lido.quadro.length, 3);
     assert.deepEqual(
       lido.quadro.slice(0, 2).map((l) => ({ ...l.campos, meses: l.meses })),
-      linhas.map(({ tipo, id: _id, ...l }) => ({ ...l, tipo })),
+      // Os Benefícios (21/11/2026): a coluna em branco volta como nenhum (null).
+      linhas.map(({ tipo, id: _id, ...l }) => ({ ...l, tipo, meses: l.meses.map((m) => ({ ...m, beneficiosDigitados: null })) })),
     );
     assert.ok(lido.quadro.every((l) => l.id === null));
-    assert.deepEqual(lido.quadro[2].meses[2], { colaboradores: 1, salarioBruto: 4_000, adicional: 0 });
+    assert.deepEqual(lido.quadro[2].meses[2], { colaboradores: 1, salarioBruto: 4_000, adicional: 0, beneficiosDigitados: null });
     assert.equal(lido.quadro[2].meses[3].colaboradores, 0);
   });
 
   it("as linhas dos centros em fórmula sobre a aba Quadro de Lotação do arquivo (11/11/2026): os centros, o Tipo e o mês", () => {
     // 3 linhas do cenário (as 30 em branco depois): da linha 6 à 38; com a referência, os meses começam na coluna F.
     const q = quadroDoArquivo(3, true);
-    assert.deepEqual([q.primeira, q.ultima, q.doMes(0, 0), q.doMes(0, 1), q.doMes(1, 0)], [6, 38, "F", "G", "J"]);
+    // 21/11/2026: cinco colunas por mês (os Benefícios em J; fevereiro começa em K).
+    assert.deepEqual([q.primeira, q.ultima, q.doMes(0, 0), q.doMes(0, 1), q.doMes(0, 4), q.doMes(1, 0)], [6, 38, "F", "G", "J", "K"]);
     const rem = formulaDoQuadro({ centros: ["1.01"], tipo: "CLT", soma: "SALARIOS" }, q, 0);
     assert.equal(
       rem,
@@ -184,6 +187,6 @@ describe("O Quadro de Lotação dos cenários analíticos (09/11/2026, etapa 4)"
     assert.deepEqual([aba.linhas[4][4].valor, aba.linhas[5][4].valor, aba.linhas[4][5].valor], ["QL Realizado (11/2026)", 3, "JAN/26 · Colaboradores"]);
     const [lido] = lerArquivoDePremissas("premissas.xlsx", gerarXlsx([aba], "teste"));
     assert.deepEqual(lido.erros, []);
-    assert.deepEqual(lido.quadro[0].meses, doze(2, 1_500));
+    assert.deepEqual(lido.quadro[0].meses, doze(2, 1_500).map((m) => ({ ...m, beneficiosDigitados: null })));
   });
 });

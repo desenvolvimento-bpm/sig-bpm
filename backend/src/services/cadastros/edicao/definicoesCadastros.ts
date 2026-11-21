@@ -1274,9 +1274,9 @@ const DESTINO_DO_TOTAL: Record<string, string> = {
   ACOMPANHAMENTO_COMPLEMENTAR: "COMPLEMENTAR",
 };
 /** A unidade que recebe pelo destino (11/10/2026): Matriz, Filial, ou Serviços para a Montagem e a Complementar. */
-const UNIDADE_DO_DESTINO: Record<string, number> = { MATRIZ: 1, FILIAL: 2, MONTAGEM: 3, COMPLEMENTAR: 3 };
+export const UNIDADE_DO_DESTINO: Record<string, number> = { MATRIZ: 1, FILIAL: 2, MONTAGEM: 3, COMPLEMENTAR: 3 };
 /** Os totais das Listas (a faixa acima de cada lista), com o rótulo como lá: sem o "(P)" ou "(S)" e com a medida. */
-const TOTAIS_DAS_LISTAS = LINHAS_TOTAIS.map((t) => ({
+export const TOTAIS_DAS_LISTAS = LINHAS_TOTAIS.map((t) => ({
   codigo: t.codigo as string,
   rotulo: `${t.rotulo.replace(/^\([PS]\) /, "")} (${t.medida})`,
   chaves: CHAVES_DA_LISTA[t.tipo] ?? [],

@@ -23,19 +23,38 @@ import type { GrupoDoCenario } from "./centrosCenario.js";
  *   Estagiários e CLT, e as Remunerações PJ, os Salários PJ. O Fundo de Garantia: Aprendiz vale sobre os Salários dos
  *   Aprendizes, e os Salários dos Estagiários saem da base dos Encargos e Benefícios (o estagiário não tem INSS, FGTS, férias
  *   com o terço nem 13º; encargosCenario.ts);
- * - o grupo sem linhas fica como antes: os colaboradores e as remunerações digitados ou da referência.
+ * - o grupo sem linhas fica como antes: os colaboradores e as remunerações digitados ou da referência;
+ * - os Benefícios (21/11/2026, pedido do Adão): em cada mês, os Benefícios Padrão aplicados à linha (o botão Benefícios da aba;
+ *   o cadastro em Configurações / Benefícios Padrão) — os colaboradores × a soma do Valor Mensal deles — ou, sem eles, o valor
+ *   digitado na importação (a coluna Benefícios da aba Quadro de Lotação do Excel). O grupo soma os das linhas dele, que entram
+ *   na conta Encargos e Benefícios da mão de obra principal (a linha Benefícios Padrão dos centros de custo; encargosCenario.ts).
  *
  * O cálculo do cenário (calcularAnalitico) grava o que os grupos com linhas recebem nas premissas e nos centros, como as
  * outras contas, para a tela, as exportações, os indicadores e a DRE.
  */
 
-export type MesDaLinha = { colaboradores: number; salarioBruto: number; adicional: number };
-/** Uma linha para o cálculo: o tipo, o código do centro e os doze meses. */
+/**
+ * Um mês de uma linha: os Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade e (21/11/2026) os Benefícios — os ids
+ * dos Benefícios Padrão aplicados (`beneficiosPadrao`) ou, sem eles, o valor digitado na importação (`beneficiosDigitados`; nulo:
+ * nenhum; sem o campo, não informado: a importação mantém o que havia).
+ */
+export type MesDaLinha = { colaboradores: number; salarioBruto: number; adicional: number; beneficiosPadrao?: string[]; beneficiosDigitados?: number | null };
+/** Uma linha para o cálculo: o tipo, o código do centro, os doze meses e os Benefícios de cada mês (os valores). */
 export type LinhaDoQuadro = {
   vinculo: VinculoColaborador;
   codigo: string | null;
   meses: MesDaLinha[];
+  beneficios?: number[];
 };
+
+/**
+ * Os Benefícios de um mês de uma linha (21/11/2026): com Benefícios Padrão aplicados, os colaboradores × a soma do Valor Mensal deles
+ * (`valores`: o id → o valor; o que não existe mais vale zero); sem eles, o valor digitado na importação (ou zero).
+ */
+export function beneficiosDoMes(m: MesDaLinha, valores: Map<string, number>): number {
+  if (m.beneficiosPadrao?.length) return m.colaboradores * m.beneficiosPadrao.reduce((s, id) => s + (valores.get(id) ?? 0), 0);
+  return m.beneficiosDigitados ?? 0;
+}
 /** Os quatro tipos de colaboradores (11/11/2026), nas contagens e, desde 12/11/2026, nos salários. */
 export type TipoDeColaborador = "aprendizes" | "estagiarios" | "clt" | "pj";
 export const TIPOS_DE_COLABORADORES: TipoDeColaborador[] = ["aprendizes", "estagiarios", "clt", "pj"];
@@ -43,9 +62,9 @@ export const TIPOS_DE_COLABORADORES: TipoDeColaborador[] = ["aprendizes", "estag
 export type SalariosDoGrupo = Record<TipoDeColaborador, number[]>;
 /**
  * O que um grupo com linhas recebe: os colaboradores de cada mês — Aprendizes, Estagiários, CLT e PJ (estes dois sem os
- * aprendizes e os estagiários) —, os salários dos mesmos quatro e quantas linhas ele tem.
+ * aprendizes e os estagiários) —, os salários dos mesmos quatro, os Benefícios (21/11/2026) e quantas linhas ele tem.
  */
-export type QuadroDoGrupo = Record<TipoDeColaborador, number[]> & { salarios: SalariosDoGrupo; linhas: number };
+export type QuadroDoGrupo = Record<TipoDeColaborador, number[]> & { salarios: SalariosDoGrupo; beneficios: number[]; linhas: number };
 /** Os colaboradores de cada Tipo da linha. */
 const TIPO_DO_VINCULO: Record<VinculoColaborador, TipoDeColaborador> = { APRENDIZ: "aprendizes", ESTAGIARIO: "estagiarios", CLT: "clt", PJ: "pj" };
 export const tipoDaLinha = (l: Pick<LinhaDoQuadro, "vinculo">): TipoDeColaborador => TIPO_DO_VINCULO[l.vinculo];
@@ -70,7 +89,7 @@ export function quadroDosGrupos(linhas: LinhaDoQuadro[], grupos: GrupoDoCenario[
     if (!g) continue;
     let q = r.get(g.grupo);
     if (!q) {
-      q = { aprendizes: doze(), estagiarios: doze(), clt: doze(), pj: doze(), salarios: { aprendizes: doze(), estagiarios: doze(), clt: doze(), pj: doze() }, linhas: 0 };
+      q = { aprendizes: doze(), estagiarios: doze(), clt: doze(), pj: doze(), salarios: { aprendizes: doze(), estagiarios: doze(), clt: doze(), pj: doze() }, beneficios: doze(), linhas: 0 };
       r.set(g.grupo, q);
     }
     q.linhas++;
@@ -79,33 +98,70 @@ export function quadroDosGrupos(linhas: LinhaDoQuadro[], grupos: GrupoDoCenario[
     l.meses.forEach((m, k) => {
       q.salarios[tipo][k] += salarioTotal(m);
       q[tipo][k] += m.colaboradores;
+      q.beneficios[k] += l.beneficios?.[k] ?? 0;
     });
   }
   return r;
 }
 
-type Db = Pick<Prisma.TransactionClient, "cenarioLotacao">;
+type Db = Pick<Prisma.TransactionClient, "cenarioLotacao" | "cenarioBeneficioPadrao">;
 
-/** As linhas do Quadro de Lotação de um cenário para o cálculo. */
-export async function linhasDoQuadro(db: Db, cenarioId: string): Promise<LinhaDoQuadro[]> {
-  const ls = await db.cenarioLotacao.findMany({
-    where: { cenarioId },
-    select: { vinculo: true, centroCusto: { select: { codigoRM: true } }, meses: true },
-  });
-  return ls.map((l) => ({
-    vinculo: l.vinculo,
-    codigo: l.centroCusto.codigoRM,
-    meses: mesesDaLinha(l.meses),
-  }));
+/** O Valor Mensal de cada Benefício Padrão do cenário (o id → o valor por colaborador). */
+export async function valoresDosBeneficios(db: Pick<Prisma.TransactionClient, "cenarioBeneficioPadrao">, cenarioId: string): Promise<Map<string, number>> {
+  const bs = await db.cenarioBeneficioPadrao.findMany({ where: { cenarioId }, select: { id: true, valorMensal: true } });
+  return new Map(bs.map((b) => [b.id, Number(b.valorMensal)]));
 }
 
-/** Os doze meses de uma linha (o mês sem registro, zero). */
-export function mesesDaLinha(meses: Array<{ mes: number; colaboradores: unknown; salarioBruto: unknown; adicional: unknown }>): MesDaLinha[] {
+/** As linhas do Quadro de Lotação de um cenário para o cálculo, com os Benefícios de cada mês (21/11/2026). */
+export async function linhasDoQuadro(db: Db, cenarioId: string): Promise<LinhaDoQuadro[]> {
+  const [ls, valores] = await Promise.all([
+    db.cenarioLotacao.findMany({
+      where: { cenarioId },
+      select: { vinculo: true, centroCusto: { select: { codigoRM: true } }, meses: true },
+    }),
+    valoresDosBeneficios(db, cenarioId),
+  ]);
+  return ls.map((l) => {
+    const meses = mesesDaLinha(l.meses);
+    return { vinculo: l.vinculo, codigo: l.centroCusto.codigoRM, meses, beneficios: meses.map((m) => beneficiosDoMes(m, valores)) };
+  });
+}
+
+/** Os doze meses de uma linha (o mês sem registro, zero), com os Benefícios Padrão aplicados e o valor digitado (21/11/2026). */
+export function mesesDaLinha(
+  meses: Array<{ mes: number; colaboradores: unknown; salarioBruto: unknown; adicional: unknown; beneficiosPadrao?: string[] | null; beneficios?: unknown }>,
+): MesDaLinha[] {
   const porMes = new Map(meses.map((m) => [m.mes, m]));
   return Array.from({ length: 12 }, (_, k) => {
     const m = porMes.get(k + 1);
-    return { colaboradores: Number(m?.colaboradores ?? 0), salarioBruto: Number(m?.salarioBruto ?? 0), adicional: Number(m?.adicional ?? 0) };
+    return {
+      colaboradores: Number(m?.colaboradores ?? 0),
+      salarioBruto: Number(m?.salarioBruto ?? 0),
+      adicional: Number(m?.adicional ?? 0),
+      beneficiosPadrao: m?.beneficiosPadrao ?? [],
+      beneficiosDigitados: m?.beneficios === null || m?.beneficios === undefined ? null : Number(m.beneficios),
+    };
   });
+}
+
+/**
+ * Os Benefícios de um mês na importação (21/11/2026): o `lido` (a coluna Benefícios da aba Quadro de Lotação; sem ela, undefined)
+ * sobre o `atual` do cenário. Sem a coluna, ou com o mesmo valor que o mês já tinha (os Benefícios Padrão aplicados, pelos
+ * colaboradores de antes), ficam os de antes — os aplicados seguem os colaboradores novos; com outro valor, ele fica digitado, sem
+ * os aplicados.
+ */
+export function beneficiosImportados(lido: MesDaLinha, atual: MesDaLinha | undefined, valores: Map<string, number>): Pick<MesDaLinha, "beneficiosPadrao" | "beneficiosDigitados"> {
+  const antes = { beneficiosPadrao: atual?.beneficiosPadrao ?? [], beneficiosDigitados: atual?.beneficiosDigitados ?? null };
+  if (lido.beneficiosDigitados === undefined) return antes;
+  const valorAntes = atual ? beneficiosDoMes(atual, valores) : 0;
+  if (Math.abs((lido.beneficiosDigitados ?? 0) - valorAntes) < 0.005) return antes;
+  return { beneficiosPadrao: [], beneficiosDigitados: lido.beneficiosDigitados };
+}
+
+/** Copia os Benefícios Padrão de um cenário para outro (a revisão e a cópia), antes do Quadro de Lotação. */
+export async function copiarBeneficios(tx: Pick<Prisma.TransactionClient, "cenarioBeneficioPadrao">, de: string, para: string) {
+  const bs = await tx.cenarioBeneficioPadrao.findMany({ where: { cenarioId: de } });
+  if (bs.length) await tx.cenarioBeneficioPadrao.createMany({ data: bs.map(({ id: _id, criadoEm: _c, atualizadoEm: _a, cenarioId: _ce, ...b }) => ({ ...b, cenarioId: para })) });
 }
 
 /**
@@ -115,7 +171,7 @@ export function mesesDaLinha(meses: Array<{ mes: number; colaboradores: unknown;
  * não vai (devolve quantas).
  */
 export async function copiarQuadro(
-  tx: Pick<Prisma.TransactionClient, "cenarioLotacao" | "cenarioLotacaoMes" | "cenarioCentroCusto">,
+  tx: Pick<Prisma.TransactionClient, "cenarioLotacao" | "cenarioLotacaoMes" | "cenarioCentroCusto" | "cenarioBeneficioPadrao">,
   de: string,
   para: string,
   mapa?: Map<string, string>,
@@ -146,7 +202,16 @@ export async function copiarQuadro(
       data: novas.map(({ id: _id, novoId, meses: _meses, criadoEm: _criado, atualizadoEm: _atualizado, ...x }) => ({ ...x, id: novoId, cenarioId: para })),
     });
   }
-  const meses = novas.flatMap((l) => l.meses.map(({ linhaId: _linha, ...m }) => ({ ...m, linhaId: l.novoId })));
+  // Os Benefícios Padrão aplicados (21/11/2026): os do cenário de destino, pelo nome (os que ele não tem saem).
+  const [deles, nossos] = await Promise.all([
+    tx.cenarioBeneficioPadrao.findMany({ where: { cenarioId: de }, select: { id: true, nome: true } }),
+    tx.cenarioBeneficioPadrao.findMany({ where: { cenarioId: para }, select: { id: true, nome: true } }),
+  ]);
+  const doNome = new Map(nossos.map((b) => [b.nome, b.id]));
+  const beneficioPara = new Map(deles.flatMap((b) => (doNome.has(b.nome) ? [[b.id, doNome.get(b.nome)!] as const] : [])));
+  const meses = novas.flatMap((l) =>
+    l.meses.map(({ linhaId: _linha, ...m }) => ({ ...m, beneficiosPadrao: m.beneficiosPadrao.flatMap((b) => (beneficioPara.has(b) ? [beneficioPara.get(b)!] : [])), linhaId: l.novoId })),
+  );
   for (let i = 0; i < meses.length; i += 1000) await tx.cenarioLotacaoMes.createMany({ data: meses.slice(i, i + 1000) });
   return linhas.length - novas.length;
 }
