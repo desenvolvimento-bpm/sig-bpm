@@ -278,7 +278,7 @@ export function CenarioResultadosContent() {
               <>
               <li>
                 As gravações das Configurações, das Premissas e dos Índices de Reajuste não refazem a DRE: abaixo das abas, o destaque Pendente
-                de Recálculo, com a borda vermelha, conta as alterações ainda fora dela, por tela (Configurações, Premissas e Reajustes; parado
+                de Recálculo, com a borda esquerda vermelha, conta as alterações ainda fora dela, por tela (Configurações, Premissas e Reajustes; parado
                 sobre o número, o que cada um conta). “Recalcular” só fica clicável com alguma alteração pendente: ele refaz a DRE com todas (as
                 premissas, as regras de rateio e os cadastros do cenário), zera o destaque e fica no histórico (tela Histórico). Congelar a
                 versão e marcar o cenário pedem o Recalcular antes.

@@ -13,7 +13,7 @@ import {
   type Combinacao,
   type DepartamentoDoIndice,
 } from "../src/services/cenarios/indicesCenario.js";
-import { fatoresDasContas, fatorNaVenda } from "../src/services/cenarios/reajustesCenario.js";
+import { fatoresDasContas, fatorNaVenda, paresDaReceita, receitaLiquidaReajustada } from "../src/services/cenarios/reajustesCenario.js";
 
 /** Uma linha da Estrutura da DRE dos testes. */
 const L = (codigo: string, tipo: LinhaEstrutura["tipo"], grupoSigla: string, descricao: string, unidades: number[], atribuicao: string | null = null): LinhaEstrutura => ({
@@ -96,6 +96,8 @@ describe("índices dos analíticos: o universo das combinações (21/11/2026)", 
         ["RBPF", "Receita Bruta do Pré-Fabricado"],
         ["MOD", "Mão de Obra Direta"],
         ["MP", "Matérias Primas"],
+        // O departamento Receita Operacional (21/11/2026): os grupos da receita como atribuições.
+        ["ROB", "Receita Operacional Bruta"],
       ],
     );
     assert.deepEqual(u.contas.map((c) => c.chave), ["PRODUCAO_M", "RBPF.RECEITA_PF", "MOD.REMUNERACOES_CLT", "MOD.HORAS_EXTRAS", "MP.CIMENTO"]);
@@ -264,5 +266,73 @@ describe("índices dos analíticos: a variação e os Resultados", () => {
     assert.equal(consolidado["CPP.MP.CIMENTO"]?.texto, "Vários");
     assert.match(consolidado["CPP.MP.CIMENTO"]?.dica ?? "", /Matriz · Cimento \(MP, CPP\): A\nFilial · Cimento \(MP, CPP\): B/);
     assert.equal(consolidado["CPP.MOD.REMUNERACOES_CLT"]?.texto, "Vários");
+  });
+});
+
+describe("índices dos analíticos: o departamento Receita Operacional (21/11/2026)", () => {
+  const RECEITA: LinhaEstrutura[] = [
+    L("ROB.RECEITA_ROB", "SUBTOTAL", "ROB", "RECEITA OPERACIONAL BRUTA (ROB)", [1, 2, 3]),
+    L("ROB.RBPF.RECEITA_PF", "ITEM", "ROB", "Receita Bruta do Pré-Fabricado", [1, 2], "Receita Bruta do Pré-Fabricado"),
+    L("ROB.RBM.RECEITA_M", "ITEM", "ROB", "Receita Bruta de Montagem", [3], "Receita Bruta de Montagem"),
+    L("IRB.IMPOSTOS_IRB", "TOTAL", "IRB", "IMPOSTOS SOBRE A RECEITA BRUTA (IRB)", [1, 2, 3]),
+    L("IRB.IO.IMPOSTOS_OPERACIONAIS", "TOTAL", "IRB", "Impostos Operacionais", [1, 2, 3], "Impostos Operacionais"),
+    L("ROL.RECEITA_ROL", "SUBTOTAL", "ROL", "RECEITA OPERACIONAL LÍQUIDA (ROL)", [1, 2, 3]),
+    L("ROL.RLPF.RECEITA_LIQUIDA_PF", "ITEM", "ROL", "Receita Líquida do Pré-Fabricado", [1, 2], "Receita Líquida do Pré-Fabricado"),
+    L("ROL.RLM.RECEITA_LIQUIDA_M", "ITEM", "ROL", "Receita Líquida de Montagem", [3], "Receita Líquida de Montagem"),
+    L("CPP.CUSTOS_CPP", "SUBTOTAL", "CPP", "CUSTOS DE PRODUÇÃO (CPP)", [1, 2]),
+    L("CPP.MP.CIMENTO", "ITEM", "CPP", "Cimento", [1, 2], "Matérias Primas"),
+  ];
+  const u = montarUniverso("REAJUSTE", RECEITA, DEPS, UNIDADES);
+  const k = (x: Partial<Combinacao>): Combinacao => ({ unidade: null, departamento: null, atribuicao: null, conta: null, venda: null, ...x });
+  const codigos = (x: Partial<Combinacao>) => celulasDaCombinacao(k(x), u).map((c) => `${c.unidade}|${c.codigo}`).sort();
+
+  it("em cada unidade com receita, antes dos da cópia, com os grupos como atribuições e os Impostos Operacionais como conta", () => {
+    const receita = u.departamentos.filter((d) => d.porGrupo);
+    assert.deepEqual(receita.map((d) => [d.id, d.unidade, d.nome]), [
+      ["RECEITA_OPERACIONAL|1", 1, "Receita Operacional"],
+      ["RECEITA_OPERACIONAL|2", 2, "Receita Operacional"],
+      ["RECEITA_OPERACIONAL|3", 3, "Receita Operacional"],
+    ]);
+    assert.equal(u.departamentos[0].id, "RECEITA_OPERACIONAL|1");
+    assert.deepEqual(
+      u.atribuicoes.filter((a) => ["ROB", "IRB", "ROL"].includes(a.chave)).map((a) => a.nome),
+      ["Receita Operacional Bruta", "Impostos Operacionais", "Receita Operacional Líquida"],
+    );
+    assert.ok(u.celulas.some((c) => c.codigo === "IRB.IO.IMPOSTOS_OPERACIONAIS" && c.unidade === 3));
+  });
+
+  it("alcança a receita da unidade inteira, ou só a ROB, os impostos ou a ROL", () => {
+    assert.deepEqual(codigos({ unidade: 1, departamento: "RECEITA_OPERACIONAL|1" }), ["1|IRB.IO.IMPOSTOS_OPERACIONAIS", "1|ROB.RBPF.RECEITA_PF", "1|ROL.RLPF.RECEITA_LIQUIDA_PF"]);
+    assert.deepEqual(codigos({ unidade: 3, departamento: "RECEITA_OPERACIONAL|3", atribuicao: "ROL" }), ["3|ROL.RLM.RECEITA_LIQUIDA_M"]);
+    assert.deepEqual(codigos({ unidade: 2, departamento: "RECEITA_OPERACIONAL|2", atribuicao: "IRB" }), ["2|IRB.IO.IMPOSTOS_OPERACIONAIS"]);
+    assert.deepEqual(codigos({ unidade: 1, departamento: "RECEITA_OPERACIONAL|1", atribuicao: "ROB", conta: "RBPF.RECEITA_PF" }), ["1|ROB.RBPF.RECEITA_PF"]);
+  });
+
+  it("recusa os impostos e a ROL da mesma unidade em índices diferentes; no mesmo índice, aceita", () => {
+    const ok = errosDasCombinacoes([{ chave: "r1", descricao: "Preços", combinacoes: [k({ unidade: 1, departamento: "RECEITA_OPERACIONAL|1" })] }], u);
+    assert.deepEqual(ok, []);
+    const erros = errosDasCombinacoes(
+      [
+        { chave: "r1", descricao: "Impostos", combinacoes: [k({ unidade: 1, departamento: "RECEITA_OPERACIONAL|1", atribuicao: "IRB" })] },
+        { chave: "r2", descricao: "Líquida", combinacoes: [k({ unidade: 1, departamento: "RECEITA_OPERACIONAL|1", atribuicao: "ROL" })] },
+      ],
+      u,
+    );
+    assert.equal(erros.length, 1);
+    assert.match(erros[0], /^Matriz: os Impostos Operacionais estão no índice Impostos e .*Receita Líquida do Pré-Fabricado.* no Líquida/);
+  });
+
+  it("os impostos reajustados: a ROL = a ROB (reajustada) − os impostos × o fator", () => {
+    const rob = Array<number>(12).fill(1000);
+    const rol = Array<number>(12).fill(900);
+    const f = Array<number>(12).fill(1.1);
+    // O mesmo fator na ROB e nos impostos: a ROL × o fator.
+    assert.ok(Math.abs(receitaLiquidaReajustada(rob, f, rol, f)[0] - 990) < 1e-9);
+    // Só os impostos (+20%): 1.000 − 100 × 1,2.
+    assert.ok(Math.abs(receitaLiquidaReajustada(rob, undefined, rol, Array<number>(12).fill(1.2))[5] - 880) < 1e-9);
+    assert.deepEqual([...paresDaReceita(RECEITA)], [
+      ["ROL.RLPF.RECEITA_LIQUIDA_PF", "ROB.RBPF.RECEITA_PF"],
+      ["ROL.RLM.RECEITA_LIQUIDA_M", "ROB.RBM.RECEITA_M"],
+    ]);
   });
 });

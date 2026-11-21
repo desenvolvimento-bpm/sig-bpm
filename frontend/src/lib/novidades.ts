@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 21/11/2026, à tarde: o departamento Receita Operacional nos índices.
+  {
+    publicada: "2026-11-21T15:46",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "No modal dos índices (Comparativo e Reajustes), o Departamento Receita Operacional, na Matriz, na Filial e em Serviços: as atribuições Receita Operacional Bruta, Impostos Operacionais e Receita Operacional Líquida, com as contas de cada uma. Nos Índices de Reajuste, reajustar os Impostos Operacionais multiplica os impostos (a ROB menos a ROL) pelo fator, e a ROL passa a ser a ROB menos eles; por isso, na mesma unidade, a ROL só pode ter o mesmo índice dos impostos.",
+    ],
+  },
   // 21/11/2026: o Recalcular dos analíticos (as alterações pendentes de recálculo e a caixa Aplicar Reajustes) e os filtros do Quadro de Lotação.
   {
     publicada: "2026-11-21T14:52",

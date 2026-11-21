@@ -57,6 +57,11 @@ const rotuloDoMes = (meses: Meses, mes: number) => meses.find((m) => m.mes === m
 const textoDosReajustes = (r: Array<{ valor: number; mes: number }>, meses: Meses) => r.map((x) => `${duasCasas(Number(x.valor))}% em ${rotuloDoMes(meses, x.mes)}`).join(", ");
 const departamentosDe = (u: UniversoDosIndices): Deps => new Map(u.departamentos.map((d) => [d.id, d]));
 
+/** As atribuições do departamento Receita Operacional (21/11/2026): os grupos da receita (como no servidor). */
+const ATRIBUICOES_DA_RECEITA = new Set(["ROB", "IRB", "ROL"]);
+/** A conta está na atribuição: a sigla dela ou, nas da Receita Operacional, o grupo. */
+const naAtribuicaoDe = (c: CelulaDoIndice, atribuicao: string) => c.atribuicao === atribuicao || (ATRIBUICOES_DA_RECEITA.has(atribuicao) && c.grupo === atribuicao);
+
 /** Se a combinação alcança a conta (como no servidor: indicesCenario.alcanca). */
 function alcanca(k: CombinacaoDoIndice, c: CelulaDoIndice, deps: Deps) {
   if (k.unidade !== null && c.unidade !== k.unidade) return false;
@@ -64,7 +69,7 @@ function alcanca(k: CombinacaoDoIndice, c: CelulaDoIndice, deps: Deps) {
     const d = deps.get(k.departamento);
     if (!d || d.unidade !== c.unidade || !d.grupos.includes(c.grupo)) return false;
   }
-  if (k.atribuicao !== null && c.atribuicao !== k.atribuicao) return false;
+  if (k.atribuicao !== null && !naAtribuicaoDe(c, k.atribuicao)) return false;
   if (k.conta !== null && c.conta !== k.conta) return false;
   if (k.venda !== null && c.venda !== k.venda) return false;
   return true;
@@ -97,10 +102,13 @@ function opcoesDa(k: CombinacaoDoIndice, u: UniversoDosIndices, deps: Deps) {
   const dep = k.departamento ? deps.get(k.departamento) : undefined;
   const naUnidade = u.celulas.filter((c) => k.unidade === null || c.unidade === k.unidade);
   const noDepartamento = naUnidade.filter((c) => !k.departamento || (!!dep && dep.unidade === c.unidade && dep.grupos.includes(c.grupo)));
-  const naAtribuicao = noDepartamento.filter((c) => k.atribuicao === null || c.atribuicao === k.atribuicao);
+  const naAtribuicao = noDepartamento.filter((c) => k.atribuicao === null || naAtribuicaoDe(c, k.atribuicao));
   return {
     departamentos: k.unidade === null ? [] : u.departamentos.filter((d) => d.unidade === k.unidade && (d.ativo || d.id === k.departamento)),
-    atribuicoes: u.atribuicoes.filter((a) => noDepartamento.some((c) => c.atribuicao === a.chave)),
+    // No departamento Receita Operacional, os grupos (Receita Operacional Bruta, Impostos Operacionais e Receita Operacional Líquida).
+    atribuicoes: dep?.porGrupo
+      ? u.atribuicoes.filter((a) => dep.grupos.includes(a.chave) && noDepartamento.some((c) => c.grupo === a.chave))
+      : u.atribuicoes.filter((a) => !ATRIBUICOES_DA_RECEITA.has(a.chave) && noDepartamento.some((c) => c.atribuicao === a.chave)),
     contas: u.contas.filter((x) => naAtribuicao.some((c) => c.conta === x.chave)),
   };
 }
@@ -468,8 +476,11 @@ function IndiceDialog({
       xs.map((l, i) => {
         if (i !== n) return l;
         const nova = { ...l.k, ...m };
-        // A conta escolhida com a Atribuição "Todas" leva a atribuição dela.
-        if (m.conta && nova.atribuicao === null) nova.atribuicao = universo.contas.find((c) => c.chave === m.conta)?.atribuicao ?? null;
+        // A conta escolhida com a Atribuição "Todas" leva a atribuição dela (no departamento Receita Operacional, o grupo dela).
+        if (m.conta && nova.atribuicao === null)
+          nova.atribuicao = deps.get(nova.departamento ?? "")?.porGrupo
+            ? (universo.celulas.find((c) => c.conta === m.conta)?.grupo ?? null)
+            : (universo.contas.find((c) => c.chave === m.conta)?.atribuicao ?? null);
         return { ...l, k: ajustada(nova, universo, deps) };
       }),
     );
@@ -484,9 +495,14 @@ function IndiceDialog({
             {reajuste
               ? "Até quatro reajustes, cada um com o Valor (%) e o mês em que Inicia Em; cada um vale sobre os anteriores, até o fim do exercício, nas contas das combinações abaixo (na DRE, com os reajustes aplicados). "
               : "A variação máxima aceita (em %, para mais ou para menos), contra o cenário comparado, nas contas das combinações abaixo: as que passam dela pedem justificativa (tela Histórico, aba Justificativas). "}
-            Cada combinação escolhe a Unidade, o Departamento (os da unidade), a Atribuição e a Conta — “Todas” vale para todas —: uma unidade
-            inteira, um departamento de uma unidade, uma atribuição de um departamento ou só uma conta
-            {reajuste ? "; a Venda (Todas, Global ou Mercantil): Global ou Mercantil fica só com as contas dos Custos de Produção da Matriz e da Filial, na parte daquela venda" : ""}. A
+            Cada combinação escolhe a Unidade, o Departamento (os da unidade; na Matriz, na Filial e em Serviços, também a Receita Operacional,
+            com a Receita Operacional Bruta, os Impostos Operacionais e a Receita Operacional Líquida como atribuições), a Atribuição e a
+            Conta — “Todas” vale para todas —: uma unidade inteira, um departamento de uma unidade, uma atribuição de um departamento ou só
+            uma conta
+            {reajuste
+              ? "; a Venda (Todas, Global ou Mercantil): Global ou Mercantil fica só com as contas dos Custos de Produção da Matriz e da Filial, na parte daquela venda. Reajustar os Impostos Operacionais multiplica os impostos (a ROB menos a ROL) pelo fator, e a ROL passa a ser a ROB menos eles: na mesma unidade, a ROL só pode ter o mesmo índice deles"
+              : ""}
+            . A
             mesma conta não pode estar em duas combinações nem em dois índices. {CUMULATIVOS}
           </DialogDescription>
         </DialogHeader>
@@ -582,8 +598,9 @@ function IndiceDialog({
                 <colgroup>
                   <col style={{ width: 40 }} />
                   <col style={{ width: 150 }} />
-                  <col style={{ width: 170 }} />
-                  <col style={{ width: reajuste ? 210 : 240 }} />
+                  {/* O Departamento com folga para "Receita Operacional" (21/11/2026). */}
+                  <col style={{ width: 200 }} />
+                  <col style={{ width: reajuste ? 230 : 260 }} />
                   <col />
                   {reajuste ? <col style={{ width: 120 }} /> : null}
                   <col style={{ width: 90 }} />

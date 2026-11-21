@@ -491,7 +491,8 @@ export type CelulaDoIndice = { chave: string; unidade: number; codigo: string; g
 export type UniversoDosIndices = {
   tipo: "COMPARACAO" | "REAJUSTE";
   unidades: Array<{ codigo: number; nome: string }>;
-  departamentos: Array<{ id: string; unidade: number; nome: string; grupos: string[]; ativo: boolean }>;
+  /** `porGrupo` (21/11/2026): o departamento Receita Operacional, cujas atribuições são os grupos da DRE (ROB, IRB e ROL). */
+  departamentos: Array<{ id: string; unidade: number; nome: string; grupos: string[]; ativo: boolean; porGrupo?: boolean }>;
   atribuicoes: Array<{ chave: string; nome: string }>;
   contas: Array<{ chave: string; nome: string; atribuicao: string }>;
   celulas: CelulaDoIndice[];

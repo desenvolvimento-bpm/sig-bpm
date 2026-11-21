@@ -16,13 +16,13 @@ export type Indicador = {
 /**
  * Os números da tela numa faixa só (E4 do levantamento de layout), em vez de
  * um cartão grande para cada número. `titulo` (21/11/2026: o Pendente de Recálculo dos cenários) vem antes dos números, em
- * negrito e no tamanho deles; `borda` "atencao" pinta a borda de vermelho.
+ * negrito e no tamanho deles; `borda` "atencao" é o destaque vermelho: as bordas cinza padrão e só a esquerda vermelha.
  */
 export function FaixaIndicadores({ itens, titulo, borda }: { itens: Indicador[]; titulo?: string; borda?: "atencao" }) {
   return (
     // Destaque amarelo-ouro à esquerda, como nos quadros das tabelas (vermelho no de atenção).
     <dl
-      className={`flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-sm border border-l-4 bg-white px-4 py-2.5 ${borda === "atencao" ? "border-red-300 border-l-red-600" : "border-gray-200 border-l-bpm-primary"}`}
+      className={`flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-sm border border-l-4 bg-white px-4 py-2.5 border-gray-200 ${borda === "atencao" ? "border-l-red-600" : "border-l-bpm-primary"}`}
     >
       {titulo ? (
         <div className="flex items-baseline">

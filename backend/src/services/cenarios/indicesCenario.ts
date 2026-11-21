@@ -18,6 +18,11 @@ import { aplicacaoDosReajustes, fatoresDasContas, GRUPOS_POR_UNIDADE, indicesDaL
  *   Serviços, P ou S). Com o Departamento "Todos", a mesma atribuição vale em todos os grupos da unidade (a Mão de Obra Direta da
  *   Montagem e a dos Complementares, por exemplo).
  * - Conta: o código sem o grupo ("MOD.REMUNERACOES_CLT"): com o Departamento "Todos", a mesma conta de todos os grupos.
+ * - O departamento Receita Operacional (21/11/2026, pedido do Adão), em cada unidade com receita (Matriz, Filial e Serviços): os
+ *   grupos ROB, IRB e ROL, que são as atribuições dele (Receita Operacional Bruta, Impostos Operacionais e Receita Operacional
+ *   Líquida), com as contas de cada um. Nos Índices de Reajuste, os Impostos Operacionais (um total: ROB − ROL) também se
+ *   reajustam: os impostos de cada produto (a ROB menos a ROL dele) × o fator, com a ROL = a ROB (com o reajuste dela) − eles
+ *   (reajustesCenario.receitaLiquidaReajustada).
  * - Venda (só nos Índices de Reajuste): Todas (nula), Global ou Mercantil; Global ou Mercantil restringe a combinação às contas
  *   com venda, as dos Custos de Produção da Matriz e da Filial (21/11/2026, a parte de cada venda; reajustesCenario.reajustarPorVenda).
  *
@@ -43,7 +48,15 @@ export type Combinacao = { unidade: number | null; departamento: string | null; 
  * nos fatores dos reajustes (reajustesCenario.fatorNaVenda).
  */
 export type CelulaDoIndice = { chave: string; unidade: number; codigo: string; grupo: string; atribuicao: string; conta: string; venda: Venda | null; descricao: string };
-export type DepartamentoDoIndice = { id: string; unidade: number; nome: string; grupos: string[]; ativo: boolean };
+/** `porGrupo` (o departamento Receita Operacional, 21/11/2026): as atribuições dele são os grupos da DRE, não as siglas das contas. */
+export type DepartamentoDoIndice = { id: string; unidade: number; nome: string; grupos: string[]; ativo: boolean; porGrupo?: boolean };
+
+/** O departamento Receita Operacional (21/11/2026): o id na unidade ("RECEITA_OPERACIONAL|1") e as atribuições dele, os grupos. */
+export const RECEITA_OPERACIONAL = "RECEITA_OPERACIONAL";
+export const ATRIBUICOES_DA_RECEITA: Record<string, string> = { ROB: "Receita Operacional Bruta", IRB: "Impostos Operacionais", ROL: "Receita Operacional Líquida" };
+/** Os Impostos Operacionais: um total (ROB − ROL) que, nos Índices de Reajuste, se reajusta como uma conta. */
+export const IMPOSTOS_OPERACIONAIS = "IRB.IO.IMPOSTOS_OPERACIONAIS";
+const idDaReceita = (u: number) => `${RECEITA_OPERACIONAL}|${u}`;
 
 /** O que as combinações de um tipo de índice podem escolher, e as contas que elas alcançam. */
 export type Universo = {
@@ -64,7 +77,8 @@ const NOME_PADRAO_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial
 /**
  * O universo das combinações (puro): as contas de cada tipo, em cada unidade — nos Índices de Comparação, as linhas verificadas do
  * Comparativo (as contas, os volumes de Produção e Serviços e os totais sem contas, como os Impostos Operacionais); nos de Reajuste,
- * as contas (ITEM) fora de Produção e Serviços, com os Custos de Produção da Matriz e da Filial em cada venda.
+ * as contas (ITEM) fora de Produção e Serviços, com os Custos de Produção da Matriz e da Filial em cada venda, e os Impostos
+ * Operacionais (21/11/2026). Nas unidades com receita, o departamento Receita Operacional vem antes dos da cópia do cenário.
  */
 export function montarUniverso(
   tipo: TipoDoIndice,
@@ -83,7 +97,7 @@ export function montarUniverso(
     if (!r.folha) continue;
     const l = r.linha;
     const doPS = !!ps && (l.codigo === ps || r.acima[0] === ps);
-    if (tipo === "REAJUSTE" && (l.tipo !== "ITEM" || doPS)) continue;
+    if (tipo === "REAJUSTE" && ((l.tipo !== "ITEM" && l.codigo !== IMPOSTOS_OPERACIONAIS) || doPS)) continue;
     const partes = l.codigo.split(".");
     const atribuicao = partes.length > 2 ? partes[1] : l.grupoSigla;
     const nomeDaAtribuicao = partes.length > 2 ? (l.atribuicao ?? partes[1]) : (SECOES[l.grupoSigla] ?? l.grupo);
@@ -112,6 +126,10 @@ export function montarUniverso(
     if (!contas.has(conta)) contas.set(conta, { nome: l.descricao, atribuicao });
   }
   const comContas = new Set(celulas.map((c) => c.unidade));
+  // O departamento Receita Operacional e as atribuições dele (os grupos), nas unidades com receita.
+  const comReceita = [...new Set(celulas.filter((c) => c.grupo in ATRIBUICOES_DA_RECEITA).map((c) => c.unidade))].sort((a, b) => a - b);
+  const daReceita: DepartamentoDoIndice[] = comReceita.map((u) => ({ id: idDaReceita(u), unidade: u, nome: "Receita Operacional", grupos: Object.keys(ATRIBUICOES_DA_RECEITA), ativo: true, porGrupo: true }));
+  if (comReceita.length) for (const [chave, nome] of Object.entries(ATRIBUICOES_DA_RECEITA)) if (!atribuicoes.has(chave) && celulas.some((c) => c.grupo === chave)) atribuicoes.set(chave, nome);
   const unidades = [
     ...unidadesDoCenario.filter((u) => comContas.has(u.codigo)),
     ...[...comContas].filter((u) => !unidadesDoCenario.some((x) => x.codigo === u)).map((u) => ({ codigo: u, nome: nomeDaUnidade(u) })),
@@ -119,7 +137,7 @@ export function montarUniverso(
   return {
     tipo,
     unidades,
-    departamentos: departamentos.filter((d) => comContas.has(d.unidade)),
+    departamentos: [...daReceita, ...departamentos.filter((d) => comContas.has(d.unidade))],
     atribuicoes: [...atribuicoes].map(([chave, nome]) => ({ chave, nome })),
     contas: [...contas].map(([chave, c]) => ({ chave, ...c })),
     celulas,
@@ -148,7 +166,8 @@ export function alcanca(k: Combinacao, c: CelulaDoIndice, departamentos: Map<str
     const d = departamentos.get(k.departamento);
     if (!d || d.unidade !== c.unidade || !d.grupos.includes(c.grupo)) return false;
   }
-  if (k.atribuicao !== null && c.atribuicao !== k.atribuicao) return false;
+  // A atribuição da Receita Operacional (ROB, IRB, ROL) é o grupo da conta.
+  if (k.atribuicao !== null && c.atribuicao !== k.atribuicao && !(k.atribuicao in ATRIBUICOES_DA_RECEITA && c.grupo === k.atribuicao)) return false;
   if (k.conta !== null && c.conta !== k.conta) return false;
   if (k.venda !== null && c.venda !== k.venda) return false;
   return true;
@@ -237,6 +256,19 @@ export function errosDasCombinacoes(indices: ComCombinacoes[], u: Universo): str
       if (repetidas.length) erros.push(`${qual}: alcança contas de outra combinação do índice — ${algumas(repetidas)}.`);
       for (const [outro, contas] of deOutro) erros.push(`${qual}: alcança contas que já estão no índice ${outro} — ${algumas(contas)}.`);
     });
+  }
+  // Os Impostos Operacionais reajustados (21/11/2026): a ROL da unidade sai da ROB menos eles, então ela não tem outro índice.
+  if (u.tipo === "REAJUSTE") {
+    const nomeDe = new Map(indices.map((i) => [i.chave, i.descricao]));
+    for (const io of u.celulas.filter((c) => c.codigo === IMPOSTOS_OPERACIONAIS)) {
+      const doIO = dono.get(io.chave)?.indice.chave;
+      if (!doIO) continue;
+      const outras = u.celulas.filter((c) => c.unidade === io.unidade && c.grupo === "ROL" && dono.get(c.chave) && dono.get(c.chave)!.indice.chave !== doIO);
+      if (outras.length)
+        erros.push(
+          `${io.descricao.split(" · ")[0]}: os Impostos Operacionais estão no índice ${nomeDe.get(doIO)} e ${algumas(outras.map((c) => `${c.descricao.split(" · ").slice(1).join(" · ")} no ${dono.get(c.chave)!.indice.descricao}`))}: com os impostos reajustados, a Receita Operacional Líquida é a ROB menos eles — use o mesmo índice nas duas (ou deixe a ROL sem índice).`,
+        );
+    }
   }
   return erros;
 }

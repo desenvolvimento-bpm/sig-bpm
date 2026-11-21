@@ -179,7 +179,11 @@ export function ConfiguracoesContent() {
                   No modal, as Combinações dizem onde o índice vale: “Incluir Combinação” abre uma linha com a Unidade (Todas, ou uma unidade do
                   cenário), o Departamento (Todos, ou um departamento da unidade escolhida: Configurações / Departamentos), a Atribuição (Todas, ou
                   uma atribuição do departamento — com o Departamento Todos, a mesma atribuição de todos os departamentos da unidade) e a Conta
-                  (Todas, ou uma conta da atribuição e do departamento). Assim, o índice vale numa unidade inteira, num departamento de uma
+                  (Todas, ou uma conta da atribuição e do departamento). Na Matriz, na Filial e em Serviços, o Departamento Receita Operacional
+                  tem como atribuições a Receita Operacional Bruta, os Impostos Operacionais e a Receita Operacional Líquida, com as contas de cada
+                  uma; nos Índices de Reajuste, reajustar os Impostos Operacionais multiplica os impostos de cada produto (a ROB menos a ROL) pelo
+                  fator, e a ROL passa a ser a ROB menos eles — por isso, na mesma unidade, a ROL só pode ter o mesmo índice dos impostos (ou
+                  nenhum). Assim, o índice vale numa unidade inteira, num departamento de uma
                   unidade, numa atribuição de um departamento ou só numa conta, e um índice tem quantas combinações precisar; a coluna Contas de
                   cada linha diz quantas contas (cada conta numa unidade) ela alcança. Nos Índices de Reajuste, a Venda (Todas, Global ou
                   Mercantil): Global ou Mercantil deixa na combinação só as contas dos Custos de Produção da Matriz e da Filial, na parte daquela

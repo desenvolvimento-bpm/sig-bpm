@@ -9,8 +9,8 @@ import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VE
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
 import { recalcular, UNIDADES } from "./edicaoCenario.js";
-import { fatorNaUnidade, fatorNaVenda, GRUPOS_POR_UNIDADE, reajustarPorVenda, resumoVazio } from "./reajustesCenario.js";
-import { fatoresDoCenario } from "./indicesCenario.js";
+import { fatorNaUnidade, fatorNaVenda, GRUPOS_POR_UNIDADE, paresDaReceita, reajustarPorVenda, receitaLiquidaReajustada, resumoVazio } from "./reajustesCenario.js";
+import { fatoresDoCenario, IMPOSTOS_OPERACIONAIS } from "./indicesCenario.js";
 import { assinaturaDasRegras, percentuaisPelasRegras } from "../volumes/vigenciaDosRateios.js";
 import { regrasDoCenario } from "./regrasDoCenario.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
@@ -605,6 +605,14 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   // ou não); só com eles aplicados os valores gravados saem reajustados.
   // Desde 21/11/2026, pelas combinações dos Índices de Reajuste (indicesCenario.ts), com a cópia dos Departamentos do cenário.
   const fatores = await fatoresDoCenario(tx, { id: cenarioId, ...cenario }, est);
+  // Os Impostos Operacionais com índice (21/11/2026, o departamento Receita Operacional): em cada unidade, a ROL de cada produto
+  // sai da ROB dele (com o reajuste dela) menos os impostos dele × o fator — a conta da ROL que faltar entra zerada.
+  const paresDaRol = paresDaReceita(est);
+  const fatorDosImpostos = (u: number) => fatorNaUnidade(fatores, IMPOSTOS_OPERACIONAIS, u);
+  for (const u of UNIDADES) {
+    if (!fatorDosImpostos(u)) continue;
+    for (const [rol, rob] of paresDaRol) if (somas.has(`${u}|${rob}`) && !somas.has(`${u}|${rol}`)) somas.set(`${u}|${rol}`, Array<number>(12).fill(0));
+  }
   const resumo = resumoVazio();
   const novos: Array<{ cenarioId: string; visao: number; linhaDREId: string; mes: number; valor: Prisma.Decimal }> = [];
   for (const [k, lista] of somas) {
@@ -627,9 +635,11 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
         )
       : null;
     const f = porUnidade ? null : fatorNaUnidade(fatores, codigo, u);
+    const fImpostos = paresDaRol.has(codigo) ? fatorDosImpostos(u) : undefined;
+    const daRol = fImpostos ? receitaLiquidaReajustada(somas.get(`${u}|${paresDaRol.get(codigo)!}`) ?? [], fatorNaUnidade(fatores, paresDaRol.get(codigo)!, u), lista, fImpostos) : null;
     lista.forEach((x, m) => {
-      if (Math.abs(x) < 0.00005) return;
-      const reajustado = doCPP ? doCPP[m] : f ? x * f[m] : x;
+      if (Math.abs(x) < 0.00005 && !daRol) return;
+      const reajustado = doCPP ? doCPP[m] : daRol ? daRol[m] : f ? x * f[m] : x;
       if (reajustado !== x) {
         resumo.contas.add(codigo);
         resumo.meses.add(m + 1);

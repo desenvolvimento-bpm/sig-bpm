@@ -75,6 +75,32 @@ export function indicesDaLinha(aplicacao: Record<string, IndicesDaConta>, chave:
   return aplicacao[chave] ?? (unidade !== null ? aplicacao[`${unidade}|${codigo}`] : undefined) ?? aplicacao[codigo];
 }
 
+/**
+ * A Receita Líquida de um produto com os Impostos Operacionais reajustados (21/11/2026, pedido do Adão), nos doze meses: a ROB
+ * dele com o reajuste dela (sem fator, como está) menos os impostos dele (a ROB menos a ROL, das premissas) × o fator dos
+ * impostos. Com o mesmo fator na ROB e nos impostos, é a ROL × o fator.
+ */
+export function receitaLiquidaReajustada(rob: number[], fatorDaRob: number[] | undefined, rol: number[], fatorDosImpostos: number[]): number[] {
+  return Array.from({ length: 12 }, (_, m) => {
+    const b = rob[m] ?? 0;
+    return b * (fatorDaRob ? fatorDaRob[m] : 1) - (b - (rol[m] ?? 0)) * fatorDosImpostos[m];
+  });
+}
+
+/** As contas da Receita Líquida e a da Receita Bruta do mesmo produto (ROL.RLPF… → ROB.RBPF…), pela sigla (RL… ↔ RB…). */
+export function paresDaReceita(est: Array<{ codigo: string; tipo: string; grupoSigla: string }>): Map<string, string> {
+  const rob = new Map<string, string>();
+  for (const l of est) if (l.tipo === "ITEM" && l.grupoSigla === "ROB") rob.set(l.codigo.split(".")[1] ?? "", l.codigo);
+  const pares = new Map<string, string>();
+  for (const l of est) {
+    if (l.tipo !== "ITEM" || l.grupoSigla !== "ROL") continue;
+    const sigla = l.codigo.split(".")[1] ?? "";
+    const par = sigla.startsWith("RL") ? rob.get(`RB${sigla.slice(2)}`) : undefined;
+    if (par) pares.set(l.codigo, par);
+  }
+  return pares;
+}
+
 /** O fator de uma conta numa unidade (de fatoresDasContas): o da conta na unidade ou, sem ele, o da conta. */
 export const fatorNaUnidade = (fatores: Map<string, number[]>, codigo: string, unidade: number) => fatores.get(`${unidade}|${codigo}`) ?? fatores.get(codigo);
 /** O fator de uma conta numa unidade e numa venda (21/11/2026): o da venda, o da unidade ou o da conta. */
