@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -432,6 +432,8 @@ function IndiceDialog({
   // As combinações, com uma chave estável por linha (para o React).
   const [proxima, setProxima] = useState(indice?.combinacoes.length ?? 0);
   const [linhas, setLinhas] = useState<Array<{ id: number; k: CombinacaoDoIndice }>>(() => (indice?.combinacoes ?? []).map((k, n) => ({ id: n, k })));
+  // A área das linhas das combinações (a que rola): o Incluir Combinação a leva até a linha nova.
+  const areaDasCombinacoes = useRef<HTMLDivElement>(null);
   const [excluindo, setExcluindo] = useState(false);
   const combinacoes = useMemo(() => linhas.map((l) => l.k), [linhas]);
   const { ruins, avisos: dasCombinacoes } = useMemo(() => avisosDasCombinacoes(combinacoes, outros, universo, deps), [combinacoes, outros, universo, deps]);
@@ -485,28 +487,31 @@ function IndiceDialog({
       }),
     );
   const select = (ruim: boolean) => `h-8 w-full min-w-0 rounded-sm border bg-white px-2 text-sm disabled:opacity-70 ${ruim ? "border-red-400" : "border-gray-300"}`;
-  const th = "px-2 py-2 text-left text-xs font-bold text-gray-900";
+  // Os rótulos da tabela das combinações presos no alto da área que rola (21/11/2026, pedido do Adão).
+  const th = "sticky top-0 z-10 bg-gray-50 px-2 py-2 text-left text-xs font-bold text-gray-900";
   return (
     <Dialog open onOpenChange={(o) => (!o && !pendente ? onFechar() : undefined)}>
-      <DialogContent avisoAoSair={podeEditar} className="max-h-[92vh] overflow-y-auto rounded-sm sm:max-w-6xl">
+      {/* O modal em coluna (21/11/2026, pedido do Adão): o título, os campos e os rótulos das combinações ficam fixos; só as linhas das
+          combinações rolam, e os avisos e os botões ficam no pé. */}
+      <DialogContent avisoAoSair={podeEditar} className="flex max-h-[92vh] flex-col overflow-y-auto rounded-sm sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>{indice ? (podeEditar ? `Editar ${nome}` : nome) : `Novo ${nome}`}</DialogTitle>
           <DialogDescription>
-            {reajuste
-              ? "Até quatro reajustes, cada um com o Valor (%) e o mês em que Inicia Em; cada um vale sobre os anteriores, até o fim do exercício, nas contas das combinações abaixo (na DRE, com os reajustes aplicados). "
-              : "A variação máxima aceita (em %, para mais ou para menos), contra o cenário comparado, nas contas das combinações abaixo: as que passam dela pedem justificativa (tela Histórico, aba Justificativas). "}
-            Cada combinação escolhe a Unidade, o Departamento (os da unidade; na Matriz, na Filial e em Serviços, também a Receita Operacional,
-            com a Receita Operacional Bruta, os Impostos Operacionais e a Receita Operacional Líquida como atribuições), a Atribuição e a
-            Conta — “Todas” vale para todas —: uma unidade inteira, um departamento de uma unidade, uma atribuição de um departamento ou só
-            uma conta
-            {reajuste
-              ? "; a Venda (Todas, Global ou Mercantil): Global ou Mercantil fica só com as contas dos Custos de Produção da Matriz e da Filial, na parte daquela venda. Reajustar os Impostos Operacionais multiplica os impostos (a ROB menos a ROL) pelo fator, e a ROL passa a ser a ROB menos eles: na mesma unidade, a ROL só pode ter o mesmo índice deles"
-              : ""}
-            . A
-            mesma conta não pode estar em duas combinações nem em dois índices. {CUMULATIVOS}
+            {reajuste ? (
+              `Até quatro reajustes, cada um com o Valor (%) e o mês em que Inicia Em; cada um vale sobre os anteriores, até o fim do exercício, nas contas das combinações abaixo (na DRE, com os reajustes aplicados). A mesma conta não pode estar em duas combinações nem em dois índices. ${CUMULATIVOS}`
+            ) : (
+              <>
+                A variação máxima aceita (em %, para mais ou para menos), contra o cenário comparado, nas contas das combinações abaixo: as que
+                passam dela pedem justificativa (tela Histórico, aba Justificativas). Cada combinação escolhe a Unidade, o Departamento (os da
+                unidade; na Matriz, na Filial e em Serviços, também a Receita Operacional, com a Receita Operacional Bruta, os Impostos
+                Operacionais e a Receita Operacional Líquida como atribuições), a Atribuição e a Conta — “Todas” vale para todas —: uma unidade
+                inteira, um departamento de uma unidade, uma atribuição de um departamento ou só uma conta. A mesma conta não pode estar em
+                duas combinações nem em dois índices. {CUMULATIVOS}
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
-        <fieldset disabled={!podeEditar || pendente} className="space-y-5">
+        <fieldset disabled={!podeEditar || pendente} className="flex min-h-0 flex-1 flex-col gap-5">
           <div className={`grid gap-4 ${reajuste ? "sm:grid-cols-2" : "sm:grid-cols-[1fr_1fr_11rem]"}`}>
             <div className="space-y-1.5">
               <Label htmlFor="ind-descricao">Descrição</Label>
@@ -567,8 +572,8 @@ function IndiceDialog({
               })}
             </div>
           ) : null}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium text-gray-900">Combinações</p>
                 <p className="text-xs text-gray-500">
@@ -586,6 +591,8 @@ function IndiceDialog({
                   onClick={() => {
                     setLinhas((xs) => [...xs, { id: proxima, k: { unidade: null, departamento: null, atribuicao: null, conta: null, venda: null } }]);
                     setProxima((p) => p + 1);
+                    // A linha nova, no fim da área que rola, à vista.
+                    requestAnimationFrame(() => areaDasCombinacoes.current?.scrollTo({ top: areaDasCombinacoes.current.scrollHeight, behavior: "smooth" }));
                   }}
                 >
                   <Plus className="size-4" />
@@ -593,7 +600,8 @@ function IndiceDialog({
                 </Button>
               ) : null}
             </div>
-            <div className="overflow-x-auto rounded-sm border border-gray-200">
+            {/* Só as linhas rolam (a altura mínima mostra algumas mesmo em telas baixas); os rótulos ficam presos no alto. */}
+            <div ref={areaDasCombinacoes} className="min-h-32 flex-1 overflow-auto rounded-sm border border-gray-200">
               <table className="w-full table-fixed text-sm">
                 <colgroup>
                   <col style={{ width: 40 }} />
@@ -606,7 +614,7 @@ function IndiceDialog({
                   <col style={{ width: 90 }} />
                   {podeEditar ? <col style={{ width: 44 }} /> : null}
                 </colgroup>
-                <thead className="bg-gray-50">
+                <thead>
                   <tr>
                     <th className={th}>#</th>
                     <th className={th}>Unidade</th>

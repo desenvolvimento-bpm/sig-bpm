@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 21/11/2026, à tarde: o modal dos índices com a rolagem só nas combinações.
+  {
+    publicada: "2026-11-21T16:22",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "No modal dos índices (Comparativo e Reajustes), só as linhas das combinações rolam: os campos do índice e os rótulos da tabela ficam fixos, e os botões, no pé. “Incluir Combinação” leva a lista até a linha nova.",
+    ],
+  },
   // 21/11/2026, à tarde: o departamento Receita Operacional nos índices.
   {
     publicada: "2026-11-21T15:46",

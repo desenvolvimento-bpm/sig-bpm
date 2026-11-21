@@ -185,7 +185,7 @@ export function ConfiguracoesContent() {
                   fator, e a ROL passa a ser a ROB menos eles — por isso, na mesma unidade, a ROL só pode ter o mesmo índice dos impostos (ou
                   nenhum). Assim, o índice vale numa unidade inteira, num departamento de uma
                   unidade, numa atribuição de um departamento ou só numa conta, e um índice tem quantas combinações precisar; a coluna Contas de
-                  cada linha diz quantas contas (cada conta numa unidade) ela alcança. Nos Índices de Reajuste, a Venda (Todas, Global ou
+                  cada linha diz quantas contas (cada conta numa unidade) ela alcança. No modal, só as linhas das combinações rolam: os campos do índice e os rótulos da tabela ficam fixos, e os avisos e os botões, no pé. Nos Índices de Reajuste, a Venda (Todas, Global ou
                   Mercantil): Global ou Mercantil deixa na combinação só as contas dos Custos de Produção da Matriz e da Filial, na parte daquela
                   venda — cada conta reajusta a parte de cada venda: os valores das premissas
                   da tabela dela e, nas contas dos centros de custo e na depreciação, que não têm venda, a parte do volume produzido dela no mês
