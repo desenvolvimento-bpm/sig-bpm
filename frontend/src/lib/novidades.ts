@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 23:23): o Responsável das Verificações com todos os que podem justificar.
+  {
+    publicada: "2026-11-20T23:23",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Verificações, a coluna Responsável lista todos os usuários que podem justificar (dar o De Acordo) cada verificação: quem alterou os valores por último, se tem Editar na aba Verificações e a vê, e os Administradores. Quem alterou por último e não pode justificar aparece em cinza, embaixo.",
+    ],
+  },
   // 20/11/2026 (publicada às 22:21): a aba Verificações das Premissas (pedido do Adão).
   {
     publicada: "2026-11-20T22:21",

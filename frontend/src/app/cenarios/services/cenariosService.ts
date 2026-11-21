@@ -279,7 +279,10 @@ export type VerificacaoDoCenario = {
   meses: number[];
   /** Os meses em texto ("Jan a Abr, Jun e Dez"). */
   mesesTexto: string;
+  /** Quem alterou os valores por último (pelo Histórico; sem alteração, quem criou o cenário). */
   responsavel: { nome: string; em: string | null } | null;
+  /** Todos os que podem justificar (dar o De Acordo): o responsável, se tem Editar na aba e a vê, e os Administradores. */
+  podemJustificar: string[];
   acordo: { nome: string; em: string } | null;
   /** O De Acordo de antes de os valores mudarem (a verificação voltou a ficar pendente). */
   acordoAnterior: { nome: string; em: string } | null;

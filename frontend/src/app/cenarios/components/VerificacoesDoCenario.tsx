@@ -33,15 +33,16 @@ const COLUNAS: Coluna<VerificacaoDoCenario>[] = [
   { chave: "alvo", rotulo: "Linha / Centro de Custo", valor: (v) => v.alvo },
   { chave: "verificacao", rotulo: "Verificação", valor: (v) => v.titulo, texto: (v) => `${v.titulo}: ${v.descricao}` },
   { chave: "meses", rotulo: "Meses", valor: (v) => v.mesesTexto },
-  { chave: "responsavel", rotulo: "Responsável", valor: (v) => v.responsavel?.nome ?? null },
+  // Todos os que podem justificar (20/11/2026, pedido do Adão).
+  { chave: "responsavel", rotulo: "Responsável", valor: (v) => v.podemJustificar.join(", ") || null },
 ];
-const LARGURAS = [44, 120, 120, 250, 380, 130, 140];
+const LARGURAS = [44, 120, 120, 240, 370, 130, 180];
 
 /**
  * A aba Verificações das Premissas (20/11/2026, pedido do Adão): as inconsistências nos valores digitados ou importados, cada uma
  * com a aba (o clique abre a aba, e nos Centros de Custo o grupo), a linha ou o centro de custo, os meses, o responsável (quem
- * alterou os valores por último, pelo Histórico) e a situação. Cada uma pede a correção ou o De Acordo do responsável (ou do
- * Administrador): marque as caixas (ou “Marcar Todas”) e clique em “De Acordo” (ou “Retirar Acordo”). Com alguma pendente, a
+ * alterou os valores por último, pelo Histórico; a coluna lista todos os que podem justificar) e a situação. Cada uma pede a
+ * correção ou o De Acordo do responsável (ou do Administrador): marque as caixas (ou “Marcar Todas”) e clique em “De Acordo” (ou “Retirar Acordo”). Com alguma pendente, a
  * versão não se congela.
  */
 export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: string; podeEditar: boolean; onAbrirAba: (aba: string, grupo: string | null) => void }) {
@@ -149,7 +150,7 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
                   aria-label={`Marcar ${v.titulo}: ${v.alvo}`}
                   checked={marcadas.has(v.chave)}
                   disabled={!pode || !v.podeAcordar}
-                  title={v.podeAcordar ? undefined : `Só ${v.responsavel?.nome ?? "o responsável"} (ou o Administrador) dá ou retira o De Acordo desta verificação`}
+                  title={v.podeAcordar ? undefined : `Só ${v.podemJustificar.join(", ") || "o responsável ou o Administrador"} dá ou retira o De Acordo desta verificação`}
                   onChange={() => alternar(v.chave)}
                   className="size-4 accent-black"
                 />
@@ -170,8 +171,11 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
                 <div className="text-xs whitespace-normal text-gray-600">{v.descricao}</div>
               </td>
               <td className="px-3 py-1.5 text-gray-700">{v.mesesTexto}</td>
-              <td className="px-3 py-1.5 text-gray-700" title={v.responsavel?.em ? `Última alteração em ${quando(v.responsavel.em)}` : "Sem alteração no Histórico: quem criou o cenário"}>
-                {v.responsavel?.nome ?? "—"}
+              <td className="px-3 py-1.5 text-gray-700" title={v.responsavel?.em ? `${v.responsavel.nome} alterou os valores por último em ${quando(v.responsavel.em)}` : "Sem alteração no Histórico: quem criou o cenário"}>
+                {v.podemJustificar.length ? v.podemJustificar.map((n) => <div key={n}>{n}</div>) : <span className="text-gray-400">—</span>}
+                {v.responsavel && !v.podemJustificar.includes(v.responsavel.nome) ? (
+                  <div className="text-xs text-gray-500">{`Alterou por último: ${v.responsavel.nome} (sem o De Acordo)`}</div>
+                ) : null}
               </td>
             </tr>
           ))

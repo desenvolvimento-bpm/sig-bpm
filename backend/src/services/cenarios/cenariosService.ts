@@ -5,7 +5,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import type { AcessoInformacoesCenario, DepartamentoAcesso, MarcacaoCenario, VisualizacaoCenario } from "../../generated/prisma/enums.js";
 import { ArquivoInvalidoError, lerAba, listarAbas } from "../../lib/xlsx.js";
-import { ACESSO_TOTAL } from "../acesso/acesso.js";
+import { ACESSO_TOTAL, carregarUsuariosAtivos, CODIGO_ADMINISTRADOR } from "../acesso/acesso.js";
 import { auditar } from "../auditoriaService.js";
 import { caminhoDoArquivo, diretorioUploads } from "../importacoes/arquivosImportados.js";
 import { INDICADORES_DAS_LISTAS } from "../relatorios/catalogoIndicadores.js";
@@ -314,6 +314,32 @@ const veVerificacao = (r: Recorte | null, v: Pick<Verificacao, "aba" | "grupo">,
 /** Quem dá (e retira) o De Acordo: o responsável pela verificação ou o Administrador. */
 const daOAcordo = (v: Pick<VerificacaoComSituacao, "responsavel">, u: Usuario) =>
   !!u.admin || (!!v.responsavel && (v.responsavel.id ? v.responsavel.id === u.id : v.responsavel.nome === u.nome));
+/**
+ * Os usuários que podem justificar (dar o De Acordo) as verificações de um cenário (20/11/2026, pedido do Adão: a coluna
+ * Responsável lista todos): os ativos que alcançam o cenário, com Editar na aba Verificações, e, em cada verificação, os do recorte
+ * dela que são o responsável ou o Administrador (`podemJustificar`).
+ */
+async function quemJustifica(c: { tipo: string; acessoInformacoes: string; criadoPorId: string | null; visualizacao: VisualizacaoCenario }) {
+  const usuarios = (await carregarUsuariosAtivos())
+    .filter((u) => u.permissions.includes("cenarios_analiticos_premissas.verificacoes:editar"))
+    .map((u): Usuario => {
+      const a = u.acesso;
+      return {
+        id: u.sub,
+        nome: u.nome,
+        admin: u.perfil.codigo === CODIGO_ADMINISTRADOR,
+        recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null,
+      };
+    })
+    .filter((u) => alcanca(c, u))
+    .map((u) => ({ usuario: u, recorte: recorteDoCenario(c, u) }));
+  return (v: Pick<VerificacaoComSituacao, "responsavel" | "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) => {
+    const podem = usuarios.filter((x) => daOAcordo(v, x.usuario) && veVerificacao(x.recorte, v, grupos)).map((x) => x.usuario);
+    // O responsável primeiro; depois os Administradores, pelo nome.
+    const ehResponsavel = (u: Usuario) => !!v.responsavel && (v.responsavel.id ? v.responsavel.id === u.id : v.responsavel.nome === u.nome);
+    return podem.sort((a, b) => Number(ehResponsavel(b)) - Number(ehResponsavel(a)) || a.nome.localeCompare(b.nome, "pt-BR")).map((u) => u.nome);
+  };
+}
 
 /** O que o cenário tem: as visões da DRE com valor e os indicadores com meta. */
 async function conteudo(ids: string[]) {
@@ -3374,7 +3400,7 @@ export const cenariosService = {
     const c = await obterOuFalhar(id, usuario);
     exigirAnalitico(c);
     const recorte = recorteDoCenario(c, usuario);
-    const { lista, grupos } = await verificacoesComSituacao(c);
+    const [{ lista, grupos }, podemJustificar] = await Promise.all([verificacoesComSituacao(c), quemJustifica(c)]);
     const editavel = !c.marcacao && !c.versaoSalvaEm;
     const visiveis = lista.filter((v) => veVerificacao(recorte, v, grupos));
     return {
@@ -3394,6 +3420,8 @@ export const cenariosService = {
         meses: v.meses,
         mesesTexto: textoDosMeses(v.meses),
         responsavel: v.responsavel ? { nome: v.responsavel.nome, em: v.responsavel.em } : null,
+        // Todos os que podem justificar (o responsável, se tem Editar na aba e a vê, e os Administradores).
+        podemJustificar: podemJustificar(v, grupos),
         acordo: v.acordo ? { nome: v.acordo.nome, em: v.acordo.em } : null,
         acordoAnterior: v.acordoAnterior ? { nome: v.acordoAnterior.nome, em: v.acordoAnterior.em } : null,
         podeAcordar: editavel && daOAcordo(v, usuario),

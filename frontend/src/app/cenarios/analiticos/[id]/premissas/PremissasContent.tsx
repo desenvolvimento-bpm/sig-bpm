@@ -221,7 +221,11 @@ export function PremissasContent() {
             <li>
               Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Situação (Pendente ou De Acordo), a
               Aba (clique nela para abri-la; nos Centros de Custo, já no grupo), a Linha / Centro de Custo, a Verificação (com a explicação), os Meses
-              e o Responsável — quem alterou os valores por último, pelo Histórico (sem alteração, quem criou o cenário). As abas com verificações
+              e o Responsável: todos os usuários que podem justificar (dar o De Acordo) — quem alterou os valores por último, pelo Histórico (sem
+              alteração, quem criou o cenário), se tem Editar na aba Verificações e a vê, e os Administradores; quem alterou por último e não pode
+              justificar aparece em cinza, embaixo. Com o Acesso às Informações Por Recorte (Configurações / Cenário), cada um vê as verificações do
+              seu recorte (o Gestor, as dos seus departamentos; o recorte por centro, as do Quadro de Lotação e dos Centros de Custo dos grupos com
+              um centro seu); com Geral, todos veem todas. As abas com verificações
               pendentes (e a própria Verificações) mostram o sinal de alerta ao lado do nome. As verificações: nas abas Matriz, Filial e Serviços,
               Valores sem Volume (receitas, impostos, custos ou kg em meses sem volume — na Variação do Estoque, sem Volume de Estoque —, que não geram
               resultado) e Volume sem Receita (volume sem a Receita Bruta Média); no Quadro de Lotação, Colaboradores sem Salário, Salário sem
