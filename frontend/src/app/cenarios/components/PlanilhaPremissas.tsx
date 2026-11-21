@@ -257,8 +257,9 @@ const BLOCO_DOS_INVESTIMENTOS = "Investimentos (a lista)";
 
 /**
  * As colunas da tabela do Importar Valores (20/11/2026, pedido do Adão): o que cada arquivo sobrescreve. Produção e Serviços
- * (as abas Matriz, Filial e Serviços) e Centros de Custo (os gastos e o Quadro de Lotação de cada grupo) listam os itens, cada
- * um com a caixa dele; as outras têm uma caixa só (Sobrescrever). A caixa desmarcada deixa o item de fora da importação.
+ * (as abas Matriz, Filial e Serviços), Centros de Custo (os gastos e o Quadro de Lotação de cada grupo) e, desde o mesmo dia,
+ * Indicadores Manuais (cada indicador) listam os itens, cada um com a caixa dele; as outras têm uma caixa só (Sobrescrever). A
+ * caixa desmarcada deixa o item de fora da importação.
  */
 type ColunaDaImportacao = "producao" | "centros" | "investimentos" | "extra" | "manuais";
 const COLUNAS_DA_IMPORTACAO: Array<{ chave: ColunaDaImportacao; titulo: string; largura: string }> = [
@@ -266,10 +267,10 @@ const COLUNAS_DA_IMPORTACAO: Array<{ chave: ColunaDaImportacao; titulo: string; 
   { chave: "centros", titulo: "Centros de Custo", largura: "w-[220px]" },
   { chave: "investimentos", titulo: "Investimentos", largura: "w-[120px]" },
   { chave: "extra", titulo: "Extra-Operacional", largura: "w-[136px]" },
-  { chave: "manuais", titulo: "Indicadores Manuais", largura: "w-[136px]" },
+  { chave: "manuais", titulo: "Indicadores Manuais", largura: "w-[180px]" },
 ];
 /** As colunas com a lista dos itens (as demais têm uma caixa só). */
-const EM_LISTA = new Set<ColunaDaImportacao>(["producao", "centros"]);
+const EM_LISTA = new Set<ColunaDaImportacao>(["producao", "centros", "manuais"]);
 /** A coluna de uma linha da planilha, pelo tipo do Código: P (Matriz, Filial e Serviços), C, L e E (Centros de Custo), B (a Depreciação Base, com os Investimentos), X e I. */
 function colunaDaChave(chave: string): ColunaDaImportacao | null {
   const tipo = chave.split("|")[0];
@@ -311,8 +312,8 @@ function EtiquetaDoArquivo({ valido }: { valido: boolean }) {
 /**
  * O Importar Valores (15/10/2026): a lista dos arquivos escolhidos (um ou vários, ou uma pasta), cada um conferido no
  * padrão do Exportar Premissas assim que entra, com o que ele sobrescreve em cada coluna (20/11/2026, pedido do Adão: as
- * linhas de produto das abas Matriz, Filial e Serviços e os centros de custo um abaixo do outro, cada um com a caixa dele, e
- * Sobrescrever nos Investimentos, no Extra-Operacional e nos Indicadores Manuais; a caixa desmarcada não importa). Os
+ * linhas de produto das abas Matriz, Filial e Serviços, os centros de custo e os indicadores manuais um abaixo do outro, cada um
+ * com a caixa dele, e Sobrescrever nos Investimentos e no Extra-Operacional; a caixa desmarcada não importa). Os
  * trechos repetidos entre os arquivos (a mesma unidade, o mesmo centro…; 15/10/2026) aparecem num quadro, e o usuário
  * escolhe, em cada um, ignorar o repetido (vale o primeiro arquivo) ou sobrescrever (vale o último). Grava-se só em
  * "Importar", como nas importações do Fechamento Mensal; a importação fica no histórico (tela Histórico, aba Alterações).
@@ -400,7 +401,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
   // Escolher Arquivos e Escolher Pasta, à direita; antes, no alto de cada célula), com os itens de todas as planilhas válidas: a
   // quantia conta os nomes (o mesmo centro em dois arquivos conta uma vez) e os marcados; os botões mudam só as caixas que valem
   // (as de um trecho que vale o de outro arquivo ficam como estão).
-  const resumos = (["producao", "centros"] as const).map((coluna) => {
+  const resumos = (["producao", "centros", "manuais"] as const).map((coluna) => {
     const caixas = validas.flatMap(({ chave }) => [...itensPorPlanilha.get(chave)!.get(coluna)!].map(([item, vence]) => ({ item, vence, caixa: chaveDaCaixa(chave, coluna, item) })));
     const ativas = caixas.filter((c) => c.vence);
     return {
@@ -409,7 +410,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
       marcados: new Set(ativas.filter((c) => !desmarcadas.has(c.caixa)).map((c) => c.item)).size,
       ativas: ativas.map((c) => c.caixa),
       todas: ativas.every((c) => !desmarcadas.has(c.caixa)),
-      nome: coluna === "producao" ? (["Linha", "Linhas"] as const) : (["Centro de Custo", "Centros de Custo"] as const),
+      nome: coluna === "producao" ? (["Linha", "Linhas"] as const) : coluna === "centros" ? (["Centro de Custo", "Centros de Custo"] as const) : (["Indicador", "Indicadores"] as const),
     };
   });
   const marcarTodas = (ativas: string[], todas: boolean) =>
@@ -494,7 +495,7 @@ function ImportarValoresDialog({ id, onFechar }: { id: string; onFechar: () => v
         <div className="min-h-0 flex-1 overflow-auto rounded-sm border border-gray-200">
           <table className="tabela-sig w-full min-w-[1328px] table-fixed border-collapse text-sm">
             <colgroup>
-              <col className="w-[360px]" />
+              <col className="w-[316px]" />
               <col className="w-24" />
               {COLUNAS_DA_IMPORTACAO.map((c) => (
                 <col key={c.chave} className={c.largura} />

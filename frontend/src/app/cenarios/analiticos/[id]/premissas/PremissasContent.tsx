@@ -294,9 +294,10 @@ export function PremissasContent() {
               “Premissas · …”) de colunas mudadas — uma coluna apagada, por exemplo — e o que não muda nada no cenário (Nada a importar);
               uma aba que não é do Exportar fica de fora, com um aviso. A tabela mostra o que cada arquivo válido sobrescreve: em Produção e
               Serviços, as linhas (Estrutura, Alveolares, Montagem…) das abas Matriz, Filial e Serviços, uma abaixo da outra; em
-              Centros de Custo, os centros de custo com valores, justificativas ou linhas do Quadro de Lotação que mudam; em Investimentos (a lista
-              e a Depreciação Base), Extra-Operacional e Indicadores Manuais, Sobrescrever. Cada item vem com a caixa marcada: desmarcada, ele
-              fica de fora da importação. Na altura de “Escolher Arquivos” e “Escolher Pasta”, à direita, ficam a quantia de Linhas e a de Centros de Custo de todos os arquivos da lista, cada uma seguida do botão “Desmarcar Todos” (ou “Marcar Todos”), que vale para a coluna inteira. Sem nada a mudar num tipo, a coluna mostra Sem Alteração; o rodapé soma o que vai ser gravado. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade, o Quadro de Lotação de um departamento…) aparece em
+              Centros de Custo, os centros de custo com valores, justificativas ou linhas do Quadro de Lotação que mudam; em Indicadores Manuais,
+              os indicadores que mudam (como a Liberação de Projetos: Matriz); em Investimentos (a lista e a Depreciação Base) e Extra-Operacional,
+              Sobrescrever. Cada item vem com a caixa marcada: desmarcada, ele
+              fica de fora da importação. Na altura de “Escolher Arquivos” e “Escolher Pasta”, à direita, ficam a quantia de Linhas, a de Centros de Custo e a de Indicadores de todos os arquivos da lista, cada uma seguida do botão “Desmarcar Todos” (ou “Marcar Todos”), que vale para a coluna inteira. Sem nada a mudar num tipo, a coluna mostra Sem Alteração; o rodapé soma o que vai ser gravado. Quando um trecho (uma unidade, um centro de custo, a depreciação de uma unidade, o Quadro de Lotação de um departamento…) aparece em
               mais de um arquivo, o
               quadro dos repetidos pede, em cada um, Ignorar (vale o primeiro arquivo) ou Sobrescrever (vale o último); no arquivo que não vale, a
               caixa do item fica desmarcada e em cinza. A aba Investimentos substitui os

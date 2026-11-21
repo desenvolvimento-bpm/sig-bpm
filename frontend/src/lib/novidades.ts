@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 20/11/2026 (publicada às 23:56): os Indicadores Manuais listados no Importar Valores.
+  {
+    publicada: "2026-11-20T23:56",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "No Importar Valores, a coluna Indicadores Manuais lista os indicadores que o arquivo muda (como a Liberação de Projetos: Matriz), cada um com a caixa dele, como os centros de custo; na altura de “Escolher Arquivos”, a quantia de Indicadores, com o “Marcar Todos” / “Desmarcar Todos”.",
+    ],
+  },
   // 20/11/2026 (publicada às 23:42): o balde Complementar nas contas da Montagem, como no fechamento.
   {
     publicada: "2026-11-20T23:42",

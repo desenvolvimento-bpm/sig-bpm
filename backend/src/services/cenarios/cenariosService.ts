@@ -3737,8 +3737,14 @@ export const cenariosService = {
     const q = cad ? recorteDoQuadroCom(recorte, cad) : null;
     // O item de cada mudança na tabela do Importar Valores (20/11/2026, pedido do Adão), que o usuário desmarca para não importar:
     // nas abas Matriz, Filial e Serviços, a aba e a linha de produto ou de obra (ou os Dias Úteis); nos Centros de Custo, o grupo;
-    // nas demais, o trecho. As linhas do Quadro de Lotação vão no grupo do centro delas (fora dos grupos, o próprio centro).
-    const itemDaLinha = (l: LinhaDaPlanilha, bloco: string) => (l.chave.startsWith("P|") ? `${NOME_DA_ABA[l.aba]} · ${l.descricao[2] || l.descricao[3]}` : (l.grupo ?? bloco));
+    // nos Indicadores Manuais (mesmo dia, pedido do Adão), o indicador; nas demais, o trecho. As linhas do Quadro de Lotação vão
+    // no grupo do centro delas (fora dos grupos, o próprio centro).
+    const itemDaLinha = (l: LinhaDaPlanilha, bloco: string) =>
+      l.chave.startsWith("P|")
+        ? `${NOME_DA_ABA[l.aba]} · ${l.descricao[2] || l.descricao[3]}`
+        : l.chave.startsWith("I|")
+          ? l.descricao[1] || l.chave.slice(2)
+          : (l.grupo ?? bloco);
     const centroDoQuadro = (centroCustoId: string, centro?: { codigoRM: string | null; nomeRM: string }) =>
       cad!.grupoDoCentro.get(centroCustoId)?.grupo ?? (centro ? rotuloDoCentro(centro) : "Sem Grupo");
     // O trecho de cada linha do Quadro de Lotação (20/11/2026, pedido do Adão; antes, a aba inteira era um trecho só): o
