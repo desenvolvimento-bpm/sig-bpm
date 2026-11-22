@@ -8,6 +8,8 @@ import { regrasDoCenario } from "./regrasDoCenario.js";
 import { alocarCentros, gruposDoCenario, type GrupoDoCenario, type Percentuais } from "./centrosCenario.js";
 import { C, calcularPremissas, calcularTabela, linhasDaTabela, linhasDoCadastro, VENDAS_DA_UNIDADE, type LinhaDoCadastro, type UnidadePremissa } from "./premissasCenario.js";
 import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
+import { gruposDasMedias, marcadoresDasMedias } from "./maoDeObraDasMedias.js";
+import { linhasDoQuadro, quadroDosGrupos } from "./quadroDoCenario.js";
 
 /**
  * As Verificações das Premissas dos cenários analíticos (20/11/2026, pedido do Adão): as inconsistências nos valores digitados ou
@@ -20,7 +22,9 @@ import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
  *   colaboradores, a linha PJ sem aumento no ano e o salário por colaborador que cai sem mudar os colaboradores.
  * - Centros de Custo: os salários de um tipo de colaborador que não variam quando a quantidade varia (no grupo), o grupo com
  *   colaboradores no Quadro de Lotação e sem Remunerações ou sem Gastos Gerais (GGD, GGI ou GGC) no mês (mesmo dia, pedido do
- *   Adão) e os valores que o rateio do grupo não leva a nenhuma unidade (a chave sem base no mês, a conta sem destino).
+ *   Adão) e os valores que o rateio do grupo não leva a nenhuma unidade (a chave sem base no mês, a conta sem destino); e,
+ *   desde 22/11/2026 (pedido do Adão), o grupo com a mão de obra das médias (as Remunerações e os Encargos do Replicar Médias,
+ *   sem o Quadro de Lotação), uma por grupo — no lugar do Quadro de Lotação sem Remunerações dele.
  *
  * O cálculo é puro (`verificar`): recebe os dados do cenário e devolve as verificações, com a assinatura dos valores envolvidos
  * (o De Acordo vale enquanto ela não muda) e onde procurar no Histórico quem os alterou (`responsavelDa`).
@@ -36,6 +40,7 @@ export type TipoDeVerificacao =
   | "SALARIOS_SEM_VARIACAO"
   | "QUADRO_SEM_REMUNERACOES"
   | "QUADRO_SEM_GASTOS_GERAIS"
+  | "MAO_DE_OBRA_DAS_MEDIAS"
   | "VALORES_FORA_DA_DRE";
 
 export const TITULO_DA_VERIFICACAO: Record<TipoDeVerificacao, string> = {
@@ -48,6 +53,7 @@ export const TITULO_DA_VERIFICACAO: Record<TipoDeVerificacao, string> = {
   SALARIOS_SEM_VARIACAO: "Salários que Não Variam com os Colaboradores",
   QUADRO_SEM_REMUNERACOES: "Quadro de Lotação sem Remunerações",
   QUADRO_SEM_GASTOS_GERAIS: "Quadro de Lotação sem Gastos Gerais",
+  MAO_DE_OBRA_DAS_MEDIAS: "Mão de Obra das Médias",
   VALORES_FORA_DA_DRE: "Valores Fora da DRE",
 };
 
@@ -100,6 +106,8 @@ export type DadosDasVerificacoes = {
   centros: Array<{ grupo: string; codigo: string; mes: number; valor: number }>;
   percentuais: Percentuais[];
   quadro: LinhaDoQuadroVerificada[];
+  /** Os grupos com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts). */
+  maoDeObraDasMedias?: string[];
 };
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -161,7 +169,10 @@ export async function dadosDasVerificacoes(c: { id: string; ano: number }): Prom
   ]);
   const { bases } = calcularPremissas(est, linhas, c.ano, gravadas);
   for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
+  // A mão de obra das médias (22/11/2026): os marcadores com a assinatura do Quadro de Lotação de hoje.
+  const maoDeObraDasMedias = [...gruposDasMedias(await marcadoresDasMedias(prisma, c.id), quadroDosGrupos(await linhasDoQuadro(prisma, c.id), grupos)).validos];
   return {
+    maoDeObraDasMedias,
     ano: c.ano,
     est,
     linhas,
@@ -322,11 +333,31 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
 /** As contas de Gastos Gerais dos grupos (diretos, indiretos e comerciais). */
 const ehGastoGeral = (codigo: string) => ["GGD", "GGI", "GGC"].includes(codigo.split(".")[1] ?? "");
 
+/** As contas da mão de obra que o Replicar Médias leva direto aos Centros de Custo (as Remunerações e os Encargos e Benefícios). */
+const ehDaMaoDeObraDasMedias = (codigo: string) => /\.(MOD|MOI)\.(REMUNERACOES_CLT|REMUNERACOES_PJ|ENCARGOS_E_BENEFICIOS)$/.test(codigo);
+
 function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
   const r: Verificacao[] = [];
+  const dasMedias = new Set(d.maoDeObraDasMedias ?? []);
   for (const g of d.grupos) {
     const ids = new Set(g.centros.map((c) => c.id));
     const linhas = d.quadro.filter((l) => ids.has(l.centroCustoId));
+    // A mão de obra das médias (22/11/2026, pedido do Adão): uma por grupo, até o Quadro de Lotação dele mudar (ou o De Acordo).
+    if (dasMedias.has(g.grupo)) {
+      const daMaoDeObra = d.centros.filter((x) => x.grupo === g.grupo && ehDaMaoDeObraDasMedias(x.codigo)).sort((a, b) => a.codigo.localeCompare(b.codigo) || a.mes - b.mes);
+      r.push({
+        aba: "centros",
+        grupo: g.grupo,
+        alvo: g.grupo,
+        venda: null,
+        chave: `MAO_DE_OBRA_DAS_MEDIAS|${g.grupo}`,
+        tipo: "MAO_DE_OBRA_DAS_MEDIAS",
+        meses: [...MESES_DO_ANO],
+        descricao: "Médias das Remunerações, Encargos e Benefícios replicadas diretamente nos Centros de Custo (sem origem do Quadro de Lotação).",
+        assinatura: assinar([daMaoDeObra.map((x) => [x.codigo, x.mes, Math.round(x.valor * 100)])]),
+        origem: { tipo: "CENTROS", grupo: g.grupo, contas: [...new Set(daMaoDeObra.map((x) => x.codigo))] },
+      });
+    }
     // O grupo com colaboradores no Quadro de Lotação e sem Remunerações (a soma dos salários das linhas) ou sem Gastos Gerais no mês.
     if (linhas.length) {
       const colab = MESES_DO_ANO.map((m) => linhas.reduce((s, l) => s + (l.meses.find((x) => x.mes === m)?.colaboradores ?? 0), 0));
@@ -336,7 +367,8 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
       const semRemuneracoes = comColab.filter((m) => Math.abs(remuneracoes[m - 1]) < 0.01);
       const semGastos = comColab.filter((m) => gastos[m - 1] < 0.01);
       const base = { aba: "centros" as const, grupo: g.grupo, alvo: g.grupo, venda: null };
-      if (semRemuneracoes.length)
+      // Na mão de obra das médias, as Remunerações não saem do quadro: a verificação dela fica no lugar desta.
+      if (semRemuneracoes.length && !dasMedias.has(g.grupo))
         r.push({
           ...base,
           chave: `QUADRO_SEM_REMUNERACOES|${g.grupo}`,

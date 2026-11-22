@@ -115,6 +115,13 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     assert.deepEqual(verificar(dados({ quadro, centros })).find((v) => v.tipo === "QUADRO_SEM_GASTOS_GERAIS")?.meses, [4, 5, 6, 7, 8, 9, 10, 11, 12]);
     const semRemuneracoes = verificar(dados({ quadro: [linhaQL({ meses: doze(() => ({ colaboradores: 3, salario: 0 })) })], centros }));
     assert.equal(semRemuneracoes.find((v) => v.tipo === "QUADRO_SEM_REMUNERACOES")?.meses.length, 12);
+    // A mão de obra das médias (22/11/2026): uma por grupo, com o texto pedido, no lugar do Quadro de Lotação sem Remunerações.
+    const comMedias = verificar(dados({ quadro: [linhaQL({ meses: doze(() => ({ colaboradores: 3, salario: 0 })) })], centros, maoDeObraDasMedias: ["ACABAMENTO"] }));
+    const dasMedias = comMedias.filter((v) => v.tipo === "MAO_DE_OBRA_DAS_MEDIAS");
+    assert.equal(dasMedias.length, 1);
+    assert.equal(dasMedias[0].alvo, "ACABAMENTO");
+    assert.equal(dasMedias[0].descricao, "Médias das Remunerações, Encargos e Benefícios replicadas diretamente nos Centros de Custo (sem origem do Quadro de Lotação).");
+    assert.ok(!comMedias.some((v) => v.tipo === "QUADRO_SEM_REMUNERACOES"));
   });
 
   it("os valores que o rateio do grupo não leva a nenhuma unidade (a chave sem base no mês)", () => {

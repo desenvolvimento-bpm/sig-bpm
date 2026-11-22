@@ -603,7 +603,8 @@ export type DepartamentoDasPremissas = (typeof DEPARTAMENTOS_DAS_PREMISSAS)[numb
 export const cenariosService = {
   /** Replicar Médias / Apagar Valores (15/10/2026), em todas as abas das premissas. */
   replicarMedias: async (id: string, acao: "replicar" | "apagar") =>
-    (await api.post<{ data: { linhas: number; valores: number } }>(`/proxy/cenarios/${id}/premissas/medias`, { acao })).data.data,
+    // `grupos` (22/11/2026): os grupos de centros que ficaram com a mão de obra das médias.
+    (await api.post<{ data: { linhas: number; valores: number; grupos?: number } }>(`/proxy/cenarios/${id}/premissas/medias`, { acao })).data.data,
   /** O Importar Valores, passo 1: confere um arquivo (um .zip vira uma análise por planilha). */
   analisarPremissas: async (id: string, arquivo: File) =>
     (

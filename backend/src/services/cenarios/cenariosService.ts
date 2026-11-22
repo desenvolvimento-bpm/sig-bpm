@@ -159,6 +159,7 @@ import {
   type MesDaLinha,
   type TipoDeColaborador,
 } from "./quadroDoCenario.js";
+import { gruposDasMedias, marcadoresDasMedias, marcarGrupos, tirarMarcadores } from "./maoDeObraDasMedias.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
 import { ROTULO_DO_TIPO, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "../colaboradores/tiposDoColaborador.js";
@@ -1047,6 +1048,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
   ]);
   // Os grupos com linhas no Quadro de Lotação do cenário (09/11/2026): os colaboradores, os salários e as remunerações calculados.
   const quadro = quadroDosGrupos(linhasDoQuadroDoCenario, grupos);
+  // Os grupos com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts): as Remunerações e os Encargos gravados pelo Replicar
+  // Médias, sem a fórmula do Quadro de Lotação e sem os Benefícios Padrão.
+  const dasMedias = gruposDasMedias(await marcadoresDasMedias(prisma, c.id), quadro).validos;
   // A variação máxima de cada conta: a do Índice de Comparação dela na unidade (21/11/2026: pelas combinações dos índices); nas
   // linhas de uma unidade (as premissas, a depreciação base e o extra-operacional: P|, B| e X|unidade|…), a da unidade; nas outras
   // (as dos centros de custo), a maior das unidades.
@@ -1089,6 +1093,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
     // percentuais em fração; o mês em branco vale a Média de Referência, o padrão). Nos grupos com linhas na aba Quadro de
     // Lotação (11/11/2026), também os Colaboradores Aprendizes e Estagiários, antes dos CLT (calculados).
     const q = quadro.get(g.grupo);
+    // A mão de obra das médias do grupo (22/11/2026): os valores gravados, sem o Quadro de Lotação nas Remunerações, nos Encargos e
+    // nos Benefícios Padrão.
+    const dasMediasNoGrupo = dasMedias.has(g.grupo);
     // Os centros do grupo (11/11/2026): as fórmulas do Excel sobre a aba Quadro de Lotação.
     const codigos = g.centros.flatMap((x) => (x.codigo ? [x.codigo] : []));
     const maosDoGrupo = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
@@ -1180,9 +1187,9 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
           und: i.und,
           conta: null,
           media: null,
-          meses: doze((mes) => q?.beneficios[mes - 1]),
+          meses: doze((mes) => (dasMediasNoGrupo ? undefined : q?.beneficios[mes - 1])),
           calculada: true,
-          doQuadro: { centros: codigos, tipo: null, soma: "BENEFICIOS" },
+          ...(dasMediasNoGrupo ? {} : { doQuadro: { centros: codigos, tipo: null, soma: "BENEFICIOS" as const } }),
           ...(contaDosBeneficios ? { somaNaConta: contaDosBeneficios } : {}),
         });
         continue;
@@ -1203,12 +1210,12 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
       });
     }
     const maos = new Map(maosDoGrupo.map((m) => [m.encargos, m]));
-    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação nos grupos com linhas lá: calculadas — desde 12/11/2026, na mão de
-    // obra principal, a soma das linhas dos Salários (CLT: Aprendizes, Estagiários e CLT; PJ: PJ); na outra, zero. Nos grupos sem
-    // linhas (22/11/2026, pedido do Adão; de 11/11 a 22/11/2026, zero), são contas como as outras: se digitam, se importam e o
-    // Replicar Médias as preenche.
+    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação (09/11/2026, nos grupos com linhas; 11/11/2026, pedido do Adão, em
+    // todos): calculadas — desde 12/11/2026, na mão de obra principal, a soma das linhas dos Salários (CLT: Aprendizes,
+    // Estagiários e CLT; PJ: PJ); na outra, zero. Na mão de obra das médias (22/11/2026), calculadas também (não se digitam nem
+    // se importam), mas com os valores que o Replicar Médias gravou, sem fórmula.
     const remuneracaoDa = new Map(
-      (q ? maosDoGrupo : []).flatMap((m) => [
+      maosDoGrupo.flatMap((m) => [
         [m.remuneracoes, (ref: (chave: string) => string) => (m.principal ? (["aprendizes", "estagiarios", "clt"] as const).map((t) => salario(ref, t)).join("+") : "0")],
         [m.remuneracoesPJ, (ref: (chave: string) => string) => (m.principal ? salario(ref, "pj") : "0")],
       ]),
@@ -1219,11 +1226,14 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
       const semBeneficios = (v: number | undefined, beneficios: number | undefined) => (v === undefined || l.codigo !== contaDosBeneficios ? v : v - (beneficios ?? 0));
       // Sem os Benefícios Adicionais e (21/11/2026) os Benefícios Padrão do grupo: as linhas deles ficam à parte.
       const ler = (mes: number) =>
-        semBeneficios(cen.get(`${g.grupo}|${l.codigo}|${mes}`), (prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`) ?? 0) + (mes >= 1 ? (q?.beneficios[mes - 1] ?? 0) : 0));
+        semBeneficios(cen.get(`${g.grupo}|${l.codigo}|${mes}`), (prem.get(`0|${vendaDosBeneficios}|${g.grupo}|${mes}`) ?? 0) + (mes >= 1 && !dasMediasNoGrupo ? (q?.beneficios[mes - 1] ?? 0) : 0));
       // A conta Encargos e Benefícios é calculada (19/10/2026): em fórmula, das Remunerações CLT, das Horas Extras e dos
       // Encargos e Benefícios do grupo; o mês em branco dos percentuais vale a Média de Referência (o padrão).
       const mo = maos.get(l.codigo);
-      const formula: LinhaDaPlanilha["formula"] = mo
+      // Na mão de obra das médias (22/11/2026), sem fórmula: os valores gravados.
+      const formula: LinhaDaPlanilha["formula"] = dasMediasNoGrupo
+        ? undefined
+        : mo
         ? (ref, doQuadroNoMes) => {
             const item = (x: string) => `IF(${ref(`E|${g.grupo}|${x}`)}="",${ref(`E|${g.grupo}|${x}`, true)},${ref(`E|${g.grupo}|${x}`)})`;
             // 20/10/2026: com o INSS e o FGTS também sobre as férias e o décimo terceiro.
@@ -2824,12 +2834,18 @@ export const cenariosService = {
       linhasDoQuadro(getPrismaClient(), id),
     ]);
     // O Quadro de Lotação do cenário (09/11/2026): com linhas dos centros do grupo, os colaboradores e as remunerações são calculados.
-    const q = quadroDosGrupos(linhasDoCenario, [g]).get(grupo);
+    const quadroDoCentro = quadroDosGrupos(linhasDoCenario, [g]);
+    const q = quadroDoCentro.get(grupo);
+    // A mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts): as Remunerações e os Encargos que o Replicar Médias gravou, sem o
+    // Quadro de Lotação (nem os Benefícios Padrão dele).
+    const dasMediasNoGrupo = gruposDasMedias(await marcadoresDasMedias(getPrismaClient(), id), quadroDoCentro).validos.has(grupo);
     // Os Benefícios Padrão do grupo (21/11/2026): a soma dos Benefícios das linhas dele no Quadro de Lotação.
-    const beneficiosPadrao = (mes: number) => (mes >= 1 ? (q?.beneficios[mes - 1] ?? 0) : 0);
+    const beneficiosPadrao = (mes: number) => (mes >= 1 && !dasMediasNoGrupo ? (q?.beneficios[mes - 1] ?? 0) : 0);
     const maos = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
-    // As Remunerações vêm da aba Quadro de Lotação nos grupos com linhas lá; nos sem linhas (22/11/2026, pedido do Adão), se digitam.
-    const doQuadro = new Set(q ? maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]) : []);
+    // As Remunerações vêm da aba Quadro de Lotação em todos os grupos (11/11/2026, pedido do Adão; antes, só nos com linhas) e não
+    // se digitam; na mão de obra das médias, ficam as que o Replicar Médias gravou.
+    const remuneracoesDoGrupo = new Set(maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
+    const doQuadro = dasMediasNoGrupo ? new Set<string>() : remuneracoesDoGrupo;
     const porLinha = new Map(gravados.map((x) => [`${x.linhaDREId}|${x.mes}`, Number(x.valor)]));
     const prem = new Map(premissas.map((x) => [`${x.venda}|${x.mes}`, Number(x.valor)]));
     const totais = est.filter((l) => l.tipo !== "ITEM");
@@ -2845,6 +2861,8 @@ export const cenariosService = {
     });
     return {
       grupo: g,
+      // A mão de obra das médias (22/11/2026): as Remunerações e os Encargos do grupo são as Médias de Referência replicadas.
+      maoDeObraDasMedias: dasMediasNoGrupo,
       // O quadro de lotação do grupo (14/10/2026; 19/10/2026: CLT e PJ; 11/11/2026: com linhas no Quadro de Lotação, também os
       // Aprendizes e os Estagiários, sem eles nos CLT e nos PJ) e os quadros em que ele entra.
       lotacao: {
@@ -2884,8 +2902,9 @@ export const cenariosService = {
           descricao: l.descricao,
           // A atribuição (Mão de Obra Direta…), pelo total dela (CPP.MOD…).
           atribuicao: totais.find((t) => t.codigo.startsWith(`${l.codigo.split(".").slice(0, 2).join(".")}.`))?.descricao ?? l.atribuicao ?? "",
-          // A Encargos e Benefícios é calculada (19/10/2026): não se digita; as Remunerações também, com o Quadro de Lotação (09/11/2026).
-          calculada: ehContaDeEncargos(l.codigo) || doQuadro.has(l.codigo),
+          // A Encargos e Benefícios é calculada (19/10/2026): não se digita; as Remunerações também, com o Quadro de Lotação (09/11/2026)
+          // ou com a mão de obra das médias (22/11/2026).
+          calculada: ehContaDeEncargos(l.codigo) || remuneracoesDoGrupo.has(l.codigo),
           doQuadro: doQuadro.has(l.codigo),
           // A conta dos Benefícios Adicionais (17/11/2026): sem eles aqui; o Total do Centro os soma.
           comBeneficios,
@@ -2924,10 +2943,10 @@ export const cenariosService = {
     };
     const fora = [...new Set(alteracoes.filter((a) => !premissa(a.linha) && (!contas.has(a.linha) || ehContaDeEncargos(a.linha))).map((a) => a.linha))];
     if (fora.length) throw new CenarioError(400, `Não são linhas que se digitam no grupo ${grupo}: ${fora.slice(0, 3).join(", ")}.`);
-    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação nos grupos com linhas lá e não se digitam; nos grupos sem linhas
-    // (22/11/2026, pedido do Adão), se digitam como as outras contas.
-    const comQuadro = alteracoes.length ? quadroDosGrupos(await linhasDoQuadro(prisma, id), [g]).has(grupo) : false;
-    const remuneracoes = new Set(comQuadro ? maosDeObraDoGrupo([...contas.keys()], g.atribuicao).flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]) : []);
+    // As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (11/11/2026, pedido do Adão; antes, só nos grupos com
+    // linhas lá) e não se digitam — nem na mão de obra das médias (22/11/2026: a única fonte além do quadro é o Replicar Médias);
+    // os colaboradores, nos grupos com linhas (09/11/2026).
+    const remuneracoes = new Set(maosDeObraDoGrupo([...contas.keys()], g.atribuicao).flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
     if (alteracoes.some((a) => remuneracoes.has(a.linha)))
       throw new CenarioError(400, `As Remunerações CLT e PJ vêm da aba Quadro de Lotação e não se digitam: inclua ou edite as linhas do grupo ${grupo} naquela aba.`);
     // Os colaboradores também (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é a única
@@ -3684,31 +3703,73 @@ export const cenariosService = {
     // Com o Acesso às Informações Por Recorte (12/11/2026), só as linhas do recorte de quem o usa (a Edição Pública).
     const recorte = recorteDoCenario(c, usuario);
     const gruposDoMedias = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
-    const linhas = (await linhasDaPlanilha(c)).filter((l) => !l.calculada && veLinha(recorte, l, gruposDoMedias));
+    const todas = (await linhasDaPlanilha(c)).filter((l) => veLinha(recorte, l, gruposDoMedias));
+    const linhas = todas.filter((l) => !l.calculada);
+    const prisma = getPrismaClient();
     // A média como ela fica gravada (22/11/2026): os meses já iguais a ela não mudam — sem isso, a média com mais casas que as
     // gravadas (os padrões de Férias, 1/9, e do 13º, 1/12) contava como alteração a cada Replicar Médias.
-    const mudancas: MudancaDaPlanilha[] = linhas.flatMap((l) => {
-      if (acao === "apagar") return MESES_1_A_12.filter((m) => l.meses[m - 1] !== null).map((mes) => ({ chave: l.chave, mes, valor: null }));
-      if (l.media === null) return [];
-      const gravada = comoGravado(l.chave, l.media);
+    const paraAMedia = (l: LinhaDaPlanilha): MudancaDaPlanilha[] => {
+      const gravada = l.media === null ? null : comoGravado(l.chave, l.media);
       return MESES_1_A_12.filter((m) => !iguais(l.meses[m - 1], gravada)).map((mes) => ({ chave: l.chave, mes, valor: l.media }));
-    });
+    };
+    // A mão de obra das médias (22/11/2026, pedido do Adão; maoDeObraDasMedias.ts): nos grupos com Média de Referência em alguma
+    // Remuneração CLT ou PJ ou nos Encargos e Benefícios, as Remunerações vão direto aos doze meses (sem média, zero, como no
+    // realizado) e os Encargos, pela média deles (no cálculo); o grupo fica marcado, com a verificação, até o Quadro de Lotação dele
+    // mudar. O Apagar Valores tira as marcas (os grupos voltam ao quadro).
+    const quadro = quadroDosGrupos(await linhasDoQuadro(prisma, id), [...gruposDoMedias.values()]);
+    const jaDasMedias = gruposDasMedias(await marcadoresDasMedias(prisma, id), quadro).validos;
+    const daMaoDeObra = todas.filter((l) => l.aba === "centros" && l.grupo && l.conta && (/\.REMUNERACOES_(CLT|PJ)$/.test(l.conta) || ehContaDeEncargos(l.conta)));
+    const comMedia = (l: LinhaDaPlanilha) => l.media !== null && Math.abs(l.media) >= 0.005;
+    const gruposDaMaoDeObra = acao === "replicar" ? [...new Set(daMaoDeObra.filter(comMedia).map((l) => l.grupo!))] : [];
+    const novosDasMedias = gruposDaMaoDeObra.filter((g) => !jaDasMedias.has(g));
+    const desmarcados = acao === "apagar" ? [...jaDasMedias].filter((g) => daMaoDeObra.some((l) => l.grupo === g)) : [];
+    const remuneracoes = daMaoDeObra.filter((l) => !ehContaDeEncargos(l.conta!) && gruposDaMaoDeObra.includes(l.grupo!));
+    // Em Serviços, as linhas por dia útil (22/11/2026, pedido do Adão: sem volume nas listas, os valores médios são por dia e a
+    // Demanda Diária fica sem Média de Referência): Demanda 1 nos meses em branco (a digitada fica), para os valores por dia × os
+    // dias úteis darem o realizado.
+    const comValorMedio = (venda: string, codigo: string) =>
+      linhas.some((x) => (x.chave.startsWith(`P|3|${venda}|RB:${codigo}:`) || x.chave.startsWith(`P|3|${venda}|CUSTO:${codigo}:`)) && comMedia(x));
+    const demandasPorDia =
+      acao === "replicar"
+        ? linhas.filter((l) => {
+            const m = /^P\|3\|([^|]+)\|DEMANDA:(.+)$/.exec(l.chave);
+            return !!m && l.media === null && comValorMedio(m[1], m[2]);
+          })
+        : [];
+    const mudancas: MudancaDaPlanilha[] = [
+      ...linhas.flatMap((l) =>
+        acao === "apagar" ? MESES_1_A_12.filter((m) => l.meses[m - 1] !== null).map((mes) => ({ chave: l.chave, mes, valor: null })) : l.media === null ? [] : paraAMedia(l),
+      ),
+      ...remuneracoes.flatMap(paraAMedia),
+      ...demandasPorDia.flatMap((l) => MESES_1_A_12.filter((m) => l.meses[m - 1] === null).map((mes) => ({ chave: l.chave, mes, valor: 1 }))),
+    ];
+    // As linhas da mão de obra que mudam só no cálculo (os Encargos dos grupos que entram nas médias; nos que saem, também as
+    // Remunerações, que voltam ao quadro).
+    const doCalculo = daMaoDeObra.filter((l) => (novosDasMedias.includes(l.grupo!) && ehContaDeEncargos(l.conta!)) || desmarcados.includes(l.grupo!));
     // Nada a mudar (22/11/2026): sem gravação, sem a pendência de recálculo e sem a entrada no Histórico.
-    if (!mudancas.length) return { linhas: 0, valores: 0 };
-    const prisma = getPrismaClient();
+    if (!mudancas.length && !doCalculo.length) return { linhas: 0, valores: 0, grupos: 0 };
     const est = await estruturaDRE();
     await prisma.$transaction(
       async (tx) => {
         await aplicarMudancas(tx, id, mudancas, est);
+        await marcarGrupos(tx, id, gruposDaMaoDeObra, quadro);
+        await tirarMarcadores(tx, id, desmarcados);
         await alteradoSemRecalcular(tx, id, "premissas");
       },
       { timeout: 300_000 },
     );
-    const nLinhas = new Set(mudancas.map((m) => m.chave)).size;
+    const mudadas = new Set([...mudancas.map((m) => m.chave), ...doCalculo.map((l) => l.chave)]);
+    const nLinhas = mudadas.size;
+    const nValores = mudancas.length + 12 * doCalculo.filter((l) => !mudancas.some((m) => m.chave === l.chave)).length;
+    const maoDeObra = gruposDaMaoDeObra.length
+      ? `; a mão de obra das médias em ${gruposDaMaoDeObra.length} ${gruposDaMaoDeObra.length === 1 ? "grupo" : "grupos"} de centros`
+      : desmarcados.length
+        ? `; ${desmarcados.length} ${desmarcados.length === 1 ? "grupo volta" : "grupos voltam"} ao Quadro de Lotação`
+        : "";
     const descricao =
       acao === "replicar"
-        ? `Médias de Referência replicadas nos doze meses (${nLinhas} ${nLinhas === 1 ? "linha" : "linhas"}, em todas as abas das premissas)`
-        : `Valores mensais apagados (${nLinhas} ${nLinhas === 1 ? "linha" : "linhas"}, em todas as abas das premissas)`;
+        ? `Médias de Referência replicadas nos doze meses (${nLinhas} ${nLinhas === 1 ? "linha" : "linhas"}, em todas as abas das premissas${maoDeObra})`
+        : `Valores mensais apagados (${nLinhas} ${nLinhas === 1 ? "linha" : "linhas"}, em todas as abas das premissas${maoDeObra})`;
     await prisma.cenarioReajuste.create({
       data: {
         cenarioId: id,
@@ -3716,13 +3777,20 @@ export const cenariosService = {
         usuarioNome: usuario.nome,
         tipo: "MEDIAS",
         descricao: recorte ? descricao.replace("em todas as abas das premissas", "no recorte de quem replicou") : descricao,
-        valores: mudancas.length,
+        valores: nValores,
         meses: MESES_1_A_12,
-        ...(recorte ? { alcance: trechos(linhas.filter((l) => mudancas.some((m) => m.chave === l.chave)).map((l) => trechoDaLinha(l, gruposDoMedias))) } : {}),
+        ...(recorte ? { alcance: trechos(todas.filter((l) => mudadas.has(l.chave)).map((l) => trechoDaLinha(l, gruposDoMedias))) } : {}),
       },
     });
-    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "ALTERACAO", entidade: "cenario", entidadeId: id, metadados: { cenario: c.nome, premissas: acao, linhas: nLinhas, valores: mudancas.length } });
-    return { linhas: nLinhas, valores: mudancas.length };
+    await auditar({
+      usuarioId: usuario.id,
+      usuarioNome: usuario.nome,
+      acao: "ALTERACAO",
+      entidade: "cenario",
+      entidadeId: id,
+      metadados: { cenario: c.nome, premissas: acao, linhas: nLinhas, valores: nValores, maoDeObraDasMedias: gruposDaMaoDeObra, voltamAoQuadro: desmarcados },
+    });
+    return { linhas: nLinhas, valores: nValores, grupos: gruposDaMaoDeObra.length };
   },
 
   /**

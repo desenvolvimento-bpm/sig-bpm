@@ -4,7 +4,8 @@ import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 import { estrutura } from "../dre/dreService.js";
 import { diasUteis } from "./calendario.js";
 import { alocarCentros, contasDoGrupo, gruposDoCenario, type GrupoDoCenario } from "./centrosCenario.js";
-import { ehContaDeEncargos, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
+import { ehContaDeEncargos, encargosDasMedias, encargosDoGrupo, maosDeObraDoGrupo, VENDAS_DOS_ENCARGOS } from "./encargosCenario.js";
+import { gruposDasMedias, marcadoresDasMedias, tirarMarcadores } from "./maoDeObraDasMedias.js";
 import { VENDA_LOTACAO_APRENDIZ, VENDA_LOTACAO_CLT, VENDA_LOTACAO_ESTAGIARIO, VENDA_LOTACAO_PJ, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { linhasDoQuadro, quadroDosGrupos, remuneracoesDoQuadro, type QuadroDoGrupo } from "./quadroDoCenario.js";
 import { calcularInvestimentosEExtra } from "./investimentosCenario.js";
@@ -413,6 +414,8 @@ async function materializarEncargos(
   gravadas: Array<{ unidade: number; venda: string; chave: string; mes: number; valor: unknown }>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
   quadro: Map<string, QuadroDoGrupo>,
+  dasMedias: Set<string>,
+  medias: Map<string, number>,
 ) {
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
   const valor = new Map(meses.map((x) => [`${x.grupo}|${x.codigo}|${x.mes}`, x.valor]));
@@ -424,7 +427,10 @@ async function materializarEncargos(
     const codigos = contasDoGrupo(est, g).map((l) => l.codigo);
     // Os Salários dos Aprendizes (09/11/2026) e dos Estagiários (11/11/2026) do grupo (12/11/2026; antes, por mão de obra).
     const q = quadro.get(g.grupo);
-    const r = encargosDoGrupo(
+    // A mão de obra das médias (22/11/2026): a Média de Referência das contas, sem o cálculo pelos percentuais.
+    const r = dasMedias.has(g.grupo)
+      ? encargosDasMedias(codigos, g.atribuicao, (codigo) => medias.get(`${g.grupo}|${codigo}`), (venda, mes) => premissa.get(`${venda}|${g.grupo}|${mes}`))
+      : encargosDoGrupo(
       codigos,
       g.atribuicao,
       (codigo, mes) => valor.get(`${g.grupo}|${codigo}|${mes}`) ?? 0,
@@ -450,9 +456,9 @@ async function materializarEncargos(
  * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO), e nos sem linhas, nenhum (12/11/2026: a aba,
  * alimentada pela Gestão de Colaboradores, é a única fonte da contagem); nos grupos com linhas, as Remunerações CLT e PJ dos
  * meses 1 a 12 — na mão de obra principal do grupo (12/11/2026: a CLT, os Salários dos Aprendizes, dos Estagiários e CLT; a
- * PJ, os Salários PJ); na outra, zero —, no lugar do que havia (a Média de Referência, o mês 0, fica). Nos grupos sem linhas
- * (22/11/2026, pedido do Adão; de 11/11 a 22/11/2026, zero), as Remunerações ficam as gravadas, como as outras contas (o
- * Replicar Médias as preenche). Devolve os valores dos meses dos centros com elas.
+ * PJ, os Salários PJ); na outra, zero —, no lugar do que havia (a Média de Referência, o mês 0, fica); nos grupos sem linhas,
+ * zero. Os grupos com a mão de obra das médias (`dasMedias`, 22/11/2026) ficam com as Remunerações que o Replicar Médias gravou.
+ * Devolve os valores dos meses dos centros com elas.
  */
 async function materializarQuadro(
   tx: Tx,
@@ -461,6 +467,7 @@ async function materializarQuadro(
   grupos: GrupoDoCenario[],
   quadro: Map<string, QuadroDoGrupo>,
   meses: Array<{ grupo: string; codigo: string; mes: number; valor: number }>,
+  dasMedias: Set<string>,
 ) {
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
   const premissas: Array<{ cenarioId: string; unidade: number; venda: string; chave: string; mes: number; valor: Prisma.Decimal }> = [];
@@ -479,13 +486,12 @@ async function materializarQuadro(
       ] as const)
         lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
     const doGrupo = new Set<string>();
-    // Sem linhas no Quadro de Lotação (22/11/2026, pedido do Adão), as Remunerações do grupo ficam como as outras contas: as
-    // gravadas (a referência, o Replicar Médias, a importação ou a tela), sem o zero do quadro.
-    if (!q) continue;
+    // A mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts): as Remunerações do grupo ficam as que o Replicar Médias gravou.
+    if (dasMedias.has(g.grupo)) continue;
     for (const mo of maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao)) {
       // Só a mão de obra principal recebe as remunerações do quadro (12/11/2026, pedido do Adão: não faz sentido prever MOI num
       // centro de custo que é MOD); a outra fica com zero.
-      const s = mo.principal ? q.salarios : undefined;
+      const s = mo.principal ? q?.salarios : undefined;
       for (const [codigo, clt] of [[mo.remuneracoes, true], [mo.remuneracoesPJ, false]] as const) {
         if (!idDaConta.has(codigo)) continue;
         doGrupo.add(codigo);
@@ -531,8 +537,24 @@ export async function materializarPremissas(tx: Tx, cenarioId: string) {
   ]);
   const meses = valoresCentros.map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
   const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos);
-  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses);
-  await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro);
+  const { dasMedias, medias } = await maoDeObraDoCalculo(tx, cenarioId, quadro);
+  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses, dasMedias);
+  await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro, dasMedias, medias);
+}
+
+/**
+ * A mão de obra das médias no cálculo (22/11/2026, maoDeObraDasMedias.ts): os grupos dela — os marcadores com a assinatura do quadro
+ * de hoje; os vencidos (o quadro do grupo mudou) saem, e o grupo volta ao Quadro de Lotação — e as Médias de Referência (o mês 0)
+ * das contas deles.
+ */
+async function maoDeObraDoCalculo(tx: Tx, cenarioId: string, quadro: Map<string, QuadroDoGrupo>) {
+  const { validos, vencidos } = gruposDasMedias(await marcadoresDasMedias(tx, cenarioId), quadro);
+  await tirarMarcadores(tx, cenarioId, vencidos);
+  const medias = new Map<string, number>();
+  if (validos.size)
+    for (const x of await tx.cenarioCentro.findMany({ where: { cenarioId, mes: 0, grupo: { in: [...validos] } }, select: { grupo: true, valor: true, linhaDRE: { select: { codigo: true } } } }))
+      medias.set(`${x.grupo}|${x.linhaDRE.codigo}`, Number(x.valor));
+  return { dasMedias: validos, medias };
 }
 
 /**
@@ -582,8 +604,10 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   const meses = valoresCentros.filter((x) => x.mes >= 1 && x.mes <= 12).map((x) => ({ grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor: Number(x.valor) }));
   // O Quadro de Lotação do cenário (09/11/2026): os colaboradores e as remunerações dos grupos com linhas, antes dos encargos.
   const quadro = quadroDosGrupos(await linhasDoQuadro(tx, cenarioId), grupos);
-  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses);
-  const valoresDosCentros = await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro);
+  // A mão de obra das médias (22/11/2026): nos grupos dela, as Remunerações e os Encargos das Médias de Referência.
+  const { dasMedias, medias } = await maoDeObraDoCalculo(tx, cenarioId, quadro);
+  const comQuadro = await materializarQuadro(tx, cenarioId, est, grupos, quadro, meses, dasMedias);
+  const valoresDosCentros = await materializarEncargos(tx, cenarioId, est, grupos, gravadas, comQuadro, quadro, dasMedias, medias);
   const alocados = alocarCentros(
     est,
     grupos,

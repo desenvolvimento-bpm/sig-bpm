@@ -152,6 +152,30 @@ export function encargosDoGrupo(
 }
 
 /**
+ * Os Encargos e Benefícios de um grupo com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts), nos doze meses: a Média
+ * de Referência de cada conta (`media(codigo)`, o mês 0), sem cálculo pelos percentuais; na conta que leva os Benefícios Adicionais,
+ * a média deles (o mês 0 da premissa) sai e entra o valor de cada mês — eles continuam digitados. Sem os Benefícios Padrão (o
+ * Quadro de Lotação não é a fonte).
+ */
+export function encargosDasMedias(
+  codigos: string[],
+  atribuicao: GrupoDoCenario["atribuicao"],
+  media: (codigo: string) => number | undefined,
+  gravado: (venda: string, mes: number) => number | undefined,
+) {
+  const r = new Map<string, number[]>();
+  const beneficios = ITENS_DOS_ENCARGOS.find((i) => i.item === "BENEFICIOS")!;
+  for (const mo of maosDeObraDoGrupo(codigos, atribuicao)) {
+    const semBeneficios = (media(mo.encargos) ?? 0) - (mo.beneficios ? (gravado(beneficios.venda, 0) ?? 0) : 0);
+    r.set(
+      mo.encargos,
+      Array.from({ length: 12 }, (_, k) => semBeneficios + (mo.beneficios ? valorDoItem(beneficios, gravado, k + 1) : 0)),
+    );
+  }
+  return r;
+}
+
+/**
  * Os Benefícios Adicionais da referência realizada (20/10/2026, decisão do usuário): a diferença entre os encargos
  * realizados do grupo e o cálculo com os percentuais padrão, (Remunerações CLT + Horas Extras) × FATOR_PADRAO, somada nas
  * mãos de obra dele; assim, os meses fechados e a Média de Referência da conta Encargos e Benefícios batem com o realizado.

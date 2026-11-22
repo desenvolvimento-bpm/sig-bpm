@@ -28,6 +28,27 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 22/11/2026, à noite: a mão de obra das médias e a Demanda Diária das linhas por dia útil de Serviços no Replicar Médias.
+  {
+    publicada: "2026-11-22T20:45",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Em Referência, o “Replicar Médias” leva as Médias de Referência das Remunerações CLT e PJ e dos Encargos e Benefícios (MOD e MOI) direto à aba Centros de Custo das Premissas, em cada grupo de centros com essas médias, tenha ou não linhas no Quadro de Lotação: com as médias do realizado, a soma de cada linha até o último mês da referência bate com o realizado. O grupo volta a calcular pelo Quadro de Lotação quando o quadro dele muda (o “Apagar Valores” também o devolve). Fora disso, as Remunerações vêm sempre do Quadro de Lotação e não se digitam nem se importam; os Benefícios Adicionais, as Horas Extras, as Multas Rescisórias e o Pró-Labore continuam digitáveis.",
+      "Em Serviços, nas linhas com os valores por dia útil (Vedação, Fundação, Capeamento e Telhamento), o “Replicar Médias” põe Demanda Diária 1 nos meses em branco (a demanda digitada fica).",
+    ],
+  },
+  // 22/11/2026, à noite: a verificação Mão de Obra das Médias.
+  {
+    publicada: "2026-11-22T20:45",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Verificações, a verificação Mão de Obra das Médias, uma por grupo de centros que recebeu as médias da mão de obra pelo “Replicar Médias”: “Médias das Remunerações, Encargos e Benefícios replicadas diretamente nos Centros de Custo (sem origem do Quadro de Lotação).”",
+    ],
+  },
   // 22/11/2026, à tarde: o menu do usuário.
   {
     publicada: "2026-11-22T14:23",

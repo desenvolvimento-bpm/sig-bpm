@@ -164,9 +164,11 @@ export function PremissasContent() {
               daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
               colaboradores e os salários vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
               “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
-              As Remunerações CLT e PJ vêm daqui nos grupos com linhas; no grupo sem nenhuma linha aqui, elas são contas como as outras na aba
-              Centros de Custo: se digitam, se importam e o “Replicar Médias” (Configurações / Referência) leva a elas a Média de Referência, nas
-              contas da MOD e da MOI.
+              As Remunerações CLT e PJ também vêm daqui (o grupo sem linhas fica com elas zeradas) e não se digitam nem se importam. A única
+              exceção é o “Replicar Médias” (Configurações / Referência): ele leva as Médias de Referência das Remunerações e dos Encargos e
+              Benefícios (MOD e MOI) direto aos Centros de Custo, e cada grupo assim ganha a verificação Mão de Obra das Médias; quando uma
+              linha dele aqui é incluída, editada ou excluída, o grupo volta a calcular por esta aba. Os Benefícios Adicionais, as Horas Extras,
+              as Multas Rescisórias e o Pró-Labore se digitam nos Centros de Custo.
               Os Benefícios das linhas, somados pelos centros de cada grupo, são a linha Benefícios Padrão dos Encargos e Benefícios do grupo, na aba
               Centros de Custo.
             </li>
@@ -241,8 +243,9 @@ export function PremissasContent() {
               Colaboradores, PJ sem Aumento no Ano (o salário da linha PJ não aumenta em nenhum mês com colaboradores) e Salário que Cai (o salário por
               colaborador cai de um mês para o outro com os mesmos colaboradores); nos Centros de Custo, Salários que Não Variam com os Colaboradores (a
               quantidade de um tipo muda e os salários do grupo não), Quadro de Lotação sem Remunerações e Quadro de Lotação sem Gastos Gerais (o grupo
-              com colaboradores e sem salários, ou sem valores nos gastos gerais diretos, indiretos ou comerciais, no mês) e Valores Fora da DRE (o
-              rateio do grupo não leva o valor a nenhuma unidade: a chave sem base no mês, a conta sem destino). Cada uma pede a correção dos valores
+              com colaboradores e sem salários, ou sem valores nos gastos gerais diretos, indiretos ou comerciais, no mês), Valores Fora da DRE (o
+              rateio do grupo não leva o valor a nenhuma unidade: a chave sem base no mês, a conta sem destino) e Mão de Obra das Médias (o grupo
+              com as Remunerações e os Encargos do Replicar Médias, sem o Quadro de Lotação: some quando o Quadro de Lotação do grupo muda). Cada uma pede a correção dos valores
               (ela some da lista) ou o De Acordo: marque a caixa das verificações (ou use “Marcar Todas” / “Desmarcar Todas”, que valem para a tabela
               com os filtros) e clique em “De Acordo”; “Retirar Acordo” desfaz. Só o responsável por cada uma (ou o Administrador) a marca; nas
               outras, a caixa fica em cinza. O De Acordo vale enquanto os valores não mudam: mudou, a verificação volta a Pendente, com o aviso. Com

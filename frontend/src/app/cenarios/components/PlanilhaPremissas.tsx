@@ -80,7 +80,7 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
             ? "Nada a replicar: os meses já estavam iguais às Médias de Referência."
             : "Nada a apagar: os meses já estavam em branco."
           : replicar
-            ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")}); a DRE fica pendente de recálculo (Resultados / Recalcular).`
+            ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")})${r.grupos ? `, com a mão de obra das médias em ${r.grupos} ${plural(r.grupos, "grupo", "grupos")} de centros (aba Verificações)` : ""}; a DRE fica pendente de recálculo (Resultados / Recalcular).`
             : `Valores apagados em ${r.linhas} ${plural(r.linhas, "linha", "linhas")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`,
       );
       onFechar();
@@ -98,15 +98,17 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
                 <>
                   <li>A Média de Referência de cada linha vai para os doze meses, no lugar dos valores de hoje.</li>
                   <li>
-                    Nos Centros de Custo, também as Remunerações CLT e PJ (MOD e MOI) dos grupos sem linhas no Quadro de Lotação; nos com linhas,
-                    elas continuam calculadas por ele.
+                    Nos Centros de Custo, também as Remunerações CLT e PJ e os Encargos e Benefícios (MOD e MOI), direto, sem o Quadro de Lotação:
+                    cada grupo com essas médias ganha a verificação Mão de Obra das Médias e volta ao Quadro de Lotação quando ele muda.
                   </li>
+                  <li>Em Serviços, as linhas com os valores por dia útil ganham Demanda Diária 1 nos meses em branco.</li>
                   <li>As linhas sem Média de Referência ficam como estão.</li>
                 </>
               ) : (
                 <>
                   <li>Os doze meses de cada linha ficam em branco (mês sem valor; os Dias Úteis voltam aos do calendário).</li>
                   <li>As Médias de Referência ficam: “Replicar Médias” as leva de novo aos meses.</li>
+                  <li>Os grupos com a mão de obra das médias voltam ao Quadro de Lotação.</li>
                 </>
               )}
               <li>Vale para todas as abas das premissas: {ABAS_DA_PLANILHA}.</li>

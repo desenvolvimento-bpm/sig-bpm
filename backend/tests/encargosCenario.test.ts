@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { beneficiosDaDiferenca, encargosDoGrupo, FATOR_PADRAO, fatorDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo } from "../src/services/cenarios/encargosCenario.js";
+import { beneficiosDaDiferenca, encargosDasMedias, encargosDoGrupo, FATOR_PADRAO, fatorDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo } from "../src/services/cenarios/encargosCenario.js";
+import { assinaturaDoQuadro, gruposDasMedias } from "../src/services/cenarios/maoDeObraDasMedias.js";
 
 const MOD = ["CPP.MOD.REMUNERACOES_CLT", "CPP.MOD.REMUNERACOES_PJ", "CPP.MOD.ENCARGOS_E_BENEFICIOS", "CPP.MOD.HORAS_EXTRAS", "CPP.MOD.MULTAS_RESCISORIAS"];
 const MOI = MOD.map((c) => c.replace(".MOD.", ".MOI."));
@@ -52,5 +53,30 @@ describe("encargos e benefícios dos centros de custo (19/10/2026)", () => {
     assert.equal(centavos(r.get("CPP.MOD.ENCARGOS_E_BENEFICIOS")![0]), 120000);
     // Abaixo do cálculo, a diferença é negativa.
     assert.ok(beneficiosDaDiferenca(MOD, "DIRETA", (c) => (c.endsWith("ENCARGOS_E_BENEFICIOS") ? 1000 : c.endsWith("REMUNERACOES_CLT") ? 10000 : 0)) < 0);
+  });
+});
+
+describe("a mão de obra das médias (22/11/2026)", () => {
+  it("os Encargos pela Média de Referência da conta: na que leva os Benefícios Adicionais, a média deles sai e entra o valor do mês", () => {
+    const medias = new Map([["CPP.MOD.ENCARGOS_E_BENEFICIOS", 1000], ["CPP.MOI.ENCARGOS_E_BENEFICIOS", 500]]);
+    // Os Benefícios Adicionais: média 200; em março, 300 digitados; nos meses sem valor, zero.
+    const gravado = (venda: string, mes: number) => (venda === "BENEFICIOS" ? (mes === 0 ? 200 : mes === 3 ? 300 : mes <= 2 ? 200 : undefined) : undefined);
+    const r = encargosDasMedias([...MOD, ...MOI], "DIRETA", (c) => medias.get(c), gravado);
+    assert.deepEqual(r.get("CPP.MOD.ENCARGOS_E_BENEFICIOS")!.slice(0, 4), [1000, 1000, 1100, 800]);
+    // A outra mão de obra fica com a média dela, sem os benefícios e sem o cálculo pelos percentuais.
+    assert.deepEqual(new Set(r.get("CPP.MOI.ENCARGOS_E_BENEFICIOS")), new Set([500]));
+  });
+
+  it("o grupo volta ao Quadro de Lotação quando o quadro dele muda (a assinatura)", () => {
+    const doze = (v: number) => Array<number>(12).fill(v);
+    const q = { aprendizes: doze(0), estagiarios: doze(0), clt: doze(3), pj: doze(1), salarios: { aprendizes: doze(0), estagiarios: doze(0), clt: doze(0), pj: doze(0) }, beneficios: doze(0), linhas: 2 };
+    const quadro = new Map([["ACABAMENTO", q]]);
+    const marcadores = new Map([["ACABAMENTO", assinaturaDoQuadro(q)], ["SEM QUADRO", assinaturaDoQuadro(undefined)]]);
+    assert.deepEqual(gruposDasMedias(marcadores, quadro), { validos: new Set(["ACABAMENTO", "SEM QUADRO"]), vencidos: [] });
+    // Um salário digitado no quadro do grupo: o marcador vence; o grupo sem quadro que ganha uma linha também.
+    const comSalario = new Map([["ACABAMENTO", { ...q, salarios: { ...q.salarios, clt: doze(9000) } }], ["SEM QUADRO", { ...q, linhas: 1 }]]);
+    assert.deepEqual(gruposDasMedias(marcadores, comSalario), { validos: new Set(), vencidos: ["ACABAMENTO", "SEM QUADRO"] });
+    assert.equal(assinaturaDoQuadro(undefined), 0);
+    assert.notEqual(assinaturaDoQuadro(q), 0);
   });
 });

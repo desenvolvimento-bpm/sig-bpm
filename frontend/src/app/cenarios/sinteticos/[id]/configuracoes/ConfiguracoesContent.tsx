@@ -48,7 +48,10 @@ export function ConfiguracoesContent() {
                   Mês) ou outro cenário analítico. O realizado traz só as Médias de Referência — das premissas, dos centros de custo, da depreciação base, do
                   extra-operacional e dos indicadores manuais —, com os meses do cenário em branco (no Mês a Mês, também
                   cada mês fechado no seu mês, menos nas premissas das unidades); use “Replicar Médias”, aqui na Referência, depois do “Realocar”, para levar as médias aos
-                  meses (“Apagar Valores”, ao lado, deixa os doze meses de todas as abas das premissas em branco; os dois pedem editar todas as
+                  meses — nos Centros de Custo, também as das Remunerações e dos Encargos e Benefícios, direto, sem o Quadro de Lotação (cada grupo
+                  assim ganha a verificação Mão de Obra das Médias e volta ao quadro quando ele muda), e, em Serviços, a Demanda Diária 1 nos
+                  meses em branco das linhas com os valores por dia útil; somados até o último mês da referência, os totais batem com o realizado
+                  (“Apagar Valores”, ao lado, deixa os doze meses de todas as abas das premissas em branco; os dois pedem editar todas as
                   abas das premissas e confirmam antes de gravar). Outro analítico traz as premissas, os centros, os investimentos e os indicadores dele. Cada Média de Referência do realizado (as contas
                   dos centros de custo, as realocações, a depreciação base, o extra-operacional e os indicadores) é a soma do período ÷ os meses dele,
                   também quando a linha não tem valor em todos: uma conta com valor num só mês de uma referência de 9 meses fica com esse valor ÷ 9 (nas
