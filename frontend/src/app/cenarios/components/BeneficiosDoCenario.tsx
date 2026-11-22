@@ -141,15 +141,18 @@ function BeneficioDialog({ id, beneficio, onFechar }: { id: string; beneficio: B
             <Label htmlFor="bp-descricao">Descrição</Label>
             <Input id="bp-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} placeholder="Opcional" className="rounded-sm" />
           </div>
-          <div className="space-y-1.5">
+          {/* O campo do valor encostado à esquerda do modal, com o número à esquerda (nunca solto no meio do layout), e com o milhar
+              e duas casas ao sair do campo: "1500" → "1.500,00". */}
+          <div className="space-y-1.5 sm:w-48">
             <Label htmlFor="bp-valor">Valor Mensal (/ Colab.)</Label>
             <Input
               id="bp-valor"
               value={valor}
               onChange={(e) => setValor(e.target.value)}
+              onBlur={() => (lido !== null && lido >= 0 ? setValor(reais(lido)) : undefined)}
               inputMode="decimal"
               placeholder="0,00"
-              className={`rounded-sm text-right sm:w-48 ${valor.trim() && !valorValido ? "border-red-400" : ""}`}
+              className={`rounded-sm ${valor.trim() && !valorValido ? "border-red-400" : ""}`}
             />
           </div>
           {beneficio?.valores ? (

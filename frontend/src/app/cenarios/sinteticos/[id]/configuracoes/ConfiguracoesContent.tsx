@@ -103,7 +103,8 @@ export function ConfiguracoesContent() {
                   Em Benefícios Padrão, depois de Centros de Custo, os benefícios do cenário (Cesta Básica, Vale-Transporte, Seguro de Vida, Plano de
                   Saúde, Plano Odontológico…): o Nome, a Descrição e o Valor Mensal (/ Colab.), com a coluna Em Uso no Quadro de Lotação (as linhas e os
                   valores — linha × mês — em que o benefício está aplicado). “Novo Benefício” inclui um; clique numa linha para editá-lo, com “Excluir”
-                  no modal (o benefício em uso sai também do Quadro de Lotação). Na aba Quadro de Lotação das Premissas, o botão Benefícios aplica os
+                  no modal (o benefício em uso sai também do Quadro de Lotação). No modal, o Valor Mensal fica à esquerda e, ao sair do campo, ganha o
+                  separador de milhar e duas casas (1500 vira 1.500,00). Na aba Quadro de Lotação das Premissas, o botão Benefícios aplica os
                   marcados às linhas e aos meses marcados: os Benefícios de cada mês da linha são os colaboradores dela × a soma do Valor Mensal dos
                   aplicados, e a linha Benefícios Padrão dos Encargos e Benefícios de cada grupo, na aba Centros de Custo, soma os dos centros dele.
                   Mudar o valor de um benefício em uso deixa a DRE do cenário pendente de recálculo; cada mudança fica no Histórico (aba Alterações). A revisão e a cópia

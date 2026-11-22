@@ -565,7 +565,74 @@ function exigirRecalculado(c: Parameters<typeof pendenciasDoRecalculo>[0], acao:
 }
 
 async function comparadoDe(c: { comparadoComId: string | null }) {
-  return c.comparadoComId ? getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true } }) : null;
+  return c.comparadoComId ? getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true, tipo: true } }) : null;
+}
+
+/**
+ * A DRE de um grupo de centros num cenário analítico (19/11/2026; 22/11/2026: também a do comparado), mês a mês: as contas do
+ * grupo com valor em algum mês (os valores gravados, com as casas deles, como na DRE do cenário), o subtotal de cada atribuição e
+ * o total de cada grupo da DRE, que somam as contas; e o Consolidado do cenário (as bases do % e do R$/m³).
+ */
+async function dreDoGrupo(cenarioId: string, grupo: string) {
+  const [linhas, gravados, consolidado] = await Promise.all([
+    estrutura(),
+    getPrismaClient().cenarioCentro.findMany({ where: { cenarioId, grupo, mes: { gte: 1, lte: 12 } }, select: { mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
+    dreDoCenario(cenarioId, 0),
+  ]);
+  const porConta = new Map<string, number[]>();
+  for (const r of gravados) {
+    const lista = porConta.get(r.linhaDRE.codigo) ?? Array<number>(12).fill(0);
+    lista[r.mes - 1] += Number(r.valor);
+    porConta.set(r.linhaDRE.codigo, lista);
+  }
+  return { valores: somarNoGrupo(linhas, porConta, 12), consolidado };
+}
+
+/**
+ * Os valores de um grupo de centros por período (`n` períodos: os 12 meses, ou 1 na referência): cada conta com valor em algum
+ * período, o subtotal da atribuição dela e o total do grupo da DRE dela, que somam as contas.
+ */
+function somarNoGrupo(linhas: Awaited<ReturnType<typeof estrutura>>, porConta: Map<string, number[]>, n: number) {
+  const partes = (codigo: string) => codigo.split(".");
+  const totais = linhas.filter((l) => l.tipo !== "ITEM" && l.tipo !== "SECAO");
+  // A atribuição de uma conta (CPP.MOD.X → CPP.MOD.MAO_DE_OBRA_DIRETA) e o total do grupo da DRE (CPP → CPP.CUSTOS_…).
+  const atribuicao = new Map(totais.filter((l) => partes(l.codigo).length === 3).map((l) => [partes(l.codigo).slice(0, 2).join("."), l.codigo]));
+  const doGrupo = new Map(totais.filter((l) => partes(l.codigo).length === 2).map((l) => [partes(l.codigo)[0], l.codigo]));
+  const valores = Array.from({ length: n }, () => new Map<string, number>());
+  const somar = (codigo: string | undefined, k: number, v: number) => {
+    if (codigo) valores[k].set(codigo, (valores[k].get(codigo) ?? 0) + v);
+  };
+  for (const [conta, periodos] of porConta) {
+    if (periodos.every((v) => v === 0)) continue;
+    periodos.forEach((v, k) => {
+      somar(conta, k, v);
+      somar(atribuicao.get(partes(conta).slice(0, 2).join(".")), k, v);
+      somar(doGrupo.get(partes(conta)[0]), k, v);
+    });
+  }
+  return valores;
+}
+
+/**
+ * A Média de Referência de um grupo de centros × 12 (22/11/2026, pedido do Adão: o comparativo da aba Centros de Custo dos
+ * Resultados quando o comparado é sintético, sem centros de custo): o mês 0 de cada conta do grupo (a média do realizado que a
+ * Referência carregou, Configurações / Referência) vezes 12, com os subtotais. Sem as bases (a referência não tem o Consolidado):
+ * o % e o R$/m³ ficam vazios. Null quando o cenário não tem Média de Referência em nenhum grupo.
+ */
+async function referenciaDoGrupo(cenarioId: string, grupo: string, linhas: Awaited<ReturnType<typeof estrutura>>) {
+  const prisma = getPrismaClient();
+  const [temReferencia, gravados] = await Promise.all([
+    prisma.cenarioCentro.count({ where: { cenarioId, mes: 0, valor: { not: 0 } } }),
+    prisma.cenarioCentro.findMany({ where: { cenarioId, grupo, mes: 0 }, select: { valor: true, linhaDRE: { select: { codigo: true } } } }),
+  ]);
+  if (!temReferencia) return null;
+  const porConta = new Map<string, number[]>();
+  for (const r of gravados) porConta.set(r.linhaDRE.codigo, [(porConta.get(r.linhaDRE.codigo)?.[0] ?? 0) + Number(r.valor) * 12]);
+  return new Map(
+    montar(linhas, "centros", [true], somarNoGrupo(linhas, porConta, 1), [new Map()], ACESSO_TOTAL)
+      .filter((l) => l.tipo !== "SECAO")
+      .map((l) => [l.codigo, l.total as CelulaTotal]),
+  );
 }
 
 type CelulaTotal = { valor: number | null; pct: number | null; unitario: number | null };
@@ -2681,35 +2748,33 @@ export const cenariosService = {
     if (!g) throw new CenarioError(404, "Grupo de centros de custo não encontrado.");
     // O recorte do perfil, qualquer que seja o acesso do cenário (19/11/2026), como a lista.
     if (!veGrupo(recorteDoPerfil(usuario), g)) throw new CenarioError(403, "Fora do seu recorte: o seu perfil só vê os centros de custo dos seus departamentos ou os seus centros de custo.");
-    const [linhas, gravados, consolidado] = await Promise.all([
-      estrutura(),
-      getPrismaClient().cenarioCentro.findMany({ where: { cenarioId: id, grupo, mes: { gte: 1, lte: 12 } }, select: { mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
-      dreDoCenario(id, 0),
-    ]);
-    const partes = (codigo: string) => codigo.split(".");
-    const totais = linhas.filter((l) => l.tipo !== "ITEM" && l.tipo !== "SECAO");
-    // A atribuição de uma conta (CPP.MOD.X → CPP.MOD.MAO_DE_OBRA_DIRETA) e o total do grupo da DRE (CPP → CPP.CUSTOS_…).
-    const atribuicao = new Map(totais.filter((l) => partes(l.codigo).length === 3).map((l) => [partes(l.codigo).slice(0, 2).join("."), l.codigo]));
-    const doGrupo = new Map(totais.filter((l) => partes(l.codigo).length === 2).map((l) => [partes(l.codigo)[0], l.codigo]));
-    // As contas com valor em algum mês (os valores gravados, com as casas deles, como na DRE do cenário).
-    const porConta = new Map<string, number[]>();
-    for (const r of gravados) {
-      const lista = porConta.get(r.linhaDRE.codigo) ?? Array<number>(12).fill(0);
-      lista[r.mes - 1] += Number(r.valor);
-      porConta.set(r.linhaDRE.codigo, lista);
-    }
-    const valores = Array.from({ length: 12 }, () => new Map<string, number>());
-    const somar = (codigo: string | undefined, k: number, v: number) => {
-      if (codigo) valores[k].set(codigo, (valores[k].get(codigo) ?? 0) + v);
-    };
-    for (const [conta, meses] of porConta) {
-      if (meses.every((v) => v === 0)) continue;
-      meses.forEach((v, k) => {
-        somar(conta, k, v);
-        somar(atribuicao.get(partes(conta).slice(0, 2).join(".")), k, v);
-        somar(doGrupo.get(partes(conta)[0]), k, v);
-      });
-    }
+    const [linhas, d, comparado] = await Promise.all([estrutura(), dreDoGrupo(id, grupo), comparadoDe(c)]);
+    // O comparativo (22/11/2026, pedido do Adão), como nas unidades: com um cenário comparado analítico, cada linha traz o total do
+    // exercício do mesmo grupo (pelo nome) no comparado, com o % e o R$/m³ sobre as bases do Consolidado dele. O sintético não tem
+    // centros de custo: no lugar dele, a Média de Referência do grupo × 12 (sem o % e o R$/m³); sem Média de Referência no cenário,
+    // a aba fica sem o comparativo (comparadoSemCentros avisa). Entram também as linhas que só o comparado tem.
+    const analitico = comparado?.tipo === "ANALITICO";
+    const doComparado = comparado && analitico ? await dreDoGrupo(comparado.id, grupo) : null;
+    const totais = doComparado
+      ? new Map(
+          montar(linhas, "centros", doComparado.consolidado.comValor, doComparado.valores, doComparado.consolidado.valores, ACESSO_TOTAL)
+            .filter((l) => l.tipo !== "SECAO")
+            .map((l) => [l.codigo, l.total as CelulaTotal]),
+        )
+      : comparado
+        ? await referenciaDoGrupo(id, grupo, linhas)
+        : null;
+    const comparadoDaAba =
+      !comparado || !totais
+        ? null
+        : analitico
+          ? { nome: comparado.nome, ano: comparado.ano }
+          : {
+              // O rótulo é o do comparado (COMPARADO TOTAL/AA, com o exercício dele; pedido do Adão, 22/11/2026); a dica diz de onde vem.
+              nome: comparado.nome,
+              ano: comparado.ano,
+              dica: `A Média de Referência de cada conta do grupo × 12 (Configurações / Referência), no lugar do cenário comparado (${comparado.nome}), que é sintético e não tem centros de custo.`,
+            };
     return {
       ano: c.ano,
       ate: 12,
@@ -2717,12 +2782,13 @@ export const cenariosService = {
       departamento: g.departamento,
       destino: g.destino,
       centros: g.centros.map((x) => ({ codigoRM: x.codigo, nome: x.nome })),
-      meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: consolidado.comValor[k] })),
-      comparado: null,
+      meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: d.consolidado.comValor[k] })),
+      comparado: comparadoDaAba,
+      comparadoSemCentros: comparado && !totais ? { nome: comparado.nome, ano: comparado.ano } : null,
       // Sem as seções (os volumes), como os centros de Resultados Empresariais.
-      linhas: montar(linhas, "centros", consolidado.comValor, valores, consolidado.valores, ACESSO_TOTAL)
+      linhas: montar(linhas, "centros", d.consolidado.comValor, d.valores, d.consolidado.valores, ACESSO_TOTAL, totais ? new Set(totais.keys()) : undefined)
         .filter((l) => l.tipo !== "SECAO")
-        .map((l) => ({ ...l, podeDetalhar: false })),
+        .map((l) => comTotalComparado({ ...l, podeDetalhar: false }, totais)),
     };
   },
 

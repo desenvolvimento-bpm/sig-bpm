@@ -35,8 +35,11 @@ export type Resultados = {
   cenarioOrcado?: string | null;
   /** O nome do comparado nos rótulos (21/10/2026): "Orçado" ou o nome da marcação escolhida no Compara Com. */
   rotuloComparado?: string;
-  /** Nos cenários (13/10/2026): o cenário comparado, cujos totais vêm no lugar do orçado. */
-  comparado?: { nome: string; ano: number } | null;
+  /**
+   * Nos cenários (13/10/2026): o cenário comparado, cujos totais vêm no lugar do orçado. `dica` (22/11/2026): a dica do rótulo
+   * da coluna, quando os valores não são os do comparado (a Média de Referência × 12 na aba Centros de Custo).
+   */
+  comparado?: { nome: string; ano: number; dica?: string } | null;
   /**
    * Nos Resultados dos cenários analíticos (21/11/2026, pedido do Adão): o Índice de Reajuste (a coluna antes de Janeiro) e, com
    * um cenário comparado, o Índice de Comparação (antes do Comparativo) de cada linha, pelo código — o texto e a dica.

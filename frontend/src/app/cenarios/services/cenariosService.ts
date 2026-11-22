@@ -750,7 +750,17 @@ export const cenariosService = {
     (await api.get<{ data: { ano: number; grupos: Array<{ grupo: string; departamento: string; total: number }> } }>(`/proxy/cenarios/${id}/resultados/centros`)).data.data,
   resultadosDoCentro: async (id: string, grupo: string) =>
     (
-      await api.get<{ data: Resultados & { grupo: string; departamento: string; destino: string; centros: Array<{ codigoRM: string | null; nome: string }> } }>(
+      // O comparado (22/11/2026): com um cenário comparado analítico, `comparado` e o total dele em cada linha; com um sintético
+      // (sem centros de custo), `comparadoSemCentros`, e a aba fica sem o comparativo.
+      await api.get<{
+        data: Resultados & {
+          grupo: string;
+          departamento: string;
+          destino: string;
+          centros: Array<{ codigoRM: string | null; nome: string }>;
+          comparadoSemCentros: { nome: string; ano: number } | null;
+        };
+      }>(
         `/proxy/cenarios/${id}/resultados/centro`,
         { params: { grupo } },
       )

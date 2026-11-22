@@ -28,6 +28,24 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 22/11/2026: o comparativo na aba Centros de Custo dos Resultados dos analíticos.
+  {
+    publicada: "2026-11-22T11:23",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Na aba Centros de Custo, o grupo escolhido traz o comparativo, como as unidades: depois do total, a coluna Comparado Total, com a Diferença, o Atingimento e a Eficiência. Com um cenário comparado analítico, é o total do mesmo grupo nele; com um sintético (sem centros de custo), a Média de Referência de cada conta do grupo × 12, sem o % e o R$/m³ — parado sobre o rótulo da coluna, a dica diz qual dos dois é.",
+    ],
+  },
+  // 22/11/2026: o Valor Mensal do modal do Benefício Padrão.
+  {
+    publicada: "2026-11-22T11:23",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: ["No modal Novo / Editar Benefício Padrão, o Valor Mensal fica à esquerda e, ao sair do campo, ganha o separador de milhar e duas casas (1500 vira 1.500,00)."],
+  },
   // 21/11/2026, à tarde: o modal dos índices com a rolagem só nas combinações.
   {
     publicada: "2026-11-21T16:22",

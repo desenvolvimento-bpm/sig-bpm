@@ -307,7 +307,7 @@ export function TabelaResultados({
     <>
       <th
         className={`${th} ${classe} !whitespace-normal leading-tight ${separar ? "border-l border-gray-300" : ""}`}
-        title={dica ?? (dados.comparado && variacao ? `O total de ${dados.comparado.nome}` : undefined)}
+        title={dica ?? (dados.comparado && variacao ? (dados.comparado.dica ?? `O total de ${dados.comparado.nome}`) : undefined)}
       >
         {rotulo}
       </th>

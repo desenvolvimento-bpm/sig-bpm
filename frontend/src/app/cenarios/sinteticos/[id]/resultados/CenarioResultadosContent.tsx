@@ -138,17 +138,26 @@ function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: st
         ) : centro.isPending || !centro.data ? (
           <Carregando />
         ) : (
-          <TabelaResultados
-            key={grupo ?? ""}
-            dados={centro.data}
-            titulo={grupo ?? ""}
-            visao={{ grupo: grupo! }}
-            nomeVisao={grupo ?? ""}
-            consultas={false}
-            doCenario
-            aoLadoDoTitulo={<InfoAgrupamento grupo={grupo ?? ""} centros={centro.data.centros} periodo="no cenário" />}
-            acaoDaLinha={(l) => (!l.volume && l.tipo === "ITEM" ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null)}
-          />
+          <div className="space-y-3">
+            {/* O comparado sintético (22/11/2026) não tem centros de custo: sem a Média de Referência no cenário, a aba fica sem o comparativo, com o aviso. */}
+            {centro.data.comparadoSemCentros ? (
+              <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                O cenário comparado, {centro.data.comparadoSemCentros.nome}, é sintético e não tem centros de custo, e este cenário não tem a Média de
+                Referência (Configurações / Referência): esta aba fica sem o comparativo.
+              </p>
+            ) : null}
+            <TabelaResultados
+              key={grupo ?? ""}
+              dados={centro.data}
+              titulo={grupo ?? ""}
+              visao={{ grupo: grupo! }}
+              nomeVisao={grupo ?? ""}
+              consultas={false}
+              doCenario
+              aoLadoDoTitulo={<InfoAgrupamento grupo={grupo ?? ""} centros={centro.data.centros} periodo="no cenário" />}
+              acaoDaLinha={(l) => (!l.volume && l.tipo === "ITEM" ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null)}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -252,7 +261,12 @@ export function CenarioResultadosContent() {
                 Adicionais na conta Encargos e Benefícios, como na DRE), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % e o R$/m³
                 sobre as bases do Consolidado do cenário. O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
                 que vai para Serviços (na DRE, nas contas da CSM ou da CSC). A lista traz só os grupos do recorte do seu perfil: todos, os dos seus
-                departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário.
+                departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário. Com um cenário comparado
+                analítico, o grupo traz também o comparativo, como nas unidades: o total do mesmo grupo no comparado (pelo nome; o % e o R$/m³ sobre
+                o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
+                coluna do comparado (Comparado Total, com o exercício dele) traz a Média de Referência de cada conta do grupo (a média do realizado
+                carregada em Configurações / Referência) × 12 — parado sobre o rótulo, a dica diz isso —, sem o % e o R$/m³ (a referência não tem as bases do Consolidado; a Eficiência fica com o traço). Sem a Média de
+                Referência no cenário, a aba fica sem o comparativo, com o aviso.
               </li>
             ) : null}
             {analitico ? null : (
