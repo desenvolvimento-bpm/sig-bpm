@@ -73,10 +73,15 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
     mutationFn: () => cenariosService.replicarMedias(id, acao),
     onSuccess: (r) => {
       invalidar(queryClient);
+      // Nada a mudar (22/11/2026): o servidor não grava, e a DRE não fica pendente.
       toast.success(
-        replicar
-          ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")}); a DRE fica pendente de recálculo (Resultados / Recalcular).`
-          : `Valores apagados em ${r.linhas} ${plural(r.linhas, "linha", "linhas")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`,
+        !r.linhas
+          ? replicar
+            ? "Nada a replicar: os meses já estavam iguais às Médias de Referência."
+            : "Nada a apagar: os meses já estavam em branco."
+          : replicar
+            ? `Médias replicadas em ${r.linhas} ${plural(r.linhas, "linha", "linhas")} (${r.valores} ${plural(r.valores, "valor", "valores")}); a DRE fica pendente de recálculo (Resultados / Recalcular).`
+            : `Valores apagados em ${r.linhas} ${plural(r.linhas, "linha", "linhas")}; a DRE fica pendente de recálculo (Resultados / Recalcular).`,
       );
       onFechar();
     },
@@ -92,6 +97,10 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
               {replicar ? (
                 <>
                   <li>A Média de Referência de cada linha vai para os doze meses, no lugar dos valores de hoje.</li>
+                  <li>
+                    Nos Centros de Custo, também as Remunerações CLT e PJ (MOD e MOI) dos grupos sem linhas no Quadro de Lotação; nos com linhas,
+                    elas continuam calculadas por ele.
+                  </li>
                   <li>As linhas sem Média de Referência ficam como estão.</li>
                 </>
               ) : (

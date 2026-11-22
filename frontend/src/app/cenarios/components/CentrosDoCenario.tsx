@@ -27,8 +27,9 @@ const reais = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 
  * indicadores), os Encargos e Benefícios (os percentuais e os Benefícios Adicionais) e as contas (mão de obra e gastos
  * gerais, por atribuição; a Encargos e Benefícios, calculada). O grupo com centros de baldes diferentes traz o aviso: o
  * valor vai pelo balde mais comum. Os colaboradores (Aprendizes, Estagiários, CLT e PJ), os Salários de cada um (12/11/2026)
- * e as Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (sem linhas do grupo lá, zero) e não se digitam (12/11/2026:
- * sem o aviso das linhas do grupo, pedido do Adão; a explicação fica no Como Usar). O destaque do grupo (16/11/2026, pedido do
+ * vêm sempre da aba Quadro de Lotação e não se digitam; as Remunerações CLT e PJ também, nos grupos com linhas lá (nos sem
+ * linhas, 22/11/2026, se digitam como as outras contas: o `calculada` do servidor decide). Sem o aviso das linhas do grupo
+ * (12/11/2026, pedido do Adão; a explicação fica no Como Usar). O destaque do grupo (16/11/2026, pedido do
  * Adão) fica acima da lista e da tabela, a partir da esquerda da lista, e a lista começa na altura dos rótulos da tabela; ao
  * rolar, a cópia dele flutua sobre a tabela.
  */

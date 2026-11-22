@@ -16,8 +16,8 @@ import { basesDosProjetos, ondeEstaoOsProjetos } from "./projetosCenario.js";
  *
  * - Matriz, Filial e Serviços: os valores por unidade (receitas, impostos, custos, kg) em meses sem volume, que não geram
  *   resultado; e o volume sem a Receita Bruta Média.
- * - Quadro de Lotação: os colaboradores sem salário, o salário sem colaboradores, a linha PJ sem aumento no ano e o salário por
- *   colaborador que cai sem mudar os colaboradores.
+ * - Quadro de Lotação: os colaboradores sem salário (uma por centro de custo, com as funções; 22/11/2026), o salário sem
+ *   colaboradores, a linha PJ sem aumento no ano e o salário por colaborador que cai sem mudar os colaboradores.
  * - Centros de Custo: os salários de um tipo de colaborador que não variam quando a quantidade varia (no grupo), o grupo com
  *   colaboradores no Quadro de Lotação e sem Remunerações ou sem Gastos Gerais (GGD, GGI ou GGC) no mês (mesmo dia, pedido do
  *   Adão) e os valores que o rateio do grupo não leva a nenhuma unidade (a chave sem base no mês, a conta sem destino).
@@ -251,6 +251,9 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
   const doCentro = grupoDosCentros(d.grupos);
   // A chave estável da linha: a unidade, o vínculo, a função e o centro (o id muda na revisão e na importação); repetidas, a ordem.
   const vistas = new Map<string, number>();
+  // Os colaboradores sem salário (22/11/2026, pedido do Adão): uma verificação por centro de custo, com as funções dele, e não
+  // uma por linha (função).
+  const semSalarioDo = new Map<string, Array<{ l: LinhaDoQuadroVerificada; id: string; meses: number[]; valores: number[][] }>>();
   for (const l of d.quadro) {
     const k0 = `${l.unidade}|${l.vinculo}|${l.funcao}|${l.centro}`;
     const n = (vistas.get(k0) ?? 0) + 1;
@@ -260,15 +263,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
     const base = { aba: "quadro" as const, grupo: doCentro.get(l.centroCustoId) ?? null, alvo: `${l.funcao} · ${VINCULO[l.vinculo]} · ${l.centro}`, venda: null, origem: { tipo: "QUADRO" as const, linhas: [l.id] } };
     const valores = meses.map((x) => [x.colaboradores, x.salario]);
     const semSalario = meses.filter((x) => x.colaboradores > 0 && !x.salario).map((x) => x.mes);
-    if (semSalario.length)
-      r.push({
-        ...base,
-        chave: `COLABORADORES_SEM_SALARIO|${id}`,
-        tipo: "COLABORADORES_SEM_SALARIO",
-        meses: semSalario,
-        descricao: `Com colaboradores e sem salário em ${nMeses(semSalario.length)} (${textoDosMeses(semSalario)}): as Remunerações e os Encargos do grupo não os contam.`,
-        assinatura: assinar([semSalario, valores]),
-      });
+    if (semSalario.length) semSalarioDo.set(l.centro, [...(semSalarioDo.get(l.centro) ?? []), { l, id, meses: semSalario, valores }]);
     const semColaboradores = meses.filter((x) => !x.colaboradores && x.salario > 0).map((x) => x.mes);
     if (semColaboradores.length)
       r.push({
@@ -301,6 +296,25 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         descricao: `O salário por colaborador cai, com os mesmos colaboradores, em ${textoDosMeses(caiEm)} (${caiEm.map((m) => `${moeda(meses[m - 2].salario)} → ${moeda(meses[m - 1].salario)}`).slice(0, 3).join("; ")}${caiEm.length > 3 ? "…" : ""}).`,
         assinatura: assinar([caiEm, valores]),
       });
+  }
+  // Uma por centro de custo: os meses em que alguma linha dele tem colaboradores sem salário, e as funções dessas linhas.
+  for (const [centro, linhasDoCentro] of semSalarioDo) {
+    const lista = [...linhasDoCentro].sort((a, b) => a.id.localeCompare(b.id, "pt-BR"));
+    const semSalario = [...new Set(lista.flatMap((x) => x.meses))].sort((a, b) => a - b);
+    const funcoes = [...new Set(lista.map((x) => `${x.l.funcao} (${VINCULO[x.l.vinculo]})`))];
+    const nomes = `${funcoes.slice(0, 4).join("; ")}${funcoes.length > 4 ? ` e mais ${funcoes.length - 4}` : ""}`;
+    r.push({
+      aba: "quadro",
+      grupo: doCentro.get(lista[0].l.centroCustoId) ?? null,
+      alvo: centro,
+      venda: null,
+      chave: `COLABORADORES_SEM_SALARIO|${centro}`,
+      tipo: "COLABORADORES_SEM_SALARIO",
+      meses: semSalario,
+      descricao: `Com colaboradores e sem salário em ${nMeses(semSalario.length)} (${textoDosMeses(semSalario)}), ${funcoes.length === 1 ? "na função" : `nas ${funcoes.length} funções`} ${nomes}: as Remunerações e os Encargos do grupo não os contam.`,
+      assinatura: assinar([semSalario, lista.map((x) => [x.id, x.valores])]),
+      origem: { tipo: "QUADRO", linhas: lista.map((x) => x.l.id) },
+    });
   }
   return r;
 }

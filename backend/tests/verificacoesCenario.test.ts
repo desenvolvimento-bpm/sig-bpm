@@ -82,6 +82,19 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
   it("no Quadro de Lotação: sem salário, salário sem colaboradores, PJ sem aumento e salário que cai", () => {
     const semSalario = linhaQL({ meses: doze((m) => ({ colaboradores: 1, salario: m < 3 ? 0 : 2000 })) });
     assert.deepEqual(verificar(dados({ quadro: [semSalario] })).find((v) => v.tipo === "COLABORADORES_SEM_SALARIO")?.meses, [1, 2]);
+    // Uma por centro de custo (22/11/2026), não por função: duas funções sem salário no mesmo centro, uma verificação só, com os
+    // meses das duas e as duas linhas na origem; outro centro, outra.
+    const outraFuncao = linhaQL({ id: "q2", funcao: "Ajudante", meses: doze((m) => ({ colaboradores: 1, salario: m === 5 ? 0 : 1800 })) });
+    const outroCentro = linhaQL({ id: "q3", centroCustoId: "c-OUTRO", centro: "1.02 - OUTRO", meses: doze((m) => ({ colaboradores: 1, salario: m === 9 ? 0 : 2500 })) });
+    const doCentro = verificar(dados({ quadro: [semSalario, outraFuncao, outroCentro] })).filter((v) => v.tipo === "COLABORADORES_SEM_SALARIO");
+    assert.equal(doCentro.length, 2);
+    const acabamento = doCentro.find((v) => v.alvo === "1.01 - ACABAMENTO")!;
+    assert.deepEqual(acabamento.meses, [1, 2, 5]);
+    assert.deepEqual(acabamento.origem, { tipo: "QUADRO", linhas: ["q2", "q1"] });
+    assert.equal(acabamento.grupo, "ACABAMENTO");
+    assert.match(acabamento.descricao, /nas 2 funções Ajudante \(CLT\); Operador \(CLT\)/);
+    assert.equal(acabamento.chave, "COLABORADORES_SEM_SALARIO|1.01 - ACABAMENTO");
+    assert.deepEqual(doCentro.find((v) => v.alvo === "1.02 - OUTRO")?.meses, [9]);
     const semColab = linhaQL({ meses: doze((m) => ({ colaboradores: m === 12 ? 0 : 1, salario: 2000 })) });
     assert.deepEqual(verificar(dados({ quadro: [semColab] })).find((v) => v.tipo === "SALARIO_SEM_COLABORADORES")?.meses, [12]);
     const pj = linhaQL({ vinculo: "PJ", meses: doze(() => ({ colaboradores: 1, salario: 9000 })) });

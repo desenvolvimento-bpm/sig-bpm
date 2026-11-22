@@ -162,8 +162,11 @@ export function PremissasContent() {
               todos vão para a mão de obra da atribuição do grupo (Direta, a MOD; Indireta ou sem atribuição, a MOI), com as Remunerações CLT = Salários
               dos Aprendizes + Salários dos Estagiários + Salários CLT e as Remunerações PJ = Salários PJ; a outra mão de obra fica sem remunerações
               daqui. Nos encargos, o Aprendiz tem o Fundo de Garantia: Aprendiz (2%), e o Estagiário não tem encargos (o salário dele sai da base). Os
-              colaboradores, os salários e as Remunerações CLT e PJ vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
+              colaboradores e os salários vêm sempre daqui, em todos os grupos (o grupo sem linhas fica com eles zerados): esta aba, alimentada pela Gestão de Colaboradores (o
               “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
+              As Remunerações CLT e PJ vêm daqui nos grupos com linhas; no grupo sem nenhuma linha aqui, elas são contas como as outras na aba
+              Centros de Custo: se digitam, se importam e o “Replicar Médias” (Configurações / Referência) leva a elas a Média de Referência, nas
+              contas da MOD e da MOI.
               Os Benefícios das linhas, somados pelos centros de cada grupo, são a linha Benefícios Padrão dos Encargos e Benefícios do grupo, na aba
               Centros de Custo.
             </li>
@@ -233,7 +236,8 @@ export function PremissasContent() {
               um centro seu); com Geral, todos veem todas. As abas com verificações
               pendentes (e a própria Verificações) mostram o sinal de alerta ao lado do nome. As verificações: nas abas Matriz, Filial e Serviços,
               Valores sem Volume (receitas, impostos, custos ou kg em meses sem volume — na Variação do Estoque, sem Volume de Estoque —, que não geram
-              resultado) e Volume sem Receita (volume sem a Receita Bruta Média); no Quadro de Lotação, Colaboradores sem Salário, Salário sem
+              resultado) e Volume sem Receita (volume sem a Receita Bruta Média); no Quadro de Lotação, Colaboradores sem Salário (uma por centro de
+              custo, com as funções das linhas dele com colaboradores e sem salário em algum mês), Salário sem
               Colaboradores, PJ sem Aumento no Ano (o salário da linha PJ não aumenta em nenhum mês com colaboradores) e Salário que Cai (o salário por
               colaborador cai de um mês para o outro com os mesmos colaboradores); nos Centros de Custo, Salários que Não Variam com os Colaboradores (a
               quantidade de um tipo muda e os salários do grupo não), Quadro de Lotação sem Remunerações e Quadro de Lotação sem Gastos Gerais (o grupo

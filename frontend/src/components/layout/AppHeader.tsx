@@ -9,7 +9,7 @@ import { podeSair } from "@/lib/alteracoesPendentes";
 import { useTema, type Tema } from "@/lib/tema";
 import { useAcessibilidade, type Acessibilidade } from "@/lib/acessibilidade";
 import { useZoom, ZOOMS } from "@/lib/zoom";
-import { Bell, Eye, GraduationCap, House, KeyRound, LogOut, Palette, ZoomIn } from "lucide-react";
+import { Bell, ChevronRight, Eye, GraduationCap, House, KeyRound, LogOut, Palette, Settings, ZoomIn } from "lucide-react";
 
 import {
   Avatar,
@@ -64,18 +64,31 @@ function getInitials(name: string) {
     .join("");
 }
 
-/** Os temas no menu do usuário: Padrão (o círculo dividido, preto | branco), Claro (branco) e Escuro (preto). */
+/** Os temas no menu do usuário: Padrão (o retângulo dividido, preto | branco), Claro (branco) e Escuro (preto). */
 const TEMAS: Array<{ tema: Tema; rotulo: string; fundo: string }> = [
   { tema: "padrao", rotulo: "Padrão", fundo: "bg-[linear-gradient(90deg,#111111_50%,#ffffff_50%)]" },
   { tema: "claro", rotulo: "Claro", fundo: "bg-[#ffffff]" },
   { tema: "escuro", rotulo: "Escuro", fundo: "bg-[#111111]" },
 ];
 
-/** A acessibilidade no menu do usuário (16/10/2026): Padrão (os destaques bons em verde) ou Daltonismo (em azul). */
-const ACESSIBILIDADES: Array<{ valor: Acessibilidade; rotulo: string; dica: string }> = [
-  { valor: "padrao", rotulo: "Padrão", dica: "Os destaques bons em verde" },
-  { valor: "daltonismo", rotulo: "Daltonismo", dica: "Os destaques bons em azul, no lugar do verde" },
+/**
+ * A acessibilidade no menu do usuário (16/10/2026): Padrão (os destaques bons em verde) ou Daltonismo (em azul). Desde 22/11/2026
+ * (pedido do Adão), cada opção mostra as cores dos destaques — vermelho, amarelo e verde, ou vermelho, amarelo e azul —, as dos
+ * sinais dos Painéis de Bordo.
+ */
+const ACESSIBILIDADES: Array<{ valor: Acessibilidade; rotulo: string; dica: string; cores: string[] }> = [
+  { valor: "padrao", rotulo: "Padrão", dica: "Padrão: os destaques bons em verde", cores: ["bg-red-600", "bg-yellow-500", "bg-green-600"] },
+  { valor: "daltonismo", rotulo: "Daltonismo", dica: "Daltonismo: os destaques bons em azul, no lugar do verde", cores: ["bg-red-600", "bg-yellow-500", "bg-blue-600"] },
 ];
+
+/**
+ * Uma linha de opções do menu do usuário (22/11/2026, pedido do Adão), da Tela Inicial ao Zoom: o ícone e o nome à esquerda e as
+ * opções à direita, todas com a mesma largura, a partir da metade da largura do menu.
+ */
+const LINHA_DE_OPCOES = "grid grid-cols-2 items-center px-1.5 py-1 text-sm";
+const ROTULO_DA_LINHA = "flex min-w-0 items-center gap-1.5 pr-2";
+/** Na lista da Tela Inicial (22/11/2026, pedido do Adão), a tela escolhida em amarelo e em negrito, também com o mouse em cima. */
+const escolhida = (sim: boolean) => (sim ? "bg-bpm-primary font-bold text-black focus:bg-bpm-primary focus:text-black focus:**:text-black" : undefined);
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -153,25 +166,28 @@ export function AppHeader() {
         <UsuariosOnline />
         {/* O sino das novidades ainda não vistas (24/10/2026), ao lado do nome. */}
         <SinoDasNovidades novas={novidades.novas} onAbrir={abrirNovidades} />
+        {/* As iniciais ficam fora do botão (22/11/2026, pedido do Adão): o menu abre no nome e na engrenagem à direita dele. */}
+        <Avatar size="sm">
+          <AvatarFallback className="bg-bpm-primary text-xs font-semibold text-black">
+            {getInitials(user?.nome ?? "U")}
+          </AvatarFallback>
+        </Avatar>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button
                 variant="ghost"
-                className="h-9 gap-2 px-2"
+                className="-ml-1 h-9 gap-1.5 px-2"
                 aria-label="Menu do usuário"
+                title="Menu do usuário"
                 data-tour="menu-do-usuario"
               />
             }
           >
-            <Avatar size="sm">
-              <AvatarFallback className="bg-bpm-primary text-xs font-semibold text-black">
-                {getInitials(user?.nome ?? "U")}
-              </AvatarFallback>
-            </Avatar>
             <span className="hidden max-w-[140px] truncate text-sm font-medium md:inline">
               {user?.nome ?? "Usuário"}
             </span>
+            <Settings className="size-4 shrink-0" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuGroup>
@@ -189,10 +205,19 @@ export function AppHeader() {
               perfil alcança (por grupo, como no menu lateral); Padrão, o início de sempre.
             */}
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-1.5">
-                <House className="size-4 shrink-0" />
-                Tela Inicial
-                <span className="ml-auto max-w-32 truncate pl-2 text-xs text-muted-foreground">{telaInicial ?? "Padrão"}</span>
+              {/*
+                O nome da tela escolhida (22/11/2026, pedido do Adão), abreviado se não couber (inteiro na dica), num retângulo que abre a
+                lista das telas, no lugar da seta do submenu.
+              */}
+              <DropdownMenuSubTrigger className={`${LINHA_DE_OPCOES} gap-0 [&>svg:last-child]:hidden`} title={`Tela Inicial: ${telaInicial ?? "Padrão"}`}>
+                <span className={ROTULO_DA_LINHA}>
+                  <House className="size-4 shrink-0" />
+                  Tela Inicial
+                </span>
+                <span className="flex h-6 w-full min-w-0 items-center justify-end gap-0.5 rounded-sm border border-gray-300 pr-1 pl-1.5 text-xs text-gray-700">
+                  <span className="min-w-0 truncate">{telaInicial ?? "Padrão"}</span>
+                  <ChevronRight className="size-3.5" />
+                </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-[70vh] w-64 overflow-y-auto">
                 <DropdownMenuRadioGroup
@@ -204,12 +229,18 @@ export function AppHeader() {
                     setTelaInicial(escolhido);
                   }}
                 >
-                  <DropdownMenuRadioItem value="">Padrão</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="" className={escolhida(telaInicial === null)}>
+                    Padrão
+                  </DropdownMenuRadioItem>
                   {processos.map((g) => (
                     <DropdownMenuGroup key={g.grupo}>
-                      <DropdownMenuLabel className="text-xs text-gray-500">{g.grupo}</DropdownMenuLabel>
+                      {/* O grupo com o destaque amarelo à esquerda, em negrito e caixa alta, como no menu lateral (22/11/2026). */}
+                      <DropdownMenuLabel className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase">
+                        <span aria-hidden className="h-3 w-1 shrink-0 bg-bpm-primary" />
+                        {g.grupo}
+                      </DropdownMenuLabel>
                       {g.processos.map((p) => (
-                        <DropdownMenuRadioItem key={p.titulo} value={p.titulo}>
+                        <DropdownMenuRadioItem key={p.titulo} value={p.titulo} className={escolhida(telaInicial === p.titulo)}>
                           {p.titulo}
                         </DropdownMenuRadioItem>
                       ))}
@@ -218,14 +249,14 @@ export function AppHeader() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            {/* O tema (13/10/2026): três círculos — Padrão (preto | branco), Claro (branco) e Escuro (preto). */}
-            <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-sm">
+            {/* O tema (13/10/2026; 22/11/2026, retângulos no lugar dos círculos): Padrão (preto | branco), Claro (branco) e Escuro (preto). */}
+            <div className={LINHA_DE_OPCOES}>
               {/* O ícone antes de Tema, como os dos demais itens do menu (13/10/2026). */}
-              <span className="flex items-center gap-1.5">
+              <span className={ROTULO_DA_LINHA}>
                 <Palette className="size-4 shrink-0" />
                 Tema
               </span>
-              <span className="flex items-center gap-2" role="radiogroup" aria-label="Tema">
+              <span className="flex w-full items-center gap-1.5" role="radiogroup" aria-label="Tema">
                 {TEMAS.map((t) => (
                   <button
                     key={t.tema}
@@ -235,7 +266,7 @@ export function AppHeader() {
                     aria-label={t.rotulo}
                     title={t.rotulo}
                     onClick={() => escolherTema(t.tema)}
-                    className={`size-5 rounded-full border border-gray-400 outline-none focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-gray-400 ${t.fundo} ${tema === t.tema ? "ring-2 ring-bpm-primary ring-offset-1 ring-offset-[var(--popover)]" : "hover:ring-1 hover:ring-gray-400"}`}
+                    className={`h-6 flex-1 rounded-sm border border-gray-400 outline-none focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-gray-400 ${t.fundo} ${tema === t.tema ? "ring-2 ring-bpm-primary ring-offset-1 ring-offset-[var(--popover)]" : "hover:ring-1 hover:ring-gray-400"}`}
                   />
                 ))}
               </span>
@@ -244,23 +275,27 @@ export function AppHeader() {
               A Acessibilidade (16/10/2026; antes, a lista Cores do Configurar Gráficos dos painéis), logo abaixo do Tema: com
               Daltonismo, os destaques bons dos Painéis de Bordo e dos Relatórios Executivos ficam azuis no lugar do verde.
             */}
-            <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-sm">
-              <span className="flex items-center gap-1.5">
+            <div className={LINHA_DE_OPCOES}>
+              <span className={ROTULO_DA_LINHA}>
                 <Eye className="size-4 shrink-0" />
                 Acessibilidade
               </span>
-              <span className="flex overflow-hidden rounded-sm border border-gray-300" role="radiogroup" aria-label="Acessibilidade">
+              {/* Cada opção com as cores dos destaques (22/11/2026, pedido do Adão), marcada como no Tema. */}
+              <span className="flex w-full items-center gap-1.5" role="radiogroup" aria-label="Acessibilidade">
                 {ACESSIBILIDADES.map((a) => (
                   <button
                     key={a.valor}
                     type="button"
                     role="radio"
                     aria-checked={acessibilidade === a.valor}
+                    aria-label={a.rotulo}
                     title={a.dica}
                     onClick={() => escolherAcessibilidade(a.valor)}
-                    className={`px-1.5 py-0.5 text-xs outline-none focus-visible:bg-gray-100 ${acessibilidade === a.valor ? "bg-bpm-primary font-bold text-black" : "text-gray-700 hover:bg-gray-100"}`}
+                    className={`flex h-6 flex-1 items-center justify-center gap-1 rounded-sm border border-gray-300 outline-none focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-gray-400 ${acessibilidade === a.valor ? "ring-2 ring-bpm-primary ring-offset-1 ring-offset-[var(--popover)]" : "hover:ring-1 hover:ring-gray-400"}`}
                   >
-                    {a.rotulo}
+                    {a.cores.map((cor) => (
+                      <span key={cor} className={`size-3 rounded-[2px] ${cor}`} />
+                    ))}
                   </button>
                 ))}
               </span>
@@ -269,23 +304,25 @@ export function AppHeader() {
               O Zoom (18/11/2026, pedido do Adão), logo abaixo da Acessibilidade: o tamanho das telas — Menor (85%), Padrão (100%) ou
               Máximo (125%), guardado neste navegador (lib/zoom.ts).
             */}
-            <div className="flex items-center justify-between gap-2 px-1.5 py-1 text-sm">
-              <span className="flex items-center gap-1.5">
+            <div className={LINHA_DE_OPCOES}>
+              <span className={ROTULO_DA_LINHA}>
                 <ZoomIn className="size-4 shrink-0" />
                 Zoom
               </span>
-              <span className="flex overflow-hidden rounded-sm border border-gray-300" role="radiogroup" aria-label="Zoom">
+              {/* A↓, A e A↑ no lugar de Menor, Padrão e Máximo (22/11/2026, pedido do Adão; os nomes ficam na dica). */}
+              <span className="flex h-6 w-full overflow-hidden rounded-sm border border-gray-300" role="radiogroup" aria-label="Zoom">
                 {ZOOMS.map((z) => (
                   <button
                     key={z.valor}
                     type="button"
                     role="radio"
                     aria-checked={zoom === z.valor}
+                    aria-label={z.rotulo}
                     title={z.dica}
                     onClick={() => escolherZoom(z.valor)}
-                    className={`px-1.5 py-0.5 text-xs outline-none focus-visible:bg-gray-100 ${zoom === z.valor ? "bg-bpm-primary font-bold text-black" : "text-gray-700 hover:bg-gray-100"}`}
+                    className={`flex-1 text-xs outline-none focus-visible:bg-gray-100 ${zoom === z.valor ? "bg-bpm-primary font-bold text-black" : "text-gray-700 hover:bg-gray-100"}`}
                   >
-                    {z.rotulo}
+                    {z.icone}
                   </button>
                 ))}
               </span>

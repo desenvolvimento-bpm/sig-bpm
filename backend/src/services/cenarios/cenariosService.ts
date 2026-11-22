@@ -785,6 +785,16 @@ const contaDaPremissa = (chave: string) => (/^(RB|CUSTO):/.test(chave) ? (chave.
 /** A aba da permissão (cenarios_analiticos_premissas.<aba>) de cada aba das premissas. */
 export const ABA_DA_PERMISSAO: Record<AbaDasPremissas, string> = { "1": "matriz", "2": "filial", "3": "servicos", quadro: "quadro", centros: "centros", investimentos: "investimentos", extra: "extra", manuais: "manuais" };
 const iguais = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a)));
+/**
+ * O valor de uma linha da planilha como `aplicarMudancas` o grava e a tela o lê de volta (22/11/2026): as premissas (P, E, B e X)
+ * com 6 casas, os centros (C) com 4 — o zero apaga, e o mês fica em branco — e os indicadores (I) com 8.
+ */
+function comoGravado(chave: string, valor: number): number | null {
+  const tipo = chave.split("|")[0];
+  const casas = tipo === "C" ? 4 : tipo === "I" ? 8 : 6;
+  const v = Number(valor.toFixed(casas));
+  return tipo === "C" && v === 0 ? null : v;
+}
 const MESES_1_A_12 = Array.from({ length: 12 }, (_, k) => k + 1);
 
 /**
@@ -1193,11 +1203,12 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
       });
     }
     const maos = new Map(maosDoGrupo.map((m) => [m.encargos, m]));
-    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação (09/11/2026, nos grupos com linhas; 11/11/2026, pedido do Adão, em
-    // todos): calculadas — desde 12/11/2026, na mão de obra principal, a soma das linhas dos Salários (CLT: Aprendizes,
-    // Estagiários e CLT; PJ: PJ); na outra, zero.
+    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação nos grupos com linhas lá: calculadas — desde 12/11/2026, na mão de
+    // obra principal, a soma das linhas dos Salários (CLT: Aprendizes, Estagiários e CLT; PJ: PJ); na outra, zero. Nos grupos sem
+    // linhas (22/11/2026, pedido do Adão; de 11/11 a 22/11/2026, zero), são contas como as outras: se digitam, se importam e o
+    // Replicar Médias as preenche.
     const remuneracaoDa = new Map(
-      maosDoGrupo.flatMap((m) => [
+      (q ? maosDoGrupo : []).flatMap((m) => [
         [m.remuneracoes, (ref: (chave: string) => string) => (m.principal ? (["aprendizes", "estagiarios", "clt"] as const).map((t) => salario(ref, t)).join("+") : "0")],
         [m.remuneracoesPJ, (ref: (chave: string) => string) => (m.principal ? salario(ref, "pj") : "0")],
       ]),
@@ -2817,8 +2828,8 @@ export const cenariosService = {
     // Os Benefícios Padrão do grupo (21/11/2026): a soma dos Benefícios das linhas dele no Quadro de Lotação.
     const beneficiosPadrao = (mes: number) => (mes >= 1 ? (q?.beneficios[mes - 1] ?? 0) : 0);
     const maos = maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao);
-    // As Remunerações vêm da aba Quadro de Lotação em todos os grupos (11/11/2026, pedido do Adão; antes, só nos com linhas).
-    const doQuadro = new Set(maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
+    // As Remunerações vêm da aba Quadro de Lotação nos grupos com linhas lá; nos sem linhas (22/11/2026, pedido do Adão), se digitam.
+    const doQuadro = new Set(q ? maos.flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]) : []);
     const porLinha = new Map(gravados.map((x) => [`${x.linhaDREId}|${x.mes}`, Number(x.valor)]));
     const prem = new Map(premissas.map((x) => [`${x.venda}|${x.mes}`, Number(x.valor)]));
     const totais = est.filter((l) => l.tipo !== "ITEM");
@@ -2913,9 +2924,10 @@ export const cenariosService = {
     };
     const fora = [...new Set(alteracoes.filter((a) => !premissa(a.linha) && (!contas.has(a.linha) || ehContaDeEncargos(a.linha))).map((a) => a.linha))];
     if (fora.length) throw new CenarioError(400, `Não são linhas que se digitam no grupo ${grupo}: ${fora.slice(0, 3).join(", ")}.`);
-    // As Remunerações CLT e PJ vêm sempre da aba Quadro de Lotação (11/11/2026, pedido do Adão; antes, só nos grupos com
-    // linhas lá) e não se digitam; os colaboradores, nos grupos com linhas (09/11/2026).
-    const remuneracoes = new Set(maosDeObraDoGrupo([...contas.keys()], g.atribuicao).flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]));
+    // As Remunerações CLT e PJ vêm da aba Quadro de Lotação nos grupos com linhas lá e não se digitam; nos grupos sem linhas
+    // (22/11/2026, pedido do Adão), se digitam como as outras contas.
+    const comQuadro = alteracoes.length ? quadroDosGrupos(await linhasDoQuadro(prisma, id), [g]).has(grupo) : false;
+    const remuneracoes = new Set(comQuadro ? maosDeObraDoGrupo([...contas.keys()], g.atribuicao).flatMap((m) => [m.remuneracoes, m.remuneracoesPJ]) : []);
     if (alteracoes.some((a) => remuneracoes.has(a.linha)))
       throw new CenarioError(400, `As Remunerações CLT e PJ vêm da aba Quadro de Lotação e não se digitam: inclua ou edite as linhas do grupo ${grupo} naquela aba.`);
     // Os colaboradores também (12/11/2026, pedido do Adão: a Gestão de Colaboradores, pela aba Quadro de Lotação, é a única
@@ -3673,13 +3685,16 @@ export const cenariosService = {
     const recorte = recorteDoCenario(c, usuario);
     const gruposDoMedias = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
     const linhas = (await linhasDaPlanilha(c)).filter((l) => !l.calculada && veLinha(recorte, l, gruposDoMedias));
-    const mudancas: MudancaDaPlanilha[] = linhas.flatMap((l) =>
-      acao === "replicar"
-        ? l.media === null
-          ? []
-          : MESES_1_A_12.filter((m) => !iguais(l.meses[m - 1], l.media)).map((mes) => ({ chave: l.chave, mes, valor: l.media }))
-        : MESES_1_A_12.filter((m) => l.meses[m - 1] !== null).map((mes) => ({ chave: l.chave, mes, valor: null })),
-    );
+    // A média como ela fica gravada (22/11/2026): os meses já iguais a ela não mudam — sem isso, a média com mais casas que as
+    // gravadas (os padrões de Férias, 1/9, e do 13º, 1/12) contava como alteração a cada Replicar Médias.
+    const mudancas: MudancaDaPlanilha[] = linhas.flatMap((l) => {
+      if (acao === "apagar") return MESES_1_A_12.filter((m) => l.meses[m - 1] !== null).map((mes) => ({ chave: l.chave, mes, valor: null }));
+      if (l.media === null) return [];
+      const gravada = comoGravado(l.chave, l.media);
+      return MESES_1_A_12.filter((m) => !iguais(l.meses[m - 1], gravada)).map((mes) => ({ chave: l.chave, mes, valor: l.media }));
+    });
+    // Nada a mudar (22/11/2026): sem gravação, sem a pendência de recálculo e sem a entrada no Histórico.
+    if (!mudancas.length) return { linhas: 0, valores: 0 };
     const prisma = getPrismaClient();
     const est = await estruturaDRE();
     await prisma.$transaction(

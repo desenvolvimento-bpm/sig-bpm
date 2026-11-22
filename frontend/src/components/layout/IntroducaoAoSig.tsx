@@ -76,7 +76,9 @@ const ETAPAS: Etapa[] = [
     alvo: '[data-tour="menu-do-usuario"]',
     texto: (
       <p>
-        O seu nome e o seu perfil, a Tela Inicial (o processo que o SIG abre ao entrar), o Tema (Padrão, Claro ou Escuro), a Acessibilidade (Daltonismo), as Novidades (as
+        Abre no seu nome ou na engrenagem ao lado dele: o seu nome e o seu perfil, a Tela Inicial (o processo que o SIG abre ao entrar: o nome dele, no retângulo, abre a lista), o Tema (Padrão,
+        Claro ou Escuro), a Acessibilidade (as cores dos destaques: vermelho, amarelo e verde, ou, no Daltonismo, azul no lugar do verde), o Zoom (A↓
+        menor, A padrão e A↑ maior), as Novidades (as
         atualizações do SIG nas telas que você acessa, por dia, processo e tela; com alguma ainda não vista, um sino balança
         ao lado do nome), Trocar Senha, Sair e esta Introdução ao SIG, para revê-la quando quiser. Para o Administrador, ao
         lado do nome, quantos usuários estão online (os nomes aparecem ao parar o mouse em cima).

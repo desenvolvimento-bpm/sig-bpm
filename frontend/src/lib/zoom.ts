@@ -12,10 +12,11 @@ import { CHAVE_ZOOM } from "./temaScript";
  */
 export type Zoom = "85" | "100" | "125";
 
-export const ZOOMS: Array<{ valor: Zoom; rotulo: string; dica: string }> = [
-  { valor: "85", rotulo: "Menor", dica: "85% do tamanho padrão" },
-  { valor: "100", rotulo: "Padrão", dica: "O tamanho padrão (100%)" },
-  { valor: "125", rotulo: "Máximo", dica: "125% do tamanho padrão" },
+/** `icone` (22/11/2026, pedido do Adão): o que o menu do usuário mostra no lugar do rótulo (A↓, A e A↑). */
+export const ZOOMS: Array<{ valor: Zoom; rotulo: string; icone: string; dica: string }> = [
+  { valor: "85", rotulo: "Menor", icone: "A↓", dica: "Menor: 85% do tamanho padrão" },
+  { valor: "100", rotulo: "Padrão", icone: "A", dica: "Padrão: o tamanho padrão (100%)" },
+  { valor: "125", rotulo: "Máximo", icone: "A↑", dica: "Máximo: 125% do tamanho padrão" },
 ];
 
 const ouvintes = new Set<() => void>();

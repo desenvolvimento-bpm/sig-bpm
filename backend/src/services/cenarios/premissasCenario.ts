@@ -448,11 +448,11 @@ async function materializarEncargos(
 /**
  * O Quadro de Lotação do cenário (09/11/2026, quadroDoCenario.ts): nos grupos com linhas, grava os Colaboradores
  * Aprendizes, Estagiários (11/11/2026), CLT e PJ (as premissas VENDAS_LOTACAO), e nos sem linhas, nenhum (12/11/2026: a aba,
- * alimentada pela Gestão de Colaboradores, é a única fonte da contagem); em todos os grupos (11/11/2026, pedido do
- * Adão: as Remunerações sempre vêm do Quadro de Lotação e não se digitam; antes, só nos grupos com linhas), as Remunerações
- * CLT e PJ dos meses 1 a 12 — na mão de obra principal do grupo (12/11/2026: a CLT, os Salários dos Aprendizes, dos
- * Estagiários e CLT; a PJ, os Salários PJ); na outra e sem linhas, zero —, no lugar do que havia (a Média de Referência, o
- * mês 0, fica). Devolve os valores dos meses dos centros com elas.
+ * alimentada pela Gestão de Colaboradores, é a única fonte da contagem); nos grupos com linhas, as Remunerações CLT e PJ dos
+ * meses 1 a 12 — na mão de obra principal do grupo (12/11/2026: a CLT, os Salários dos Aprendizes, dos Estagiários e CLT; a
+ * PJ, os Salários PJ); na outra, zero —, no lugar do que havia (a Média de Referência, o mês 0, fica). Nos grupos sem linhas
+ * (22/11/2026, pedido do Adão; de 11/11 a 22/11/2026, zero), as Remunerações ficam as gravadas, como as outras contas (o
+ * Replicar Médias as preenche). Devolve os valores dos meses dos centros com elas.
  */
 async function materializarQuadro(
   tx: Tx,
@@ -479,10 +479,13 @@ async function materializarQuadro(
       ] as const)
         lista.forEach((v, k) => (v ? premissas.push({ cenarioId, unidade: 0, venda, chave: g.grupo, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(6)) }) : undefined));
     const doGrupo = new Set<string>();
+    // Sem linhas no Quadro de Lotação (22/11/2026, pedido do Adão), as Remunerações do grupo ficam como as outras contas: as
+    // gravadas (a referência, o Replicar Médias, a importação ou a tela), sem o zero do quadro.
+    if (!q) continue;
     for (const mo of maosDeObraDoGrupo(contasDoGrupo(est, g).map((l) => l.codigo), g.atribuicao)) {
       // Só a mão de obra principal recebe as remunerações do quadro (12/11/2026, pedido do Adão: não faz sentido prever MOI num
       // centro de custo que é MOD); a outra fica com zero.
-      const s = mo.principal ? q?.salarios : undefined;
+      const s = mo.principal ? q.salarios : undefined;
       for (const [codigo, clt] of [[mo.remuneracoes, true], [mo.remuneracoesPJ, false]] as const) {
         if (!idDaConta.has(codigo)) continue;
         doGrupo.add(codigo);

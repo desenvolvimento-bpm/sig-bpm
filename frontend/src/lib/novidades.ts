@@ -28,6 +28,33 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 22/11/2026, à tarde: o menu do usuário.
+  {
+    publicada: "2026-11-22T14:23",
+    processo: TODO_O_SIG,
+    itens: [
+      "No menu do usuário: ele abre no seu nome e na engrenagem ao lado dele; a Tela Inicial mostra o nome da tela escolhida num retângulo que abre a lista (a escolhida em amarelo e negrito, e os grupos com o destaque amarelo, como no menu lateral); o Tema em retângulos; a Acessibilidade com as cores dos destaques (vermelho, amarelo e verde, ou, no Daltonismo, azul no lugar do verde); e o Zoom com A↓, A e A↑. As opções têm todas a mesma largura, a partir da metade do menu.",
+    ],
+  },
+  // 22/11/2026, à tarde: as Remunerações dos grupos sem linhas no Quadro de Lotação e o Replicar Médias.
+  {
+    publicada: "2026-11-22T14:23",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Em Referência, o “Replicar Médias” leva a Média de Referência também às Remunerações CLT e PJ (as contas da MOD e da MOI) dos grupos de centros sem linhas no Quadro de Lotação; nesses grupos, elas se digitam e se importam na aba Centros de Custo das Premissas, como as outras contas (nos grupos com linhas, continuam calculadas pelo Quadro de Lotação).",
+      "O “Replicar Médias” só conta e grava os meses que mudam: rodado de novo, sem nada a mudar, ele avisa “Nada a replicar” e não deixa a DRE pendente de recálculo nem entra no Histórico.",
+    ],
+  },
+  // 22/11/2026, à tarde: a verificação Colaboradores sem Salário por centro de custo.
+  {
+    publicada: "2026-11-22T14:23",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: ["Na aba Verificações, Colaboradores sem Salário vem uma vez por centro de custo (com as funções dele no texto), e não uma por função."],
+  },
   // 22/11/2026: o comparativo na aba Centros de Custo dos Resultados dos analíticos.
   {
     publicada: "2026-11-22T11:23",
