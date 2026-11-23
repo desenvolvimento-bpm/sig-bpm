@@ -105,10 +105,14 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     assert.match(salarioSemColab.descricao, /^Função Operador \(CLT\): com salário e sem colaboradores/);
     const pj = linhaQL({ vinculo: "PJ", meses: doze(() => ({ colaboradores: 1, salario: 9000 })) });
     assert.ok(tipos(dados({ quadro: [pj] })).includes("PJ_SEM_AUMENTO"));
+    // Sem os valores das remunerações nos textos (23/11/2026, pedido do Adão): só a função.
+    assert.equal(verificar(dados({ quadro: [pj] })).find((v) => v.tipo === "PJ_SEM_AUMENTO")?.descricao, "Função Operador (PJ): o salário não aumenta em nenhum dos 12 meses com colaboradores (Jan a Dez).");
     const pjComAumento = linhaQL({ vinculo: "PJ", meses: doze((m) => ({ colaboradores: 1, salario: m < 5 ? 9000 : 9500 })) });
     assert.ok(!tipos(dados({ quadro: [pjComAumento] })).includes("PJ_SEM_AUMENTO"));
     const cai = linhaQL({ meses: doze((m) => ({ colaboradores: 1, salario: m === 3 ? 5000 : 3000 })) });
-    assert.deepEqual(verificar(dados({ quadro: [cai] })).find((v) => v.tipo === "SALARIO_QUE_CAI")?.meses, [4]);
+    const queCai = verificar(dados({ quadro: [cai] })).find((v) => v.tipo === "SALARIO_QUE_CAI")!;
+    assert.deepEqual(queCai.meses, [4]);
+    assert.ok(!queCai.descricao.includes("R$"));
   });
 
   it("nos Centros de Custo: salários que não variam, Quadro sem Remunerações ou sem Gastos Gerais", () => {
@@ -117,6 +121,7 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     const vs = verificar(dados({ quadro }));
     assert.deepEqual(vs.find((v) => v.tipo === "SALARIOS_SEM_VARIACAO")?.meses, [6]);
     assert.equal(vs.find((v) => v.tipo === "SALARIOS_SEM_VARIACAO")?.alvo, "ACABAMENTO");
+    assert.match(vs.find((v) => v.tipo === "SALARIOS_SEM_VARIACAO")!.descricao, /\(2 → 3 colab\.\)/);
     // Os Gastos Gerais do grupo só em parte do ano.
     const centros = [1, 2, 3].map((mes) => ({ grupo: "ACABAMENTO", codigo: "CPP.GGD.ENERGIA", mes, valor: 100 }));
     assert.deepEqual(verificar(dados({ quadro, centros })).find((v) => v.tipo === "QUADRO_SEM_GASTOS_GERAIS")?.meses, [4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -139,7 +144,10 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     assert.match(fora.descricao, /Metalurgia não tem base/);
     // Só o nome do centro na coluna (22/11/2026); a conta no começo do texto.
     assert.equal(fora.alvo, "METALURGIA");
-    assert.match(fora.descricao, /^Remunerações CLT: /);
+    assert.match(fora.descricao, /^Remunerações CLT: os valores de 1 mês \(Jan\) não chegam à DRE/);
+    // Numa conta de gastos gerais (não de mão de obra), o valor continua no texto.
+    const foraGastos = verificar(dados({ grupos, centros: [{ grupo: "METALURGIA", codigo: "CPP.GGD.ENERGIA", mes: 1, valor: 500 }] })).find((v) => v.tipo === "VALORES_FORA_DA_DRE")!;
+    assert.match(foraGastos.descricao, /^Energia: R\$\s?500,00 em 1 mês/);
     // Com base no mês (a Matriz), o valor chega à DRE.
     const percentuais = Array.from({ length: 12 }, () => new Map([["METALURGIA|MATRIZ", 1]]));
     assert.ok(!tipos(dados({ grupos, centros, percentuais })).includes("VALORES_FORA_DA_DRE"));

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { getPrismaClient } from "../../config/prisma.js";
 import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
 import { estrutura as estruturaDRE } from "../dre/dreService.js";
+import { linhaSensivel } from "../acesso/recorteDepartamento.js";
 import { percentuaisPelasRegras } from "../volumes/vigenciaDosRateios.js";
 import { regrasDoCenario } from "./regrasDoCenario.js";
 import { alocarCentros, gruposDoCenario, type GrupoDoCenario, type Percentuais } from "./centrosCenario.js";
@@ -298,7 +299,8 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         chave: `PJ_SEM_AUMENTO|${id}`,
         tipo: "PJ_SEM_AUMENTO",
         meses: ativos.map((x) => x.mes),
-        descricao: `${naFuncao}o salário (${moeda(ativos[0].salario)}) não aumenta em nenhum dos ${nMeses(ativos.length)} com colaboradores (${textoDosMeses(ativos.map((x) => x.mes))}).`,
+        // Sem os valores das remunerações (23/11/2026, pedido do Adão): só a função.
+        descricao: `${naFuncao}o salário não aumenta em nenhum dos ${nMeses(ativos.length)} com colaboradores (${textoDosMeses(ativos.map((x) => x.mes))}).`,
         assinatura: assinar([valores]),
       });
     // O salário por colaborador que cai de um mês para o outro, com os mesmos colaboradores.
@@ -309,7 +311,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         chave: `SALARIO_QUE_CAI|${id}`,
         tipo: "SALARIO_QUE_CAI",
         meses: caiEm,
-        descricao: `${naFuncao}o salário por colaborador cai, com os mesmos colaboradores, em ${textoDosMeses(caiEm)} (${caiEm.map((m) => `${moeda(meses[m - 2].salario)} → ${moeda(meses[m - 1].salario)}`).slice(0, 3).join("; ")}${caiEm.length > 3 ? "…" : ""}).`,
+        descricao: `${naFuncao}o salário por colaborador cai, com os mesmos colaboradores, em ${textoDosMeses(caiEm)}.`,
         assinatura: assinar([caiEm, valores]),
       });
   }
@@ -412,7 +414,8 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
         alvo: g.grupo,
         venda: null,
         meses,
-        descricao: `Os colaboradores ${TIPO_NO_GRUPO[vinculo]} mudam e os salários deles não, em ${textoDosMeses(meses)} (${meses.slice(0, 3).map((m) => `${colab[m - 2].toLocaleString("pt-BR")} → ${colab[m - 1].toLocaleString("pt-BR")} colab., ${moeda(salarios[m - 1])}`).join("; ")}${meses.length > 3 ? "…" : ""}): confira as linhas do grupo no Quadro de Lotação.`,
+        // Os colaboradores de cada mês, sem o valor dos salários (23/11/2026, pedido do Adão).
+        descricao: `Os colaboradores ${TIPO_NO_GRUPO[vinculo]} mudam e os salários deles não, em ${textoDosMeses(meses)} (${meses.slice(0, 3).map((m) => `${colab[m - 2].toLocaleString("pt-BR")} → ${colab[m - 1].toLocaleString("pt-BR")} colab.`).join("; ")}${meses.length > 3 ? "…" : ""}): confira as linhas do grupo no Quadro de Lotação.`,
         assinatura: assinar([meses, colab, salarios.map((s) => Math.round(s * 100))]),
         origem: { tipo: "QUADRO", linhas: doTipo.map((l) => l.id) },
       });
@@ -427,6 +430,8 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
     porGrupoEConta.set(k, [...(porGrupoEConta.get(k) ?? []), x]);
   }
   const descricao = new Map(d.est.map((l) => [l.codigo, l.descricao]));
+  // As contas de mão de obra (Mão de Obra Direta e Indireta, as sensíveis): sem o valor no texto (23/11/2026, pedido do Adão).
+  const deMaoDeObra = new Set(d.est.filter((l) => linhaSensivel(l)).map((l) => l.codigo));
   for (const [k, valores] of porGrupoEConta) {
     const [grupo, codigo] = [k.slice(0, k.lastIndexOf("|")), k.slice(k.lastIndexOf("|") + 1)];
     const g = porGrupo.get(grupo)!;
@@ -450,7 +455,9 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
       alvo: grupo,
       venda: null,
       meses,
-      descricao: `${descricao.get(codigo) ?? codigo}: ${moeda(total)} em ${nMeses(meses.length)} (${textoDosMeses(meses)}) não chegam à DRE: ${motivo}.`,
+      descricao: deMaoDeObra.has(codigo)
+        ? `${descricao.get(codigo) ?? codigo}: os valores de ${nMeses(meses.length)} (${textoDosMeses(meses)}) não chegam à DRE: ${motivo}.`
+        : `${descricao.get(codigo) ?? codigo}: ${moeda(total)} em ${nMeses(meses.length)} (${textoDosMeses(meses)}) não chegam à DRE: ${motivo}.`,
       assinatura: assinar([meses, meses.map((m) => Math.round(fora[m - 1] * 100))]),
       origem: { tipo: "CENTROS", grupo, contas: [codigo] },
     });

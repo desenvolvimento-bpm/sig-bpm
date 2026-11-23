@@ -247,7 +247,8 @@ export function PremissasContent() {
               quantidade de um tipo muda e os salários do grupo não), Quadro de Lotação sem Remunerações e Quadro de Lotação sem Gastos Gerais (o grupo
               com colaboradores e sem salários, ou sem valores nos gastos gerais diretos, indiretos ou comerciais, no mês), Valores Fora da DRE (o
               rateio do grupo não leva o valor a nenhuma unidade: a chave sem base no mês, a conta sem destino) e Mão de Obra das Médias (o grupo
-              com as Remunerações e os Encargos do Replicar Médias, sem o Quadro de Lotação: some quando o Quadro de Lotação do grupo muda). Cada uma pede a correção dos valores
+              com as Remunerações e os Encargos do Replicar Médias, sem o Quadro de Lotação: some quando o Quadro de Lotação do grupo muda). Os textos não
+              trazem os valores das remunerações: nas do Quadro de Lotação, só a função; em Valores Fora da DRE, nas contas de mão de obra, só os meses. Cada uma pede a correção dos valores
               (ela some da lista) ou o De Acordo: marque a caixa das verificações (ou use “Marcar Todas” / “Desmarcar Todas”, que valem para a tabela
               com os filtros) e clique em “De Acordo”; “Retirar Acordo” desfaz. Só o responsável por cada uma (ou o Administrador) a marca; nas
               outras, a caixa fica em cinza. O De Acordo vale enquanto os valores não mudam: mudou, a verificação volta a Pendente, com o aviso. Com

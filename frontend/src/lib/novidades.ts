@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 23/11/2026, à tarde: as Verificações sem os valores das remunerações.
+  {
+    publicada: "2026-11-23T12:59",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Verificações, os textos não trazem mais os valores das remunerações: nas verificações do Quadro de Lotação, só a função e os meses; em Salários que Não Variam com os Colaboradores, só os colaboradores; em Valores Fora da DRE, nas contas de mão de obra, só os meses.",
+    ],
+  },
   // 23/11/2026: a aba Departamentos, o Atingimento com o sinal, os ícones dos sinais, o comparado dos cenários e a receita prévia no extrato.
   {
     publicada: "2026-11-23T12:34",
