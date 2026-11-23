@@ -38,6 +38,7 @@ const linhaQL = (extra: Partial<LinhaDoQuadroVerificada>): LinhaDoQuadroVerifica
   unidade: "Matriz",
   centroCustoId: "c-ACABAMENTO",
   centro: "1.01 - ACABAMENTO",
+  nomeDoCentro: "ACABAMENTO",
   meses: doze(() => ({ colaboradores: 2, salario: 3000 })),
   ...extra,
 });
@@ -85,18 +86,23 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     // Uma por centro de custo (22/11/2026), não por função: duas funções sem salário no mesmo centro, uma verificação só, com os
     // meses das duas e as duas linhas na origem; outro centro, outra.
     const outraFuncao = linhaQL({ id: "q2", funcao: "Ajudante", meses: doze((m) => ({ colaboradores: 1, salario: m === 5 ? 0 : 1800 })) });
-    const outroCentro = linhaQL({ id: "q3", centroCustoId: "c-OUTRO", centro: "1.02 - OUTRO", meses: doze((m) => ({ colaboradores: 1, salario: m === 9 ? 0 : 2500 })) });
+    const outroCentro = linhaQL({ id: "q3", centroCustoId: "c-OUTRO", centro: "1.02 - OUTRO", nomeDoCentro: "OUTRO", meses: doze((m) => ({ colaboradores: 1, salario: m === 9 ? 0 : 2500 })) });
     const doCentro = verificar(dados({ quadro: [semSalario, outraFuncao, outroCentro] })).filter((v) => v.tipo === "COLABORADORES_SEM_SALARIO");
     assert.equal(doCentro.length, 2);
-    const acabamento = doCentro.find((v) => v.alvo === "1.01 - ACABAMENTO")!;
+    // Na coluna, só o nome do centro (22/11/2026); a chave fica com o código.
+    const acabamento = doCentro.find((v) => v.alvo === "ACABAMENTO")!;
     assert.deepEqual(acabamento.meses, [1, 2, 5]);
     assert.deepEqual(acabamento.origem, { tipo: "QUADRO", linhas: ["q2", "q1"] });
     assert.equal(acabamento.grupo, "ACABAMENTO");
     assert.match(acabamento.descricao, /nas 2 funções Ajudante \(CLT\); Operador \(CLT\)/);
     assert.equal(acabamento.chave, "COLABORADORES_SEM_SALARIO|1.01 - ACABAMENTO");
-    assert.deepEqual(doCentro.find((v) => v.alvo === "1.02 - OUTRO")?.meses, [9]);
+    assert.deepEqual(doCentro.find((v) => v.alvo === "OUTRO")?.meses, [9]);
     const semColab = linhaQL({ meses: doze((m) => ({ colaboradores: m === 12 ? 0 : 1, salario: 2000 })) });
-    assert.deepEqual(verificar(dados({ quadro: [semColab] })).find((v) => v.tipo === "SALARIO_SEM_COLABORADORES")?.meses, [12]);
+    const salarioSemColab = verificar(dados({ quadro: [semColab] })).find((v) => v.tipo === "SALARIO_SEM_COLABORADORES")!;
+    assert.deepEqual(salarioSemColab.meses, [12]);
+    // Só o nome do centro na coluna; a função e o tipo no começo do texto.
+    assert.equal(salarioSemColab.alvo, "ACABAMENTO");
+    assert.match(salarioSemColab.descricao, /^Função Operador \(CLT\): com salário e sem colaboradores/);
     const pj = linhaQL({ vinculo: "PJ", meses: doze(() => ({ colaboradores: 1, salario: 9000 })) });
     assert.ok(tipos(dados({ quadro: [pj] })).includes("PJ_SEM_AUMENTO"));
     const pjComAumento = linhaQL({ vinculo: "PJ", meses: doze((m) => ({ colaboradores: 1, salario: m < 5 ? 9000 : 9500 })) });
@@ -110,6 +116,7 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     const quadro = [linhaQL({}), linhaQL({ id: "q2", funcao: "Ajudante", meses: doze((m) => ({ colaboradores: m >= 6 ? 1 : 0, salario: 0 })) })];
     const vs = verificar(dados({ quadro }));
     assert.deepEqual(vs.find((v) => v.tipo === "SALARIOS_SEM_VARIACAO")?.meses, [6]);
+    assert.equal(vs.find((v) => v.tipo === "SALARIOS_SEM_VARIACAO")?.alvo, "ACABAMENTO");
     // Os Gastos Gerais do grupo só em parte do ano.
     const centros = [1, 2, 3].map((mes) => ({ grupo: "ACABAMENTO", codigo: "CPP.GGD.ENERGIA", mes, valor: 100 }));
     assert.deepEqual(verificar(dados({ quadro, centros })).find((v) => v.tipo === "QUADRO_SEM_GASTOS_GERAIS")?.meses, [4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -130,6 +137,9 @@ describe("as Verificações das Premissas (20/11/2026)", () => {
     const fora = verificar(dados({ grupos, centros })).find((v) => v.tipo === "VALORES_FORA_DA_DRE")!;
     assert.deepEqual(fora.meses, [1]);
     assert.match(fora.descricao, /Metalurgia não tem base/);
+    // Só o nome do centro na coluna (22/11/2026); a conta no começo do texto.
+    assert.equal(fora.alvo, "METALURGIA");
+    assert.match(fora.descricao, /^Remunerações CLT: /);
     // Com base no mês (a Matriz), o valor chega à DRE.
     const percentuais = Array.from({ length: 12 }, () => new Map([["METALURGIA|MATRIZ", 1]]));
     assert.ok(!tipos(dados({ grupos, centros, percentuais })).includes("VALORES_FORA_DA_DRE"));

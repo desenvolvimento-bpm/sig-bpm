@@ -760,6 +760,8 @@ export const cenariosService = {
           destino: string;
           centros: Array<{ codigoRM: string | null; nome: string }>;
           comparadoSemCentros: { nome: string; ano: number } | null;
+          // Os valores do grupo com os reajustes da DRE (22/11/2026): os totais batem com o Consolidado.
+          reajustado?: boolean;
         };
       }>(
         `/proxy/cenarios/${id}/resultados/centro`,

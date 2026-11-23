@@ -92,8 +92,10 @@ export type LinhaDoQuadroVerificada = {
   funcao: string;
   unidade: string;
   centroCustoId: string;
-  /** O código e o nome do centro (o que a aba mostra). */
+  /** O código e o nome do centro (o que a aba mostra; na chave das verificações). */
   centro: string;
+  /** Só o nome do centro (22/11/2026, pedido do Adão: a coluna Linha / Centro de Custo mostra só ele). */
+  nomeDoCentro: string;
   meses: Array<{ mes: number; colaboradores: number; salario: number }>;
 };
 
@@ -187,6 +189,7 @@ export async function dadosDasVerificacoes(c: { id: string; ano: number }): Prom
       unidade: l.unidadeNegocio.nome,
       centroCustoId: l.centroCustoId,
       centro: [l.centroCusto.codigoRM, l.centroCusto.nomeRM].filter(Boolean).join(" - "),
+      nomeDoCentro: l.centroCusto.nomeRM || l.centroCusto.codigoRM || "",
       // O salário pago (o bruto e a insalubridade ou periculosidade), por colaborador.
       meses: l.meses.map((m) => ({ mes: m.mes, colaboradores: Number(m.colaboradores), salario: Number(m.salarioBruto) + Number(m.adicional) })),
     })),
@@ -271,7 +274,9 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
     vistas.set(k0, n);
     const id = n > 1 ? `${k0}|${n}` : k0;
     const meses = MESES_DO_ANO.map((m) => l.meses.find((x) => x.mes === m) ?? { mes: m, colaboradores: 0, salario: 0 });
-    const base = { aba: "quadro" as const, grupo: doCentro.get(l.centroCustoId) ?? null, alvo: `${l.funcao} · ${VINCULO[l.vinculo]} · ${l.centro}`, venda: null, origem: { tipo: "QUADRO" as const, linhas: [l.id] } };
+    // Na coluna Linha / Centro de Custo, só o nome do centro (22/11/2026, pedido do Adão); a função e o tipo, no começo do texto.
+    const base = { aba: "quadro" as const, grupo: doCentro.get(l.centroCustoId) ?? null, alvo: l.nomeDoCentro, venda: null, origem: { tipo: "QUADRO" as const, linhas: [l.id] } };
+    const naFuncao = `Função ${l.funcao} (${VINCULO[l.vinculo]}): `;
     const valores = meses.map((x) => [x.colaboradores, x.salario]);
     const semSalario = meses.filter((x) => x.colaboradores > 0 && !x.salario).map((x) => x.mes);
     if (semSalario.length) semSalarioDo.set(l.centro, [...(semSalarioDo.get(l.centro) ?? []), { l, id, meses: semSalario, valores }]);
@@ -282,7 +287,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         chave: `SALARIO_SEM_COLABORADORES|${id}`,
         tipo: "SALARIO_SEM_COLABORADORES",
         meses: semColaboradores,
-        descricao: `Com salário e sem colaboradores em ${nMeses(semColaboradores.length)} (${textoDosMeses(semColaboradores)}): o salário não gera resultado.`,
+        descricao: `${naFuncao}com salário e sem colaboradores em ${nMeses(semColaboradores.length)} (${textoDosMeses(semColaboradores)}): o salário não gera resultado.`,
         assinatura: assinar([semColaboradores, valores]),
       });
     // A linha PJ sem aumento no ano: o salário dos meses com colaboradores nunca passa o do primeiro deles.
@@ -293,7 +298,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         chave: `PJ_SEM_AUMENTO|${id}`,
         tipo: "PJ_SEM_AUMENTO",
         meses: ativos.map((x) => x.mes),
-        descricao: `O salário (${moeda(ativos[0].salario)}) não aumenta em nenhum dos ${nMeses(ativos.length)} com colaboradores (${textoDosMeses(ativos.map((x) => x.mes))}).`,
+        descricao: `${naFuncao}o salário (${moeda(ativos[0].salario)}) não aumenta em nenhum dos ${nMeses(ativos.length)} com colaboradores (${textoDosMeses(ativos.map((x) => x.mes))}).`,
         assinatura: assinar([valores]),
       });
     // O salário por colaborador que cai de um mês para o outro, com os mesmos colaboradores.
@@ -304,7 +309,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
         chave: `SALARIO_QUE_CAI|${id}`,
         tipo: "SALARIO_QUE_CAI",
         meses: caiEm,
-        descricao: `O salário por colaborador cai, com os mesmos colaboradores, em ${textoDosMeses(caiEm)} (${caiEm.map((m) => `${moeda(meses[m - 2].salario)} → ${moeda(meses[m - 1].salario)}`).slice(0, 3).join("; ")}${caiEm.length > 3 ? "…" : ""}).`,
+        descricao: `${naFuncao}o salário por colaborador cai, com os mesmos colaboradores, em ${textoDosMeses(caiEm)} (${caiEm.map((m) => `${moeda(meses[m - 2].salario)} → ${moeda(meses[m - 1].salario)}`).slice(0, 3).join("; ")}${caiEm.length > 3 ? "…" : ""}).`,
         assinatura: assinar([caiEm, valores]),
       });
   }
@@ -317,7 +322,7 @@ function verificarQuadro(d: DadosDasVerificacoes): Verificacao[] {
     r.push({
       aba: "quadro",
       grupo: doCentro.get(lista[0].l.centroCustoId) ?? null,
-      alvo: centro,
+      alvo: lista[0].l.nomeDoCentro,
       venda: null,
       chave: `COLABORADORES_SEM_SALARIO|${centro}`,
       tipo: "COLABORADORES_SEM_SALARIO",
@@ -403,7 +408,8 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
         tipo: "SALARIOS_SEM_VARIACAO",
         aba: "centros",
         grupo: g.grupo,
-        alvo: `${g.grupo} · Salários ${TIPO_NO_GRUPO[vinculo]}`,
+        // Só o nome do centro (22/11/2026); o tipo dos colaboradores está no texto.
+        alvo: g.grupo,
         venda: null,
         meses,
         descricao: `Os colaboradores ${TIPO_NO_GRUPO[vinculo]} mudam e os salários deles não, em ${textoDosMeses(meses)} (${meses.slice(0, 3).map((m) => `${colab[m - 2].toLocaleString("pt-BR")} → ${colab[m - 1].toLocaleString("pt-BR")} colab., ${moeda(salarios[m - 1])}`).join("; ")}${meses.length > 3 ? "…" : ""}): confira as linhas do grupo no Quadro de Lotação.`,
@@ -440,10 +446,11 @@ function verificarCentros(d: DadosDasVerificacoes): Verificacao[] {
       tipo: "VALORES_FORA_DA_DRE",
       aba: "centros",
       grupo,
-      alvo: `${grupo} · ${descricao.get(codigo) ?? codigo}`,
+      // Só o nome do centro (22/11/2026); a conta, no começo do texto.
+      alvo: grupo,
       venda: null,
       meses,
-      descricao: `${moeda(total)} em ${nMeses(meses.length)} (${textoDosMeses(meses)}) não chegam à DRE: ${motivo}.`,
+      descricao: `${descricao.get(codigo) ?? codigo}: ${moeda(total)} em ${nMeses(meses.length)} (${textoDosMeses(meses)}) não chegam à DRE: ${motivo}.`,
       assinatura: assinar([meses, meses.map((m) => Math.round(fora[m - 1] * 100))]),
       origem: { tipo: "CENTROS", grupo, contas: [codigo] },
     });

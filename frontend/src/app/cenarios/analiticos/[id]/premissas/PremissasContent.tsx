@@ -230,9 +230,10 @@ export function PremissasContent() {
               cada mês), como nas outras tabelas do SIG.
             </li>
             <li>
-              Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Situação (Pendente ou De Acordo), a
-              Aba (clique nela para abri-la; nos Centros de Custo, já no grupo), a Linha / Centro de Custo, a Verificação (com a explicação), os Meses
-              e o Responsável: o responsável imediato pela linha ou pelo centro — o Analista cujo recorte o alcança; sem ele, o Coordenador;
+              Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Aba (clique nela para abri-la;
+              nos Centros de Custo, já no grupo), a Linha / Centro de Custo (nas do Quadro de Lotação e dos Centros de Custo, só o nome do centro; a
+              função, o tipo ou a conta vêm no começo da explicação), a Verificação (com a explicação), os Meses, o Responsável e a Situação
+              (Pendente ou De Acordo, em etiqueta). O Responsável é o responsável imediato pela linha ou pelo centro — o Analista cujo recorte o alcança; sem ele, o Coordenador ou o Gente e Gestão;
               sem ele, o Estratégico; sem ele, o Gestor (mais de um só quando são do mesmo nível); sem nenhum, quem alterou os valores por último,
               pelo Histórico (passe o mouse para ver quem alterou e quando). Ele (com Editar na aba Verificações) ou o Administrador dá o De Acordo. Com o Acesso às Informações Por Recorte (Configurações / Cenário), cada um vê as verificações do
               seu recorte (o Gestor, as dos seus departamentos; o recorte por centro, as do Quadro de Lotação e dos Centros de Custo dos grupos com

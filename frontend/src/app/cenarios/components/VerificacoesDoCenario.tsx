@@ -26,17 +26,19 @@ const textoDaSituacao = (v: VerificacaoDoCenario) =>
       ? `Pendente · os valores mudaram depois do De Acordo de ${v.acordoAnterior.nome} (${quando(v.acordoAnterior.em)})`
       : "Pendente";
 
+// A Situação por último, depois do Responsável (22/11/2026, pedido do Adão); na Linha / Centro de Custo, só o nome do centro (o
+// servidor manda só ele).
 const COLUNAS: Coluna<VerificacaoDoCenario>[] = [
   { chave: "marcar", rotulo: "", semFiltro: true, classe: "w-10" },
-  { chave: "situacao", rotulo: "Situação", valor: situacao, texto: textoDaSituacao },
   { chave: "aba", rotulo: "Aba", valor: (v) => v.abaRotulo },
   { chave: "alvo", rotulo: "Linha / Centro de Custo", valor: (v) => v.alvo },
   { chave: "verificacao", rotulo: "Verificação", valor: (v) => v.titulo, texto: (v) => `${v.titulo}: ${v.descricao}` },
   { chave: "meses", rotulo: "Meses", valor: (v) => v.mesesTexto },
   // Todos os que podem justificar (20/11/2026, pedido do Adão).
   { chave: "responsavel", rotulo: "Responsável", valor: (v) => v.responsaveis.join(", ") || null },
+  { chave: "situacao", rotulo: "Situação", valor: situacao, texto: textoDaSituacao },
 ];
-const LARGURAS = [44, 120, 120, 240, 370, 130, 180];
+const LARGURAS = [44, 120, 240, 370, 130, 180, 140];
 
 /**
  * A aba Verificações das Premissas (20/11/2026, pedido do Adão): as inconsistências nos valores digitados ou importados, cada uma
@@ -48,9 +50,10 @@ const LARGURAS = [44, 120, 120, 240, 370, 130, 180];
  */
 export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: string; podeEditar: boolean; onAbrirAba: (aba: string, grupo: string | null) => void }) {
   const queryClient = useQueryClient();
-  // O De Acordo em verde (em azul, com a Acessibilidade Daltonismo).
+  // A Situação em etiqueta (22/11/2026, pedido do Adão: como nas Contestações de Gastos): Pendente em amarelo; De Acordo em verde
+  // (em azul, com a Acessibilidade Daltonismo).
   const [acessibilidade] = useAcessibilidade();
-  const corDoAcordo = acessibilidade === "daltonismo" ? "text-blue-700" : "text-green-700";
+  const etiquetaDoAcordo = acessibilidade === "daltonismo" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-green-200 bg-green-50 text-green-700";
   const consulta = useQuery({ queryKey: ["cenarios", id, "verificacoes"], queryFn: () => cenariosService.verificacoes(id) });
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   const tabela = useTabelaFiltravel(consulta.data?.verificacoes, COLUNAS);
@@ -157,11 +160,6 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
                 />
               </td>
               <td className="px-3 py-1.5">
-                <span className={`font-medium ${v.acordo ? corDoAcordo : "text-amber-700"}`}>{situacao(v)}</span>
-                {v.acordo ? <div className="text-xs text-gray-500">{`${v.acordo.nome}, ${quando(v.acordo.em)}`}</div> : null}
-                {!v.acordo && v.acordoAnterior ? <div className="text-xs text-gray-500">{`Os valores mudaram depois do De Acordo de ${v.acordoAnterior.nome}`}</div> : null}
-              </td>
-              <td className="px-3 py-1.5">
                 <button type="button" onClick={() => onAbrirAba(v.aba, v.grupo)} title={`Abrir a aba ${v.abaRotulo}${v.grupo && v.aba === "centros" ? ` no grupo ${v.grupo}` : ""}`} className="text-left font-medium text-gray-900 underline decoration-gray-300 underline-offset-2 hover:decoration-gray-900">
                   {v.abaRotulo}
                 </button>
@@ -174,6 +172,13 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
               <td className="px-3 py-1.5 text-gray-700">{v.mesesTexto}</td>
               <td className="px-3 py-1.5 text-gray-700" title={v.responsavel?.em ? `${v.responsavel.nome} alterou os valores por último em ${quando(v.responsavel.em)}` : "Sem alteração no Histórico: quem criou o cenário"}>
                 {v.responsaveis.length ? v.responsaveis.map((n) => <div key={n}>{n}</div>) : <span className="text-gray-400">—</span>}
+              </td>
+              <td className="px-3 py-1.5">
+                <span className="inline-flex flex-col gap-0.5">
+                  <span className={`inline-block w-fit rounded-sm border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${v.acordo ? etiquetaDoAcordo : "border-yellow-200 bg-yellow-50 text-yellow-800"}`}>{situacao(v)}</span>
+                  {v.acordo ? <span className="text-[11px] text-gray-500">{`${v.acordo.nome}, ${quando(v.acordo.em)}`}</span> : null}
+                  {!v.acordo && v.acordoAnterior ? <span className="text-[11px] text-gray-500">{`Os valores mudaram depois do De Acordo de ${v.acordoAnterior.nome}`}</span> : null}
+                </span>
               </td>
             </tr>
           ))

@@ -75,7 +75,7 @@ export const exportacaoCenarioService = {
           est: await estrutura(),
           informacoes: [
             `${nomeBase} · ${geracao}`,
-            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate; por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os percentuais dos Encargos e Benefícios não entram; a conta Encargos e Benefícios entra com os Benefícios Adicionais (nas abas, em linhas separadas).",
+            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate (com a caixa Aplicar Reajustes, a DRE tem os reajustes, e estas abas, os valores das premissas, sem eles); por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os percentuais dos Encargos e Benefícios não entram; a conta Encargos e Benefícios entra com os Benefícios Adicionais (nas abas, em linhas separadas).",
           ],
           rotulos: lista.meses.map((m) => m.rotulo),
           total: [0, lista.meses.length - 1],

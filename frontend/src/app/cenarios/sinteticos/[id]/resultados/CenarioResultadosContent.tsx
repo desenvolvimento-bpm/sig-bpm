@@ -146,6 +146,12 @@ function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: st
                 Referência (Configurações / Referência): esta aba fica sem o comparativo.
               </p>
             ) : null}
+            {/* Com a DRE calculada com os reajustes (22/11/2026, pedido do Adão), os valores do centro com eles, como o Consolidado. */}
+            {centro.data.reajustado ? (
+              <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                Valores com os reajustes da DRE (Aplicar Reajustes), como o Consolidado. A aba Centros de Custo das Premissas mostra os valores sem eles.
+              </p>
+            ) : null}
             <TabelaResultados
               key={grupo ?? ""}
               dados={centro.data}
@@ -258,7 +264,8 @@ export function CenarioResultadosContent() {
               <li>
                 Na aba Centros de Custo, como em Resultados Empresariais: a lista dos grupos de centros com valor no cenário à esquerda (busque pelo nome)
                 e, ao lado, a DRE do escolhido, mês a mês — as contas do grupo com valor (as da aba Centros de Custo das Premissas, com os Benefícios
-                Adicionais na conta Encargos e Benefícios, como na DRE), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % e o R$/m³
+                Adicionais na conta Encargos e Benefícios, como na DRE; com a DRE calculada com os reajustes, a caixa Aplicar Reajustes, com eles, e os
+                totais batem com o Consolidado), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % e o R$/m³
                 sobre as bases do Consolidado do cenário. O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
                 que vai para Serviços (na DRE, nas contas da CSM ou da CSC). A lista traz só os grupos do recorte do seu perfil: todos, os dos seus
                 departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário. Com um cenário comparado
@@ -315,7 +322,7 @@ export function CenarioResultadosContent() {
             ) : null}
             <li>
               Use “Exportar” para baixar em Excel ou PDF, como em Resultados Empresariais: a visão atual ou todas as unidades (uma por aba ou por
-              página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel: na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
+              página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel (os valores das premissas, sem os reajustes): na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
             </li>
             <li>
               Versões (para quem edita a tela Resultados): “Congelar Versão” trava o cenário na versão atual (VER00, VER01…), como o fechamento de uma

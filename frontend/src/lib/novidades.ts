@@ -28,6 +28,27 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 22/11/2026, à noite: as colunas e o responsável das Verificações.
+  {
+    publicada: "2026-11-22T23:05",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Verificações, a coluna Linha / Centro de Custo mostra só o nome do centro de custo (a função, o tipo ou a conta vêm no começo da explicação), e a Situação (Pendente ou De Acordo, em etiqueta) passa a ser a última coluna, depois do Responsável.",
+      "O perfil Gente e Gestão entra na escolha do responsável imediato no nível do Coordenador.",
+    ],
+  },
+  // 22/11/2026, à noite: a aba Centros de Custo dos Resultados com os reajustes.
+  {
+    publicada: "2026-11-22T23:05",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Na aba Centros de Custo, com a caixa Aplicar Reajustes marcada (a DRE calculada com os reajustes), os valores de cada centro vêm com os reajustes, e os totais batem com o Consolidado. A aba Centros de Custo das Premissas continua com os valores sem eles.",
+    ],
+  },
   // 22/11/2026, mais tarde: a troca de referência mantendo os meses não muda o resultado.
   {
     publicada: "2026-11-22T21:33",

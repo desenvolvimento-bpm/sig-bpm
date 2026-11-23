@@ -54,6 +54,7 @@ import {
   calcularAnalitico,
   materializarPremissas,
   pendenciasDoRecalculo,
+  reajustarOGrupo,
   calcularPremissas,
   calcularTabela,
   linhasDaTabela,
@@ -323,26 +324,28 @@ async function obterOuFalhar(id: string, usuario: Usuario) {
 }
 
 /**
- * A ordem dos responsáveis imediatos das verificações (21/11/2026, pedido do Adão), pelo nome do perfil: o Analista; sem ele, o
- * Coordenador; sem ele, o Estratégico; sem ele, o Gestor.
+ * A ordem dos responsáveis imediatos das verificações (21/11/2026, pedido do Adão), pelo nome do perfil (sem acento): o Analista;
+ * sem ele, o Coordenador e o Gente e Gestão (22/11/2026, pedido do Adão: no nível do Coordenador); sem eles, o Estratégico; sem ele,
+ * o Gestor. O nível de cada perfil (0 é o primeiro).
  */
-const HIERARQUIA_DOS_RESPONSAVEIS = ["analista", "coordenador", "estrategico", "gestor"];
+const NIVEL_DO_RESPONSAVEL: Record<string, number> = { analista: 0, coordenador: 1, "gente e gestao": 1, estrategico: 2, gestor: 3 };
+const NIVEIS_DOS_RESPONSAVEIS = Math.max(...Object.values(NIVEL_DO_RESPONSAVEL)) + 1;
 const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 /**
  * Os responsáveis imediatos de cada verificação (21/11/2026, pedido do Adão): os usuários ativos do primeiro nível da hierarquia
- * (Analista, Coordenador, Estratégico, Gestor) cujo recorte do perfil (os centros de custo, ou os departamentos do Gestor) alcança
- * a verificação — a linha ou o centro dela. Vazio: ninguém da hierarquia a alcança.
+ * (Analista; Coordenador e Gente e Gestão; Estratégico; Gestor) cujo recorte do perfil (os centros de custo, ou os departamentos
+ * do Gestor) alcança a verificação — a linha ou o centro dela. Vazio: ninguém da hierarquia a alcança.
  */
 async function responsaveisImediatos() {
   const usuarios = (await carregarUsuariosAtivos()).flatMap((u) => {
-    const nivel = HIERARQUIA_DOS_RESPONSAVEIS.indexOf(semAcento(u.perfil.nome));
+    const nivel = NIVEL_DO_RESPONSAVEL[semAcento(u.perfil.nome)] ?? -1;
     const a = u.acesso;
     const recorte = recorteDoPerfil({ recorte: a.recorteCentro ? { centros: a.centros, departamentos: null } : a.recorteDepartamento ? { departamentos: a.departamentos, centros: null } : null });
     return nivel >= 0 && recorte ? [{ id: u.sub, nome: u.nome, nivel, recorte }] : [];
   });
   return (v: Pick<Verificacao, "aba" | "grupo">, grupos: Map<string, GrupoDoCenario>) => {
-    for (let nivel = 0; nivel < HIERARQUIA_DOS_RESPONSAVEIS.length; nivel++) {
+    for (let nivel = 0; nivel < NIVEIS_DOS_RESPONSAVEIS; nivel++) {
       const deste = usuarios.filter((u) => u.nivel === nivel && veVerificacao(u.recorte, v, grupos));
       if (deste.length) return deste.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")).map((u) => ({ id: u.id as string | null, nome: u.nome }));
     }
@@ -576,10 +579,13 @@ async function comparadoDe(c: { comparadoComId: string | null }) {
  * o total de cada grupo da DRE, que somam as contas; e o Consolidado do cenário (as bases do % e do R$/m³).
  */
 async function dreDoGrupo(cenarioId: string, grupo: string) {
-  const [linhas, gravados, consolidado] = await Promise.all([
+  const prisma = getPrismaClient();
+  const [linhas, gravados, consolidado, c, grupos] = await Promise.all([
     estrutura(),
-    getPrismaClient().cenarioCentro.findMany({ where: { cenarioId, grupo, mes: { gte: 1, lte: 12 } }, select: { mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
+    prisma.cenarioCentro.findMany({ where: { cenarioId, grupo, mes: { gte: 1, lte: 12 } }, select: { mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
     dreDoCenario(cenarioId, 0),
+    prisma.cenario.findUnique({ where: { id: cenarioId }, select: { reajustesCalculados: true } }),
+    gruposDoCenario(cenarioId),
   ]);
   const porConta = new Map<string, number[]>();
   for (const r of gravados) {
@@ -587,7 +593,11 @@ async function dreDoGrupo(cenarioId: string, grupo: string) {
     lista[r.mes - 1] += Number(r.valor);
     porConta.set(r.linhaDRE.codigo, lista);
   }
-  return { valores: somarNoGrupo(linhas, porConta, 12), consolidado };
+  // Com a DRE calculada com os reajustes (22/11/2026, pedido do Adão), os valores do grupo com eles (reajustarOGrupo): os totais
+  // batem com o Consolidado. A aba Centros de Custo das Premissas continua sem eles (a base digitada).
+  const g = grupos.find((x) => x.grupo === grupo);
+  const reajustado = !!c?.reajustesCalculados && !!g;
+  return { valores: somarNoGrupo(linhas, reajustado ? await reajustarOGrupo(prisma, cenarioId, g!, porConta) : porConta, 12), consolidado, reajustado };
 }
 
 /**
@@ -2816,6 +2826,8 @@ export const cenariosService = {
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: d.consolidado.comValor[k] })),
       comparado: comparadoDaAba,
       comparadoSemCentros: comparado && !totais ? { nome: comparado.nome, ano: comparado.ano } : null,
+      // Os valores do grupo com os reajustes da DRE (22/11/2026): a tela avisa.
+      reajustado: d.reajustado,
       // Sem as seções (os volumes), como os centros de Resultados Empresariais.
       linhas: montar(linhas, "centros", d.consolidado.comValor, d.valores, d.consolidado.valores, ACESSO_TOTAL, totais ? new Set(totais.keys()) : undefined)
         .filter((l) => l.tipo !== "SECAO")

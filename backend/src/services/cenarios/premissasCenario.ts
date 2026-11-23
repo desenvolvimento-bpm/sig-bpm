@@ -714,3 +714,47 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
   await recalcular(tx, cenarioId, Array.from({ length: 12 }, (_, k) => k + 1), UNIDADES, est);
   return { aplicados: cenario.reajustesAplicados, reajustes: resumo };
 }
+
+/**
+ * Os valores de um grupo de centros com os reajustes da DRE (22/11/2026, pedido do Adão: na aba Centros de Custo dos Resultados,
+ * com a DRE calculada com os reajustes, os totais batem com o Consolidado). Como no calcularAnalitico, cada conta do grupo vai às
+ * unidades pelo rateio (alocarCentros: a unidade e a conta de destino — a parte da Complementar, na equivalente da CSC), e cada
+ * parte sai multiplicada pelo fator da conta de destino na unidade; nos Custos de Produção da Matriz e da Filial, pelos das vendas,
+ * na proporção do volume produzido de cada uma (como o resto da conta em reajustarPorVenda). O que o rateio não leva a nenhuma
+ * unidade fica como está. `porConta`: os doze meses de cada conta do grupo; devolve os doze meses reajustados, na conta do grupo.
+ */
+export async function reajustarOGrupo(db: Tx, cenarioId: string, g: GrupoDoCenario, porConta: Map<string, number[]>) {
+  const cenario = await db.cenario.findUniqueOrThrow({ where: { id: cenarioId }, select: { ano: true, indicesDosReajustes: true, aplicacaoDosReajustes: true } });
+  const est = await estrutura();
+  const fatores = await fatoresDoCenario(db, { id: cenarioId, ...cenario }, est);
+  if (!fatores.size) return porConta;
+  const [linhas, gravadas, regras, projetos] = await Promise.all([
+    linhasDoCadastro(),
+    db.cenarioPremissa.findMany({ where: { cenarioId } }),
+    regrasDoCenario(db, cenarioId),
+    db.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
+  ]);
+  const { porVenda, bases } = calcularPremissas(est, linhas, cenario.ano, gravadas);
+  for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
+  const percentuais = percentuaisPelasRegras(regras, cenario.ano, bases);
+  const porCodigo = new Map(est.map((l) => [l.codigo, l]));
+  const fator = (u: number, codigo: string, m: number) => {
+    const l = porCodigo.get(codigo);
+    const porUnidade = l ? GRUPOS_POR_UNIDADE[l.grupoSigla]?.find((x) => x.unidade === u) : undefined;
+    if (!porUnidade) return fatorNaUnidade(fatores, codigo, u)?.[m] ?? 1;
+    const volumes = porUnidade.vendas.map((v) => Math.max(0, porVenda.get(`${u}|${v.chave}|${C.PRODUCAO_M3}`)?.[m] ?? 0));
+    const volume = volumes.reduce((s, v) => s + v, 0);
+    return porUnidade.vendas.reduce((s, v, k) => s + (volume > 0 ? volumes[k] / volume : k === 0 ? 1 : 0) * (fatorNaVenda(fatores, codigo, u, v.chave)?.[m] ?? 1), 0);
+  };
+  const r = new Map<string, number[]>();
+  for (const [codigo, meses] of porConta) {
+    const lista = [...meses];
+    const valores = meses.flatMap((valor, k) => (valor ? [{ grupo: g.grupo, codigo, mes: k + 1, valor }] : []));
+    for (const [k, partes] of alocarCentros(est, [g], valores, percentuais)) {
+      const [u, destino] = [Number(k.slice(0, k.indexOf("|"))), k.slice(k.indexOf("|") + 1)];
+      partes.forEach((x, m) => (lista[m] += x * (fator(u, destino, m) - 1)));
+    }
+    r.set(codigo, lista);
+  }
+  return r;
+}
