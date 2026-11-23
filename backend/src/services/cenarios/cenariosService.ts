@@ -12,10 +12,11 @@ import { INDICADORES_DAS_LISTAS } from "../relatorios/catalogoIndicadores.js";
 import { carregarNomesDoSistema, nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
 import { basesDoConsolidado, COD } from "../relatorios/basesResultados.js";
 import { estrutura, montar } from "../relatorios/resultadosService.js";
+import { montarDepartamentos } from "../relatorios/departamentosDaDRE.js";
 import { estrutura as estruturaDRE } from "../dre/dreService.js";
 import { contasDaUnidade, ErroEdicao, gravarValores, linhasDaUnidade, linhasDoConsolidado, recalcular, UNIDADES, type Alteracao } from "./edicaoCenario.js";
 import { indicadoresService } from "../relatorios/indicadoresService.js";
-import { calcularCenario, type CalculoDoCenario } from "./indicadoresDoCenario.js";
+import { calcularCenario, rotuloDoComparado, type CalculoDoCenario } from "./indicadoresDoCenario.js";
 import {
   ABA_CONSOLIDADO,
   abaDaPlanilha,
@@ -55,6 +56,7 @@ import {
   materializarPremissas,
   pendenciasDoRecalculo,
   reajustarOGrupo,
+  centrosNaDREDoCenario,
   calcularPremissas,
   calcularTabela,
   linhasDaTabela,
@@ -570,8 +572,11 @@ function exigirRecalculado(c: Parameters<typeof pendenciasDoRecalculo>[0], acao:
 }
 
 async function comparadoDe(c: { comparadoComId: string | null }) {
-  return c.comparadoComId ? getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true, tipo: true } }) : null;
+  return c.comparadoComId ? getPrismaClient().cenario.findUnique({ where: { id: c.comparadoComId }, select: { id: true, nome: true, ano: true, tipo: true, marcacao: true } }) : null;
 }
+
+/** O comparado nas respostas dos Resultados: o nome, o exercício e o rótulo das colunas dele (rotuloDoComparado, 23/11/2026). */
+const comparadoDaResposta = (c: { nome: string; ano: number; marcacao: MarcacaoCenario | null } | null) => (c ? { nome: c.nome, ano: c.ano, rotulo: rotuloDoComparado(c) } : null);
 
 /**
  * A DRE de um grupo de centros num cenário analítico (19/11/2026; 22/11/2026: também a do comparado), mês a mês: as contas do
@@ -1801,7 +1806,7 @@ export const cenariosService = {
       ano: c.ano,
       ate: 12,
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: d.comValor[k] })),
-      comparado: comparado ? { nome: comparado.nome, ano: comparado.ano } : null,
+      comparado: comparadoDaResposta(comparado),
       linhas: montar(linhas, visao, d.comValor, d.valores, d.consolidado, ACESSO_TOTAL, totais ? new Set(totais.keys()) : undefined).map((l) =>
         comTotalComparado({ ...l, podeDetalhar: false }, totais),
       ),
@@ -1841,7 +1846,7 @@ export const cenariosService = {
       mesApurado: true,
       cenarioOrcado: comparado?.nome ?? null,
       mesesSemMeta: [],
-      comparado: comparado ? { nome: comparado.nome, ano: comparado.ano } : null,
+      comparado: comparadoDaResposta(comparado),
       abas: [
         // Os itens do cadastro do Painel de Bordo (17/10/2026).
         { chave: "resultados", titulo: "Resultados", quadros: montarPainel(quadros.resultados, periodos, serie) },
@@ -1873,7 +1878,7 @@ export const cenariosService = {
     return {
       ano: c.ano,
       ate: 12,
-      comparado: comparado ? { nome: comparado.nome, ano: comparado.ano } : null,
+      comparado: comparadoDaResposta(comparado),
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: true })),
       indicadores: calculo.indicadores
         .filter((i) => !recorte || i.classe !== "MANUAL" || veDepartamentos(recorte, departamentosDoGrupoDoIndicador(i.indicador.grupo)))
@@ -1913,7 +1918,7 @@ export const cenariosService = {
       ano: c.ano,
       ate: 12,
       meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: true })),
-      comparado: comparado ? { nome: comparado.nome, ano: comparado.ano } : null,
+      comparado: comparadoDaResposta(comparado),
       linhas: montar(linhas, visao, meses, d.valores, d.consolidado, ACESSO_TOTAL, todas).map((l) => comTotalComparado({ ...l, podeDetalhar: false }, totais)),
       editaveis: visao === 0 ? [] : [...contasDaUnidade(est, visao)],
     };
@@ -2757,6 +2762,63 @@ export const cenariosService = {
   },
 
   /**
+   * A aba Departamentos da tela Resultados de um cenário analítico (23/11/2026, pedido do Adão), antes de Centros de Custo, como a de
+   * Resultados Empresariais: a DRE do Consolidado do cenário, com os mesmos totais, mas cada departamento com centros de custo (de CPP
+   * a DA) abre pelos grupos de centros (montarDepartamentos), cada um com o valor dele no departamento pelo rateio do cenário e, com a
+   * DRE calculada com os reajustes, com eles (centrosNaDREDoCenario), e pelo resto das atribuições (as Premissas das unidades, os
+   * Investimentos…). Com um cenário comparado, o total do exercício dele em cada linha, como no Consolidado: o analítico abre pelos
+   * centros dele do mesmo jeito; o sintético não tem centros (`comparadoSemCentros`), e as linhas dos centros e as "(Outros)" ficam
+   * sem o comparativo. Os grupos fora do recorte do perfil do usuário (recorteDoPerfil, como a aba Centros de Custo) ficam nas
+   * "(Outros)".
+   */
+  async departamentosDosResultados(id: string, usuario: Usuario = SISTEMA) {
+    const c = await obterOuFalhar(id, usuario);
+    exigirAnalitico(c);
+    const prisma = getPrismaClient();
+    const [linhas, d, comparado, grupos, centros, calculo] = await Promise.all([
+      estrutura(),
+      dreDoCenario(id, 0),
+      comparadoDe(c),
+      gruposDoCenario(id),
+      centrosNaDREDoCenario(prisma, id),
+      prisma.cenario.findUnique({ where: { id }, select: { reajustesCalculados: true } }),
+    ]);
+    const visiveis = new Set(gruposDoRecorte(recorteDoPerfil(usuario), grupos).map((g) => g.grupo));
+    // Os doze meses de cada conta de destino de cada grupo do recorte, mês a mês.
+    const porMes = (m: Map<string, Map<string, number[]>>) =>
+      new Map(
+        [...m]
+          .filter(([g]) => visiveis.has(g))
+          .map(([g, contas]) => [g, Array.from({ length: 12 }, (_, k) => new Map([...contas].map(([codigo, lista]) => [codigo, lista[k]])))] as const),
+      );
+    const analitico = comparado?.tipo === "ANALITICO";
+    const [dComparado, centrosDoComparado] = comparado
+      ? await Promise.all([dreDoCenario(comparado.id, 0), analitico ? centrosNaDREDoCenario(prisma, comparado.id) : null])
+      : [null, null];
+    const dep = montarDepartamentos(linhas, [
+      { consolidado: d.valores, centros: porMes(centros) },
+      ...(dComparado ? [{ consolidado: dComparado.valores, centros: centrosDoComparado ? porMes(centrosDoComparado) : null }] : []),
+    ]);
+    // O total do exercício do comparado em cada linha (o % e o R$/m³ sobre o Consolidado dele), como totaisDoComparado.
+    const totais = dComparado
+      ? new Map(montar(dep.linhas, 0, dComparado.comValor, dep.series[1].valores, dComparado.consolidado, ACESSO_TOTAL).map((l) => [l.codigo, l.total as CelulaTotal]))
+      : null;
+    return {
+      ano: c.ano,
+      ate: 12,
+      meses: Array.from({ length: 12 }, (_, k) => ({ mes: k + 1, rotulo: rotuloMes(c.ano, k + 1), apurado: d.comValor[k] })),
+      comparado: comparadoDaResposta(comparado),
+      comparadoSemCentros: comparado && !analitico ? { nome: comparado.nome, ano: comparado.ano } : null,
+      // Os centros com os reajustes da DRE: a tela avisa, como na aba Centros de Custo.
+      reajustado: !!calculo?.reajustesCalculados,
+      linhas: montar(dep.linhas, 0, d.comValor, dep.series[0].valores, d.consolidado, ACESSO_TOTAL, totais ? new Set(totais.keys()) : undefined).map((l) => ({
+        ...comTotalComparado({ ...l, podeDetalhar: false }, totais && !dep.series[1].semValor.has(l.codigo) ? totais : null),
+        ...(dep.centros.has(l.codigo) ? { centro: true } : {}),
+      })),
+    };
+  },
+
+  /**
    * A aba Centros de Custo da tela Resultados de um cenário analítico (19/11/2026, pedido do Adão: como a de Resultados
    * Empresariais; de quem lê a tela): os grupos de centros com valor no exercício, só os do recorte do perfil do usuário
    * (recorteDoPerfil: todos, os dos departamentos dele ou os com algum centro dele, qualquer que seja o Acesso às Informações do
@@ -2809,11 +2871,11 @@ export const cenariosService = {
       !comparado || !totais
         ? null
         : analitico
-          ? { nome: comparado.nome, ano: comparado.ano }
+          ? comparadoDaResposta(comparado)
           : {
-              // O rótulo é o do comparado (COMPARADO TOTAL/AA, com o exercício dele; pedido do Adão, 22/11/2026); a dica diz de onde vem.
-              nome: comparado.nome,
-              ano: comparado.ano,
+              // O rótulo é o do comparado (pela marcação dele, ou COMPARADO TOTAL/AA, com o exercício dele; pedido do Adão, 22/11 e
+              // 23/11/2026); a dica diz de onde vem.
+              ...comparadoDaResposta(comparado)!,
               dica: `A Média de Referência de cada conta do grupo × 12 (Configurações / Referência), no lugar do cenário comparado (${comparado.nome}), que é sintético e não tem centros de custo.`,
             };
     return {

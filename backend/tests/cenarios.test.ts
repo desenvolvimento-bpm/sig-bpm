@@ -5,7 +5,7 @@ import type { LinhaPlanilha, ValorCelula } from "../src/lib/xlsx.js";
 import { limiteDaLinha, mesesAcima, totaisDaDRE } from "../src/services/cenarios/comparativoCenario.js";
 import { abaDaChave, abaDaPlanilha, abaDeInvestimentos, chaveDaDescricao, lerArquivoDePremissas, nadaAImportar, precisaJustificar, type LinhaDaPlanilha } from "../src/services/cenarios/planilhaPremissas.js";
 import { gerarXlsx } from "../src/lib/xlsxEscrita.js";
-import { classificar } from "../src/services/cenarios/indicadoresDoCenario.js";
+import { classificar, rotuloDoComparado } from "../src/services/cenarios/indicadoresDoCenario.js";
 import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leituraCenario.js";
 import { diasUteis, pascoa } from "../src/services/cenarios/calendario.js";
 import { calcularTabela, linhasDaTabela } from "../src/services/cenarios/premissasCenario.js";
@@ -723,5 +723,15 @@ describe("quadro de lotação dos cenários analíticos (14/10/2026)", () => {
     assert.equal(grupoDaLotacao(" seguranca  (cri) ", grupos), "SEGURANÇA (CRI)");
     assert.equal(grupoDaLotacao("LABORATÓRIO", grupos), "LABORATÓRIO");
     assert.equal(grupoDaLotacao("TURN KEY - ADM", grupos), null);
+  });
+});
+
+describe("o rótulo do cenário comparado nos Resultados (23/11/2026)", () => {
+  it("pela marcação e o exercício do comparado; sem marcação, COMPARADO", () => {
+    assert.equal(rotuloDoComparado({ marcacao: "PREVISAO", ano: 2026 }), "FORECAST TOTAL/26");
+    assert.equal(rotuloDoComparado({ marcacao: "ORCAMENTO_EMPRESARIAL", ano: 2026 }), "ORÇADO TOTAL/26");
+    assert.equal(rotuloDoComparado({ marcacao: "RESULTADOS_ANTERIORES", ano: 2025 }), "ANTERIOR TOTAL/25");
+    assert.equal(rotuloDoComparado({ marcacao: "RESULTADOS_VENDIDOS", ano: 2026 }), "VENDIDO TOTAL/26");
+    assert.equal(rotuloDoComparado({ marcacao: null, ano: 2026 }), "COMPARADO TOTAL/26");
   });
 });

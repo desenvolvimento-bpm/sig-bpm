@@ -144,16 +144,20 @@ function useSinais() {
   return { 1: { ...base[1], texto: `${base[1].texto} ${orcado}` }, 0: { ...base[0], texto: `${base[0].texto} ${orcado}` }, [-1]: { ...base[-1], texto: `${base[-1].texto} ${orcado}` } } as const;
 }
 
-/** O ícone do sinal (21/10/2026), na cor dele: ▲ melhor, ▼ pior e ■ até 5%. Em SVG, para sair no Copiar como Imagem. */
-function IconeDoSinal({ s, titulo }: { s: -1 | 0 | 1; titulo?: string }) {
+/**
+ * O ícone do sinal (21/10/2026), na cor dele (melhor, até 5% ou pior). A forma (23/11/2026, pedido do Adão) é a da direção do valor,
+ * qualquer que seja o comportamento do card: ▲ o realizado maior que o comparado, ▼ menor e ■ igual (ou sem comparado); na legenda,
+ * só o quadrado na cor. Em SVG, para sair no Copiar como Imagem.
+ */
+function IconeDoSinal({ s, direcao, titulo }: { s: -1 | 0 | 1; direcao: -1 | 0 | 1; titulo?: string }) {
   const SINAL = useSinais();
   const fill = SINAL[s].cor;
   return (
     <svg viewBox="0 0 12 12" className="inline-block size-3 shrink-0" role={titulo ? "img" : undefined} aria-label={titulo} aria-hidden={titulo ? undefined : true}>
       {titulo ? <title>{titulo}</title> : null}
-      {s === 1 ? (
+      {direcao === 1 ? (
         <polygon points="6,1 11.5,11 0.5,11" style={{ fill }} />
-      ) : s === -1 ? (
+      ) : direcao === -1 ? (
         <polygon points="0.5,1 11.5,1 6,11" style={{ fill }} />
       ) : (
         <rect x={1.5} y={1.5} width={9} height={9} style={{ fill }} />
@@ -162,9 +166,13 @@ function IconeDoSinal({ s, titulo }: { s: -1 | 0 | 1; titulo?: string }) {
   );
 }
 
-/** O sinal da legenda: o ícone na cor do sinal, como no destaque dos cards. */
+/** A direção do realizado contra o comparado (23/11/2026): 1 maior, -1 menor, 0 igual ou sem um deles. */
+const direcaoDo = (b: Pick<BlocoPainel, "realizado" | "orcado">): -1 | 0 | 1 =>
+  b.realizado === null || b.orcado === null || Math.abs(b.realizado - b.orcado) < 1e-9 ? 0 : b.realizado > b.orcado ? 1 : -1;
+
+/** O sinal da legenda (23/11/2026, pedido do Adão): o quadrado na cor do sinal. */
 function Sinal({ s }: { s: -1 | 0 | 1 }) {
-  return <IconeDoSinal s={s} titulo={useSinais()[s].texto} />;
+  return <IconeDoSinal s={s} direcao={0} titulo={useSinais()[s].texto} />;
 }
 
 /**
@@ -174,7 +182,7 @@ function Sinal({ s }: { s: -1 | 0 | 1 }) {
  * (12 px; sem orçado, cinza). A faixa é uma borda (no Copiar como Imagem do Firefox, o fundo em CSS saía em branco; o do
  * quadro vai em SVG).
  */
-function DestaqueDoDesvio({ b, formatarOrcado }: { b: Pick<BlocoPainel, "orcado" | "vsOrcado" | "sinal">; formatarOrcado: (v: number | null) => string }) {
+function DestaqueDoDesvio({ b, formatarOrcado }: { b: Pick<BlocoPainel, "realizado" | "orcado" | "vsOrcado" | "sinal">; formatarOrcado: (v: number | null) => string }) {
   const SINAL = useSinais();
   const { orcado } = useRotulosDoGrafico();
   const cor = b.sinal === null ? "var(--color-gray-400)" : SINAL[b.sinal].cor;
@@ -189,7 +197,7 @@ function DestaqueDoDesvio({ b, formatarOrcado }: { b: Pick<BlocoPainel, "orcado"
       </svg>
       {/* A variação 50% maior (21/10/2026; antes, 12 px). */}
       <span className="relative inline-flex items-center gap-1.5 text-lg leading-snug font-bold text-gray-900">
-        {b.sinal === null ? null : <IconeDoSinal s={b.sinal} />}
+        {b.sinal === null ? null : <IconeDoSinal s={b.sinal} direcao={direcaoDo(b)} />}
         {desvio(b.vsOrcado)}
       </span>
       <span className="relative mt-0.5 text-xs whitespace-nowrap text-gray-600">vs. {orcado}</span>
@@ -228,7 +236,7 @@ function LinhaDoCenario({ c, b, formatarOrcado }: { c: Pick<ComparacaoDoCard, "r
       </span>
       <span className="relative min-w-12 shrink-0 text-right text-base leading-snug font-bold whitespace-nowrap text-gray-900">{formatarOrcado(b.orcado)}</span>
       <span className="relative inline-flex min-w-[4.5rem] shrink-0 items-center justify-end gap-1.5 text-base leading-snug font-bold whitespace-nowrap text-gray-900">
-        {b.sinal === null ? null : <IconeDoSinal s={b.sinal} />}
+        {b.sinal === null ? null : <IconeDoSinal s={b.sinal} direcao={direcaoDo(b)} />}
         {desvio(b.vsOrcado)}
       </span>
     </div>
@@ -779,8 +787,8 @@ export function PainelContent() {
             </li>
             <li>
               Na aba Variações, no alto, em destaque (e flutuante, abaixo do título, ao rolar a tela), o “Ordenar Por” escolhe a medida que define as três maiores variações: Diferença (a maior em
-              reais, para mais ou para menos), Atingimento (o mais longe de 100%) ou Eficiência (a maior em pontos percentuais); a escolha fica
-              guardada neste navegador. Ao lado, a legenda dos sinais: ▲ Melhor, ■ Até 5% Var. e ▼ Pior (nos custos e despesas, menor é melhor;
+              reais, para mais ou para menos), Atingimento (o mais longe de zero) ou Eficiência (a maior em pontos percentuais); a escolha fica
+              guardada neste navegador. Ao lado, a legenda dos sinais, em quadrados nas cores deles: Melhor, Até 5% Var. e Pior (nos custos e despesas, menor é melhor;
               nas receitas financeiras, maior é melhor). Embaixo, cada unidade (Matriz, Filial, Serviços, Despesas e Extra e RN; só as que o seu
               perfil lê em Resultados) com os departamentos dela — os grupos de custos e despesas da DRE, como Custos de Produção: Pré-Fabricados
               (CPP) ou Despesas Administrativas (DA); as receitas, os impostos sobre elas e as Despesas Variáveis de Venda (DVV) ficam de fora. Cada
@@ -790,7 +798,7 @@ export function PainelContent() {
               Período. Cada variação mostra, numa linha, a posição, a conta e a atribuição (∆1 · Cimento (Matérias Primas)); o Realizado em destaque, com o % sobre a receita líquida
               (/RL); e, como nos cards PROVA, uma linha por comparado — a Média, com o quadradinho amarelo-ouro do Realizado e os meses dela entre
               parênteses (Média (Jan. a Ago.)), o cenário da Comparação Padrão ou cada um da PROVA, com o quadradinho da cor dele — com o Comparado, a Diferença (realizado − comparado, em R$, com o ícone do sinal), o
-              Atingimento (realizado ÷ comparado, em %) e a Eficiência (o % realizado − o % comparado, em pontos percentuais; o % da Média é a soma
+              Atingimento (realizado ÷ comparado − 100%, com o sinal: +6,5% é 106,5% do comparado) e a Eficiência (o % realizado − o % comparado, em pontos percentuais; o % da Média é a soma
               dos valores sobre a soma das bases) e a faixa na cor do sinal à direita. Na PROVA, as três maiores são as de maior medida contra algum
               dos cenários. A lupa ao lado do valor realizado abre os gastos por conta e por item, como nas abas das unidades
               de Resultados: no Atual, o extrato dos lançamentos de origem do mês — em cada lançamento, a conta abre o balancete com os movimentos,
@@ -856,9 +864,10 @@ export function PainelContent() {
             </p>
             <p>
               O desvio (vs. Orçado) é o realizado sobre o orçado, menos 1 (com o orçado negativo, o sinal se inverte). A faixa à direita do destaque
-              e o ícone ficam verdes (azuis, com a Acessibilidade Daltonismo), com um triângulo para cima, quando o realizado está do lado bom do
-              orçado; vermelhos, com um triângulo para baixo, do lado ruim; e amarelos, com um quadrado, quando o desvio é de até 5%. O lado bom depende
-              do sentido do indicador: ↑ quanto maior, melhor; ↓ quanto menor, melhor. Com o orçado zero (uma meta zero, como a de acidentes), o
+              e o ícone ficam verdes (azuis, com a Acessibilidade Daltonismo) quando o realizado está do lado bom do orçado; vermelhos, do lado
+              ruim; e amarelos quando o desvio é de até 5% (na legenda, um quadrado de cada cor). A forma do ícone é a do valor, qualquer que seja o
+              comportamento do card: triângulo para cima com o realizado maior que o orçado, para baixo com ele menor e quadrado quando são iguais.
+              O lado bom depende do sentido do indicador: ↑ quanto maior, melhor; ↓ quanto menor, melhor. Com o orçado zero (uma meta zero, como a de acidentes), o
               desvio não se calcula (—), mas o destaque ainda tem a cor: amarelo se o realizado também for zero; senão, verde ou vermelho pelo sentido.
             </p>
             <p>

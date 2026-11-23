@@ -29,7 +29,14 @@ const COR = {
   semSinal: "#9ca3af",
 };
 const COR_DO_SINAL = (s: Sinal) => (s === 1 ? COR.melhor : s === 0 ? COR.ate5 : s === -1 ? COR.pior : COR.semSinal);
-const ICONE_DO_SINAL = (s: Sinal) => (s === 1 ? "▲" : s === 0 ? "■" : s === -1 ? "▼" : "");
+/**
+ * O ícone do desvio (23/11/2026, pedido do Adão, como no Painel de Bordo): a direção do valor, qualquer que seja o comportamento do
+ * card — ▲ o realizado maior que o comparado, ▼ menor, ■ igual; sem sinal, nenhum.
+ */
+const ICONE_DO_SINAL = (s: Sinal, direcao: -1 | 0 | 1) => (s === null ? "" : direcao === 1 ? "▲" : direcao === -1 ? "▼" : "■");
+/** A direção do realizado contra o comparado: 1 maior, -1 menor, 0 igual ou sem um deles. */
+export const direcaoDo = (realizado: number | null, comparado: number | null): -1 | 0 | 1 =>
+  realizado === null || comparado === null || Math.abs(realizado - comparado) < 1e-9 ? 0 : realizado > comparado ? 1 : -1;
 
 export const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 /** A largura estimada de um texto, em px: a média das letras da fonte (as do negrito, um pouco mais largas). */
@@ -50,7 +57,8 @@ const svg = (w: number, h: number, corpo: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="${FONTE}">${retangulo(0, 0, w, h, COR.fundo)}${corpo}</svg>`;
 
 /** Um valor do card (o do mês ou o acumulado), já formatado, com o comparado e o desvio. */
-export type BlocoDoCard = { valor: string; comparado: string; desvio: string; sinal: Sinal };
+/** `direcao` (23/11/2026): a do realizado contra o comparado (direcaoDo), a forma do ícone. */
+export type BlocoDoCard = { valor: string; comparado: string; desvio: string; sinal: Sinal; direcao: -1 | 0 | 1 };
 export type CardVisual = {
   titulo: string;
   /** À direita do título: o grupo e o sentido ("Venda: Total (↑)"). */
@@ -72,7 +80,7 @@ export type CardVisual = {
 function quadroDoComparado(x: number, y: number, w: number, b: BlocoDoCard, rotulo: string, comDesvio: boolean) {
   const h = 58;
   let corpo = retangulo(x, y, w, h, COR.destaque, 3) + retangulo(x + w - 5, y, 5, h, COR_DO_SINAL(b.sinal));
-  if (comDesvio) corpo += texto(x + w - 14, y + 20, `${ICONE_DO_SINAL(b.sinal)} ${b.desvio}`.trim(), { px: 15, negrito: true, ancora: "end", cor: b.sinal === null ? COR.cinza : COR.texto });
+  if (comDesvio) corpo += texto(x + w - 14, y + 20, `${ICONE_DO_SINAL(b.sinal, b.direcao)} ${b.desvio}`.trim(), { px: 15, negrito: true, ancora: "end", cor: b.sinal === null ? COR.cinza : COR.texto });
   corpo += texto(x + w - 14, y + (comDesvio ? 36 : 26), `vs. ${cortar(rotulo, 11, w - 40)}`, { px: 11, cor: COR.cinza, ancora: "end" });
   corpo += texto(x + w - 14, y + (comDesvio ? 52 : 46), b.comparado, { px: 15, negrito: true, ancora: "end" });
   return corpo;

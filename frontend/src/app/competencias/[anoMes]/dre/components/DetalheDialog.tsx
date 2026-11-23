@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import type { Coluna } from "@/lib/filtrosDeTabela";
 
-import { MemoriaCalculoDialog } from "../../receita-previa/components/MemoriaCalculoDialog";
+import { MemoriaCalculoDialog, MemoriaDaReceita } from "../../receita-previa/components/MemoriaCalculoDialog";
 import type { Natureza } from "../../receita-previa/services/receitaPreviaService";
 import { moeda } from "../../utils/formatacao";
 import { dreService, mensagemDeErro, UNIDADES, type BlocoDetalhe, type LancamentoDetalhe, type VisaoDetalhe } from "../services/dreService";
@@ -36,14 +36,25 @@ const nomeUnidade = (u?: number) => UNIDADES.find((x) => x.codigo === u)?.nome;
 const percentual = (p: string) => `${(Number(p) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%`;
 const fatorTexto = (f: string) => (f === "-1" ? "sinal trocado" : `× ${Number(f).toLocaleString("pt-BR", { maximumFractionDigits: 8 })}`);
 
+/**
+ * As linhas de Receita Bruta e Líquida de Frete e de Montagem (23/11/2026, pedido do Adão): a parte da receita prévia mostra no
+ * extrato a tabela dos itens importados (os valores e, nos serviços, o andamento), no lugar do botão da memória de cálculo.
+ */
+const RECEITAS_COM_A_MEMORIA = new Set(["RBF", "RLF", "RBM", "RLM"]);
+export const mostraAMemoria = (linha: string) => RECEITAS_COM_A_MEMORIA.has(linha.split(".")[1] ?? "");
+
 function Bloco({
   b,
   consolidado,
+  anoMes,
+  embutirAMemoria,
   onMemoria,
   onDocumentos,
 }: {
   b: BlocoDetalhe;
   consolidado: boolean;
+  anoMes: string;
+  embutirAMemoria: boolean;
   onMemoria: (u: number, n: Natureza, obra?: string) => void;
   onDocumentos: (l: LancamentoDetalhe) => void;
 }) {
@@ -70,9 +81,13 @@ function Bloco({
     return (
       <div className="space-y-2 rounded-sm border border-gray-200 p-3">
         {cabecalho}
-        <Button type="button" variant="outline" size="sm" className="rounded-sm" onClick={() => onMemoria(b.unidade, b.natureza as Natureza, b.obra)}>
-          Abrir a memória de cálculo da receita prévia
-        </Button>
+        {embutirAMemoria ? (
+          <MemoriaDaReceita anoMes={anoMes} unidade={b.unidade} natureza={b.natureza as Natureza} obra={b.obra} embutida />
+        ) : (
+          <Button type="button" variant="outline" size="sm" className="rounded-sm" onClick={() => onMemoria(b.unidade, b.natureza as Natureza, b.obra)}>
+            Abrir a memória de cálculo da receita prévia
+          </Button>
+        )}
       </div>
     );
   }
@@ -215,7 +230,8 @@ export function DetalheDialog({ anoMes, linha, visao, onFechar, rotuloMes, nota 
   }
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-sm sm:max-w-5xl">
+      {/* Com a tabela da receita prévia no extrato (as receitas de Frete e de Montagem, 23/11/2026), mais largo. */}
+      <DialogContent className={`max-h-[90vh] overflow-y-auto rounded-sm ${mostraAMemoria(linha) ? "sm:max-w-7xl" : "sm:max-w-5xl"}`}>
         <DialogHeader>
           <DialogTitle>
             {data ? `${data.visao} · ${data.linha.descricao}${rotuloMes ? ` · ${rotuloMes}` : ""}` : "Detalhamento"}
@@ -230,7 +246,15 @@ export function DetalheDialog({ anoMes, linha, visao, onFechar, rotuloMes, nota 
           <div className="space-y-3">
             {data.observacao ? <p className="rounded-sm border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">{data.observacao}</p> : null}
             {data.blocos.map((b, i) => (
-              <Bloco key={i} b={b} consolidado={data.visao === "Consolidado"} onMemoria={(u, n, obra) => setMemoria({ unidade: u, natureza: n, obra })} onDocumentos={setDocumentos} />
+              <Bloco
+                key={i}
+                b={b}
+                consolidado={data.visao === "Consolidado"}
+                anoMes={anoMes}
+                embutirAMemoria={mostraAMemoria(linha)}
+                onMemoria={(u, n, obra) => setMemoria({ unidade: u, natureza: n, obra })}
+                onDocumentos={setDocumentos}
+              />
             ))}
             {data.somaOrigens !== null ? (
               <div className={`flex items-center gap-2 rounded-sm border p-3 text-sm ${fecha ? "border-green-200 bg-green-50 text-green-800" : "border-yellow-200 bg-yellow-50 text-yellow-800"}`}>

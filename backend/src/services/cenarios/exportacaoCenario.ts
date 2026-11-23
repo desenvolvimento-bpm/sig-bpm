@@ -17,7 +17,8 @@ const VISOES: Array<{ visao: 0 | 1 | 2 | 3 | 4 | 5; nome: string }> = [
 ];
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-export type EscopoResultadosDoCenario = { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 } | { tipo: "unidades" };
+/** A aba Departamentos dos analíticos (23/11/2026): o Consolidado com os departamentos abertos pelos grupos de centros. */
+export type EscopoResultadosDoCenario = { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 } | { tipo: "unidades" } | { tipo: "departamentos" };
 export type EscopoCentrosDoCenario = { tipo: "centro"; grupo: string } | { tipo: "centros" } | { tipo: "centrosArquivos" };
 
 /** "Cenário Orgânico VER00 (2027)": o nome do cenário nos arquivos. */
@@ -32,10 +33,22 @@ const nomeDoCenario = (c: { nome: string; versao: number; ano: number }) => `${/
 export const exportacaoCenarioService = {
   async resultados(id: string, escopo: EscopoResultadosDoCenario, formato: Formato, usuario: Usuario) {
     const c = await cenariosService.obter(id, usuario);
-    const visoes = escopo.tipo === "unidades" ? VISOES : VISOES.filter((v) => v.visao === escopo.visao);
+    const visoes = escopo.tipo === "unidades" ? VISOES : escopo.tipo === "departamentos" ? [] : VISOES.filter((v) => v.visao === escopo.visao);
     const bs: Bloco[] = [];
-    for (const v of visoes) bs.push({ nome: v.nome, titulo: `${nomeDoCenario(c)} · ${v.nome}`, dados: await cenariosService.resultados(id, v.visao, usuario) });
-    const ident = identificacaoLivre(`${nomeDoCenario(c)} · os doze meses do exercício`, usuario.nome);
+    let comparado: { nome: string; ano: number } | null = null;
+    if (escopo.tipo === "departamentos") {
+      // As linhas dos centros e as "(Outros)" sem o comparativo (um comparado sintético) ficam com as colunas dele vazias.
+      const dados = await cenariosService.departamentosDosResultados(id, usuario);
+      bs.push({ nome: "Departamentos", titulo: `${nomeDoCenario(c)} · Departamentos`, dados, comparado: dados.comparado ? { rotulo: dados.comparado.rotulo } : null });
+      comparado = dados.comparado;
+    }
+    for (const v of visoes) {
+      const dados = await cenariosService.resultados(id, v.visao, usuario);
+      // Com um cenário comparado (23/11/2026, pedido do Adão), o total dele e as variações, com o rótulo da tela.
+      bs.push({ nome: v.nome, titulo: `${nomeDoCenario(c)} · ${v.nome}`, dados, comparado: dados.comparado ? { rotulo: dados.comparado.rotulo } : null });
+      comparado ??= dados.comparado;
+    }
+    const ident = identificacaoLivre(`${nomeDoCenario(c)} · os doze meses do exercício${comparado ? ` · comparado com ${comparado.nome} (${comparado.ano})` : ""}`, usuario.nome);
     const nomeVisao = escopo.tipo === "unidades" ? "todas as unidades" : bs[0].nome;
     return arquivoDeResultados(bs, ident, formato, `${nomeDoCenario(c)} - ${nomeVisao}`, limparNome(`${nomeDoCenario(c)} - ${nomeVisao}.${formato}`));
   },

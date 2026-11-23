@@ -26,7 +26,7 @@ export type OpcoesDaTabela = Pick<BlocoTabela, "visao" | "nivel" | "linhas" | "r
 const COLUNAS: Array<{ chave: keyof ColunasDaTabela; rotulo: string; detalhe: string }> = [
   { chave: "unitario", rotulo: "Valores Unitários (R$/m³)", detalhe: "O R$/m³ do mês, do total e do orçado." },
   { chave: "diferenca", rotulo: "Diferença", detalhe: "O realizado menos o orçado." },
-  { chave: "atingimento", rotulo: "Atingimento", detalhe: "O realizado sobre o orçado." },
+  { chave: "atingimento", rotulo: "Atingimento", detalhe: "O realizado sobre o orçado menos 100%, com o sinal (+6,5%, -7,5%)." },
   { chave: "eficiencia", rotulo: "Eficiência", detalhe: "O % realizado menos o % orçado." },
 ];
 const TODAS_AS_COLUNAS: ColunasDaTabela = { unitario: true, diferenca: true, atingimento: true, eficiencia: true };

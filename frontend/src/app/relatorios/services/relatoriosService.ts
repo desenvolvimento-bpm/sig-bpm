@@ -26,6 +26,8 @@ export type LinhaResultado = {
   prova?: Partial<Record<MarcacaoComparavel, { mes: Celula; total: Celula }>>;
   /** Nas visões das unidades (18/11/2026, a aba Variações): a linha que é a base do % (as bases vêm em `basesDoPercentual`). */
   basePercentual?: string | null;
+  /** Na aba Departamentos (23/11/2026): a linha de um grupo de centros de custo, logo abaixo do total do departamento. */
+  centro?: boolean;
 };
 
 export type Resultados = {
@@ -39,7 +41,8 @@ export type Resultados = {
    * Nos cenários (13/10/2026): o cenário comparado, cujos totais vêm no lugar do orçado. `dica` (22/11/2026): a dica do rótulo
    * da coluna, quando os valores não são os do comparado (a Média de Referência × 12 na aba Centros de Custo).
    */
-  comparado?: { nome: string; ano: number; dica?: string } | null;
+  // `rotulo` (23/11/2026): o das colunas do comparado — pela marcação dele ("FORECAST TOTAL/26") ou "COMPARADO TOTAL/26".
+  comparado?: { nome: string; ano: number; dica?: string; rotulo?: string } | null;
   /**
    * Nos Resultados dos cenários analíticos (21/11/2026, pedido do Adão): o Índice de Reajuste (a coluna antes de Janeiro) e, com
    * um cenário comparado, o Índice de Comparação (antes do Comparativo) de cada linha, pelo código — o texto e a dica.
@@ -60,6 +63,8 @@ export type Resultados = {
   centros?: Array<{ codigoRM: string | null; nome: string }>;
   /** Nas obras: o código (centro 1.98 ou 1.99) e o nome da obra. */
   obra?: { codigo: string; nome: string };
+  /** Na aba Departamentos (23/11/2026): o nome do cenário do orçado, quando ele é sintético (sem centros de custo). */
+  orcadoSemCentros?: string | null;
 };
 /** As obras com lançamento no período, com o total do exercício (o Resultado Líquido; no recorte, a soma do que se vê). */
 export type ObrasResultados = { ano: number; ate: number; obras: Array<{ codigo: string; nome: string; total: string }> };
@@ -219,6 +224,9 @@ export const relatoriosService = {
     (await api.get<{ data: string[] }>("/proxy/relatorios/resultados/pesquisa/fornecedores", { params: periodo(ano, ate) })).data.data,
   resultados: async (ano: number, ate: number | undefined, visao: number, comparaCom?: MarcacaoComparavel, prova?: MarcacaoComparavel[]) =>
     (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao, ...comparado(comparaCom), ...comProva(prova) } })).data.data,
+  /** A aba Departamentos (23/11/2026): a DRE do Consolidado com os departamentos abertos pelos centros de custo, com o orçado da Comparação Padrão. */
+  departamentos: async (ano: number, ate: number | undefined, comparaCom?: MarcacaoComparavel) =>
+    (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: "departamentos", ...comparado(comparaCom) } })).data.data,
   /** Os cenários marcados do exercício (21/10/2026): as opções do Compara Com. */
   comparaveis: async (ano: number) => (await api.get<{ data: Comparavel[] }>("/proxy/relatorios/comparaveis", { params: { ano } })).data.data,
   centros: async (ano: number, ate: number | undefined) =>
@@ -264,6 +272,16 @@ export const formato = {
   pct: (v: number) => `${n1.format(v * 100)}%`,
   inteiro: (v: number) => n0.format(v),
   umaCasa: (v: number) => n1.format(v),
+  /**
+   * O Atingimento (23/11/2026, pedido do Adão): o realizado sobre o comparado menos 100%, com o sinal — 106,5% vira "+6,5%" e
+   * 92,5%, "-7,5%"; o que arredonda para zero fica "0,0%", sem sinal. `razao`: o realizado ÷ o comparado.
+   */
+  atingimento: (razao: number) => {
+    const v = razao - 1;
+    const t = `${n1.format(v * 100)}%`;
+    if (!/[1-9]/.test(t)) return t.replace("-", "");
+    return v > 0 ? `+${t}` : t;
+  },
 };
 
 /**

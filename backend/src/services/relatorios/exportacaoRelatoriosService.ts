@@ -25,6 +25,8 @@ import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
 export type EscopoResultados =
   | { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 }
   | { tipo: "centro"; grupo: string }
+  /** A aba Departamentos (23/11/2026): o Consolidado com os departamentos abertos pelos centros de custo. */
+  | { tipo: "departamentos" }
   | { tipo: "unidades" }
   | { tipo: "centros" }
   /** Todos os centros de custo, um arquivo Excel por centro, num ZIP (14/10/2026). */
@@ -47,8 +49,48 @@ const SEM_COMPARACAO: ComparacaoDaTela = { comparaCom: "ORCAMENTO_EMPRESARIAL", 
 
 // O que as visões e os centros de custo têm em comum (o orçado das visões não vai para a exportação).
 type Resultados = Pick<Awaited<ReturnType<typeof resultadosService.centros>>, "ano" | "ate" | "meses" | "linhas">;
-/** Uma aba (Excel) ou um conjunto de páginas (PDF); nos centros de custo, o departamento (para o nome do arquivo). */
-export type Bloco = { nome: string; titulo: string; dados: Resultados; departamento?: string; detalhe?: AlvoDosDetalhes | null };
+/**
+ * Uma aba (Excel) ou um conjunto de páginas (PDF); nos centros de custo, o departamento (para o nome do arquivo). `comparado`
+ * (23/11/2026, os Resultados dos cenários): o rótulo das colunas do cenário comparado — com ele, o total do comparado de cada linha
+ * (o `orcado.total` dela) e as variações (Diferença, Atingimento, Eficiência) entram no arquivo.
+ */
+export type Bloco = { nome: string; titulo: string; dados: Resultados; departamento?: string; detalhe?: AlvoDosDetalhes | null; comparado?: { rotulo: string } | null };
+
+/** Uma célula do total (o valor, o % e o R$/m³). */
+type CelulaDoTotal = { valor: number | null; pct: number | null; unitario: number | null };
+type LinhaDoBloco = Resultados["linhas"][number];
+/** O total do cenário comparado na linha (o campo do orçado, só o total). */
+const doComparado = (l: LinhaDoBloco): CelulaDoTotal | null => (l as { orcado?: { total?: CelulaDoTotal } | null }).orcado?.total ?? null;
+/**
+ * As variações do cenário contra o comparado (23/11/2026), como na tela: a Diferença (o cenário menos o comparado), o Atingimento (o
+ * cenário sobre o comparado; comparado zero, sem ele) e a Eficiência (o % do cenário menos o do comparado, em pontos percentuais; só
+ * nas linhas com %).
+ */
+function variacoes(l: LinhaDoBloco, o: CelulaDoTotal | null) {
+  const r = l.total;
+  const comPct = !l.volume && (l.meses.some((c) => c.pct !== null) || r.pct !== null);
+  return {
+    diferenca: o && r.valor !== null && o.valor !== null ? r.valor - o.valor : null,
+    atingimento: o && r.valor !== null && o.valor ? r.valor / o.valor : null,
+    eficiencia: !o || !comPct ? undefined : r.pct !== null && o.pct !== null ? (r.pct - o.pct) * 100 : null,
+  };
+}
+/**
+ * O Atingimento com o sinal (23/11/2026, pedido do Adão, como na tela): o cenário sobre o comparado menos 100% — "+6,5%" (106,5%),
+ * "-7,5%" (92,5%); o que arredonda para zero, "0,0%", sem sinal. `razao`: o cenário ÷ o comparado.
+ */
+const atingimentoComSinal = (razao: number) => {
+  const v = razao - 1;
+  const t = pct(v);
+  if (!/[1-9]/.test(t)) return t.replace("-", "");
+  return v > 0 ? `+${t}` : t;
+};
+/** Os pontos percentuais com o sinal ("+1,2 p.p."; o que arredonda para zero, sem sinal). */
+const pontos = (pp: number) => {
+  const t = n1.format(pp);
+  if (!/[1-9]/.test(t)) return `${t.replace("-", "")} p.p.`;
+  return `${pp > 0 ? "+" : ""}${t} p.p.`;
+};
 
 const VISOES: Array<{ visao: 0 | 1 | 2 | 3 | 4 | 5; nome: string }> = [
   { visao: 0, nome: "Consolidado" },
@@ -95,6 +137,8 @@ async function blocos(ano: number, ate: number | undefined, escopo: EscopoResult
     const v = VISOES.find((x) => x.visao === escopo.visao)!;
     return [{ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) }];
   }
+  // A aba Departamentos (23/11/2026), sem a aba Detalhes (as linhas dos centros e as "(Outros)" não são as do balancete).
+  if (escopo.tipo === "departamentos") return [{ nome: "Departamentos", titulo: "Departamentos", dados: await resultadosService.departamentos(ano, ate, acesso, true, comparacao.comparaCom), detalhe: null }];
   if (escopo.tipo === "obra" || escopo.tipo === "obras") {
     const obras = escopo.tipo === "obra" ? [escopo.codigo] : (await resultadosService.listarObras(ano, ate, acesso, true)).obras.map((o) => o.codigo);
     const r: Bloco[] = [];
@@ -153,6 +197,8 @@ function abaResultados(b: Bloco, id: Identificacao): AbaEscrita {
     cab(`TOTAL/${String(dados.ano).slice(2)}`),
     cab("%"),
     cab("R$/m³"),
+    // O cenário comparado (23/11/2026): o total dele e as variações, depois do total, como na tela.
+    ...(b.comparado ? [cab(b.comparado.rotulo), cab("%"), cab("R$/m³"), cab("DIFERENÇA"), cab("ATINGIMENTO"), cab("EFICIÊNCIA")] : []),
   ]);
   const cabecalho = linhas.length;
   // Sem o primeiro total da ROL e com os fundos das telas (22/10/2026): os totais em amarelo claro, os resultados mais forte.
@@ -162,17 +208,31 @@ function abaResultados(b: Bloco, id: Identificacao): AbaEscrita {
     const t = (e: Parameters<typeof naCorDaDRE>[0]) => (fundo === "item" ? ESTILO[e] : naCorDaDRE(e, fundo));
     const num = (v: number | null): Celula => (v === null ? { valor: null, estilo: d ? t("destaqueDireita") : ESTILO.itemDireita } : { valor: v, estilo: d ? t("destaqueNumero") : ESTILO.itemNumero });
     const per = (v: number | null): Celula => (v === null || l.volume ? { valor: null, estilo: d ? t("destaqueDireita") : ESTILO.itemDireita } : { valor: v, estilo: d ? t("destaquePercentual") : ESTILO.itemPercentual });
+    const o = b.comparado ? doComparado(l) : null;
+    const v = variacoes(l, o);
+    const texto = (s: string | null): Celula => ({ valor: s, estilo: d ? t("destaqueDireita") : ESTILO.itemDireita });
     linhas.push([
       { valor: l.descricao, estilo: d ? t("destaque") : ESTILO.item },
       ...l.meses.flatMap((c, i) => [num(c.valor), per(c.pct), ...(i === l.meses.length - 1 ? [num(l.volume ? null : c.unitario)] : [])]),
       num(l.total.valor),
       per(l.total.pct),
       num(l.volume ? null : l.total.unitario),
+      ...(b.comparado
+        ? [
+            num(o?.valor ?? null),
+            per(o?.pct ?? null),
+            num(l.volume ? null : (o?.unitario ?? null)),
+            num(v.diferenca),
+            // O Atingimento (o cenário ÷ o comparado − 100%, com o sinal, como na tela), também nas linhas de volume.
+            texto(v.atingimento === null ? null : atingimentoComSinal(v.atingimento)),
+            texto(v.eficiencia === undefined || v.eficiencia === null ? null : pontos(v.eficiencia)),
+          ]
+        : []),
     ]);
   }
   return {
     nome: b.nome,
-    larguras: [48, ...dados.meses.flatMap((_, i) => (i === dados.meses.length - 1 ? [15, 8, 10] : [15, 8])), 16, 8, 10],
+    larguras: [48, ...dados.meses.flatMap((_, i) => (i === dados.meses.length - 1 ? [15, 8, 10] : [15, 8])), 16, 8, 10, ...(b.comparado ? [18, 8, 10, 15, 13, 12] : [])],
     linhas,
     linhaCabecalho: cabecalho,
     rodape: `Resultados ${dados.ano} · ${b.titulo}`,
@@ -310,6 +370,62 @@ function paginasResultados(doc: DocumentoPDF, b: Bloco, id: Identificacao) {
   }
 }
 
+/**
+ * O comparativo de um bloco no PDF (23/11/2026, os Resultados dos cenários): os doze meses, o total e o comparado não cabem lado a
+ * lado no A4; depois das páginas da DRE, as do comparativo — o total do cenário, o do comparado (o valor, o % e o R$/m³) e as
+ * variações (Diferença, Atingimento, Eficiência), como na tela.
+ */
+function paginasDoComparado(doc: DocumentoPDF, b: Bloco, id: Identificacao) {
+  const { dados } = b;
+  const larguraDescricao = 230;
+  const colunas = [`TOTAL/${String(dados.ano).slice(2)}`, "%", "R$/m³", b.comparado!.rotulo, "%", "R$/m³", "DIFERENÇA", "ATINGIMENTO", "EFICIÊNCIA"];
+  // A largura de cada coluna, em partes do espaço depois da descrição: a do rótulo do comparado, a mais larga.
+  const pesos = [1.2, 0.7, 0.8, 1.7, 0.7, 0.8, 1.1, 1.1, 1.0];
+  const parte = (DIREITA - M - larguraDescricao) / pesos.reduce((s, p) => s + p, 0);
+  const x = (i: number) => M + larguraDescricao + parte * pesos.slice(0, i + 1).reduce((s, p) => s + p, 0) - 3;
+  const ALTURA = 13;
+  let y = 0;
+  const cabecalho = () => {
+    doc.retangulo(M, y - 4, DIREITA - M, 13, FUNDO);
+    doc.texto(M + 3, y, "Linha", { fonte: "negrito", tamanho: CORPO });
+    colunas.forEach((c, i) => doc.texto(x(i), y, c, { fonte: "negrito", tamanho: CORPO, alinhar: "direita" }));
+    doc.linha(M, y - 4, DIREITA, y - 4, TRACO);
+    y -= 15;
+  };
+  const titulo = `Resultados · ${b.titulo} · Comparativo`;
+  y = topo(doc, titulo, id, true);
+  cabecalho();
+  for (const l of semPrimeiroTotalDaRol(dados.linhas.filter((z) => z.tipo !== "SECAO"))) {
+    if (y < 40) {
+      y = topo(doc, titulo, id, false);
+      cabecalho();
+    }
+    const fundo = fundoDaDRE(l);
+    const d = fundo !== "item";
+    const fonte: Fonte = d ? "negrito" : "normal";
+    if (d) doc.retangulo(M, y - 7.5, DIREITA - M, ALTURA - 1, fundo === "resultado" ? FUNDO_DO_RESULTADO : FUNDO_DO_TOTAL);
+    const xt = d ? M + 3 : M + 11;
+    doc.texto(xt, y - 2, caber(l.descricao, fonte, CORPO, larguraDescricao - (xt - M) - 4), { fonte, tamanho: CORPO });
+    const valor = (v: number | null | undefined) => (v === null || v === undefined ? "—" : l.volume ? n2.format(v) : n0.format(v));
+    const o = doComparado(l);
+    const v = variacoes(l, o);
+    const comSinal = (n: number, t: string) => (n > 0 && /[1-9]/.test(t) ? `+${t}` : t);
+    const celulas = [
+      valor(l.total.valor),
+      l.volume || l.total.pct === null ? "" : pct(l.total.pct),
+      l.volume || l.total.unitario === null ? "" : n2.format(l.total.unitario),
+      valor(o?.valor),
+      l.volume || !o || o.pct === null ? "" : pct(o.pct),
+      l.volume || !o || o.unitario === null ? "" : n2.format(o.unitario),
+      v.diferenca === null ? "—" : comSinal(v.diferenca, valor(v.diferenca)),
+      v.atingimento === null ? "—" : atingimentoComSinal(v.atingimento),
+      v.eficiencia === undefined ? "" : v.eficiencia === null ? "—" : pontos(v.eficiencia),
+    ];
+    celulas.forEach((t, i) => (t ? doc.texto(x(i), y - 2, t, { fonte: i === 0 || i === 3 ? fonte : "normal", tamanho: CORPO, alinhar: "direita" }) : undefined));
+    y -= ALTURA;
+  }
+}
+
 function valorIndicador(unidade: string, v: number | null) {
   if (v === null) return "—";
   if (unidade === "%") return pct(v);
@@ -388,7 +504,11 @@ const limpar = (nome: string) => nome.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+
 export function arquivoDeResultados(bs: Bloco[], id: Identificacao, formato: Formato, titulo: string, nomeArquivo: string, extras: AbaEscrita[] = []) {
   if (formato === "xlsx") return { nomeArquivo, tipo: XLSX, conteudo: gerarXlsx([...bs.map((b) => abaResultados(b, id)), ...extras], titulo), visoes: bs.map((b) => b.nome) };
   const doc = new DocumentoPDF(A4_PAISAGEM);
-  for (const b of bs) paginasResultados(doc, b, id);
+  for (const b of bs) {
+    paginasResultados(doc, b, id);
+    // O comparativo (23/11/2026): com o cenário comparado, as páginas dele logo depois das da DRE do bloco.
+    if (b.comparado) paginasDoComparado(doc, b, id);
+  }
   rodapes(doc, id);
   return { nomeArquivo, tipo: "application/pdf", conteudo: doc.gerar(titulo), visoes: bs.map((b) => b.nome) };
 }

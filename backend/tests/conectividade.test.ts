@@ -8,7 +8,7 @@ import { signToken, signTokenDaApi, verifyToken } from "../src/lib/jwt.js";
 import { autenticacao } from "../src/middlewares/autenticacao.js";
 import { ApiError, curtoDoIndicador, curtoDoPainel, niveisDaDre, sinalDo, variacao } from "../src/services/conectividade/catalogoApis.js";
 import { exigirLigada } from "../src/services/conectividade/conectividadeService.js";
-import { cardEmSvg, cortar, esc, tabelaEmSvg } from "../src/services/conectividade/visuais.js";
+import { cardEmSvg, cortar, direcaoDo, esc, tabelaEmSvg } from "../src/services/conectividade/visuais.js";
 
 /** Um pedido de mentira: o endereço da conexão e os cabeçalhos. */
 const pedido = (remoto: string, headers: Record<string, string> = {}, secure = false) => ({ socket: { remoteAddress: remoto }, headers, secure }) as unknown as Request;
@@ -89,9 +89,14 @@ describe("Biblioteca de APIs (24/10/2026)", () => {
   it("os textos dos dados não viram marcação no SVG, e os longos se cortam", () => {
     assert.equal(esc(`<script>"a" & 'b'</script>`), "&lt;script&gt;&quot;a&quot; &amp; &#39;b&#39;&lt;/script&gt;");
     assert.ok(cortar("Uma descrição bem comprida demais para caber", 12, 80).endsWith("…"));
-    const bloco = { valor: "1,0", comparado: "2,0", desvio: "-50,0%", sinal: -1 as const };
+    // O realizado menor que o comparado: a seta para baixo, mesmo no sinal Melhor (23/11/2026, a direção do valor).
+    const bloco = { valor: "1,0", comparado: "2,0", desvio: "-50,0%", sinal: 1 as const, direcao: direcaoDo(1, 2) };
     const card = cardEmSvg({ titulo: "<b>x</b>", subtitulo: "s", periodo: "AGO/2026", unidade: "R$ M", rotuloComparado: "Orçado", mes: bloco, acumulado: bloco });
     assert.ok(card.svg.startsWith("<svg") && !card.svg.includes("<b>") && card.largura === 500);
+    assert.ok(card.svg.includes("▼ -50,0%") && !card.svg.includes("▲"));
+    assert.equal(direcaoDo(3, 2), 1);
+    assert.equal(direcaoDo(2, 2), 0);
+    assert.equal(direcaoDo(null, 2), 0);
     const tabela = tabelaEmSvg("T", "S", [{ titulo: "Linha", largura: 200, alinhar: "start" }], [{ celulas: ["A & B"], estilo: "TOTAL" }]);
     assert.ok(tabela.svg.includes("A &amp; B"));
   });

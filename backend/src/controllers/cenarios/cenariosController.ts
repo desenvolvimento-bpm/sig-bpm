@@ -159,6 +159,10 @@ export const cenariosController = {
     if (request.query.escopo === "unidades") {
       if (![0, 1, 2, 3, 4, 5].every(le)) return response.status(403).json({ error: "Exportar todas as unidades pede a leitura de todas as abas da tela Resultados." });
       escopo = { tipo: "unidades" };
+    } else if (request.query.visao === "departamentos") {
+      // A aba Departamentos dos analíticos (23/11/2026), com a permissão dela.
+      if (!temPermissao(request, `${base}_resultados.departamentos:ler`)) return response.status(403).json({ error: "Sem permissão para esta aba." });
+      escopo = { tipo: "departamentos" };
     } else {
       const v = z.coerce.number().int().min(0).max(5).safeParse(request.query.visao ?? 0);
       if (!v.success) return response.status(400).json({ error: "Visão inválida." });
@@ -189,6 +193,12 @@ export const cenariosController = {
   recalcular(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.recalcular(c, usuario(request))) : undefined;
+  },
+
+  /** A aba Departamentos dos Resultados (23/11/2026): o Consolidado com os departamentos abertos pelos grupos de centros. */
+  departamentosDosResultados(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.departamentosDosResultados(c, usuario(request))) : undefined;
   },
 
   /** A aba Centros de Custo dos Resultados (19/11/2026): os grupos de centros com valor no cenário. */

@@ -28,6 +28,107 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 23/11/2026: a aba Departamentos, o Atingimento com o sinal, os ícones dos sinais, o comparado dos cenários e a receita prévia no extrato.
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Nova aba Departamentos, antes de Centros de Custo: a DRE do Consolidado, com os mesmos totais, mas cada departamento de custos e despesas (de Custos de Produção a Despesas Administrativas) abre pelos centros de custo, com o valor de cada um no departamento (pelos rateios do mês); depois dos centros, as atribuições com o que não vem deles (as de centros, com “(Outros)” no nome). Com o orçado da Comparação Padrão.",
+      "O Atingimento passa a ser o realizado sobre o orçado menos 100%, com o sinal: 106,5% aparece como +6,5%, e 92,5%, como -7,5% (também no Exportar).",
+      "No extrato das linhas de Receita Bruta e Líquida de Frete e de Montagem, a parte da receita prévia mostra direto a tabela dos itens importados na Receita Prévia (os valores e o andamento), no lugar do botão da memória de cálculo.",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: [
+      "A legenda dos sinais (Melhor, Até 5% Var. e Pior) traz um quadrado de cada cor, e nos cards o ícone, na cor do sinal, aponta para cima quando o realizado é maior que o comparado e para baixo quando é menor, qualquer que seja o comportamento do card.",
+      "Na aba Variações, o Atingimento sai com o sinal (+6,5%, -7,5%).",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Nova aba Departamentos, antes de Centros de Custo: a DRE do Consolidado do cenário, com os mesmos totais, mas cada departamento de custos e despesas abre pelos grupos de centros de custo (pelo rateio do cenário e, com a caixa Aplicar Reajustes, com os reajustes); depois deles, as atribuições com o que não vem dos centros.",
+      "A coluna do cenário comparado tem o rótulo da marcação dele, com o exercício dele (ORÇADO TOTAL/26, FORECAST TOTAL/26, ANTERIOR TOTAL/25…); sem marcação, COMPARADO TOTAL/26.",
+      "O Exportar (Excel e PDF) leva o comparado e as variações (Diferença, Atingimento e Eficiência).",
+      "O Atingimento passa a ser o cenário sobre o comparado menos 100%, com o sinal (+6,5%, -7,5%).",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: [
+      "A coluna do cenário comparado tem o rótulo da marcação dele, com o exercício dele (ORÇADO TOTAL/26, FORECAST TOTAL/26…); sem marcação, COMPARADO TOTAL/26.",
+      "O Exportar (Excel e PDF) leva o comparado e as variações (Diferença, Atingimento e Eficiência), e o Atingimento sai com o sinal (+6,5%, -7,5%).",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Cenários Analíticos",
+    tela: "Painel de Bordo",
+    rota: "/cenarios/analiticos/0/painel",
+    itens: [
+      "A legenda dos sinais traz um quadrado de cada cor, e nos cards o ícone, na cor do sinal, aponta para cima quando o cenário é maior que o comparado e para baixo quando é menor.",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Cenários Sintéticos",
+    tela: "Painel de Bordo",
+    rota: "/cenarios/sinteticos/0/painel",
+    itens: [
+      "A legenda dos sinais traz um quadrado de cada cor, e nos cards o ícone, na cor do sinal, aponta para cima quando o cenário é maior que o comparado e para baixo quando é menor.",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Relatórios Executivos",
+    rota: RE,
+    itens: [
+      "Nos cards e nas legendas dos sinais, o mesmo padrão dos Painéis de Bordo: a legenda em quadrados de cada cor e o ícone dos cards para cima ou para baixo conforme o realizado é maior ou menor que o comparado.",
+      "Nas tabelas de Resultados, o Atingimento sai com o sinal (+6,5%, -7,5%).",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Realizado por Obra",
+    tela: "Resultados",
+    rota: "/realizado-por-obra/resultados",
+    itens: ["O Atingimento passa a ser o realizado sobre o vendido menos 100%, com o sinal (+6,5%, -7,5%)."],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No extrato das linhas de Receita Bruta e Líquida de Frete e de Montagem, a parte da receita prévia mostra direto a tabela dos itens importados (os valores e o andamento), no lugar do botão da memória de cálculo.",
+    ],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Gestão de Colaboradores",
+    tela: "Painel de Bordo",
+    rota: "/gestao-de-colaboradores/painel/resultados",
+    itens: ["A legenda dos sinais traz um quadrado de cada cor, e o ícone dos cards aponta para cima ou para baixo conforme o valor é maior ou menor que o comparado."],
+  },
+  {
+    publicada: "2026-11-23T12:34",
+    processo: "Central de Conectividade",
+    tela: "APIs",
+    rota: "/central-de-conectividade/biblioteca-de-apis",
+    itens: ["Nos cards em imagem, o ícone do desvio aponta para cima ou para baixo conforme o realizado é maior ou menor que o comparado, como no Painel de Bordo."],
+  },
   // 22/11/2026, à noite: as colunas e o responsável das Verificações.
   {
     publicada: "2026-11-22T23:05",

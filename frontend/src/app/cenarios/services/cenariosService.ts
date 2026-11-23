@@ -746,6 +746,16 @@ export const cenariosService = {
   correspondencias: async () => (await api.get<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias")).data.data,
   gravarCorrespondencias: async (itens: CorrespondenciaDeTarefa[]) => (await api.put<{ data: Correspondencias }>("/proxy/cadastros/linhas/correspondencias", { itens })).data.data,
   resultados: async (id: string, visao: number) => (await api.get<{ data: Resultados }>(`/proxy/cenarios/${id}/resultados`, { params: { visao } })).data.data,
+  /**
+   * A aba Departamentos dos Resultados dos analíticos (23/11/2026): o Consolidado com os departamentos abertos pelos grupos de centros;
+   * com um comparado sintético (sem centros), `comparadoSemCentros`, e as linhas dos centros e as "(Outros)" ficam sem o comparativo.
+   */
+  departamentosDosResultados: async (id: string) =>
+    (
+      await api.get<{ data: Resultados & { comparadoSemCentros: { nome: string; ano: number } | null; reajustado: boolean } }>(
+        `/proxy/cenarios/${id}/resultados/departamentos`,
+      )
+    ).data.data,
   /** A aba Centros de Custo dos Resultados dos analíticos (19/11/2026): os grupos com valor e a DRE de um grupo. */
   centrosDosResultados: async (id: string) =>
     (await api.get<{ data: { ano: number; grupos: Array<{ grupo: string; departamento: string; total: number }> } }>(`/proxy/cenarios/${id}/resultados/centros`)).data.data,

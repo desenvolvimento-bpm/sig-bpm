@@ -17,7 +17,7 @@ import { ABA_DA_VISAO } from "../../services/acesso/telas.js";
 
 const anoSchema = z.coerce.number().int().min(2025).max(2100);
 const ateSchema = z.coerce.number().int().min(1).max(12).optional();
-const visaoSchema = z.union([z.literal("centros"), z.literal("obras"), z.literal("sem_centros"), z.literal("linhas"), z.literal("rateios_linhas"), z.coerce.number().int().min(0).max(5)]);
+const visaoSchema = z.union([z.literal("departamentos"), z.literal("centros"), z.literal("obras"), z.literal("sem_centros"), z.literal("linhas"), z.literal("rateios_linhas"), z.coerce.number().int().min(0).max(5)]);
 const obraSchema = z.string().trim().regex(/^1.9[89]./, "Obra inválida").max(40).optional();
 const grupoSchema = z.string().trim().min(1).max(200).optional();
 const linhaSchema = z.string().trim().min(1).max(60).optional();
@@ -164,6 +164,12 @@ export const relatoriosController = {
     if (v.data === "centros") {
       return responder(response, () => (g.data ? resultadosService.centros(p.ano, g.data, p.ate, acesso, true) : resultadosService.listarCentros(p.ano, p.ate, acesso, true)));
     }
+    // A aba Departamentos (23/11/2026): o Consolidado com os departamentos abertos pelos centros de custo, com o orçado da Comparação Padrão.
+    if (v.data === "departamentos") {
+      const comparaCom = comparaComDe(request);
+      if (comparaCom === false) return response.status(400).json({ error: "Compara Com inválido" });
+      return responder(response, () => resultadosService.departamentos(p.ano, p.ate, acesso, true, comparaCom));
+    }
     // As linhas (26/10/2026), gravadas na etapa Linhas da apuração: as das unidades que o perfil lê.
     if (v.data === "linhas" || v.data === "rateios_linhas") {
       const l = linhaSchema.safeParse(request.query.linha || undefined);
@@ -220,6 +226,7 @@ export const relatoriosController = {
       else return response.status(400).json({ error: "Linha inválida" });
     }
     else if (g.success && g.data) e = { tipo: "centro", grupo: g.data };
+    else if (v.success && v.data === "departamentos") e = { tipo: "departamentos" };
     else if (v.success && typeof v.data === "number") e = { tipo: "visao", visao: v.data as 0 | 1 | 2 | 3 | 4 | 5 };
     else return response.status(400).json({ error: "Visão inválida: use ?visao=0..5, ?grupo= ou ?escopo=unidades|centros." });
     // ?detalhes=1 (27/10/2026): no Excel, a aba Detalhes no fim, com os movimentos do balancete de cada aba.

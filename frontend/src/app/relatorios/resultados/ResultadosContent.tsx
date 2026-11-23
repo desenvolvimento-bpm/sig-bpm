@@ -46,6 +46,9 @@ const VISOES: Array<{ chave: string; aba: string; nome: string; foraDaTela?: boo
   { chave: "3", aba: "servicos", nome: "Serviços" },
   { chave: "4", aba: "despesas", nome: "Despesas e Extra" },
   { chave: "5", aba: "rn", nome: "RN" },
+  // A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: o Consolidado com os departamentos de CPP a DA
+  // abertos pelos centros de custo, no lugar das atribuições e das contas.
+  { chave: "departamentos", aba: "departamentos", nome: "Departamentos" },
   { chave: "centros", aba: "centros", nome: "Centros de Custo" },
   // Os movimentos que deveriam ter centro de custo e não têm (14/10/2026).
   { chave: "sem_centros", aba: "sem_centros", nome: "Sem Centros de Custo" },
@@ -237,7 +240,10 @@ export function TabelaResultados({
   const comOrcadoNoMes = comOrcado && !dados.comparado;
   // O nome do comparado (21/10/2026): "ORÇADO" no Orçamento Empresarial; nos outros cenários do Compara Com, o nome da marcação.
   const ROTULO = (dados.rotuloComparado ?? "Orçado").toUpperCase();
-  const rotuloDoOrcadoTotal = rotulosDoTotal?.comparado ?? (dados.comparado ? `COMPARADO TOTAL/${String(dados.comparado.ano).slice(2)}` : `${ROTULO} TOTAL/${ano}`);
+  // Nos cenários (23/11/2026, pedido do Adão), o rótulo do servidor: pela marcação do comparado ("FORECAST TOTAL/26") ou, sem ela,
+  // "COMPARADO TOTAL/26".
+  const rotuloDoOrcadoTotal =
+    rotulosDoTotal?.comparado ?? (dados.comparado ? (dados.comparado.rotulo ?? `COMPARADO TOTAL/${String(dados.comparado.ano).slice(2)}`) : `${ROTULO} TOTAL/${ano}`);
   const orcadoDa = (l: LinhaResultado, v: number | undefined) => (l.tipo === "SECAO" || v === undefined ? "" : l.volume ? formato.valor(v) : formato.inteiro(v));
   /** O texto com o sinal: + nos positivos (o − dos negativos vem do formato); o que arredonda para zero fica sem sinal. */
   const comSinal = (v: number, texto: string) => (v > 0 && /[1-9]/.test(texto) ? `+${texto}` : texto);
@@ -248,9 +254,12 @@ export function TabelaResultados({
     const d = r.valor - o.valor;
     return comSinal(d, l.volume ? formato.valor(d) : formato.inteiro(d));
   };
-  /** Atingimento: o realizado sobre o orçado, em percentual (orçado zero: traço). */
+  /**
+   * Atingimento: o realizado sobre o orçado menos 100%, com o sinal (23/11/2026, pedido do Adão: 106,5% é "+6,5%"; 92,5%, "-7,5%");
+   * orçado zero: traço.
+   */
   const atingimento = (l: LinhaResultado, r: Celula, o: Celula | undefined) =>
-    l.tipo === "SECAO" || !o ? "" : r.valor === null || !o.valor ? "—" : formato.pct(r.valor / o.valor);
+    l.tipo === "SECAO" || !o ? "" : r.valor === null || !o.valor ? "—" : formato.atingimento(r.valor / o.valor);
   /** Eficiência: o % realizado menos o % orçado, em pontos percentuais, com o sinal (só nas linhas com %). */
   const eficiencia = (l: LinhaResultado, r: Celula, o: Celula | undefined) => {
     if (l.tipo === "SECAO" || l.volume || !o || !temPct(l)) return "";
@@ -843,6 +852,32 @@ function VisaoUnidade({ ano, ate, visao, nome, comparaCom, prova }: { ano: numbe
   return <TabelaResultados key={visao} dados={consulta.data} titulo={`Resultados · ${nome}`} visao={visao === 0 ? { consolidado: true } : { unidade: visao }} nomeVisao={nome} comparados={comparados} />;
 }
 
+/**
+ * A aba Departamentos (23/11/2026, pedido do Adão): a DRE do Consolidado, com os mesmos totais, mas cada departamento de CPP a DA
+ * aberto pelos grupos de centros de custo (o valor de cada um no departamento, pela regra da apuração) e, depois deles, pelas
+ * atribuições com o que não vem dos centros. O orçado é o da Comparação Padrão (na PROVA também): o de um cenário sintético não
+ * tem centros, e as linhas dos centros e as "(Outros)" ficam sem ele.
+ */
+function VisaoDepartamentos({ ano, ate, comparaCom }: { ano: number; ate: number; comparaCom: MarcacaoComparavel }) {
+  const consulta = useQuery({
+    queryKey: ["relatorios", "resultados", ano, ate, "departamentos", comparaCom],
+    queryFn: () => relatoriosService.departamentos(ano, ate, comparaCom),
+  });
+  if (consulta.isError) return <Erro erro={consulta.error} padrao="Erro ao carregar os departamentos." />;
+  if (consulta.isPending) return <Carregando />;
+  return (
+    <div className="space-y-3">
+      {consulta.data.orcadoSemCentros ? (
+        <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+          O cenário do orçado, {consulta.data.orcadoSemCentros}, é sintético e não tem centros de custo: as linhas dos centros e as “(Outros)” ficam sem o
+          orçado.
+        </p>
+      ) : null}
+      <TabelaResultados dados={consulta.data} titulo="Resultados · Departamentos" visao={{ consolidado: true }} nomeVisao="Departamentos" />
+    </div>
+  );
+}
+
 export function ResultadosContent() {
   useRegistrarAcessoTela("/relatorios/resultados");
   const exercicios = useExercicios();
@@ -933,7 +968,20 @@ export function ResultadosContent() {
         comoUsar={
           <ul>
             <li>Escolha o exercício e o mês até onde ver; só as competências fechadas aparecem (os meses abertos ou em conferência ficam de fora).</li>
-            <li>Escolha a visão nas abas: Consolidado, cada unidade, Centros de Custo (com a lista dos centros à esquerda), Sem Centros de Custo, Linhas (com a lista das linhas à esquerda, por unidade), Obras (com a lista das obras à esquerda, com o código e a busca por nome ou código) ou Impostos (os Créditos de Impostos). Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>Escolha a visão nas abas: Consolidado, cada unidade, Departamentos, Centros de Custo (com a lista dos centros à esquerda), Sem Centros de Custo, Linhas (com a lista das linhas à esquerda, por unidade), Obras (com a lista das obras à esquerda, com o código e a busca por nome ou código) ou Impostos (os Créditos de Impostos). Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>
+              Em Departamentos, a DRE do Consolidado, com os mesmos totais, mas, de Custo de Produto Vendido até Despesas Administrativas, cada
+              departamento com centros de custo (Custos de Produção, Montagem, Complementares, Logística, Técnicas, Comerciais e Administrativas) abre
+              pelos centros de custo (como os nomes da aba Centros de Custo), cada um com o total dele no departamento, no lugar das atribuições e das
+              contas. O valor de cada centro segue a regra da apuração: o balde e os rateios do mês (a parte da produção que vai para Serviços, a
+              Montagem dos centros complementares nos Complementares…), por isso um centro pode aparecer em mais de um departamento, e só com as
+              atribuições da aba Centros de Custo (mão de obra, gastos gerais e depreciação). Depois dos centros, as atribuições com o que não vem
+              deles, com as contas: as que os centros não usam (Mão de Obra Terceirizada, Matérias Primas, Estoque) e, nas que eles usam, o resto, com
+              “(Outros)” no nome (os lançamentos sem centro de custo do cadastro e, no seu recorte, os centros que você não vê). As Despesas Variáveis
+              de Venda, sem centros, e do Lucro Operacional em diante, as linhas são as do Consolidado. O orçado é o da Comparação Padrão (também com a
+              PROVA escolhida); o de um cenário sintético não tem centros, e as linhas dos centros e as “(Outros)” ficam sem ele. As linhas dos centros
+              e as “(Outros)” não abrem os lançamentos; as demais, como no Consolidado.
+            </li>
             <li>
               Em Linhas, a DRE de cada linha de produto e de obra, da receita à Margem de Contribuição, com o % e o R$/m³ da unidade dela. A lista traz só as
               linhas das unidades (Matriz, Filial e Serviços) que o seu perfil lê. Os valores são os gravados na etapa Linhas do Fechamento Mensal; uma
@@ -966,8 +1014,8 @@ export function ResultadosContent() {
             <li>
               Na Comparação Padrão (um cenário; de início, a primeira marcação que houver, nessa ordem), nas unidades e no Consolidado, as colunas de
               rótulo preto trazem o orçado (valor, % e R$/m³): depois do mês de referência, o do mês; depois do total, o acumulado de janeiro até ele.
-              Depois do orçado acumulado, a variação: Diferença (realizado − orçado), Atingimento (realizado ÷ orçado) e Eficiência (% realizado − %
-              orçado, em pontos percentuais). Fora do Orçamento, as colunas trazem o nome da marcação (PREVISÃO AGO/26…). Sem cenário, zero.
+              Depois do orçado acumulado, a variação: Diferença (realizado − orçado), Atingimento (realizado ÷ orçado − 100%, com o sinal: 106,5%
+              aparece como +6,5%, e 92,5%, como -7,5%) e Eficiência (% realizado − % orçado, em pontos percentuais). Fora do Orçamento, as colunas trazem o nome da marcação (PREVISÃO AGO/26…). Sem cenário, zero.
               Aparecem as linhas com o realizado em algum mês e as que têm o orçado diferente de zero no cenário comparado (na PROVA, em algum
               deles); as zeradas nos dois ficam de fora.
             </li>
@@ -978,7 +1026,7 @@ export function ResultadosContent() {
               Vendido em ouro forte e o Anterior em ouro fraco —, com as linhas nos tons mais fracos dela. Passe o mouse no rótulo para ver o nome do
               cenário. Os centros de custo, as obras e as linhas não têm orçado.
             </li>
-            <li>Clique no valor de um mês, numa linha com lupa, para ver os lançamentos de origem daquele mês (ou, nas linhas de volume, as listas somadas por obra); clicar na descrição abre o mês de referência.</li>
+            <li>Clique no valor de um mês, numa linha com lupa, para ver os lançamentos de origem daquele mês (ou, nas linhas de volume, as listas somadas por obra); clicar na descrição abre o mês de referência. Nas linhas de Receita Bruta e Líquida de Frete e de Montagem, a parte da receita prévia traz no extrato a tabela dos itens importados na Receita Prévia (os valores e, nos serviços, o andamento de cada medição), com uma aba por origem quando há mais de uma; nas demais receitas, o botão abre a memória de cálculo.</li>
             <li>
               No extrato, clique na conta de um lançamento contábil para ver o balancete dela no mês (o modal Balancete): os movimentos do
               balancete importado no fechamento, com a emissão, o cliente ou fornecedor e o histórico de cada um. Abre no centro
@@ -1036,7 +1084,7 @@ export function ResultadosContent() {
             </li>
             <li>
               “Exportar”, ao lado do período, baixa em Excel (todas as colunas) ou PDF (A4 deitada: cada mês com a participação embaixo, e o total com o %
-              e o R$/m³) o que está na tela (a Visão, o Centro de Custo, o Sem Centro de Custo, a Linha ou a Obra Atual) e, de qualquer aba, todas as unidades,
+              e o R$/m³) o que está na tela (a Visão — também Departamentos —, o Centro de Custo, o Sem Centro de Custo, a Linha ou a Obra Atual) e, de qualquer aba, todas as unidades,
               todos os centros de custo, todas sem centro de custo, todas as linhas e todas as obras (uma por aba ou por
               página). Nas unidades e no Consolidado, o arquivo traz as mesmas linhas da tela, pela comparação escolhida (o orçado não vai
               ao arquivo). Em Excel, também um arquivo por centro de
@@ -1064,6 +1112,10 @@ export function ResultadosContent() {
               de montagem pela montagem (m³). Em Despesas e Extra, no RN e nos centros de custo, as bases são as do Consolidado.
             </p>
             <p>Nos centros de custo, cada mês mostra o mesmo recorte da DRE: os custos e despesas de mão de obra, gastos gerais e depreciação.</p>
+            <p>
+              Em Departamentos, o Consolidado com cada departamento de custos e despesas aberto pelos centros de custo: o valor de cada centro no
+              departamento, pela regra da apuração, e o resto em cada atribuição; os totais são os do Consolidado.
+            </p>
             <p>
               Nas linhas, a DRE de cada unidade dividida entre as linhas dela pela etapa Linhas da apuração (a Receita Prévia nas receitas; nos custos, a tarefa
               das requisições e das notas fiscais e as regras da Alocação nas Linhas), gravada e congelada com o fechamento: a soma das linhas de uma unidade é a
@@ -1122,7 +1174,9 @@ export function ResultadosContent() {
               <Abas rotulo="Visão dos resultados" ativa={visao} onMudar={setVisao} abas={visoes.map((v) => ({ chave: v.chave, rotulo: v.nome }))} />
             </div>
           </div>
-          {!visao ? null : visao === "centros" ? (
+          {!visao ? null : visao === "departamentos" ? (
+            <VisaoDepartamentos ano={ano} ate={ate} comparaCom={comparacao.comparaCom} />
+          ) : visao === "centros" ? (
             <VisaoCentros ano={ano} ate={ate} escolhido={escolhido} onEscolher={setEscolhido} />
           ) : visao === "sem_centros" ? (
             <VisaoSemCentros ano={ano} ate={ate} escolhido={semCentro} onEscolher={setSemCentro} />

@@ -98,11 +98,15 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
     // Os Indicadores Manuais dos sintéticos (12/11/2026, pedido do Adão: uma aba da tela Resultados, depois das visões; os
     // perfis com a aba nas Configurações a herdaram); nos analíticos, nas Premissas.
     // A aba Centros de Custo dos analíticos (19/11/2026, pedido do Adão), depois das unidades; os perfis que leem a tela a
-    // herdaram (as migrações 20261119100000 e 20261119110000), e cada um vê só os grupos do seu recorte.
+    // herdaram (as migrações 20261119100000 e 20261119110000), e cada um vê só os grupos do seu recorte. A aba Departamentos
+    // (23/11/2026, pedido do Adão), antes dela: os perfis que leem o Consolidado e os Centros de Custo a herdaram (migração
+    // 20261123100000).
     {
       codigo: `${base}_resultados`,
       nome: "Resultados",
-      abas: analitico ? [...UNIDADES, { codigo: "centros", nome: "Centros de Custo" }] : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }],
+      abas: analitico
+        ? [...UNIDADES, { codigo: "departamentos", nome: "Departamentos" }, { codigo: "centros", nome: "Centros de Custo" }]
+        : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }],
     },
     // A aba Indicadores no Painel de Bordo, depois de Performance (19/10/2026; antes, a tela Indicadores e, por um dia, a
     // aba Metas; a chave continua `metas`): todos os indicadores do cenário.
@@ -148,12 +152,15 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
       // pedido do Adão: o código fica (a visão rateios_linhas do relatório e da exportação, o `rateios` do PainelDeLinhas e do
       // resultadosLinhaService.linha) para o processo Resultados por Obra. Fora do catálogo, nenhum perfil a alcança.
       // A aba Impostos (Créditos de Impostos; 03/11/2026, pedido do Adão; de início, Almoxarifado), depois de Obras: os créditos
-      // de impostos de cada mês fechado.
+      // de impostos de cada mês fechado. A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: os perfis que
+      // leem o Consolidado e os Centros de Custo a herdaram (migração 20261123100000).
       {
         codigo: "relatorio_resultados",
         nome: "Resultados",
         abas: [
-          ...COM_CENTROS_E_OBRAS.slice(0, 7),
+          ...UNIDADES,
+          { codigo: "departamentos", nome: "Departamentos" },
+          COM_CENTROS_E_OBRAS[6],
           { codigo: "sem_centros", nome: "Sem Centros de Custo" },
           { codigo: "linhas", nome: "Linhas" },
           COM_CENTROS_E_OBRAS[7],

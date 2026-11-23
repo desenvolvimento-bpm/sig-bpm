@@ -171,6 +171,54 @@ function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: st
 }
 
 /**
+ * A aba Departamentos dos Resultados de um cenário analítico (23/11/2026, pedido do Adão), antes de Centros de Custo, como a de
+ * Resultados Empresariais: a DRE do Consolidado do cenário, com os mesmos totais, mas cada departamento de CPP a DA aberto pelos
+ * grupos de centros de custo (o valor de cada um no departamento, pelo rateio do cenário) e, depois deles, pelas atribuições com o que
+ * não vem dos centros (as Premissas das unidades, os Investimentos…).
+ */
+function VisaoDepartamentos({ id }: { id: string }) {
+  const consulta = useQuery({ queryKey: ["cenarios", id, "resultados", "departamentos"], queryFn: () => cenariosService.departamentosDosResultados(id) });
+  if (consulta.isError) {
+    return (
+      <div className="rounded-sm border border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-700">{mensagemDeErro(consulta.error, "Erro ao carregar os departamentos do cenário.")}</p>
+      </div>
+    );
+  }
+  if (consulta.isPending) return <Carregando />;
+  if (consulta.data.linhas.every((l) => l.tipo === "SECAO")) {
+    return <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">O cenário ainda não tem a DRE: ela é calculada a partir das premissas do cenário.</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {consulta.data.comparadoSemCentros ? (
+        <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+          O cenário comparado, {consulta.data.comparadoSemCentros.nome}, é sintético e não tem centros de custo: as linhas dos centros e as “(Outros)” ficam
+          sem o comparativo.
+        </p>
+      ) : null}
+      {consulta.data.reajustado ? (
+        <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+          Valores dos centros com os reajustes da DRE (Aplicar Reajustes), como o Consolidado.
+        </p>
+      ) : null}
+      <TabelaResultados
+        dados={consulta.data}
+        titulo="Resultados · Departamentos"
+        visao={{ consolidado: true }}
+        nomeVisao="Departamentos"
+        consultas={false}
+        doCenario
+        // As Contas do Balancete nas contas (não nas linhas dos centros), como no Consolidado.
+        acaoDaLinha={(l) =>
+          !l.volume && !l.centro && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
+        }
+      />
+    </div>
+  );
+}
+
+/**
  * A tela Resultados de um cenário: as visões da DRE mês a mês no exercício, como em Resultados Empresariais. No sintético,
  * quem edita os cenários edita a DRE aqui, e a aba Indicadores Manuais (12/11/2026, pedido do Adão), depois das visões,
  * digita os indicadores que não saem da DRE; no analítico (13/10/2026), a DRE é calculada a partir das premissas e fica
@@ -195,14 +243,18 @@ export function CenarioResultadosContent() {
   const leManuais = !analitico && hasPermission(t.perm("resultados", "ler", "manuais"));
   // A aba Centros de Custo dos analíticos (19/11/2026, pedido do Adão), depois das unidades, com a permissão dela.
   const leCentrosDosResultados = analitico && hasPermission(t.perm("resultados", "ler", "centros"));
+  // A aba Departamentos dos analíticos (23/11/2026, pedido do Adão), antes de Centros de Custo, com a permissão dela.
+  const leDepartamentos = analitico && hasPermission(t.perm("resultados", "ler", "departamentos"));
   const abas = [
     ...visoes.map((v) => ({ chave: v.chave, rotulo: v.nome })),
+    ...(leDepartamentos ? [{ chave: "departamentos", rotulo: "Departamentos" }] : []),
     ...(leCentrosDosResultados ? [{ chave: "centros", rotulo: "Centros de Custo" }] : []),
     ...(leManuais ? [{ chave: "manuais", rotulo: "Indicadores Manuais" }] : []),
   ];
   const visao = abas.some((a) => a.chave === escolhida) ? escolhida : (abas[0]?.chave ?? "");
   const naManuais = visao === "manuais";
   const nosCentros = visao === "centros";
+  const nosDepartamentos = visao === "departamentos";
   const daVisao = VISOES.find((v) => v.chave === visao);
   const podeEditar = !analitico && !!daVisao && hasPermission(t.perm("resultados", "editar", daVisao.aba)) && !!cenario.data && !travado;
   const nome = daVisao?.nome ?? "";
@@ -217,7 +269,7 @@ export function CenarioResultadosContent() {
   // alterações ainda não recalculadas.
   const podeRecalcular = analitico && !!cenario.data && !travado && hasPermission(t.perm("resultados", "editar"));
   const opcoesExportar: OpcaoExportar[] = [
-    ...(daVisao ? [{ chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { escopo: "atual", visao } }] : []),
+    ...(daVisao || nosDepartamentos ? [{ chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { escopo: "atual", visao } }] : []),
     ...(leTodas ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { escopo: "unidades" } }] : []),
     ...(leCentros
       ? [
@@ -242,7 +294,7 @@ export function CenarioResultadosContent() {
                 endereco={`/proxy/cenarios/${id}/exportar`}
                 opcoes={opcoesExportar}
                 padrao={`${cenario.data?.nome ?? "Cenário"} - Resultados`}
-                imagem={daVisao ? { nome: `${cenario.data?.nome ?? "Cenário"} - Resultados - ${nome}` } : undefined}
+                imagem={daVisao || nosDepartamentos ? { nome: `${cenario.data?.nome ?? "Cenário"} - Resultados - ${nosDepartamentos ? "Departamentos" : nome}` } : undefined}
               /> : null}
           </div>
         }
@@ -258,8 +310,23 @@ export function CenarioResultadosContent() {
               </li>
             ) : null}
             <li>
-              Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? " e, depois delas, Centros de Custo" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).
+              Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? " e, depois delas, Departamentos e Centros de Custo" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).
             </li>
+            {analitico ? (
+              <li>
+                Na aba Departamentos, como em Resultados Empresariais: a DRE do Consolidado do cenário, com os mesmos totais, mas, de Custo de
+                Produto Vendido até Despesas Administrativas, cada departamento com centros de custo (Custos de Produção, Montagem, Complementares,
+                Logística, Técnicas, Comerciais e Administrativas) abre pelos grupos de centros (os da aba Centros de Custo), cada um com o total dele
+                no departamento, no lugar das atribuições e das contas. O valor de cada grupo segue o rateio do cenário (Configurações / Regras de
+                Rateio: a parte da produção que vai para Serviços, a Montagem dos grupos complementares nos Complementares…), por isso um grupo pode
+                aparecer em mais de um departamento; com a DRE calculada com os reajustes (Aplicar Reajustes), com eles. Depois dos grupos, as
+                atribuições com o que não vem deles, com as contas: as que os centros não usam (Mão de Obra Terceirizada, Matérias Primas, Estoque, das
+                Premissas das unidades) e, nas que eles usam, o resto, com “(Outros)” no nome (as Premissas das unidades, a Depreciação dos
+                Investimentos e, no seu recorte, os grupos que você não vê). As Despesas Variáveis de Venda, sem centros, e do Lucro Operacional em
+                diante, as linhas são as do Consolidado. Com um cenário comparado analítico, o comparativo abre do mesmo jeito; um sintético não tem
+                centros de custo, e as linhas dos grupos e as “(Outros)” ficam sem o comparativo, com o aviso.
+              </li>
+            ) : null}
             {analitico ? (
               <li>
                 Na aba Centros de Custo, como em Resultados Empresariais: a lista dos grupos de centros com valor no cenário à esquerda (busque pelo nome)
@@ -271,7 +338,7 @@ export function CenarioResultadosContent() {
                 departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário. Com um cenário comparado
                 analítico, o grupo traz também o comparativo, como nas unidades: o total do mesmo grupo no comparado (pelo nome; o % e o R$/m³ sobre
                 o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
-                coluna do comparado (Comparado Total, com o exercício dele) traz a Média de Referência de cada conta do grupo (a média do realizado
+                coluna do comparado (com o rótulo da marcação dele, ou Comparado Total, e o exercício dele) traz a Média de Referência de cada conta do grupo (a média do realizado
                 carregada em Configurações / Referência) × 12 — parado sobre o rótulo, a dica diz isso —, sem o % e o R$/m³ (a referência não tem as bases do Consolidado; a Eficiência fica com o traço). Sem a Média de
                 Referência no cenário, a aba fica sem o comparativo, com o aviso.
               </li>
@@ -322,7 +389,7 @@ export function CenarioResultadosContent() {
             ) : null}
             <li>
               Use “Exportar” para baixar em Excel ou PDF, como em Resultados Empresariais: a visão atual ou todas as unidades (uma por aba ou por
-              página); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel (os valores das premissas, sem os reajustes): na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
+              página; nos analíticos, também a aba Departamentos); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel (os valores das premissas, sem os reajustes): na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
             </li>
             <li>
               Versões (para quem edita a tela Resultados): “Congelar Versão” trava o cenário na versão atual (VER00, VER01…), como o fechamento de uma
@@ -332,8 +399,11 @@ export function CenarioResultadosContent() {
             </li>
             <li>
               Com um cenário comparado (Configurações / {analitico ? "Comparativo e Reajustes" : "Comparativo"}), depois do total do exercício vêm, em preto e cinza, o total do cenário comparado (valor, % e
-              R$/m³) e, no amarelo, a Diferença (o cenário menos o comparado), o Atingimento (o cenário sobre o comparado) e a Eficiência (a diferença
-              dos %, em pontos percentuais), como o orçado em Resultados Empresariais — sem o mês vigente, porque o cenário se olha nos 12 meses.
+              R$/m³) e, no amarelo, a Diferença (o cenário menos o comparado), o Atingimento (o cenário sobre o comparado menos 100%, com o sinal: 106,5% aparece como +6,5%, e 92,5%,
+              como -7,5%) e a Eficiência (a diferença dos %, em pontos percentuais), como o orçado em Resultados Empresariais — sem o mês vigente, porque o cenário se olha nos 12 meses. O
+              rótulo da coluna do comparado é o da marcação dele, com o exercício dele (ORÇADO TOTAL/26, FORECAST TOTAL/26, ANTERIOR TOTAL/25,
+              VENDIDO TOTAL/26); sem marcação, COMPARADO TOTAL/26. O “Exportar” (Excel e PDF) leva o comparado e as três variações: no Excel, nas
+              mesmas colunas da tela; no PDF, nas páginas Comparativo de cada visão, logo depois da DRE dela.
             </li>
             <li>No menu de níveis (a seta antes do título da tabela), escolha Totais, Atribuições ou Contas (Produção e Serviços, os volumes, aparece em todos: recolhido em Totais e Atribuições, aberto em Contas); a seta de cada total ou atribuição (e a de Produção e Serviços) abre e fecha só aquele grupo.</li>
             <li>O botão de seta ao lado do menu de níveis recolhe (seta para a esquerda) ou expande (seta para a direita) os meses — todos, dezembro também, deixando a descrição e os totais, que se esticam e enchem a tela; a escolha fica guardada neste navegador.</li>
@@ -379,6 +449,8 @@ export function CenarioResultadosContent() {
       {analitico ? <AvisoRateiosSemBase id={id} /> : null}
       {naManuais ? (
         <IndicadoresDoCenario id={id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />
+      ) : nosDepartamentos ? (
+        <VisaoDepartamentos id={id} />
       ) : nosCentros ? (
         <VisaoCentros id={id} escolhido={grupoEscolhido} onEscolher={setGrupoEscolhido} />
       ) : !daVisao ? (

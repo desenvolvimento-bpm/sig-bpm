@@ -728,24 +728,7 @@ export async function reajustarOGrupo(db: Tx, cenarioId: string, g: GrupoDoCenar
   const est = await estrutura();
   const fatores = await fatoresDoCenario(db, { id: cenarioId, ...cenario }, est);
   if (!fatores.size) return porConta;
-  const [linhas, gravadas, regras, projetos] = await Promise.all([
-    linhasDoCadastro(),
-    db.cenarioPremissa.findMany({ where: { cenarioId } }),
-    regrasDoCenario(db, cenarioId),
-    db.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
-  ]);
-  const { porVenda, bases } = calcularPremissas(est, linhas, cenario.ano, gravadas);
-  for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
-  const percentuais = percentuaisPelasRegras(regras, cenario.ano, bases);
-  const porCodigo = new Map(est.map((l) => [l.codigo, l]));
-  const fator = (u: number, codigo: string, m: number) => {
-    const l = porCodigo.get(codigo);
-    const porUnidade = l ? GRUPOS_POR_UNIDADE[l.grupoSigla]?.find((x) => x.unidade === u) : undefined;
-    if (!porUnidade) return fatorNaUnidade(fatores, codigo, u)?.[m] ?? 1;
-    const volumes = porUnidade.vendas.map((v) => Math.max(0, porVenda.get(`${u}|${v.chave}|${C.PRODUCAO_M3}`)?.[m] ?? 0));
-    const volume = volumes.reduce((s, v) => s + v, 0);
-    return porUnidade.vendas.reduce((s, v, k) => s + (volume > 0 ? volumes[k] / volume : k === 0 ? 1 : 0) * (fatorNaVenda(fatores, codigo, u, v.chave)?.[m] ?? 1), 0);
-  };
+  const { percentuais, fator } = await rateioDoCenario(db, cenarioId, cenario.ano, est, fatores);
   const r = new Map<string, number[]>();
   for (const [codigo, meses] of porConta) {
     const lista = [...meses];
@@ -755,6 +738,74 @@ export async function reajustarOGrupo(db: Tx, cenarioId: string, g: GrupoDoCenar
       partes.forEach((x, m) => (lista[m] += x * (fator(u, destino, m) - 1)));
     }
     r.set(codigo, lista);
+  }
+  return r;
+}
+
+/**
+ * O rateio do cenário (os percentuais das regras de rateio de cada mês, sobre as bases das premissas e a Liberação de Projetos) e o
+ * fator do reajuste de cada conta de destino numa unidade e num mês (nos Custos de Produção da Matriz e da Filial, o das vendas, na
+ * proporção do volume produzido de cada uma; sem índice, 1), com os `fatores` do cenário (fatoresDoCenario).
+ */
+async function rateioDoCenario(db: Tx, cenarioId: string, ano: number, est: LinhaEstrutura[], fatores: Awaited<ReturnType<typeof fatoresDoCenario>>) {
+  const [linhas, gravadas, regras, projetos] = await Promise.all([
+    linhasDoCadastro(),
+    db.cenarioPremissa.findMany({ where: { cenarioId } }),
+    regrasDoCenario(db, cenarioId),
+    db.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
+  ]);
+  const { porVenda, bases } = calcularPremissas(est, linhas, ano, gravadas);
+  for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);
+  const percentuais = percentuaisPelasRegras(regras, ano, bases);
+  const porCodigo = new Map(est.map((l) => [l.codigo, l]));
+  const fator = (u: number, codigo: string, m: number) => {
+    const l = porCodigo.get(codigo);
+    const porUnidade = l ? GRUPOS_POR_UNIDADE[l.grupoSigla]?.find((x) => x.unidade === u) : undefined;
+    if (!porUnidade) return fatorNaUnidade(fatores, codigo, u)?.[m] ?? 1;
+    const volumes = porUnidade.vendas.map((v) => Math.max(0, porVenda.get(`${u}|${v.chave}|${C.PRODUCAO_M3}`)?.[m] ?? 0));
+    const volume = volumes.reduce((s, v) => s + v, 0);
+    return porUnidade.vendas.reduce((s, v, k) => s + (volume > 0 ? volumes[k] / volume : k === 0 ? 1 : 0) * (fatorNaVenda(fatores, codigo, u, v.chave)?.[m] ?? 1), 0);
+  };
+  return { percentuais, fator };
+}
+
+/**
+ * Os grupos de centros de custo na DRE do cenário (23/11/2026, pedido do Adão: a aba Departamentos dos Resultados): como no
+ * calcularAnalitico, os valores gravados de cada grupo (os doze meses, com o Quadro de Lotação e os encargos do último cálculo) vão
+ * às unidades pelo rateio (alocarCentros: a unidade e a conta de destino — a parte da Complementar, na equivalente da CSC; a da
+ * produção que vai para Serviços, na da CSM ou da CSC), com o fator do reajuste da conta de destino na unidade quando a DRE foi
+ * calculada com os reajustes (reajustesCalculados), e somam-se nas unidades, como o Consolidado. O que o rateio não leva a nenhuma
+ * unidade fica fora. Por grupo, os doze meses de cada conta de destino.
+ */
+export async function centrosNaDREDoCenario(db: Tx, cenarioId: string) {
+  const cenario = await db.cenario.findUniqueOrThrow({
+    where: { id: cenarioId },
+    select: { ano: true, indicesDosReajustes: true, aplicacaoDosReajustes: true, reajustesCalculados: true },
+  });
+  const [est, grupos, gravados] = await Promise.all([
+    estrutura(),
+    gruposDoCenario(cenarioId, db),
+    db.cenarioCentro.findMany({ where: { cenarioId, mes: { gte: 1, lte: 12 } }, select: { grupo: true, mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
+  ]);
+  const fatores = cenario.reajustesCalculados ? await fatoresDoCenario(db, { id: cenarioId, ...cenario }, est) : new Map();
+  const { percentuais, fator } = await rateioDoCenario(db, cenarioId, cenario.ano, est, fatores);
+  const porGrupo = new Map<string, Array<{ grupo: string; codigo: string; mes: number; valor: number }>>();
+  for (const x of gravados) {
+    const valor = Number(x.valor);
+    if (valor) porGrupo.set(x.grupo, [...(porGrupo.get(x.grupo) ?? []), { grupo: x.grupo, codigo: x.linhaDRE.codigo, mes: x.mes, valor }]);
+  }
+  const r = new Map<string, Map<string, number[]>>();
+  for (const g of grupos) {
+    const valores = porGrupo.get(g.grupo);
+    if (!valores) continue;
+    const porDestino = new Map<string, number[]>();
+    for (const [k, partes] of alocarCentros(est, [g], valores, percentuais)) {
+      const [u, destino] = [Number(k.slice(0, k.indexOf("|"))), k.slice(k.indexOf("|") + 1)];
+      const lista = porDestino.get(destino) ?? Array<number>(12).fill(0);
+      partes.forEach((x, m) => (lista[m] += fatores.size ? x * fator(u, destino, m) : x));
+      porDestino.set(destino, lista);
+    }
+    r.set(g.grupo, porDestino);
   }
   return r;
 }

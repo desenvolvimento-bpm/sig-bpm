@@ -171,23 +171,7 @@ const numerica = (chave: string, rotulo: string, campo: (l: LinhaExtrato) => num
  * filtro e ordem nos rótulos das colunas.
  */
 export function MemoriaCalculoDialog({ anoMes, unidade, natureza, variacao = false, obra, onFechar }: Props) {
-  const { data, isPending, isError } = useQuery({
-    queryKey: ["receita-previa", anoMes, "itens", unidade, natureza],
-    queryFn: () => receitaPreviaService.itens(anoMes, unidade, natureza),
-  });
-  const grupos = useMemo(
-    () =>
-      GRUPOS_ORIGEM.map((g) => ({
-        ...g,
-        linhas: agrupar(
-          (data?.itens ?? []).filter((i) => i.origem === g.origem && doExtrato(i, variacao) && (!obra || numeroDaObra(i.obra) === obra)),
-          g.origem,
-        ),
-      })).filter((g) => g.linhas.length > 0),
-    [data, variacao, obra],
-  );
-  const [escolhido, setEscolhido] = useState<string | null>(null);
-  const ativo = grupos.find((g) => g.origem === escolhido) ?? grupos[0];
+  const { data, grupos } = useGruposDaMemoria(anoMes, unidade, natureza, variacao, obra);
   const registros = grupos.reduce((t, g) => t + g.linhas.reduce((n, l) => n + l.registros, 0), 0);
 
   return (
@@ -210,31 +194,74 @@ export function MemoriaCalculoDialog({ anoMes, unidade, natureza, variacao = fal
             valores ficam como foram apurados, com o preço vigente na apuração.
           </DialogDescription>
         </DialogHeader>
-        {isError ? <p className="text-sm text-red-700">Erro ao carregar a memória de cálculo.</p> : null}
-        {isPending ? (
-          <Carregando linhas={4} />
-        ) : ativo ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="shrink-0">
-              <Abas
-                rotulo="Origem dos itens"
-                ativa={ativo.origem}
-                onMudar={setEscolhido}
-                abas={grupos.map((g) => ({ chave: g.origem, rotulo: g.rotulo }))}
-              />
-            </div>
-            <TabelaDoGrupo key={ativo.origem} linhas={ativo.linhas} origem={ativo.origem} unidade={unidade} variacao={variacao} />
-          </div>
-        ) : (
-          <p className="text-sm text-gray-600">Nenhum item nesta linha.</p>
-        )}
+        <MemoriaDaReceita anoMes={anoMes} unidade={unidade} natureza={natureza} variacao={variacao} obra={obra} />
       </DialogContent>
     </Dialog>
   );
 }
 
+/** Os itens da linha da receita prévia (a consulta, a mesma do modal e do extrato), agrupados por origem e por obra. */
+function useGruposDaMemoria(anoMes: string, unidade: number, natureza: Natureza, variacao: boolean, obra?: string) {
+  const consulta = useQuery({
+    queryKey: ["receita-previa", anoMes, "itens", unidade, natureza],
+    queryFn: () => receitaPreviaService.itens(anoMes, unidade, natureza),
+  });
+  const { data } = consulta;
+  const grupos = useMemo(
+    () =>
+      GRUPOS_ORIGEM.map((g) => ({
+        ...g,
+        linhas: agrupar(
+          (data?.itens ?? []).filter((i) => i.origem === g.origem && doExtrato(i, variacao) && (!obra || numeroDaObra(i.obra) === obra)),
+          g.origem,
+        ),
+      })).filter((g) => g.linhas.length > 0),
+    [data, variacao, obra],
+  );
+  return { ...consulta, grupos };
+}
+
+/**
+ * O corpo da memória de cálculo: as abas das origens (Produção, Expedição, Saídas, Devoluções, Serviços e Lanç. Manuais, só as com
+ * itens) e a tabela da escolhida. `embutida` (23/11/2026, pedido do Adão: no extrato das linhas de Receita Bruta e Líquida de Frete e
+ * de Montagem de Resultados, no lugar do botão que abria a memória): a tabela com altura máxima e rolagem própria, e as abas só com
+ * mais de uma origem.
+ */
+export function MemoriaDaReceita({
+  anoMes,
+  unidade,
+  natureza,
+  variacao = false,
+  obra,
+  embutida = false,
+}: {
+  anoMes: string;
+  unidade: number;
+  natureza: Natureza;
+  variacao?: boolean;
+  obra?: string;
+  embutida?: boolean;
+}) {
+  const { isPending, isError, grupos } = useGruposDaMemoria(anoMes, unidade, natureza, variacao, obra);
+  const [escolhido, setEscolhido] = useState<string | null>(null);
+  const ativo = grupos.find((g) => g.origem === escolhido) ?? grupos[0];
+  if (isError) return <p className="text-sm text-red-700">Erro ao carregar a memória de cálculo.</p>;
+  if (isPending) return <Carregando linhas={embutida ? 2 : 4} />;
+  if (!ativo) return <p className="text-sm text-gray-600">Nenhum item nesta linha.</p>;
+  return (
+    <div className={embutida ? "space-y-2" : "flex min-h-0 flex-1 flex-col gap-3"}>
+      {!embutida || grupos.length > 1 ? (
+        <div className="shrink-0">
+          <Abas rotulo="Origem dos itens" ativa={ativo.origem} onMudar={setEscolhido} abas={grupos.map((g) => ({ chave: g.origem, rotulo: g.rotulo }))} />
+        </div>
+      ) : null}
+      <TabelaDoGrupo key={ativo.origem} linhas={ativo.linhas} origem={ativo.origem} unidade={unidade} variacao={variacao} embutida={embutida} />
+    </div>
+  );
+}
+
 /** A tabela de uma origem; trocar de aba remonta a tabela, e os filtros recomeçam. */
-function TabelaDoGrupo({ linhas, origem, unidade, variacao }: { linhas: LinhaExtrato[]; origem: string; unidade: number; variacao: boolean }) {
+function TabelaDoGrupo({ linhas, origem, unidade, variacao, embutida = false }: { linhas: LinhaExtrato[]; origem: string; unidade: number; variacao: boolean; embutida?: boolean }) {
   const colunas = useMemo(() => {
     const algum = (f: (l: LinhaExtrato) => unknown) => linhas.some((l) => f(l) !== null && f(l) !== undefined && f(l) !== "");
     const valoradoPorPreco = origem === "PRODUCAO" || origem === "EXPEDICAO";
@@ -303,8 +330,8 @@ function TabelaDoGrupo({ linhas, origem, unidade, variacao }: { linhas: LinhaExt
     // Só esta área rola; os rótulos da tabela ficam presos no topo dela. A área
     // ganha camada própria (will-change): com os rótulos fixos, sem ela o
     // navegador redesenha a tabela inteira a cada passo, e a tela pisca.
-    <div className="min-h-0 flex-1 overflow-auto will-change-transform">
-      <table className="tabela-sig w-full border-collapse text-sm">
+    <div className={`${embutida ? "max-h-96" : "min-h-0 flex-1"} overflow-auto will-change-transform`}>
+      <table className={`tabela-sig w-full border-collapse ${embutida ? "text-xs" : "text-sm"}`}>
         {tabela.cabecalho}
         <tbody>
           {tabela.visiveis.length === 0 ? (

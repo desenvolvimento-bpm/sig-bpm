@@ -198,7 +198,7 @@ export function ResultadosDaObraContent() {
             </li>
             <li>
               Depois dos meses, o Realizado (a soma dos meses), o Vendido e as variações: a Diferença (o realizado menos o vendido), o Atingimento (o realizado
-              sobre o vendido) e a Eficiência (o % realizado menos o % vendido, em pontos percentuais).
+              sobre o vendido menos 100%, com o sinal: +6,5% é 106,5% do vendido) e a Eficiência (o % realizado menos o % vendido, em pontos percentuais).
             </li>
           </ul>
         }

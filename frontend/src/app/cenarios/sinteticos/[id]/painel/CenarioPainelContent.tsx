@@ -103,9 +103,10 @@ export function CenarioPainelContent() {
             </p>
             <p>
               O desvio (vs. Comparado) é o valor do cenário sobre o do comparado, menos 1. A faixa à direita do destaque e o ícone ficam verdes (azuis, com a
-              Acessibilidade Daltonismo), com um triângulo para cima, quando o cenário está do lado bom do comparado; vermelhos, com um triângulo para
-              baixo, do lado ruim; e amarelos, com um quadrado, quando o desvio é de até 5%; o lado bom depende do sentido do
-              indicador (↑ ou ↓).
+              Acessibilidade Daltonismo) quando o cenário está do lado bom do comparado; vermelhos, do lado ruim; e amarelos quando o desvio é de
+              até 5% (na legenda, um quadrado de cada cor); o lado bom depende do sentido do indicador (↑ ou ↓). A forma do ícone é a do valor,
+              qualquer que seja o comportamento do card: triângulo para cima com o cenário maior que o comparado, para baixo com ele menor e
+              quadrado quando são iguais.
             </p>
           </>
         }

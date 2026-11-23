@@ -6,8 +6,12 @@ import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
 import { dreService, RegraDREError } from "../dre/dreService.js";
 import { obrasService } from "../dre/obrasService.js";
 import { GRUPOS_SEM_CENTRO, nomeDoGrupoSemCentro, semCentroService, type GrupoSemCentro } from "../dre/semCentroService.js";
-import { linhasDoCentro } from "../dre/recorteCentros.js";
+import { linhasDoCentro, prefixoDaAtribuicao } from "../dre/recorteCentros.js";
 import { baseDoPercentual, baseDoUnitario, basesDoConsolidado, COD, GRUPOS_DE_VOLUME, type VisaoResultados } from "./basesResultados.js";
+import { centrosNaDRE } from "./centrosNaDRE.js";
+import { montarDepartamentos } from "./departamentosDaDRE.js";
+import { centrosNaDREDoCenario } from "../cenarios/premissasCenario.js";
+import { atribuicoesDoCentro } from "../dre/recorteCentros.js";
 
 /**
  * Relatório de Resultados: as visões da DRE (unidades, consolidado e centros
@@ -388,6 +392,73 @@ export const resultadosService = {
       centros: [...centros.values()].sort((a, b) => (a.codigoRM ?? "").localeCompare(b.codigoRM ?? "")),
       meses: meses.map(({ mes, rotulo, competenciaId }) => ({ mes, rotulo, apurado: competenciaId !== null })),
       linhas: montar(linhas, "centros", apurado, valores, consolidado, acesso).filter((l) => l.tipo !== "SECAO"),
+    };
+  },
+
+  /**
+   * A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: a DRE do Consolidado mês a mês, com os mesmos
+   * totais, mas cada departamento com centros de custo (de CPP a DA) abre pelos grupos de centros (montarDepartamentos), cada um
+   * com o valor dele no departamento pela regra da apuração (centrosNaDRE), e pelo resto das atribuições. Com o orçado da
+   * Comparação Padrão (`comparaCom`), como o Consolidado: o do cenário analítico abre pelos centros dele do mesmo jeito (os valores
+   * do rateio do cenário, centrosNaDREDoCenario, nas mesmas atribuições); um sintético não tem centros (`orcadoSemCentros`), e as
+   * linhas dos centros e as "(Outros)" ficam sem o orçado. Com recorte (o Gestor e o Coordenador), só os centros e as linhas dele:
+   * os demais ficam nas "(Outros)". As linhas dos centros (`centro`) e as "(Outros)" não abrem os lançamentos.
+   */
+  async departamentos(ano: number, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false, comparaCom: Comparacao = "ORCAMENTO_EMPRESARIAL") {
+    const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
+    const competencias = meses.map((m) => m.competenciaId);
+    const [linhas, consolidado, centros, orcado] = await Promise.all([estrutura(), valoresDaVisao(competencias, 0), centrosNaDRE(competencias, acesso), orcadoDaVisao(0, ultimo, comparaCom)]);
+    const apurado = meses.map((m) => m.competenciaId !== null);
+    // Os centros do orçado no mês de referência e no acumulado até ele; com recorte, só os grupos que o realizado mostra.
+    const doCenario = orcado.cenario ? await getPrismaClient().cenario.findUnique({ where: { id: orcado.cenario.id }, select: { tipo: true } }) : null;
+    const analitico = doCenario?.tipo === "ANALITICO";
+    let centrosDoOrcado: Map<string, Array<Map<string, number>>> | null = new Map();
+    if (orcado.cenario && !analitico) centrosDoOrcado = null;
+    else if (orcado.cenario) {
+      const permitidas = atribuicoesDoCentro(linhas);
+      const visiveis = acesso.recorteCentro || acesso.recorteDepartamento ? new Set(centros.keys()) : null;
+      for (const [g, contas] of await centrosNaDREDoCenario(getPrismaClient(), orcado.cenario.id)) {
+        if (visiveis && !visiveis.has(g)) continue;
+        const mes = new Map<string, number>();
+        const total = new Map<string, number>();
+        for (const [codigo, lista] of contas) {
+          if (!permitidas.has(prefixoDaAtribuicao(codigo))) continue;
+          mes.set(codigo, lista[ultimo - 1] ?? 0);
+          total.set(codigo, lista.slice(0, ultimo).reduce((s, v) => s + v, 0));
+        }
+        centrosDoOrcado.set(g, [mes, total]);
+      }
+    }
+    const dep = montarDepartamentos(linhas, [
+      { consolidado, centros },
+      { consolidado: [orcado.daVisao.mes, orcado.daVisao.total], centros: centrosDoOrcado },
+    ]);
+    const [doRealizado, doOrcado] = dep.series;
+    // As linhas que entram só com o orçado (diferente de zero), como nas visões.
+    const comOrcado = new Set(doOrcado.valores.flatMap((m) => [...m].filter(([, v]) => arredonda(v, 4) !== 0).map(([codigo]) => codigo)));
+    const porCodigo = new Map(dep.linhas.map((l) => [l.codigo, l]));
+    // O % e o R$/m³ do orçado sobre as bases do Consolidado dele, como no Consolidado.
+    const celula = (l: LinhaEstrutura, k: 0 | 1) => {
+      const v = arredonda(doOrcado.valores[k].get(l.codigo) ?? 0, 4);
+      const bases = k === 0 ? orcado.doConsolidado.mes : orcado.doConsolidado.total;
+      const bp = baseDoPercentual(0, l);
+      const bu = baseDoUnitario(l);
+      return { valor: v, pct: bp ? divide(v, bases.get(bp)) : null, unitario: bu ? divide(v, bases.get(bu)) : null };
+    };
+    return {
+      ano,
+      ate: ultimo,
+      meses: meses.map(({ mes, rotulo, competenciaId }) => ({ mes, rotulo, apurado: competenciaId !== null })),
+      cenarioOrcado: orcado.cenario?.nome ?? null,
+      rotuloComparado: rotuloDaComparacao(comparaCom, orcado.cenario),
+      // O cenário do orçado é sintético (sem centros de custo): a tela avisa.
+      orcadoSemCentros: orcado.cenario && !analitico ? orcado.cenario.nome : null,
+      linhas: montar(dep.linhas, 0, apurado, doRealizado.valores, consolidado, acesso, comOrcado).map((l) => ({
+        ...l,
+        ...(dep.centros.has(l.codigo) ? { centro: true } : {}),
+        podeDetalhar: l.podeDetalhar && !dep.parciais.has(l.codigo),
+        orcado: l.tipo === "SECAO" ? null : doOrcado.semValor.has(l.codigo) ? undefined : { mes: celula(porCodigo.get(l.codigo)!, 0), total: celula(porCodigo.get(l.codigo)!, 1) },
+      })),
     };
   },
 };

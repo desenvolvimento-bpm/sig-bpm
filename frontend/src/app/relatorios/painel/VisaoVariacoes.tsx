@@ -63,7 +63,7 @@ const QUANTAS = 3;
 export type OrdemDasVariacoes = "diferenca" | "atingimento" | "eficiencia";
 const ORDENS: Array<{ valor: OrdemDasVariacoes; rotulo: string; dica: string }> = [
   { valor: "diferenca", rotulo: "Diferença", dica: "As três contas com a maior diferença em reais (realizado − comparado), para mais ou para menos." },
-  { valor: "atingimento", rotulo: "Atingimento", dica: "As três contas com o atingimento (realizado ÷ comparado) mais longe de 100%, para mais ou para menos." },
+  { valor: "atingimento", rotulo: "Atingimento", dica: "As três contas com o atingimento (realizado ÷ comparado − 100%) mais longe de zero, para mais ou para menos." },
   { valor: "eficiencia", rotulo: "Eficiência", dica: "As três contas com a maior eficiência (% realizado − % comparado, em pontos percentuais), para mais ou para menos." },
 ];
 
@@ -160,8 +160,8 @@ const inteiro = (v: number) => formato.inteiro(Math.round(v) || 0);
 /** O texto com o sinal: + nos positivos (o − dos negativos vem do formato); o que arredonda para zero fica sem sinal. */
 const comSinal = (v: number, texto: string) => (v > 0 && /[1-9]/.test(texto) ? `+${texto}` : texto);
 const diferencaDo = (c: Comparado) => comSinal(c.diferenca, inteiro(c.diferenca));
-/** Atingimento: o realizado sobre o comparado, em percentual (comparado zero: traço), como nas abas das unidades. */
-const atingimentoDo = (c: Comparado) => (c.atingimento === null ? "—" : formato.pct(c.atingimento));
+/** Atingimento: o realizado sobre o comparado menos 100%, com o sinal (comparado zero: traço), como nas abas das unidades (23/11/2026). */
+const atingimentoDo = (c: Comparado) => (c.atingimento === null ? "—" : formato.atingimento(c.atingimento));
 /** Eficiência: o % realizado menos o % comparado, em pontos percentuais, com o sinal (sem o %: traço). */
 const eficienciaDo = (c: Comparado) => {
   if (c.eficiencia === null) return "—";
@@ -176,7 +176,7 @@ const temPct = (l: LinhaResultado) => !l.volume && (l.meses.some((c) => c.pct !=
 /** O período dos meses: "JAN a AGO/26" (ou só "JAN/26", com um mês). */
 const periodoDos = (meses: MesRelatorio[]) => (meses.length === 1 ? meses[0].rotulo : `${meses[0].rotulo.slice(0, 3)} a ${meses[meses.length - 1].rotulo}`);
 
-/** A medida do Ordenar Por num comparado (a distância de 100% no atingimento); nula, sem a medida. */
+/** A medida do Ordenar Por num comparado (a distância de zero no atingimento, o realizado ÷ o comparado − 100%); nula, sem a medida. */
 const MEDIDA: Record<OrdemDasVariacoes, (c: Comparado) => number | null> = {
   diferenca: (c) => Math.abs(c.diferenca),
   atingimento: (c) => (c.atingimento === null ? null : Math.abs(c.atingimento - 1)),
@@ -480,16 +480,21 @@ function MesesDaConta({ ano, consulta, onFechar }: { ano: number; consulta: Extr
   );
 }
 
-/** O ícone do sinal, na cor dele: ▲ melhor, ▼ pior e ■ até 5% (o dos cards do Painel de Bordo). */
-function IconeDoSinal({ s, cores, titulo }: { s: Sinal; cores: Record<Sinal, string>; titulo?: string }) {
+/**
+ * O ícone do sinal, na cor dele (melhor, até 5% ou pior), como o dos cards do Painel de Bordo; a forma (23/11/2026, pedido do Adão) é
+ * a da direção do valor: ▲ o realizado maior que o comparado (a Diferença positiva), ▼ menor e ■ igual; na legenda, o quadrado.
+ */
+function IconeDoSinal({ s, direcao, cores, titulo }: { s: Sinal; direcao: -1 | 0 | 1; cores: Record<Sinal, string>; titulo?: string }) {
   const fill = cores[s];
   return (
     <svg viewBox="0 0 12 12" className="inline-block size-3 shrink-0" role={titulo ? "img" : undefined} aria-label={titulo} aria-hidden={titulo ? undefined : true}>
       {titulo ? <title>{titulo}</title> : null}
-      {s === 1 ? <polygon points="6,1 11.5,11 0.5,11" style={{ fill }} /> : s === -1 ? <polygon points="0.5,1 11.5,1 6,11" style={{ fill }} /> : <rect x={1.5} y={1.5} width={9} height={9} style={{ fill }} />}
+      {direcao === 1 ? <polygon points="6,1 11.5,11 0.5,11" style={{ fill }} /> : direcao === -1 ? <polygon points="0.5,1 11.5,1 6,11" style={{ fill }} /> : <rect x={1.5} y={1.5} width={9} height={9} style={{ fill }} />}
     </svg>
   );
 }
+/** A direção da Diferença (o realizado menos o comparado): 1 positiva, -1 negativa, 0 zero. */
+const direcaoDa = (c: Comparado): -1 | 0 | 1 => (Math.abs(c.diferenca) < 1e-9 ? 0 : c.diferenca > 0 ? 1 : -1);
 
 /**
  * As linhas dos comparados de uma variação (como as dos cards PROVA, também na Comparação Padrão e na Média): em cada uma, o
@@ -527,7 +532,7 @@ function LinhasDosComparados({ v, comparativos, ordem, cores }: { v: Variacao; c
             </span>
             <span className="text-right text-[13px] font-bold whitespace-nowrap text-gray-900">{inteiro(c.base)}</span>
             <span className="inline-flex items-center justify-end gap-1 text-[13px] font-bold whitespace-nowrap text-gray-900">
-              <IconeDoSinal s={c.sinal} cores={cores} />
+              <IconeDoSinal s={c.sinal} direcao={direcaoDa(c)} cores={cores} />
               {diferencaDo(c)}
             </span>
             <span className="text-right text-[13px] font-bold whitespace-nowrap text-gray-900">{atingimentoDo(c)}</span>
@@ -718,7 +723,7 @@ export function VisaoVariacoes({ ano, ate, comparacao }: { ano: number; ate: num
         >
           {([1, 0, -1] as Sinal[]).map((s) => (
             <span key={s} className="inline-flex items-center gap-1.5">
-              <IconeDoSinal s={s} cores={cores} />
+              <IconeDoSinal s={s} direcao={0} cores={cores} />
               {ROTULO_DO_SINAL[s]}
             </span>
           ))}

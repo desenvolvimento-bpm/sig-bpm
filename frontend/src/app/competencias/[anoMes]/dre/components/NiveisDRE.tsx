@@ -43,7 +43,8 @@ const guardarNivel = (chave: string, n: Nivel) => {
   }
 };
 
-type Linha = { codigo: string; tipo: string };
+/** `centro` (23/11/2026, a aba Departamentos dos Resultados): a linha de um grupo de centros de custo, no lugar das atribuições. */
+type Linha = { codigo: string; tipo: string; centro?: boolean };
 
 /**
  * O nível de contorno de cada linha, como na planilha: 0 os totais, 1 as
@@ -87,8 +88,9 @@ export function estrutura(linhas: Linha[]) {
     }
     for (const g of acima.get(l.codigo)!) comFilhos.add(g);
   }
-  // Totais sem atribuição embaixo (só contas, como a ROB): no nível Atribuições, ficam fechados.
-  const comAtribuicao = new Set(linhas.filter((l) => l.tipo !== "ITEM" && nivel.get(l.codigo) === 1).map((l) => acima.get(l.codigo)![0]));
+  // Totais sem atribuição embaixo (só contas, como a ROB): no nível Atribuições, ficam fechados. Os com centros de custo (a aba
+  // Departamentos, 23/11/2026) ficam abertos: os centros estão no lugar das atribuições.
+  const comAtribuicao = new Set(linhas.filter((l) => (l.tipo !== "ITEM" && nivel.get(l.codigo) === 1) || l.centro).map((l) => acima.get(l.codigo)![0]));
   const soContas = new Set([...comFilhos].filter((c) => nivel.get(c) === 0 && !comAtribuicao.has(c)));
   return { nivel, acima, comFilhos, soContas };
 }

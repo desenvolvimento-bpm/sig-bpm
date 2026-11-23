@@ -199,6 +199,14 @@ export function rotuloDaComparacao(c: Comparacao, cenario?: { nome: string; marc
   return !marcacao || marcacao === "ORCAMENTO_EMPRESARIAL" ? "Orçado" : ROTULO_DA_MARCACAO[marcacao];
 }
 
+/**
+ * O rótulo das colunas do cenário comparado nos Resultados dos cenários (23/11/2026, pedido do Adão), na tela e nos arquivos
+ * exportados: com marcação, o nome dela e o exercício do comparado — ORÇADO (o Orçamento Empresarial), FORECAST, ANTERIOR ou
+ * VENDIDO ("FORECAST TOTAL/26"); sem marcação, "COMPARADO TOTAL/26".
+ */
+export const rotuloDoComparado = (c: { marcacao: MarcacaoCenario | null; ano: number }) =>
+  `${(c.marcacao ? rotuloDaComparacao(c.marcacao) : "Comparado").toUpperCase()} TOTAL/${String(c.ano).slice(2)}`;
+
 /** O nome de cada marcação (21/10/2026: o Compara Com de Resultados Empresariais e os rótulos do comparado). */
 export const ROTULO_DA_MARCACAO: Record<MarcacaoCenario, string> = {
   // Os nomes curtos (22/10/2026; antes, Orçamento Empresarial, Resultados Anteriores, Resultados Vendidos e Previsão de Resultados).

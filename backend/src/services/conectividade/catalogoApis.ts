@@ -7,7 +7,7 @@ import { CenarioError, cenariosService, MARCACOES } from "../cenarios/cenariosSe
 import { indicadoresService } from "../relatorios/indicadoresService.js";
 import { painelService } from "../relatorios/painelService.js";
 import { RelatorioError, resultadosService } from "../relatorios/resultadosService.js";
-import { cardEmSvg, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type Sinal, type Visual } from "./visuais.js";
+import { cardEmSvg, direcaoDo, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type Sinal, type Visual } from "./visuais.js";
 
 /**
  * O catálogo da Biblioteca de APIs (24/10/2026, pedido do Adão): as APIs que abrem a outros aplicativos os dados das
@@ -344,7 +344,7 @@ function painelEmDados(cards: ReturnType<typeof cardsDoPainel>, rotuloComparado:
 
 function painelEmVisual(cards: ReturnType<typeof cardsDoPainel>, periodo: string, rotuloComparado: string, comGrafico: boolean): Visual[] {
   return cards.map(({ item: i }) => {
-    const bloco = (b: BlocoDoPainel, f: FormatoPainel): BlocoDoCard => ({ valor: curtoDoPainel(b.realizado, f), comparado: curtoDoPainel(b.orcado, f), desvio: desvio(b.vsOrcado), sinal: b.sinal });
+    const bloco = (b: BlocoDoPainel, f: FormatoPainel): BlocoDoCard => ({ valor: curtoDoPainel(b.realizado, f), comparado: curtoDoPainel(b.orcado, f), desvio: desvio(b.vsOrcado), sinal: b.sinal, direcao: direcaoDo(b.realizado, b.orcado) });
     const fator = fatorDoPainel(i.formato);
     const fatorAcum = fatorDoPainel(i.formatoAcumulado);
     const escala = (v: number | null, f: number) => (v === null ? null : v * f);
@@ -418,6 +418,7 @@ function indicadoresEmVisual(r: Indicadores, periodo: string, rotuloComparado: s
       comparado: curtoDoIndicador(i.unidade, comp),
       desvio: desvio(variacao(real, comp)),
       sinal: sinalDo(real, comp, i.sentido),
+      direcao: direcaoDo(real, comp),
     });
     const f = fatorDoIndicador(i.unidade);
     const escala = (v: number | null) => (v === null ? null : v * f);

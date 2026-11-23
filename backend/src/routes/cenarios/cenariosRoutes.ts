@@ -41,6 +41,8 @@ cenariosRoutes.get("/:id/exportar", autenticacao, tela("resultados", "ler"), asy
 cenariosRoutes.get("/:id/centros/exportar", autenticacao, tela("premissas", "ler", "centros"), asyncHandler(c.exportarCentros));
 cenariosRoutes.get("/:id/resultados", autenticacao, tela("resultados", "ler", (r: Request) => abaDaVisao(r.query.visao ?? 0)), asyncHandler(c.resultados));
 // A aba Centros de Custo dos Resultados dos analíticos (19/11/2026): os grupos e a DRE de um grupo.
+// A aba Departamentos dos Resultados dos analíticos (23/11/2026), com a permissão dela.
+cenariosRoutes.get("/:id/resultados/departamentos", autenticacao, tela("resultados", "ler", "departamentos"), asyncHandler(c.departamentosDosResultados));
 cenariosRoutes.get("/:id/resultados/centros", autenticacao, tela("resultados", "ler", "centros"), asyncHandler(c.centrosDosResultados));
 cenariosRoutes.get("/:id/resultados/centro", autenticacao, tela("resultados", "ler", "centros"), asyncHandler(c.resultadosDoCentro));
 // Os indicadores: a aba Indicadores do Painel de Bordo (o controlador deixa só as abas permitidas) ou a aba Indicadores
