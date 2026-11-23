@@ -52,6 +52,7 @@ import {
   C as CONTAS_DAS_PREMISSAS,
   alteradoSemRecalcular,
   calcularAnalitico,
+  materializarPremissas,
   pendenciasDoRecalculo,
   calcularPremissas,
   calcularTabela,
@@ -159,7 +160,7 @@ import {
   type MesDaLinha,
   type TipoDeColaborador,
 } from "./quadroDoCenario.js";
-import { gruposDasMedias, marcadoresDasMedias, marcarGrupos, tirarMarcadores } from "./maoDeObraDasMedias.js";
+import { gruposDasMedias, marcadoresDasMedias, marcarGrupos, tirarMarcadores, VENDA_DA_BASE, VENDAS_DA_MAO_DE_OBRA_DAS_MEDIAS, vendaDaBase } from "./maoDeObraDasMedias.js";
 import { chaveDaLinhaDoQuadro, quadroRealizadoMaisRecente, quadrosRealizadosPorLinha } from "../colaboradores/quadroService.js";
 import { resolvedorDeColaboradores } from "../colaboradores/importacaoCadastros.js";
 import { ROTULO_DO_TIPO, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "../colaboradores/tiposDoColaborador.js";
@@ -2050,9 +2051,13 @@ export const cenariosService = {
       );
     await prisma.$transaction(
       async (tx) => {
-        // Mantendo os meses (11/11/2026), só as Médias de Referência (o mês 0) saem e entram de novo.
+        // Mantendo os meses (11/11/2026), só as Médias de Referência (o mês 0) saem e entram de novo. A mão de obra das médias do
+        // cenário fica (22/11/2026, pedido do Adão: os meses e o resultado não mudam): antes, o cálculo grava as bases dos Encargos
+        // dela com as médias de agora; o marcador e as bases não saem.
+        if (manter) await materializarPremissas(tx, id);
         const soMedias = manter ? { mes: 0 } : {};
-        await tx.cenarioPremissa.deleteMany({ where: { cenarioId: id, ...soMedias } });
+        const semAMaoDeObraDasMedias = manter ? { venda: { notIn: VENDAS_DA_MAO_DE_OBRA_DAS_MEDIAS } } : {};
+        await tx.cenarioPremissa.deleteMany({ where: { cenarioId: id, ...soMedias, ...semAMaoDeObraDasMedias } });
         // Só as Médias de Referência (o mês 0; 15/10/2026: antes, também os doze meses iguais a elas).
         const premissas = ref.premissas.map((p) => ({ cenarioId: id, unidade: p.unidade, venda: p.venda, chave: p.chave, mes: 0, valor: new Prisma.Decimal(p.valor.toFixed(6)) }));
         const mensais = comMedia(ref.mensais, (x) => `${x.venda}|${x.chave}`)
@@ -2345,12 +2350,17 @@ export const cenariosService = {
     const nomeArquivo = `Cenário ${origem.nome} ${rotuloVersao(origem.versao)}${origem.ano !== c.ano ? ` (${origem.ano})` : ""}`;
     await prisma.$transaction(
       async (tx) => {
-        // Mantendo os meses (11/11/2026), só as Médias de Referência (o mês 0) saem e vêm da origem.
+        // Mantendo os meses (11/11/2026), só as Médias de Referência (o mês 0) saem e vêm da origem. A mão de obra das médias do
+        // cenário fica, e a da origem não vem (22/11/2026, pedido do Adão: os meses e o resultado não mudam; antes, os marcadores da
+        // origem vinham com as médias e, nos grupos com o mesmo Quadro de Lotação, os Encargos passavam a sair da média): antes, o
+        // cálculo grava as bases dos Encargos dela com as médias de agora. Sem manter os meses, as da origem vêm com os meses dela.
+        if (manterMeses) await materializarPremissas(tx, id);
         const soMedias = manterMeses ? { mes: 0 } : {};
-        await tx.cenarioPremissa.deleteMany({ where: { cenarioId: id, ...soMedias } });
+        const semAMaoDeObraDasMedias = manterMeses ? { venda: { notIn: VENDAS_DA_MAO_DE_OBRA_DAS_MEDIAS } } : {};
+        await tx.cenarioPremissa.deleteMany({ where: { cenarioId: id, ...soMedias, ...semAMaoDeObraDasMedias } });
         await tx.cenarioCentro.deleteMany({ where: { cenarioId: id, ...soMedias } });
         await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, ...soMedias } });
-        const premissas = await tx.cenarioPremissa.findMany({ where: { cenarioId: origem.id, ...soMedias } });
+        const premissas = await tx.cenarioPremissa.findMany({ where: { cenarioId: origem.id, ...soMedias, ...semAMaoDeObraDasMedias } });
         await gravarEmLotes(premissas, (lote) => tx.cenarioPremissa.createMany({ data: lote.map((p) => ({ ...p, cenarioId: id })) }));
         const centros = await tx.cenarioCentro.findMany({ where: { cenarioId: origem.id, ...soMedias } });
         await gravarEmLotes(centros, (lote) => tx.cenarioCentro.createMany({ data: lote.map((x) => ({ ...x, cenarioId: id })) }));
@@ -3743,9 +3753,32 @@ export const cenariosService = {
       ...remuneracoes.flatMap(paraAMedia),
       ...demandasPorDia.flatMap((l) => MESES_1_A_12.filter((m) => l.meses[m - 1] === null).map((mes) => ({ chave: l.chave, mes, valor: 1 }))),
     ];
-    // As linhas da mão de obra que mudam só no cálculo (os Encargos dos grupos que entram nas médias; nos que saem, também as
-    // Remunerações, que voltam ao quadro).
-    const doCalculo = daMaoDeObra.filter((l) => (novosDasMedias.includes(l.grupo!) && ehContaDeEncargos(l.conta!)) || desmarcados.includes(l.grupo!));
+    // Os Encargos dos grupos que já estão nas médias (22/11/2026): com outra Média de Referência (outra referência, mantendo os
+    // meses), a base gravada (maoDeObraDasMedias.ts) fica para trás, e o Replicar Médias a troca — marcarGrupos a tira, e o cálculo
+    // a grava de novo com a média de agora. Sem base gravada (um marcador de antes delas), o cálculo já a grava com a de agora.
+    const gravadasDasMedias =
+      acao === "replicar" && jaDasMedias.size
+        ? new Map(
+            (
+              await prisma.cenarioPremissa.findMany({
+                where: { cenarioId: id, unidade: 0, mes: 0, chave: { in: [...jaDasMedias] }, venda: { in: [VENDA_DA_BASE.direta, VENDA_DA_BASE.indireta] } },
+                select: { venda: true, chave: true, valor: true },
+              })
+            ).map((p) => [`${p.venda}|${p.chave}`, Number(p.valor)]),
+          )
+        : new Map<string, number>();
+    const baseVencida = (l: LinhaDaPlanilha) => {
+      if (!jaDasMedias.has(l.grupo!) || !gruposDaMaoDeObra.includes(l.grupo!) || !ehContaDeEncargos(l.conta!)) return false;
+      const codigos = daMaoDeObra.filter((x) => x.grupo === l.grupo).map((x) => x.conta!);
+      const mo = maosDeObraDoGrupo(codigos, gruposDoMedias.get(l.grupo!)!.atribuicao).find((x) => x.encargos === l.conta);
+      const gravada = mo && gravadasDasMedias.get(`${vendaDaBase(mo.direta)}|${l.grupo}`);
+      if (!mo || gravada === undefined) return false;
+      // A média da linha já é a base (baseDasMedias): na planilha, a conta que leva os Benefícios Adicionais sai sem a média deles.
+      return Math.abs(gravada - (l.media ?? 0)) >= 0.005;
+    };
+    // As linhas da mão de obra que mudam só no cálculo (os Encargos dos grupos que entram nas médias ou com a base vencida; nos que
+    // saem, também as Remunerações, que voltam ao quadro).
+    const doCalculo = daMaoDeObra.filter((l) => (novosDasMedias.includes(l.grupo!) && ehContaDeEncargos(l.conta!)) || desmarcados.includes(l.grupo!) || baseVencida(l));
     // Nada a mudar (22/11/2026): sem gravação, sem a pendência de recálculo e sem a entrada no Histórico.
     if (!mudancas.length && !doCalculo.length) return { linhas: 0, valores: 0, grupos: 0 };
     const est = await estruturaDRE();

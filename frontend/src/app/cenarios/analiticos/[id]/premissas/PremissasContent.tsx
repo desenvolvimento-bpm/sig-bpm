@@ -166,7 +166,8 @@ export function PremissasContent() {
               “Importar Quadro de Lotação Vigente” da Referência, nas Configurações, traz o Quadro de Lotação mais recente), é a única fonte da contagem.
               As Remunerações CLT e PJ também vêm daqui (o grupo sem linhas fica com elas zeradas) e não se digitam nem se importam. A única
               exceção é o “Replicar Médias” (Configurações / Referência): ele leva as Médias de Referência das Remunerações e dos Encargos e
-              Benefícios (MOD e MOI) direto aos Centros de Custo, e cada grupo assim ganha a verificação Mão de Obra das Médias; quando uma
+              Benefícios (MOD e MOI) direto aos Centros de Custo, e cada grupo assim ganha a verificação Mão de Obra das Médias (os valores
+              replicados ficam até o próximo “Replicar Médias”, também com outra referência mantendo os meses); quando uma
               linha dele aqui é incluída, editada ou excluída, o grupo volta a calcular por esta aba. Os Benefícios Adicionais, as Horas Extras,
               as Multas Rescisórias e o Pró-Labore se digitam nos Centros de Custo.
               Os Benefícios das linhas, somados pelos centros de cada grupo, são a linha Benefícios Padrão dos Encargos e Benefícios do grupo, na aba

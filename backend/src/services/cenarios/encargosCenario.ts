@@ -152,21 +152,33 @@ export function encargosDoGrupo(
 }
 
 /**
- * Os Encargos e Benefícios de um grupo com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts), nos doze meses: a Média
- * de Referência de cada conta (`media(codigo)`, o mês 0), sem cálculo pelos percentuais; na conta que leva os Benefícios Adicionais,
- * a média deles (o mês 0 da premissa) sai e entra o valor de cada mês — eles continuam digitados. Sem os Benefícios Padrão (o
- * Quadro de Lotação não é a fonte).
+ * A base dos Encargos e Benefícios de uma mão de obra de um grupo com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts):
+ * a Média de Referência da conta (`media(codigo)`, o mês 0), sem cálculo pelos percentuais; na que leva os Benefícios Adicionais,
+ * sem a média deles (o mês 0 da premissa). O cálculo a grava na primeira vez e depois a lê: outra referência não a muda.
+ */
+export function baseDasMedias(
+  mo: ReturnType<typeof maosDeObraDoGrupo>[number],
+  media: (codigo: string) => number | undefined,
+  gravado: (venda: string, mes: number) => number | undefined,
+) {
+  return (media(mo.encargos) ?? 0) - (mo.beneficios ? (gravado(itemDosEncargos("BENEFICIOS")!.venda, 0) ?? 0) : 0);
+}
+
+/**
+ * Os Encargos e Benefícios de um grupo com a mão de obra das médias (22/11/2026, maoDeObraDasMedias.ts), nos doze meses: a base de
+ * cada mão de obra (`base(codigo)`, baseDasMedias); na que leva os Benefícios Adicionais, mais o valor deles em cada mês — eles
+ * continuam digitados. Sem os Benefícios Padrão (o Quadro de Lotação não é a fonte).
  */
 export function encargosDasMedias(
   codigos: string[],
   atribuicao: GrupoDoCenario["atribuicao"],
-  media: (codigo: string) => number | undefined,
+  base: (codigo: string) => number | undefined,
   gravado: (venda: string, mes: number) => number | undefined,
 ) {
   const r = new Map<string, number[]>();
-  const beneficios = ITENS_DOS_ENCARGOS.find((i) => i.item === "BENEFICIOS")!;
+  const beneficios = itemDosEncargos("BENEFICIOS")!;
   for (const mo of maosDeObraDoGrupo(codigos, atribuicao)) {
-    const semBeneficios = (media(mo.encargos) ?? 0) - (mo.beneficios ? (gravado(beneficios.venda, 0) ?? 0) : 0);
+    const semBeneficios = base(mo.encargos) ?? 0;
     r.set(
       mo.encargos,
       Array.from({ length: 12 }, (_, k) => semBeneficios + (mo.beneficios ? valorDoItem(beneficios, gravado, k + 1) : 0)),

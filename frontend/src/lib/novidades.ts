@@ -28,6 +28,16 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 22/11/2026, mais tarde: a troca de referência mantendo os meses não muda o resultado.
+  {
+    publicada: "2026-11-22T21:33",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Em Referência, com “Manter os Valores dos Meses”, a mão de obra das médias do cenário fica como está e a do outro analítico não vem: trocar a referência e recalcular não muda o resultado. Os Encargos e Benefícios dos grupos com a mão de obra das médias ficam os replicados até o próximo “Replicar Médias”, que os leva às médias novas.",
+    ],
+  },
   // 22/11/2026, à noite: a mão de obra das médias e a Demanda Diária das linhas por dia útil de Serviços no Replicar Médias.
   {
     publicada: "2026-11-22T20:45",

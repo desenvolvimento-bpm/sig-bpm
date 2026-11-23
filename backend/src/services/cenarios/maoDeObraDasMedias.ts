@@ -10,9 +10,18 @@ import type { QuadroDoGrupo } from "./quadroDoCenario.js";
  * excluída, por qualquer caminho) o grupo volta a calcular pelo Quadro de Lotação.
  *
  * O marcador é uma premissa do cenário (unidade 0, esta venda, o grupo na chave, o mês 0 e a assinatura no valor): vai junto na
- * cópia e na revisão, e uma nova referência (que troca as premissas) o tira.
+ * cópia e na revisão. Ao lado dele, a base dos Encargos e Benefícios de cada mão de obra do grupo (as vendas de
+ * `VENDA_DA_BASE`, o mês 0): a Média de Referência da conta na hora do Replicar Médias, sem a dos Benefícios Adicionais — os
+ * meses dos Encargos são ela mais os Benefícios Adicionais do mês, e não mudam com outra referência (22/11/2026, pedido do Adão:
+ * trocar a referência mantendo os meses não muda o resultado). A referência que troca as premissas tira o marcador e as bases (a
+ * de outro analítico traz os da origem, com os meses dela); a que mantém os meses deixa os do cenário e não traz os da origem.
  */
 export const VENDA_MAO_DE_OBRA_DAS_MEDIAS = "MAO_DE_OBRA_DAS_MEDIAS";
+/** A base dos Encargos e Benefícios da mão de obra direta (a MOD) e da indireta (a MOI) do grupo com a mão de obra das médias. */
+export const VENDA_DA_BASE = { direta: "ENCARGOS_DAS_MEDIAS_MOD", indireta: "ENCARGOS_DAS_MEDIAS_MOI" } as const;
+export const vendaDaBase = (direta: boolean) => (direta ? VENDA_DA_BASE.direta : VENDA_DA_BASE.indireta);
+/** As premissas da mão de obra das médias (o marcador e as bases): a referência que mantém os meses não as troca. */
+export const VENDAS_DA_MAO_DE_OBRA_DAS_MEDIAS = [VENDA_MAO_DE_OBRA_DAS_MEDIAS, VENDA_DA_BASE.direta, VENDA_DA_BASE.indireta];
 
 type Cliente = Pick<Prisma.TransactionClient, "cenarioPremissa">;
 
@@ -51,13 +60,13 @@ export function gruposDasMedias(marcadores: Map<string, number>, quadro: Map<str
   return { validos, vencidos };
 }
 
-/** Tira os marcadores dos grupos (todos, sem `grupos`): eles voltam ao Quadro de Lotação. */
+/** Tira os marcadores e as bases dos grupos (todos, sem `grupos`): eles voltam ao Quadro de Lotação. */
 export async function tirarMarcadores(cliente: Cliente, cenarioId: string, grupos?: string[]) {
   if (grupos && !grupos.length) return;
-  await cliente.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: VENDA_MAO_DE_OBRA_DAS_MEDIAS, ...(grupos ? { chave: { in: grupos } } : {}) } });
+  await cliente.cenarioPremissa.deleteMany({ where: { cenarioId, unidade: 0, venda: { in: VENDAS_DA_MAO_DE_OBRA_DAS_MEDIAS }, ...(grupos ? { chave: { in: grupos } } : {}) } });
 }
 
-/** Grava (ou troca) o marcador de cada grupo, com a assinatura do quadro dele agora. */
+/** Grava (ou troca) o marcador de cada grupo, com a assinatura do quadro dele agora; as bases, o próximo cálculo grava. */
 export async function marcarGrupos(cliente: Cliente, cenarioId: string, grupos: string[], quadro: Map<string, QuadroDoGrupo>) {
   if (!grupos.length) return;
   await tirarMarcadores(cliente, cenarioId, grupos);

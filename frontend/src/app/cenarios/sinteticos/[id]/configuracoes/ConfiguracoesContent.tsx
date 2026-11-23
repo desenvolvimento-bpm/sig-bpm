@@ -57,8 +57,9 @@ export function ConfiguracoesContent() {
                   também quando a linha não tem valor em todos: uma conta com valor num só mês de uma referência de 9 meses fica com esse valor ÷ 9 (nas
                   premissas das unidades, o total do período ÷ o volume ou os dias úteis dele). Os avisos do que não coube aparecem embaixo. Marque
                   “Manter os Valores dos Meses” para trocar só as Médias de Referência: os doze meses do cenário (digitados ou importados), os
-                  investimentos e as linhas do Quadro de Lotação ficam, e o Justificar? do Exportar Premissas passa a comparar os meses com as médias
-                  novas; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das
+                  investimentos, as linhas do Quadro de Lotação e a mão de obra das médias do cenário (com os Encargos e Benefícios replicados; a do
+                  outro analítico não vem) ficam, e o resultado recalculado não muda; o Justificar? do Exportar Premissas passa a comparar os meses com
+                  as médias novas, e o “Replicar Médias” as leva aos meses; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das
                   Premissas, alimentada pela Gestão de Colaboradores: no realizado, marque “Importar Quadro de Lotação Vigente” para trocar as linhas
                   dela pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim da competência mais recente, em todos
                   os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com a caixa Aplicar Reajustes marcada

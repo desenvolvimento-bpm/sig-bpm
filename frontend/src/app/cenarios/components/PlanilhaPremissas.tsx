@@ -99,7 +99,8 @@ function ReplicarOuApagarDialog({ id, acao, onFechar }: { id: string; acao: "rep
                   <li>A Média de Referência de cada linha vai para os doze meses, no lugar dos valores de hoje.</li>
                   <li>
                     Nos Centros de Custo, também as Remunerações CLT e PJ e os Encargos e Benefícios (MOD e MOI), direto, sem o Quadro de Lotação:
-                    cada grupo com essas médias ganha a verificação Mão de Obra das Médias e volta ao Quadro de Lotação quando ele muda.
+                    cada grupo com essas médias ganha a verificação Mão de Obra das Médias e volta ao Quadro de Lotação quando ele muda. Os
+                    Encargos e Benefícios dele ficam os replicados até o próximo “Replicar Médias” (outra referência, mantendo os meses, não os muda).
                   </li>
                   <li>Em Serviços, as linhas com os valores por dia útil ganham Demanda Diária 1 nos meses em branco.</li>
                   <li>As linhas sem Média de Referência ficam como estão.</li>

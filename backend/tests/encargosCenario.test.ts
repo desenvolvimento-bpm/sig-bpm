@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { beneficiosDaDiferenca, encargosDasMedias, encargosDoGrupo, FATOR_PADRAO, fatorDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo } from "../src/services/cenarios/encargosCenario.js";
+import { baseDasMedias, beneficiosDaDiferenca, encargosDasMedias, encargosDoGrupo, FATOR_PADRAO, fatorDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo } from "../src/services/cenarios/encargosCenario.js";
 import { assinaturaDoQuadro, gruposDasMedias } from "../src/services/cenarios/maoDeObraDasMedias.js";
 
 const MOD = ["CPP.MOD.REMUNERACOES_CLT", "CPP.MOD.REMUNERACOES_PJ", "CPP.MOD.ENCARGOS_E_BENEFICIOS", "CPP.MOD.HORAS_EXTRAS", "CPP.MOD.MULTAS_RESCISORIAS"];
@@ -61,10 +61,20 @@ describe("a mão de obra das médias (22/11/2026)", () => {
     const medias = new Map([["CPP.MOD.ENCARGOS_E_BENEFICIOS", 1000], ["CPP.MOI.ENCARGOS_E_BENEFICIOS", 500]]);
     // Os Benefícios Adicionais: média 200; em março, 300 digitados; nos meses sem valor, zero.
     const gravado = (venda: string, mes: number) => (venda === "BENEFICIOS" ? (mes === 0 ? 200 : mes === 3 ? 300 : mes <= 2 ? 200 : undefined) : undefined);
-    const r = encargosDasMedias([...MOD, ...MOI], "DIRETA", (c) => medias.get(c), gravado);
+    // A base de cada mão de obra (gravada na primeira vez): a média da conta, sem a dos Benefícios Adicionais na que os leva.
+    const bases = new Map(maosDeObraDoGrupo([...MOD, ...MOI], "DIRETA").map((mo) => [mo.encargos, baseDasMedias(mo, (c) => medias.get(c), gravado)]));
+    assert.deepEqual(Object.fromEntries(bases), { "CPP.MOD.ENCARGOS_E_BENEFICIOS": 800, "CPP.MOI.ENCARGOS_E_BENEFICIOS": 500 });
+    const r = encargosDasMedias([...MOD, ...MOI], "DIRETA", (c) => bases.get(c), gravado);
     assert.deepEqual(r.get("CPP.MOD.ENCARGOS_E_BENEFICIOS")!.slice(0, 4), [1000, 1000, 1100, 800]);
     // A outra mão de obra fica com a média dela, sem os benefícios e sem o cálculo pelos percentuais.
     assert.deepEqual(new Set(r.get("CPP.MOI.ENCARGOS_E_BENEFICIOS")), new Set([500]));
+  });
+
+  it("os meses dos Encargos saem da base gravada: outra Média de Referência (outra referência, mantendo os meses) não os muda", () => {
+    const gravado = (venda: string, mes: number) => (venda === "BENEFICIOS" ? (mes === 0 ? 999 : 100) : undefined);
+    const bases = new Map([["CPP.MOD.ENCARGOS_E_BENEFICIOS", 800]]);
+    const r = encargosDasMedias(MOD, "DIRETA", (c) => bases.get(c), gravado);
+    assert.deepEqual(new Set(r.get("CPP.MOD.ENCARGOS_E_BENEFICIOS")), new Set([900]));
   });
 
   it("o grupo volta ao Quadro de Lotação quando o quadro dele muda (a assinatura)", () => {
