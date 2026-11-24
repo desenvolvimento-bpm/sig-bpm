@@ -37,7 +37,7 @@ export const exportacaoCenarioService = {
     const bs: Bloco[] = [];
     let comparado: { nome: string; ano: number } | null = null;
     if (escopo.tipo === "departamentos") {
-      // As linhas dos centros e as "(Outros)" sem o comparativo (um comparado sintético) ficam com as colunas dele vazias.
+      // As linhas dos centros sem o comparativo (um comparado sintético) ficam com as colunas dele vazias.
       const dados = await cenariosService.departamentosDosResultados(id, usuario);
       bs.push({ nome: "Departamentos", titulo: `${nomeDoCenario(c)} · Departamentos`, dados, comparado: dados.comparado ? { rotulo: dados.comparado.rotulo } : null });
       comparado = dados.comparado;

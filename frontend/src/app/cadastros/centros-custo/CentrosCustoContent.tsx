@@ -64,7 +64,13 @@ export function CentrosCustoContent() {
             sairia, uma conta que nenhuma aba de resultado leria) aparece num quadro vermelho, e a confirmação fica bloqueada até a planilha ser corrigida.
           </li>
           <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os registros inativos.</li>
-          <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Código RM e o Centro de Custo (Controladoria) e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
+          <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Código RM e a exclusão ficam bloqueados: o código liga o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
+          <li>
+            O Centro de Custo (Controladoria) muda também com movimentos: o realizado (todas as competências, também as fechadas) passa ao nome novo, e as
+            lotações importadas do grupo (Listas / Quadro de Lotação) vão junto — mude o nome também na planilha antes de importar. Os cenários analíticos
+            ficam com o nome deles (para trocar, Configurações / Centros de Custo de cada cenário); os Resultados ligam os dois pelo Código RM. A mensagem
+            depois de gravar diz o que mudou.
+          </li>
           <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
         </ul>
       }

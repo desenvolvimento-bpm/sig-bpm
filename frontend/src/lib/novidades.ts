@@ -28,6 +28,74 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 24/11/2026: os Departamentos só com os centros, o Código RM, a fonte 20, a Receita Complementar, o Contestar à direita, as Contestações somente leitura, o Nome Controladoria e o Novo das Unidades.
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "Na aba Departamentos, cada departamento (Custos de Produção, Montagem, Complementares, Logística, Técnicas, Comerciais e Administrativas) mostra só os centros de custo: saem a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais, o Estoque e a Depreciação. O total de cada departamento continua o do Consolidado.",
+      "Na aba Departamentos, o orçado de cada centro vem do grupo do cenário com os mesmos centros de custo, pelo Código RM, mesmo com outro nome no cenário.",
+      "No extrato das Receitas Bruta e Líquida Complementar, a tabela da receita prévia aparece direto, no lugar do botão do memorial de cálculo.",
+      "No extrato e no Pesquisar, o Contestar fica alinhado à direita da coluna. Com uma competência do Fechamento Mensal aberta, os modais de gastos mostram o destaque Somente Leitura, sem o Contestar.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "Na aba Departamentos, cada departamento mostra só os grupos de centros de custo (sem a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais, o Estoque e a Depreciação); o total continua o do Consolidado.",
+      "Com um cenário comparado analítico, as abas Departamentos e Centros de Custo ligam cada grupo ao do comparado pelo Código RM, mesmo com outro nome.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Contestações de Gastos",
+    tela: "Contestações",
+    rota: "/contestacoes-de-gastos/solicitadas",
+    itens: [
+      "Com uma competência do Fechamento Mensal aberta ou em conferência, as Contestações de Gastos (Solicitadas, Recebidas e Validações) ficam somente leitura, com o destaque: nada se contesta, acata, recusa, edita, altera ou processa até ela ser fechada.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "O texto das anotações, do Texto Livre e das legendas das fotos e dos vídeos novos começa com o tamanho 20; os blocos que já estavam nos slides continuam com 14.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "O texto das anotações, do Texto Livre e das legendas das fotos e dos vídeos novos começa com o tamanho 20; os blocos que já estavam nos slides continuam com 14.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/centros-custo",
+    itens: [
+      "Nos Centros de Custo, o Centro de Custo (Controladoria) muda também com movimentos: o realizado passa ao nome novo em todas as competências, e as lotações importadas do grupo vão junto. Os cenários analíticos ficam com o nome deles, ligados pelo Código RM nos Resultados. A mensagem depois de gravar diz o que mudou.",
+    ],
+  },
+  {
+    publicada: "2026-11-24T09:13",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/unidades",
+    itens: [
+      "Nas Unidades, o botão Novo inclui uma unidade, com o próximo código. A apuração, os Resultados e os cenários calculam só as cinco unidades com regra própria: a nova fica fora da DRE até ganhar a regra dela.",
+    ],
+  },
   // 23/11/2026, à tarde: as Verificações sem os valores das remunerações.
   {
     publicada: "2026-11-23T12:59",

@@ -17,6 +17,11 @@ type ValoresDosGrupos = Map<string, Map<string, number>>;
 const guardados = new Map<string, ValoresDosGrupos>();
 const temRecorte = (a: Acesso) => a.recorteCentro || a.recorteDepartamento;
 
+/** Esquece os meses guardados (24/11/2026): a gravação de um centro de custo (o Nome Controladoria…) muda os grupos sem reapurar. */
+export function esquecerOsGruposGuardados() {
+  guardados.clear();
+}
+
 /**
  * Os grupos de centros de custo de uma competência na DRE do Consolidado (23/11/2026, a aba Departamentos dos Resultados
  * Empresariais): os lançamentos de cada grupo (o Nome da Controladoria dos centros, como na aba Centros de Custo) passam pela mesma

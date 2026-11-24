@@ -219,10 +219,17 @@ function aplicar(campo: HTMLElement | null, fazer: (sel: Selection) => void) {
   campo.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-/** Os tamanhos da fonte, em px (17/10/2026: numerados na barra). O texto das anotações e das legendas é de 14 (o padrão, com asterisco na lista). */
+/**
+ * Os tamanhos da fonte, em px (17/10/2026: numerados na barra). O texto das anotações, do Texto Livre e das legendas é de 20 nos
+ * blocos novos (23/11/2026, pedido do Adão: o padrão, com asterisco na lista; antes, 14); os de antes, sem o tamanho gravado, ficam
+ * com 14 (TAMANHO_DOS_ANTIGOS), para os slides montados não mudarem.
+ */
 // Até 72 (20/10/2026), para os títulos da Capa no Texto Livre; 84, 108 e 144 desde 22/10/2026.
 export const TAMANHOS = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 60, 72, 84, 108, 144];
-export const TAMANHO_PADRAO = 14;
+export const TAMANHO_PADRAO = 20;
+export const TAMANHO_DOS_ANTIGOS = 14;
+/** O tamanho do texto de um bloco: o gravado ou, sem ele, o dos de antes. */
+export const tamanhoDoTexto = (b: { tamanho?: number }) => b.tamanho ?? TAMANHO_DOS_ANTIGOS;
 /** Os tamanhos do título das anotações (19/10/2026), em maiúsculas e negrito: o padrão é 18 (22/10/2026; antes, 12). */
 export const TAMANHOS_DO_TITULO = [12, 14, 16, 18, 20, 24, 28, 32];
 export const TAMANHO_DO_TITULO = 18;
@@ -438,7 +445,9 @@ export function BarraDeTexto({
     setAberta(null);
   }
   // O tamanho do texto onde está o cursor (o número do botão), a cada mudança da seleção; no título, o dele.
-  const [tamanho, setTamanho] = useState(14);
+  const [tamanho, setTamanho] = useState(TAMANHO_PADRAO);
+  // O tamanho do campo (23/11/2026): o padrão dele, com asterisco na lista (20 nos blocos novos, 14 nos de antes).
+  const [base, setBase] = useState(TAMANHO_PADRAO);
   // A fonte do texto onde está o cursor (22/10/2026), destacada na lista das fontes; no título, a dele.
   const [fonteAtual, setFonteAtual] = useState<ChaveDaFonte | undefined>(undefined);
   // O alinhamento do parágrafo onde está o cursor (12/11/2026), o ícone do botão e o destaque da lista.
@@ -456,6 +465,7 @@ export function BarraDeTexto({
       const sel = window.getSelection();
       if (el && sel && sel.rangeCount && el.contains(sel.anchorNode)) {
         setTamanho(tamanhoDaSelecao(el));
+        setBase(Math.round(parseFloat(getComputedStyle(el).fontSize)));
         setFonteAtual(fonteDaSelecao(el));
         setAlinhamentoAtual(alinhamentoDaSelecao(el));
       }
@@ -551,7 +561,7 @@ export function BarraDeTexto({
                   setAberta(null);
                 }}
               >
-                {t === (titulo && focoNoTitulo ? TAMANHO_DO_TITULO : TAMANHO_PADRAO) ? `${t}*` : t}
+                {t === (titulo && focoNoTitulo ? TAMANHO_DO_TITULO : base) ? `${t}*` : t}
               </button>
             ))}
             <span className="border-t border-gray-100 px-1 pt-1 text-center text-[10px] text-gray-500">* padrão</span>

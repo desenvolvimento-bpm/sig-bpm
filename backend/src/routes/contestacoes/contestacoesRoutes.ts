@@ -11,6 +11,8 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
  * na aba Contestações dos Lançamentos.
  */
 export const contestacoesRoutes = Router();
+// A competência do Fechamento Mensal aberta (23/11/2026): para as telas avisarem que as Contestações ficam somente leitura.
+contestacoesRoutes.get("/fechamento-aberto", autenticacao, asyncHandler(c.fechamentoAberto));
 contestacoesRoutes.get("/opcoes", autenticacao, verificarPermissao("contestacoes.solicitadas:editar"), asyncHandler(c.opcoes));
 contestacoesRoutes.get("/previa", autenticacao, verificarPermissao("contestacoes.solicitadas:editar"), asyncHandler(c.previa));
 contestacoesRoutes.post("/", autenticacao, verificarPermissao("contestacoes.solicitadas:editar"), asyncHandler(c.criar));

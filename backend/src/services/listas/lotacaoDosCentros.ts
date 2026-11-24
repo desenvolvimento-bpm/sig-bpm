@@ -1,4 +1,5 @@
 import { getPrismaClient } from "../../config/prisma.js";
+import type { Prisma } from "../../generated/prisma/client.js";
 import { nomeDoGrupo } from "../cenarios/centrosCenario.js";
 import { RegraListaError } from "./listasService.js";
 
@@ -25,6 +26,16 @@ export function grupoDaLotacao(centroCusto: string, grupos: Iterable<string>): s
   const porChave = new Map([...grupos].map((g) => [chave(g), g]));
   const k = chave(centroCusto);
   return porChave.get(k) ?? porChave.get(APELIDOS[k] ?? "") ?? null;
+}
+
+/**
+ * A troca do Nome Controladoria (24/11/2026, pedido do Adão): as lotações importadas do grupo `antigo` passam ao nome `novo`, para
+ * as competências já importadas continuarem no grupo. Devolve quantas linhas mudaram.
+ */
+export async function renomearNasLotacoes(tx: Pick<Prisma.TransactionClient, "lotacaoCentro">, antigo: string, novo: string) {
+  const linhas = await tx.lotacaoCentro.findMany({ select: { id: true, centroCusto: true } });
+  const ids = linhas.filter((l) => grupoDaLotacao(l.centroCusto, [antigo]) === antigo).map((l) => l.id);
+  return ids.length ? (await tx.lotacaoCentro.updateMany({ where: { id: { in: ids } }, data: { centroCusto: novo } })).count : 0;
 }
 
 /**

@@ -137,7 +137,7 @@ async function blocos(ano: number, ate: number | undefined, escopo: EscopoResult
     const v = VISOES.find((x) => x.visao === escopo.visao)!;
     return [{ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) }];
   }
-  // A aba Departamentos (23/11/2026), sem a aba Detalhes (as linhas dos centros e as "(Outros)" não são as do balancete).
+  // A aba Departamentos (23/11/2026), sem a aba Detalhes (as linhas dos centros não são as do balancete).
   if (escopo.tipo === "departamentos") return [{ nome: "Departamentos", titulo: "Departamentos", dados: await resultadosService.departamentos(ano, ate, acesso, true, comparacao.comparaCom), detalhe: null }];
   if (escopo.tipo === "obra" || escopo.tipo === "obras") {
     const obras = escopo.tipo === "obra" ? [escopo.codigo] : (await resultadosService.listarObras(ano, ate, acesso, true)).obras.map((o) => o.codigo);

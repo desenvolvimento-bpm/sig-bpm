@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { plural } from "@/lib/texto";
 
 import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
+import { AvisoDoFechamentoAberto, useFechamentoAberto } from "@/app/contestacoes-de-gastos/components/FechamentoAberto";
 import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestacoesService";
 
 import { moeda } from "../../utils/formatacao";
@@ -78,6 +79,8 @@ export function ItensDoMovimentoDialog({
   contestar?: { bloqueio: string | null; render: (s: ItensSelecionados, fechar: () => void, concluir: () => void) => ReactNode };
 }) {
   const consulta = useQuery({ queryKey, queryFn: carregar });
+  // A competência do Fechamento Mensal aberta (23/11/2026, pedido do Adão): com o Contestar Selecionados, o destaque do somente leitura.
+  const aberta = useFechamentoAberto();
   const [soDoMovimento, setSoDoMovimento] = useState(true);
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [contestando, setContestando] = useState(false);
@@ -218,6 +221,7 @@ export function ItensDoMovimentoDialog({
           </div>
         ) : null}
 
+        {contestar ? <AvisoDoFechamentoAberto competencia={aberta} onde="modal" /> : null}
         {avisoSemItens ? <p className="shrink-0 rounded-sm border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900">{avisoSemItens}</p> : null}
 
         {consulta.isError ? (

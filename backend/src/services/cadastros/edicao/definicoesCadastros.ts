@@ -16,6 +16,9 @@ import { auditar } from "../../auditoriaService.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
 import { chaveDoFornecedor } from "../../classificacao/regrasClassificacao.js";
+import { nomeDoGrupo } from "../../cenarios/centrosCenario.js";
+import { renomearNasLotacoes } from "../../listas/lotacaoDosCentros.js";
+import { esquecerOsGruposGuardados } from "../../relatorios/centrosNaDRE.js";
 import { DEFINICOES_COLABORADORES } from "./definicoesColaboradores.js";
 import { RegraCadastroError, type Sugestao } from "./erroCadastro.js";
 
@@ -285,7 +288,9 @@ const centros: DefinicaoCadastro = {
     { nome: "codigoRM", rotulo: "Código RM", tipo: "texto", travaComMovimento: true, ajuda: "A chave do balancete. Vazio só para centros mantidos fora do RM." },
     { nome: "coligada", rotulo: "Coligada", tipo: "inteiro" },
     { nome: "nomeRM", rotulo: "Nome no RM", tipo: "texto", obrigatorio: true },
-    { nome: "nomeControladoria", rotulo: "Centro de custo (controladoria)", tipo: "texto", travaComMovimento: true, ajuda: "Agrupa os centros na visão por centro de custo (Resultados, no mês e em Resultados Empresariais)." },
+    // Desde 24/11/2026 (pedido do Adão), muda também com movimentos: o realizado se liga ao centro pelo ID, e os cenários, pelo
+    // Código RM (a troca no gravar).
+    { nome: "nomeControladoria", rotulo: "Centro de custo (controladoria)", tipo: "texto", ajuda: "Agrupa os centros na visão por centro de custo (Resultados, no mês e em Resultados Empresariais). Muda também com movimentos: o realizado passa ao nome novo, inclusive nas competências fechadas." },
     {
       nome: "departamento",
       rotulo: "Departamento",
@@ -333,9 +338,48 @@ const centros: DefinicaoCadastro = {
       ativo: v.ativo === undefined ? true : booleano(v.ativo),
     };
   },
-  async gravar(db, d, id) {
+  async gravar(db, d, id, quem) {
     const dados = d as Prisma.CentroCustoUncheckedCreateInput;
-    return id ? (await db.centroCusto.update({ where: { id }, data: dados })).id : (await db.centroCusto.create({ data: { ...dados, ordem: (await db.centroCusto.count()) + 1 } })).id;
+    // A aba Departamentos guarda os grupos dos meses apurados: qualquer gravação de centro os recalcula.
+    esquecerOsGruposGuardados();
+    if (!id) return (await db.centroCusto.create({ data: { ...dados, ordem: (await db.centroCusto.count()) + 1 } })).id;
+    const antes = await db.centroCusto.findUnique({ where: { id }, select: { nomeControladoria: true, nomeRM: true, codigoRM: true } });
+    const de = antes ? nomeDoGrupo(antes) : null;
+    const para = nomeDoGrupo({ nomeControladoria: dados.nomeControladoria ?? null, nomeRM: dados.nomeRM, codigoRM: dados.codigoRM ?? null });
+    if (!antes || de === para) return (await db.centroCusto.update({ where: { id }, data: dados })).id;
+    // A troca do Nome Controladoria (24/11/2026, pedido do Adão), também com movimentos, como a troca do nome dos cards: o realizado
+    // se liga ao centro pelo ID e passa ao nome novo sozinho (todas as competências); as lotações importadas (Listas / Quadro de
+    // Lotação), que só têm o nome, vão junto quando o grupo antigo fica sem centros. Os cenários analíticos têm a cópia deles
+    // (Configurações / Centros de Custo) e ficam com o nome deles; as telas que comparam os dois os ligam pelo Código RM
+    // (ligacaoDosGrupos.ts).
+    const { lotacoes, noGrupoNovo } = await db.$transaction(
+      async (tx) => {
+        await tx.centroCusto.update({ where: { id }, data: dados });
+        const ativos = (await tx.centroCusto.findMany({ where: { ativo: true, id: { not: id } }, select: { nomeControladoria: true, nomeRM: true, codigoRM: true } })).map(nomeDoGrupo);
+        return {
+          lotacoes: ativos.includes(de!) ? 0 : await renomearNasLotacoes(tx, de!, para),
+          noGrupoNovo: ativos.filter((g) => g === para).length,
+        };
+      },
+      { timeout: 60_000 },
+    );
+    const copias = await db.cenarioCentroCusto.findMany({
+      where: { origemId: id },
+      select: { nomeControladoria: true, nomeRM: true, codigoRM: true, cenario: { select: { nome: true, ano: true } } },
+      orderBy: [{ cenario: { ano: "asc" } }, { cenario: { nome: "asc" } }],
+    });
+    const comOutroNome = copias.filter((c) => nomeDoGrupo(c) !== para).map((c) => `${c.cenario.nome} ${c.cenario.ano} (${nomeDoGrupo(c)})`);
+    await auditar({ usuarioId: quem ?? null, acao: ACAO_RENOMEACAO, entidade: "centro_custo", entidadeId: id, antes: { nomeControladoria: de }, depois: { nomeControladoria: para }, metadados: { nome: para, lotacoes, noGrupoNovo, cenariosComOutroNome: comOutroNome } });
+    const partes = [
+      `Nome Controladoria trocado de ${de} para ${para}: o realizado (todas as competências, também as fechadas) já aparece com o nome novo`,
+      noGrupoNovo ? `; o centro entrou no grupo ${para}, que já tinha ${noGrupoNovo} ${plural(noGrupoNovo, "centro", "centros")}` : "",
+      lotacoes ? `; também em ${lotacoes} ${plural(lotacoes, "lotação importada", "lotações importadas")} (Listas / Quadro de Lotação): mude o nome na planilha antes de importar` : "",
+      ".",
+      comOutroNome.length
+        ? ` ${plural(comOutroNome.length, "O cenário analítico", "Os cenários analíticos")} ${comOutroNome.join(", ")} ${plural(comOutroNome.length, "mantém", "mantêm")} o nome dele: para trocar, use Configurações / Centros de Custo do cenário. Os Resultados ligam os dois pelo Código RM.`
+        : "",
+    ];
+    return { id, aviso: partes.join("") };
   },
   async movimentos(db, id) {
     const [l, m, r] = await Promise.all([
@@ -778,9 +822,11 @@ const unidades: DefinicaoCadastro = {
   entidade: "unidades",
   titulo: "Unidade de negócio",
   auditoria: "unidade_negocio",
-  // As cinco unidades são fixas: cada uma é apurada por uma regra própria. O Tipo saiu do cadastro (09/10/2026):
-  // a unidade é identificada pelo código e, onde a planilha a cita (as abas Realizado (…)), pelo nome.
-  criar: false,
+  // As cinco unidades de 1 a 5 são apuradas cada uma por uma regra própria. O Tipo saiu do cadastro (09/10/2026): a unidade é
+  // identificada pelo código e, onde a planilha a cita (as abas Realizado (…)), pelo nome. Desde 24/11/2026 (pedido do Adão), com
+  // o Novo: a unidade nova recebe o próximo código e fica fora da DRE (a apuração, os Resultados e os cenários calculam só as de 1
+  // a 5) até ganhar a regra dela — o aviso ao criar diz isso.
+  criar: true,
   excluir: false,
   campos: [
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
@@ -799,10 +845,28 @@ const unidades: DefinicaoCadastro = {
     return n ? `A unidade tem ${n} ${plural(n, "registro", "registros")} nas listas, nos rateios, na receita prévia e na DRE apurada.` : null;
   },
   ler: (db, id) => db.unidadeNegocio.findUnique({ where: { id } }),
-  async preparar(_db, v) {
-    return { nome: exigir(v.nome, "O nome"), ordem: inteiro(v.ordem, "A ordem") ?? 0, ativo: v.ativo === undefined ? true : booleano(v.ativo) };
+  async preparar(db, v, id) {
+    const nome = exigir(v.nome, "O nome");
+    // O nome identifica a unidade na carga da Estrutura da DRE: dois iguais (sem diferença de maiúsculas e acentos) se confundiriam.
+    const outra = (await db.unidadeNegocio.findMany({ select: { id: true, nome: true } })).find((u) => u.id !== id && nomeComparavel(u.nome) === nomeComparavel(nome));
+    if (outra) throw new RegraCadastroError(409, `Já existe a unidade ${outra.nome}.`);
+    return { nome, ordem: inteiro(v.ordem, "A ordem") ?? 0, ativo: v.ativo === undefined ? true : booleano(v.ativo) };
   },
-  gravar: async (db, d, id) => (await db.unidadeNegocio.update({ where: { id: id! }, data: d as Prisma.UnidadeNegocioUpdateInput })).id,
+  async gravar(db, d, id) {
+    if (id) return (await db.unidadeNegocio.update({ where: { id }, data: d as Prisma.UnidadeNegocioUpdateInput })).id;
+    // A unidade nova (24/11/2026): o próximo código e, sem a ordem, a última posição.
+    const dados = d as { nome: string; ordem: number; ativo: boolean };
+    const [maiores, comRegra] = await Promise.all([
+      db.unidadeNegocio.aggregate({ _max: { codigo: true, ordem: true } }),
+      db.unidadeNegocio.findMany({ where: { codigo: { in: [1, 2, 3, 4, 5] } }, orderBy: { codigo: "asc" }, select: { nome: true } }),
+    ]);
+    const codigo = (maiores._max.codigo ?? 0) + 1;
+    const criada = await db.unidadeNegocio.create({ data: { ...dados, codigo, ordem: dados.ordem || (maiores._max.ordem ?? 0) + 1 } });
+    return {
+      id: criada.id,
+      aviso: `A unidade ${criada.nome} foi incluída com o código ${codigo}. A apuração, os Resultados e os cenários calculam só as unidades com regra própria (${comRegra.map((u) => u.nome).join(", ")}): a unidade nova fica fora da DRE até ganhar a regra dela. Nos cenários analíticos, ela entra pelo Trazer Novos dos Cadastros Gerais.`,
+    };
+  },
 };
 
 // ---------------------------------------------------------------------- linhas

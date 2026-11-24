@@ -193,7 +193,11 @@ export function mensagemDeErro(e: unknown, padrao: string) {
   return r || padrao;
 }
 
+/** A competência do Fechamento Mensal que não está fechada (23/11/2026): com ela, as Contestações de Gastos ficam somente leitura. */
+export type CompetenciaAberta = { ano: number; mes: number; status: "ABERTA" | "EM_CONFERENCIA" };
+
 export const contestacoesService = {
+  fechamentoAberto: async (): Promise<CompetenciaAberta | null> => (await api.get("/proxy/contestacoes/fechamento-aberto")).data.data.competencia,
   opcoes: async (): Promise<{ centros: CentroOpcao[]; contas: ContaOpcao[] }> => (await api.get("/proxy/contestacoes/opcoes")).data.data,
   /** As Regras de Rateio vigentes no mês (a rota da DRE do mês: o extrato e o modal Contestar). */
   rateios: async (anoMes: string): Promise<RegrasDeRateioDoMes> => (await api.get(`/proxy/competencias/${anoMes}/dre/rateios`)).data.data,

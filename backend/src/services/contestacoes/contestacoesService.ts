@@ -41,6 +41,29 @@ export class RegraContestacaoError extends Error {
 export type UsuarioDaContestacao = { id: string; nome: string; acesso: Acesso };
 
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
+
+/**
+ * A competência do Fechamento Mensal que não está fechada (aberta ou em conferência; a mais recente), ou nenhuma (23/11/2026, pedido do
+ * Adão): com ela, as Contestações de Gastos ficam somente leitura — nada se contesta, responde, edita, muda de situação nem se
+ * processa. A Importação e o Desfazer da aba Contestações dos Lançamentos Manuais (o próprio fechamento) continuam.
+ */
+export function fechamentoAberto() {
+  return getPrismaClient().competencia.findFirst({
+    where: { status: { not: "FECHADA" } },
+    orderBy: [{ ano: "desc" }, { mes: "desc" }],
+    select: { ano: true, mes: true, status: true },
+  });
+}
+
+/** Recusa (409) a gravação das Contestações de Gastos com uma competência do Fechamento Mensal aberta (fechamentoAberto). */
+async function exigirFechamentoFechado() {
+  const c = await fechamentoAberto();
+  if (c)
+    throw new RegraContestacaoError(
+      409,
+      `A competência ${rotulo(c.ano, c.mes)} do Fechamento Mensal está ${c.status === "EM_CONFERENCIA" ? "em conferência" : "aberta"}: as Contestações de Gastos ficam somente leitura até ela ser fechada.`,
+    );
+}
 const ABERTAS: SituacaoContestacao[] = ["PENDENTE", "ACATADA"];
 export const ROTULO_SITUACAO: Record<SituacaoContestacao, string> = { PENDENTE: "Pendente", ACATADA: "Acatada", RECUSADA: "Recusada", VALIDADA: "Validada" };
 /** O motivo dos lançamentos manuais das contestações (a aba Contestações dos Lançamentos). */
@@ -749,6 +772,7 @@ export const contestacoesService = {
     },
     u: UsuarioDaContestacao,
   ) {
+    await exigirFechamentoFechado();
     const prisma = getPrismaClient();
     const l = await exigirLancamento(d.lancamentoId);
     const recusa = recusaDoAcesso(l, u.acesso);
@@ -897,6 +921,7 @@ export const contestacoesService = {
    * a Auditoria guarda o antes e o depois.
    */
   async editar(id: string, d: { centroNovoId: string | null; contaNovaId: string | null }, u: UsuarioDaContestacao) {
+    await exigirFechamentoFechado();
     const prisma = getPrismaClient();
     const c = await exigirContestacao(id);
     const motivo = motivoNaoEditar(c);
@@ -912,6 +937,7 @@ export const contestacoesService = {
 
   /** O responsável acata ou recusa a pendente (aba Recebidas). */
   async responder(id: string, d: { acatar: boolean; justificativa: string | null }, u: UsuarioDaContestacao) {
+    await exigirFechamentoFechado();
     const prisma = getPrismaClient();
     const c = await exigirContestacao(id);
     if (c.situacao !== "PENDENTE") throw new RegraContestacaoError(409, `A contestação nº ${c.numero} está ${ROTULO_SITUACAO[c.situacao].toLowerCase()}: só a pendente se acata ou recusa.`);
@@ -942,6 +968,7 @@ export const contestacoesService = {
    * a validada por aqui não corrige nada além do que já estava: é a validação feita fora do SIG.
    */
   async alterarSituacao(id: string, d: { situacao: SituacaoContestacao; justificativa: string }, u: UsuarioDaContestacao) {
+    await exigirFechamentoFechado();
     const prisma = getPrismaClient();
     const c = await exigirContestacao(id);
     const justificativa = d.justificativa.trim();
@@ -1003,6 +1030,7 @@ export const contestacoesService = {
    * acatadas (os roteiros de conferência; a tela processa todas).
    */
   async processar(u: UsuarioDaContestacao, ids?: string[]) {
+    await exigirFechamentoFechado();
     const prisma = getPrismaClient();
     const acatadas = await prisma.contestacao.findMany({
       where: { situacao: "ACATADA", ...(ids ? { id: { in: ids } } : {}) },

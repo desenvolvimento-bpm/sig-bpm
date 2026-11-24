@@ -130,4 +130,15 @@ describe("os slides comuns aos relatórios e aos painéis (31/10/2026)", () => {
     assert.equal(corpo.safeParse(sumario(["PAINEL"])).success, true);
     assert.equal(corpo.safeParse(sumario(["FATOS"])).success, false);
   });
+
+  it("guarda o tamanho do texto dos blocos de texto (23/11/2026: os novos com 20)", () => {
+    const corpo = corpoDasPaginas(z.literal("PAINEL"), 1);
+    const texto = (tamanho: unknown) => ({ paginas: [{ id: "p1", blocos: [{ id: "t", x: 0, y: 0, w: 6, h: 3, tipo: "TEXTO", texto: "Olá", tamanho }] }] });
+    const r = corpo.safeParse(texto(20));
+    assert.equal(r.success, true);
+    assert.equal((r.data!.paginas[0].blocos[0] as { tamanho?: number }).tamanho, 20);
+    // Sem ele (os blocos de antes), o bloco vale; fora da faixa da lista (10 a 144), não.
+    assert.equal(corpo.safeParse(texto(undefined)).success, true);
+    assert.equal(corpo.safeParse(texto(500)).success, false);
+  });
 });

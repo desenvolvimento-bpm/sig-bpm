@@ -193,8 +193,7 @@ function VisaoDepartamentos({ id }: { id: string }) {
     <div className="space-y-3">
       {consulta.data.comparadoSemCentros ? (
         <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-          O cenário comparado, {consulta.data.comparadoSemCentros.nome}, é sintético e não tem centros de custo: as linhas dos centros e as “(Outros)” ficam
-          sem o comparativo.
+          O cenário comparado, {consulta.data.comparadoSemCentros.nome}, é sintético e não tem centros de custo: as linhas dos centros ficam sem o comparativo.
         </p>
       ) : null}
       {consulta.data.reajustado ? (
@@ -316,15 +315,16 @@ export function CenarioResultadosContent() {
               <li>
                 Na aba Departamentos, como em Resultados Empresariais: a DRE do Consolidado do cenário, com os mesmos totais, mas, de Custo de
                 Produto Vendido até Despesas Administrativas, cada departamento com centros de custo (Custos de Produção, Montagem, Complementares,
-                Logística, Técnicas, Comerciais e Administrativas) abre pelos grupos de centros (os da aba Centros de Custo), cada um com o total dele
-                no departamento, no lugar das atribuições e das contas. O valor de cada grupo segue o rateio do cenário (Configurações / Regras de
-                Rateio: a parte da produção que vai para Serviços, a Montagem dos grupos complementares nos Complementares…), por isso um grupo pode
-                aparecer em mais de um departamento; com a DRE calculada com os reajustes (Aplicar Reajustes), com eles. Depois dos grupos, as
-                atribuições com o que não vem deles, com as contas: as que os centros não usam (Mão de Obra Terceirizada, Matérias Primas, Estoque, das
-                Premissas das unidades) e, nas que eles usam, o resto, com “(Outros)” no nome (as Premissas das unidades, a Depreciação dos
-                Investimentos e, no seu recorte, os grupos que você não vê). As Despesas Variáveis de Venda, sem centros, e do Lucro Operacional em
-                diante, as linhas são as do Consolidado. Com um cenário comparado analítico, o comparativo abre do mesmo jeito; um sintético não tem
-                centros de custo, e as linhas dos grupos e as “(Outros)” ficam sem o comparativo, com o aviso.
+                Logística, Técnicas, Comerciais e Administrativas) mostra só os grupos de centros (os da aba Centros de Custo), cada um com o total
+                dele no departamento, sem as atribuições e as contas (Mão de Obra Terceirizada, Matérias Primas, Gastos Gerais, Estoque,
+                Depreciação…). O total de cada departamento é o do Consolidado: a soma dos grupos fica menor que ele pelo que não vem dos centros (as
+                Premissas das unidades, a Depreciação dos Investimentos e, no seu recorte, os grupos que você não vê). O valor de cada grupo segue o
+                rateio do cenário (Configurações / Regras de Rateio: a parte da produção que vai para Serviços, a Montagem dos grupos complementares
+                nos Complementares…), por isso um grupo pode aparecer em mais de um departamento; com a DRE calculada com os reajustes (Aplicar
+                Reajustes), com eles. As Despesas Variáveis de Venda, sem centros, e do Lucro Operacional em diante, as linhas são as do Consolidado.
+                Com um cenário comparado analítico, o comparativo abre do mesmo jeito, cada grupo dele no grupo deste com os mesmos centros de custo
+                (pelo Código RM, mesmo com outro nome); um sintético não tem centros de custo, e as linhas dos grupos ficam sem o comparativo, com o
+                aviso.
               </li>
             ) : null}
             {analitico ? (
@@ -336,8 +336,8 @@ export function CenarioResultadosContent() {
                 sobre as bases do Consolidado do cenário. O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
                 que vai para Serviços (na DRE, nas contas da CSM ou da CSC). A lista traz só os grupos do recorte do seu perfil: todos, os dos seus
                 departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário. Com um cenário comparado
-                analítico, o grupo traz também o comparativo, como nas unidades: o total do mesmo grupo no comparado (pelo nome; o % e o R$/m³ sobre
-                o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
+                analítico, o grupo traz também o comparativo, como nas unidades: o total do grupo com os mesmos centros de custo no comparado (pelo
+                Código RM, mesmo com outro nome; o % e o R$/m³ sobre o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
                 coluna do comparado (com o rótulo da marcação dele, ou Comparado Total, e o exercício dele) traz a Média de Referência de cada conta do grupo (a média do realizado
                 carregada em Configurações / Referência) × 12 — parado sobre o rótulo, a dica diz isso —, sem o % e o R$/m³ (a referência não tem as bases do Consolidado; a Eficiência fica com o traço). Sem a Média de
                 Referência no cenário, a aba fica sem o comparativo, com o aviso.

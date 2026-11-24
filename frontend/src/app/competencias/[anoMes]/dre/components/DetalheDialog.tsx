@@ -37,10 +37,10 @@ const percentual = (p: string) => `${(Number(p) * 100).toLocaleString("pt-BR", {
 const fatorTexto = (f: string) => (f === "-1" ? "sinal trocado" : `× ${Number(f).toLocaleString("pt-BR", { maximumFractionDigits: 8 })}`);
 
 /**
- * As linhas de Receita Bruta e Líquida de Frete e de Montagem (23/11/2026, pedido do Adão): a parte da receita prévia mostra no
- * extrato a tabela dos itens importados (os valores e, nos serviços, o andamento), no lugar do botão da memória de cálculo.
+ * As linhas de Receita Bruta e Líquida de Frete, de Montagem e Complementar (23/11/2026, pedidos do Adão): a parte da receita prévia
+ * mostra no extrato a tabela dos itens importados (os valores e, nos serviços, o andamento), no lugar do botão da memória de cálculo.
  */
-const RECEITAS_COM_A_MEMORIA = new Set(["RBF", "RLF", "RBM", "RLM"]);
+const RECEITAS_COM_A_MEMORIA = new Set(["RBF", "RLF", "RBM", "RLM", "RBC", "RLC"]);
 export const mostraAMemoria = (linha: string) => RECEITAS_COM_A_MEMORIA.has(linha.split(".")[1] ?? "");
 
 function Bloco({

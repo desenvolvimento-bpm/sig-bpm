@@ -14,6 +14,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
 import { ContestarDialog } from "@/app/contestacoes-de-gastos/components/ContestarDialog";
+import { AvisoDoFechamentoAberto, motivoDoFechamentoAberto, useFechamentoAberto } from "@/app/contestacoes-de-gastos/components/FechamentoAberto";
 import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestacoesService";
 
 import { moeda } from "../../utils/formatacao";
@@ -59,6 +60,9 @@ export function BalanceteDialog({
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const podeContestar = hasPermission("contestacoes.solicitadas:editar");
+  // Com uma competência do Fechamento Mensal aberta (23/11/2026, pedido do Adão), as Contestações ficam somente leitura: sem o
+  // Contestar e o Contestar Selecionados, com o destaque (as etiquetas das contestações, dos rateios e das redistribuições ficam).
+  const aberta = useFechamentoAberto();
   const [contestando, setContestando] = useState<MovimentoDoBalancete | null>(null);
   const [vendoItens, setVendoItens] = useState<MovimentoDoBalancete | null>(null);
   const temCentro = !!lancamento.centro?.codigoRM;
@@ -88,7 +92,8 @@ export function BalanceteDialog({
       { chave: "centro", rotulo: "Centro de Custo", valor: centroTexto },
       ...(comContaNaDRE ? [{ chave: "contaDRE", rotulo: "Conta na DRE", valor: (x: MovimentoDoBalancete) => (x.contaNaDRE ? `${x.contaNaDRE.reduzido} · ${x.contaNaDRE.descricao}` : contaDoBalancete) }] : []),
       { chave: "valor", rotulo: "Valor", tipo: "numero", alinhamento: "direita", valor: (x) => Number(x.valor), texto: (x) => moeda(x.valor) },
-      { chave: "acoes", rotulo: "Ações", semFiltro: true },
+      // As ações alinhadas à direita da coluna (23/11/2026, pedido do Adão): o Contestar sempre no mesmo lugar, com ou sem o Itens.
+      { chave: "acoes", rotulo: "Ações", alinhamento: "direita", semFiltro: true },
     ],
     [comContaNaDRE, comId, contaDoBalancete],
   );
@@ -132,7 +137,7 @@ export function BalanceteDialog({
           </Button>
         ) : null;
       return (
-        <span className="inline-flex items-center gap-1">
+        <span className="flex items-center justify-end gap-1">
           {itens}
           {acaoDaContestacao(m)}
         </span>
@@ -180,7 +185,7 @@ export function BalanceteDialog({
         </span>
       ) : null;
     }
-    return podeContestar ? (
+    return podeContestar && !aberta ? (
       <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-2 text-[11px]" onClick={() => setContestando(m)} title="Sugerir outro centro de custo e/ou outra conta para o movimento">
         <MessageSquareWarning className="size-3.5" />
         Contestar
@@ -240,6 +245,7 @@ export function BalanceteDialog({
             {lancamento.contaAdotada ? ` Na DRE, a conta é a ${lancamento.contaAdotada.reduzido}.` : ""}
           </DialogDescription>
         </DialogHeader>
+        {podeContestar ? <AvisoDoFechamentoAberto competencia={aberta} onde="modal" /> : null}
 
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <label className="inline-flex items-center gap-2 text-sm text-gray-800">
@@ -323,7 +329,11 @@ export function BalanceteDialog({
             queryKey={["dre", anoMes, "balancete", "itens", filtro, vendoItens.id]}
             carregar={() => dreService.itensDoMovimento(anoMes, filtro, vendoItens.id)}
             onFechar={() => setVendoItens(null)}
-            contestar={podeContestar ? { bloqueio: bloqueioDosItens(vendoItens), render: (sel, fechar, concluir) => contestarItens(vendoItens, sel, fechar, concluir) } : undefined}
+            contestar={
+              podeContestar
+                ? { bloqueio: aberta ? motivoDoFechamentoAberto(aberta) : bloqueioDosItens(vendoItens), render: (sel, fechar, concluir) => contestarItens(vendoItens, sel, fechar, concluir) }
+                : undefined
+            }
           />
         ) : null}
         {contestando ? (

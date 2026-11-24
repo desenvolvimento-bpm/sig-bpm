@@ -15,6 +15,7 @@ import type { Coluna } from "@/lib/filtrosDeTabela";
 import { plural } from "@/lib/texto";
 
 import { ContestarDialog } from "@/app/contestacoes-de-gastos/components/ContestarDialog";
+import { AvisoDoFechamentoAberto, motivoDoFechamentoAberto, useFechamentoAberto } from "@/app/contestacoes-de-gastos/components/FechamentoAberto";
 import { ROTULO_SITUACAO } from "@/app/contestacoes-de-gastos/services/contestacoesService";
 import { ItensDoMovimentoDialog, type ItensSelecionados } from "@/app/competencias/[anoMes]/dre/components/ItensDoMovimentoDialog";
 import { dreService } from "@/app/competencias/[anoMes]/dre/services/dreService";
@@ -60,6 +61,8 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const podeContestar = hasPermission("contestacoes.solicitadas:editar");
+  // Com uma competência do Fechamento Mensal aberta (23/11/2026, pedido do Adão): sem o Contestar e o Contestar Selecionados, com o destaque.
+  const aberta = useFechamentoAberto();
   const [tipo, setTipo] = useState<TipoDaPesquisa>("fornecedor");
   const [fornecedor, setFornecedor] = useState<OpcaoDaBusca | null>(null);
   const [conta, setConta] = useState<OpcaoDaBusca | null>(null);
@@ -108,7 +111,8 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
         ? { chave: "cliForn", rotulo: "Fornecedor/Cliente", valor: (x: OcorrenciaDaPesquisa) => x.cliForn }
         : { chave: "conta", rotulo: "Conta de Resultado", valor: (x: OcorrenciaDaPesquisa) => contaTexto(x.contaNaDRE) },
       { chave: "valor", rotulo: "Valor", tipo: "numero", alinhamento: "direita", valor: (x) => Number(x.valor), texto: (x) => moeda(x.valor) },
-      { chave: "acoes", rotulo: "Ações", semFiltro: true },
+      // As ações alinhadas à direita da coluna (23/11/2026, pedido do Adão): o Contestar sempre no mesmo lugar, com ou sem o Itens.
+      { chave: "acoes", rotulo: "Ações", alinhamento: "direita", semFiltro: true },
     ],
     [porConta],
   );
@@ -165,7 +169,7 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
         </span>
       );
     }
-    return podeContestar ? (
+    return podeContestar && !aberta ? (
       <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-2 text-[11px]" onClick={() => setContestando(o)} title="Sugerir outro centro de custo e/ou outra conta para o movimento">
         <MessageSquareWarning className="size-3.5" />
         Contestar
@@ -209,7 +213,7 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
     }
     if (c.chave === "acoes") {
       return (
-        <span className="inline-flex items-center gap-1">
+        <span className="flex items-center justify-end gap-1">
           {o.idMovimento && o.itens > 0 ? (
             <Button
               type="button"
@@ -241,6 +245,7 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
             mês escolhido) do fornecedor ou cliente ou da conta de resultado escolhido na lista — só os que o seu perfil vê.
           </DialogDescription>
         </DialogHeader>
+        {podeContestar ? <AvisoDoFechamentoAberto competencia={aberta} onde="modal" /> : null}
 
         <form
           className="flex shrink-0 flex-wrap items-center gap-2"
@@ -349,7 +354,7 @@ function PesquisarDialog({ ano, ate, onFechar }: { ano: number; ate: number; onF
             contestar={
               podeContestar
                 ? {
-                    bloqueio: bloqueioDosItens(vendoItens),
+                    bloqueio: aberta ? motivoDoFechamentoAberto(aberta) : bloqueioDosItens(vendoItens),
                     render: (sel: ItensSelecionados, fechar: () => void, concluir: () => void) => (
                       <ContestarDialog
                         movimento={movimentoContestado(vendoItens)}

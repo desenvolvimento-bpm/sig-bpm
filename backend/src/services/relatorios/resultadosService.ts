@@ -11,6 +11,8 @@ import { baseDoPercentual, baseDoUnitario, basesDoConsolidado, COD, GRUPOS_DE_VO
 import { centrosNaDRE } from "./centrosNaDRE.js";
 import { montarDepartamentos } from "./departamentosDaDRE.js";
 import { centrosNaDREDoCenario } from "../cenarios/premissasCenario.js";
+import { gruposDoCenario } from "../cenarios/centrosCenario.js";
+import { gruposDoRealizado, juntarPelaLigacao, ligarGrupos } from "../cenarios/ligacaoDosGrupos.js";
 import { atribuicoesDoCentro } from "../dre/recorteCentros.js";
 
 /**
@@ -397,12 +399,13 @@ export const resultadosService = {
 
   /**
    * A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: a DRE do Consolidado mês a mês, com os mesmos
-   * totais, mas cada departamento com centros de custo (de CPP a DA) abre pelos grupos de centros (montarDepartamentos), cada um
-   * com o valor dele no departamento pela regra da apuração (centrosNaDRE), e pelo resto das atribuições. Com o orçado da
-   * Comparação Padrão (`comparaCom`), como o Consolidado: o do cenário analítico abre pelos centros dele do mesmo jeito (os valores
-   * do rateio do cenário, centrosNaDREDoCenario, nas mesmas atribuições); um sintético não tem centros (`orcadoSemCentros`), e as
-   * linhas dos centros e as "(Outros)" ficam sem o orçado. Com recorte (o Gestor e o Coordenador), só os centros e as linhas dele:
-   * os demais ficam nas "(Outros)". As linhas dos centros (`centro`) e as "(Outros)" não abrem os lançamentos.
+   * totais, mas cada departamento com centros de custo (de CPP a DA) mostra só os grupos de centros (montarDepartamentos), cada um
+   * com o valor dele no departamento pela regra da apuração (centrosNaDRE), sem as atribuições. Com o orçado da Comparação Padrão
+   * (`comparaCom`), como o Consolidado: o do cenário analítico abre pelos centros dele do mesmo jeito (os valores do rateio do
+   * cenário, centrosNaDREDoCenario, nas mesmas atribuições, cada grupo do cenário no grupo do realizado com os mesmos centros, pelo
+   * Código RM: ligacaoDosGrupos.ts, 24/11/2026); um sintético não tem centros (`orcadoSemCentros`), e as linhas dos centros ficam
+   * sem o orçado. Com recorte (o Gestor e o Coordenador), só os centros e as linhas dele. As linhas dos centros (`centro`) não
+   * abrem os lançamentos.
    */
   async departamentos(ano: number, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false, comparaCom: Comparacao = "ORCAMENTO_EMPRESARIAL") {
     const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
@@ -417,7 +420,10 @@ export const resultadosService = {
     else if (orcado.cenario) {
       const permitidas = atribuicoesDoCentro(linhas);
       const visiveis = acesso.recorteCentro || acesso.recorteDepartamento ? new Set(centros.keys()) : null;
-      for (const [g, contas] of await centrosNaDREDoCenario(getPrismaClient(), orcado.cenario.id)) {
+      // Os grupos do cenário com o nome do grupo do realizado pelo Código RM (24/11/2026): o Nome Controladoria de um e do outro
+      // pode ser diferente (ligacaoDosGrupos.ts).
+      const [doOrcado, gruposDoOrcado, doRealizado] = await Promise.all([centrosNaDREDoCenario(getPrismaClient(), orcado.cenario.id), gruposDoCenario(orcado.cenario.id), gruposDoRealizado()]);
+      for (const [g, contas] of juntarPelaLigacao(doOrcado, ligarGrupos(gruposDoOrcado, doRealizado))) {
         if (visiveis && !visiveis.has(g)) continue;
         const mes = new Map<string, number>();
         const total = new Map<string, number>();

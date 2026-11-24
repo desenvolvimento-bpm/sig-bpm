@@ -748,7 +748,7 @@ export const cenariosService = {
   resultados: async (id: string, visao: number) => (await api.get<{ data: Resultados }>(`/proxy/cenarios/${id}/resultados`, { params: { visao } })).data.data,
   /**
    * A aba Departamentos dos Resultados dos analíticos (23/11/2026): o Consolidado com os departamentos abertos pelos grupos de centros;
-   * com um comparado sintético (sem centros), `comparadoSemCentros`, e as linhas dos centros e as "(Outros)" ficam sem o comparativo.
+   * com um comparado sintético (sem centros), `comparadoSemCentros`, e as linhas dos centros ficam sem o comparativo.
    */
   departamentosDosResultados: async (id: string) =>
     (

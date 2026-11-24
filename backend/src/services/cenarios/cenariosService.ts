@@ -70,6 +70,7 @@ import {
 } from "./premissasCenario.js";
 import { contasDoGrupo, gruposDoCenario, RATEIOS, rateiosSemBase, type GrupoDoCenario } from "./centrosCenario.js";
 import { apagarValoresDoGrupo, copiarCadastros, renomearValoresDoGrupo, trazerNovosDosCadastros } from "./cadastrosDoCenario.js";
+import { gruposQueLigam, juntarPelaLigacao, ligarGrupos } from "./ligacaoDosGrupos.js";
 import {
   gruposDaDREParaDepartamentos,
   prepararDepartamento,
@@ -581,28 +582,40 @@ const comparadoDaResposta = (c: { nome: string; ano: number; marcacao: MarcacaoC
 /**
  * A DRE de um grupo de centros num cenário analítico (19/11/2026; 22/11/2026: também a do comparado), mês a mês: as contas do
  * grupo com valor em algum mês (os valores gravados, com as casas deles, como na DRE do cenário), o subtotal de cada atribuição e
- * o total de cada grupo da DRE, que somam as contas; e o Consolidado do cenário (as bases do % e do R$/m³).
+ * o total de cada grupo da DRE, que somam as contas; e o Consolidado do cenário (as bases do % e do R$/m³). Com mais de um grupo
+ * (24/11/2026: os grupos do comparado ligados a um grupo do cenário pelo Código RM, ligacaoDosGrupos.ts), a soma deles.
  */
-async function dreDoGrupo(cenarioId: string, grupo: string) {
+async function dreDoGrupo(cenarioId: string, grupo: string | string[]) {
+  const nomes = typeof grupo === "string" ? [grupo] : grupo;
   const prisma = getPrismaClient();
   const [linhas, gravados, consolidado, c, grupos] = await Promise.all([
     estrutura(),
-    prisma.cenarioCentro.findMany({ where: { cenarioId, grupo, mes: { gte: 1, lte: 12 } }, select: { mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
+    prisma.cenarioCentro.findMany({ where: { cenarioId, grupo: { in: nomes }, mes: { gte: 1, lte: 12 } }, select: { grupo: true, mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
     dreDoCenario(cenarioId, 0),
     prisma.cenario.findUnique({ where: { id: cenarioId }, select: { reajustesCalculados: true } }),
     gruposDoCenario(cenarioId),
   ]);
-  const porConta = new Map<string, number[]>();
+  const porGrupo = new Map<string, Map<string, number[]>>();
   for (const r of gravados) {
+    const porConta = porGrupo.get(r.grupo) ?? new Map<string, number[]>();
     const lista = porConta.get(r.linhaDRE.codigo) ?? Array<number>(12).fill(0);
     lista[r.mes - 1] += Number(r.valor);
     porConta.set(r.linhaDRE.codigo, lista);
+    porGrupo.set(r.grupo, porConta);
   }
   // Com a DRE calculada com os reajustes (22/11/2026, pedido do Adão), os valores do grupo com eles (reajustarOGrupo): os totais
   // batem com o Consolidado. A aba Centros de Custo das Premissas continua sem eles (a base digitada).
-  const g = grupos.find((x) => x.grupo === grupo);
-  const reajustado = !!c?.reajustesCalculados && !!g;
-  return { valores: somarNoGrupo(linhas, reajustado ? await reajustarOGrupo(prisma, cenarioId, g!, porConta) : porConta, 12), consolidado, reajustado };
+  const reajustado = !!c?.reajustesCalculados && nomes.some((n) => grupos.some((x) => x.grupo === n));
+  const porConta = new Map<string, number[]>();
+  for (const [nome, contas] of porGrupo) {
+    const g = grupos.find((x) => x.grupo === nome);
+    const doGrupo = c?.reajustesCalculados && g ? await reajustarOGrupo(prisma, cenarioId, g, contas) : contas;
+    for (const [conta, lista] of doGrupo) {
+      const soma = porConta.get(conta);
+      porConta.set(conta, soma ? soma.map((v, k) => v + (lista[k] ?? 0)) : [...lista]);
+    }
+  }
+  return { valores: somarNoGrupo(linhas, porConta, 12), consolidado, reajustado };
 }
 
 /**
@@ -2764,12 +2777,12 @@ export const cenariosService = {
   /**
    * A aba Departamentos da tela Resultados de um cenário analítico (23/11/2026, pedido do Adão), antes de Centros de Custo, como a de
    * Resultados Empresariais: a DRE do Consolidado do cenário, com os mesmos totais, mas cada departamento com centros de custo (de CPP
-   * a DA) abre pelos grupos de centros (montarDepartamentos), cada um com o valor dele no departamento pelo rateio do cenário e, com a
-   * DRE calculada com os reajustes, com eles (centrosNaDREDoCenario), e pelo resto das atribuições (as Premissas das unidades, os
-   * Investimentos…). Com um cenário comparado, o total do exercício dele em cada linha, como no Consolidado: o analítico abre pelos
-   * centros dele do mesmo jeito; o sintético não tem centros (`comparadoSemCentros`), e as linhas dos centros e as "(Outros)" ficam
-   * sem o comparativo. Os grupos fora do recorte do perfil do usuário (recorteDoPerfil, como a aba Centros de Custo) ficam nas
-   * "(Outros)".
+   * a DA) mostra só os grupos de centros (montarDepartamentos), cada um com o valor dele no departamento pelo rateio do cenário e,
+   * com a DRE calculada com os reajustes, com eles (centrosNaDREDoCenario), sem as atribuições (as Premissas das unidades, os
+   * Investimentos… ficam só no total). Com um cenário comparado, o total do exercício dele em cada linha, como no Consolidado: o
+   * analítico abre pelos centros dele do mesmo jeito (cada grupo dele no grupo deste com os mesmos centros, pelo Código RM:
+   * ligacaoDosGrupos.ts, 24/11/2026); o sintético não tem centros (`comparadoSemCentros`), e as linhas dos centros
+   * ficam sem o comparativo. Só os grupos do recorte do perfil do usuário (recorteDoPerfil, como a aba Centros de Custo).
    */
   async departamentosDosResultados(id: string, usuario: Usuario = SISTEMA) {
     const c = await obterOuFalhar(id, usuario);
@@ -2793,7 +2806,11 @@ export const cenariosService = {
       );
     const analitico = comparado?.tipo === "ANALITICO";
     const [dComparado, centrosDoComparado] = comparado
-      ? await Promise.all([dreDoCenario(comparado.id, 0), analitico ? centrosNaDREDoCenario(prisma, comparado.id) : null])
+      ? await Promise.all([
+          dreDoCenario(comparado.id, 0),
+          // Os grupos do comparado com o nome do grupo deste cenário pelo Código RM (24/11/2026, ligacaoDosGrupos.ts).
+          analitico ? Promise.all([centrosNaDREDoCenario(prisma, comparado.id), gruposDoCenario(comparado.id)]).then(([v, gs]) => juntarPelaLigacao(v, ligarGrupos(gs, grupos))) : null,
+        ])
       : [null, null];
     const dep = montarDepartamentos(linhas, [
       { consolidado: d.valores, centros: porMes(centros) },
@@ -2853,11 +2870,12 @@ export const cenariosService = {
     if (!veGrupo(recorteDoPerfil(usuario), g)) throw new CenarioError(403, "Fora do seu recorte: o seu perfil só vê os centros de custo dos seus departamentos ou os seus centros de custo.");
     const [linhas, d, comparado] = await Promise.all([estrutura(), dreDoGrupo(id, grupo), comparadoDe(c)]);
     // O comparativo (22/11/2026, pedido do Adão), como nas unidades: com um cenário comparado analítico, cada linha traz o total do
-    // exercício do mesmo grupo (pelo nome) no comparado, com o % e o R$/m³ sobre as bases do Consolidado dele. O sintético não tem
+    // exercício do mesmo grupo no comparado (desde 24/11/2026, o grupo com os mesmos centros, pelo Código RM, mesmo com outro nome:
+    // ligacaoDosGrupos.ts), com o % e o R$/m³ sobre as bases do Consolidado dele. O sintético não tem
     // centros de custo: no lugar dele, a Média de Referência do grupo × 12 (sem o % e o R$/m³); sem Média de Referência no cenário,
     // a aba fica sem o comparativo (comparadoSemCentros avisa). Entram também as linhas que só o comparado tem.
     const analitico = comparado?.tipo === "ANALITICO";
-    const doComparado = comparado && analitico ? await dreDoGrupo(comparado.id, grupo) : null;
+    const doComparado = comparado && analitico ? await dreDoGrupo(comparado.id, gruposQueLigam(await gruposDoCenario(comparado.id), await gruposDoCenario(id), grupo)) : null;
     const totais = doComparado
       ? new Map(
           montar(linhas, "centros", doComparado.consolidado.comValor, doComparado.valores, doComparado.consolidado.valores, ACESSO_TOTAL)

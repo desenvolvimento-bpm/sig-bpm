@@ -67,6 +67,8 @@ export type Bloco = Posicao &
     /** O título da anotação (16/10/2026); sem ele, o nome da nota. */
     | {
         tipo: "ANOTACAO";
+        /** O tamanho do texto, em px (23/11/2026: os blocos novos com 20); sem ele, 14 (os de antes). */
+        tamanho?: number;
         nota: Nota;
         texto: string;
         titulo?: string;
@@ -80,13 +82,15 @@ export type Bloco = Posicao &
         espacamento?: number;
       }
     /** Uma foto (16/10/2026): o arquivo, guardado no servidor, a legenda e a proporção (largura ÷ altura). */
-    | { tipo: "FOTO"; arquivo: string; legenda: string; proporcao: number; /** A legenda formatada (17/10/2026), em HTML. */ legendaHtml?: string; /** A Imagem Livre (21/10/2026): só a imagem, sem o fundo, a moldura e a legenda. */ livre?: boolean; /** Os ajustes da imagem (21/10/2026). */ ajustes?: AjustesDeImagem; /** O corte (27/10/2026): a imagem cobre o quadro, que tem o tamanho escolhido, com o zoom e a posição; sem ele, o quadro tem a proporção da imagem. */ recorte?: RecorteDaImagem }
+    | { tipo: "FOTO"; /** O tamanho do texto, em px (23/11/2026: os blocos novos com 20); sem ele, 14 (os de antes). */ tamanho?: number; arquivo: string; legenda: string; proporcao: number; /** A legenda formatada (17/10/2026), em HTML. */ legendaHtml?: string; /** A Imagem Livre (21/10/2026): só a imagem, sem o fundo, a moldura e a legenda. */ livre?: boolean; /** Os ajustes da imagem (21/10/2026). */ ajustes?: AjustesDeImagem; /** O corte (27/10/2026): a imagem cobre o quadro, que tem o tamanho escolhido, com o zoom e a posição; sem ele, o quadro tem a proporção da imagem. */ recorte?: RecorteDaImagem }
     /**
      * Um vídeo (20/10/2026): um arquivo do computador (`arquivo`, guardado no servidor, até 200 MB) ou um link do YouTube,
      * Instagram, Facebook ou LinkedIn (`url`, o endereço colado), com a legenda e a proporção; vazio, o quadro esperando o vídeo.
      */
     | {
         tipo: "VIDEO";
+        /** O tamanho do texto da legenda, em px (23/11/2026: os blocos novos com 20); sem ele, 14 (os de antes). */
+        tamanho?: number;
         origem: "ARQUIVO" | "LINK";
         arquivo: string;
         url: string;
@@ -99,7 +103,7 @@ export type Bloco = Posicao &
         recomecarAoTerminar?: boolean;
       }
     /** O Texto Livre (20/10/2026): o texto formatado das anotações, sem o destaque, o título, o ícone e o fundo. */
-    | { tipo: "TEXTO"; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number; /** As Bordas (12/11/2026). */ borda?: BordaDoTexto }
+    | { tipo: "TEXTO"; /** O tamanho do texto, em px (23/11/2026: os blocos novos com 20); sem ele, 14 (os de antes). */ tamanho?: number; texto: string; html?: string; /** O espaçamento entre as linhas (20/10/2026). */ espacamento?: number; /** As Bordas (12/11/2026). */ borda?: BordaDoTexto }
     /**
      * O Sumário (20/10/2026): as telas marcadas (da Introdução em diante), com o número do primeiro slide de cada uma, e, em
      * "TELAS_E_SLIDES", os slides delas; a lista e os números se montam a cada vez, com os slides do relatório.

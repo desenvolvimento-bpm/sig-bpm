@@ -22,6 +22,7 @@ import { plural } from "@/lib/texto";
 
 import { botaoPrimario } from "@/app/cenarios/components/CenarioDialog";
 import { ItensDoMovimentoDialog } from "@/app/competencias/[anoMes]/dre/components/ItensDoMovimentoDialog";
+import { AvisoDoFechamentoAberto, motivoDoFechamentoAberto, useFechamentoAberto } from "./FechamentoAberto";
 import { moeda } from "@/app/competencias/[anoMes]/utils/formatacao";
 
 import { contestacoesService, mensagemDeErro, quemResponde, ROTULO_SITUACAO, type Contestacao, type SituacaoContestacao } from "../services/contestacoesService";
@@ -111,7 +112,11 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
   // As abas Solicitadas e Recebidas (30/10/2026, pedido do Adão): a tabela enxuta, com o Motivo, a Justificativa, os
   // movimentos e a resposta no menu da coluna Ações.
   const enxuta = aba !== "validacoes";
-  const podeResponder = (c: Contestacao) => aba === "recebidas" && c.situacao === "PENDENTE" && c.souResponsavel && hasPermission("contestacoes.recebidas:editar");
+  // Com uma competência do Fechamento Mensal aberta (23/11/2026, pedido do Adão), somente leitura: sem Acatar, Recusar, Editar,
+  // Alterar Status e Processar, com o destaque.
+  const aberta = useFechamentoAberto();
+  const podeResponder = (c: Contestacao) =>
+    !aberta && aba === "recebidas" && c.situacao === "PENDENTE" && c.souResponsavel && hasPermission("contestacoes.recebidas:editar");
   const atualizar = () => queryClient.invalidateQueries({ queryKey: ["contestacoes"] });
   const responder = useMutation({
     mutationFn: (d: { id: string; acatar: boolean; justificativa: string | null }) => contestacoesService.responder(d.id, { acatar: d.acatar, justificativa: d.justificativa }),
@@ -250,13 +255,25 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
                 </li>
               </>
             ) : null}
+            <li>
+              Com uma competência do Fechamento Mensal aberta ou em conferência, as Contestações de Gastos ficam somente leitura até ela ser
+              fechada: o destaque Somente Leitura, com a borda esquerda vermelha, diz qual é a competência, e Acatar, Recusar, Editar, Alterar Status,
+              Processar e o Contestar dos extratos ficam indisponíveis (a consulta, os movimentos e os itens continuam). A Importação das
+              contestações na aba Contestações dos Lançamentos Manuais, que faz parte do fechamento, continua.
+            </li>
             <li>Use os filtros nos rótulos das colunas.</li>
           </ul>
         }
         acoes={
           aba === "validacoes" ? (
             <PermissionGuard permission="contestacoes_validacoes:editar">
-              <Button type="button" className={botaoPrimario} disabled={!acatadas.length} onClick={() => setProcessando(true)} title={acatadas.length ? "Corrigir as contestações acatadas" : "Nenhuma contestação acatada"}>
+              <Button
+                type="button"
+                className={botaoPrimario}
+                disabled={!acatadas.length || !!aberta}
+                onClick={() => setProcessando(true)}
+                title={aberta ? motivoDoFechamentoAberto(aberta) : acatadas.length ? "Corrigir as contestações acatadas" : "Nenhuma contestação acatada"}
+              >
                 <Cog className="size-4" />
                 Processar
               </Button>
@@ -264,6 +281,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
           ) : undefined
         }
       />
+      <AvisoDoFechamentoAberto competencia={aberta} onde="tela" />
       <QuadroTabela>
         <DataTable<Contestacao>
           data={tabela.visiveis}
@@ -292,7 +310,7 @@ export function ContestacoesContent({ aba }: { aba: AbaDasContestacoes }) {
               <LinhaDaValidacao
                 key={c.id}
                 c={c}
-                podeEditar={hasPermission("contestacoes_validacoes:editar")}
+                podeEditar={!aberta && hasPermission("contestacoes_validacoes:editar")}
                 onVerMovimentos={() => setVendo(c)}
                 onLer={(o) => setLendo({ c, o })}
                 onEditar={() => setEditando(c)}

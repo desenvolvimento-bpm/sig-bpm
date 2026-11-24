@@ -34,7 +34,7 @@ import { BarraDeEdicao, COLUNAS, escrevendoAgora, GradeDoRelatorio, larguraDoSli
 import { ColarNoSlideDialog, type Colado, type ComoColar } from "../components/ColarNoSlideDialog";
 import { TransicoesDoSlide, type MudancaDoSlide } from "../components/TransicoesDoSlide";
 import { copiaDe, copiaPeloTexto, formatacaoBasica, TIPO_DA_COPIA, useCopia, type Copia } from "../components/copiarColar";
-import { deTexto, limparHtml } from "../components/TextoRico";
+import { deTexto, limparHtml, TAMANHO_PADRAO } from "../components/TextoRico";
 import { useProcesso } from "../components/processo";
 import { ABAS_SEM_NUMERO, relatoriosExecutivosService, type Bloco, type ConteudoDoBloco, type Fundo, type Pagina, type Relatorio, type TelaDoSumario } from "../services/relatoriosExecutivosService";
 
@@ -305,7 +305,7 @@ function Editor({
       const h = linhasDaFoto(t.w, proporcao, larguraDoSlide(), livre);
       const p = ultimo && ultimo.x + ultimo.w + t.w <= COLUNAS ? { x: ultimo.x + ultimo.w, y: ultimo.y } : { x: 0, y: fim };
       const id = novoId();
-      mudarPagina([...daPagina, { tipo: "FOTO", arquivo: nome, legenda: "", proporcao, ...(livre ? { livre: true } : {}), id, ...p, w: t.w, h }]);
+      mudarPagina([...daPagina, { tipo: "FOTO", tamanho: TAMANHO_PADRAO, arquivo: nome, legenda: "", proporcao, ...(livre ? { livre: true } : {}), id, ...p, w: t.w, h }]);
       // A imagem adicionada abre o Cortar e Posicionar (27/10/2026); o Cancelar a deixa como entrou.
       setEscolher({ id, cortar: true });
     },
@@ -353,7 +353,7 @@ function Editor({
       const h = linhasDaFoto(t.w, m.proporcao, largura);
       const p = ultimo && ultimo.x + ultimo.w + t.w <= COLUNAS ? { x: ultimo.x + ultimo.w, y: ultimo.y } : { x: 0, y: fim };
       const id = novoId();
-      mudarPagina([...daPagina, { tipo: "VIDEO", ...m, legenda: "", id, ...p, w: t.w, h }]);
+      mudarPagina([...daPagina, { tipo: "VIDEO", tamanho: TAMANHO_PADRAO, ...m, legenda: "", id, ...p, w: t.w, h }]);
       setEscolher({ id });
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível enviar o vídeo.")),
@@ -418,7 +418,7 @@ function Editor({
     const html = formatado && formatado.length <= 30_000 ? formatado : deTexto(texto);
     const w = 6;
     const h = linhasDoTexto(texto, w, como.tipo === "ANOTACAO" ? 30 : 0);
-    const conteudo = como.tipo === "ANOTACAO" ? { tipo: "ANOTACAO" as const, nota: como.nota, texto, html } : { tipo: "TEXTO" as const, texto, html };
+    const conteudo = como.tipo === "ANOTACAO" ? { tipo: "ANOTACAO" as const, tamanho: TAMANHO_PADRAO, nota: como.nota, texto, html } : { tipo: "TEXTO" as const, tamanho: TAMANHO_PADRAO, texto, html };
     const id = novoId();
     mudarPagina([...daPagina, { ...conteudo, id, w, h, ...lugarLivre(daPagina, w, h, 0, 0, linhasDaPagina()) }]);
     setEscolher({ id });
@@ -762,11 +762,11 @@ function Editor({
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuLabel className="text-xs text-gray-500">Texto</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => incluir([{ tipo: "ANOTACAO", nota: "POSITIVO", texto: "" }])}>
+                    <DropdownMenuItem onClick={() => incluir([{ tipo: "ANOTACAO", tamanho: TAMANHO_PADRAO, nota: "POSITIVO", texto: "" }])}>
                       <StickyNote className="size-4" />
                       Anotação
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => incluir([{ tipo: "TEXTO", texto: "" }])}>
+                    <DropdownMenuItem onClick={() => incluir([{ tipo: "TEXTO", tamanho: TAMANHO_PADRAO, texto: "" }])}>
                       <Type className="size-4" />
                       Texto Livre
                     </DropdownMenuItem>
@@ -1369,7 +1369,7 @@ export function ItensDoComoUsar() {
         Anotação inclui um bloco de texto ao lado do último bloco, no formato dos cards do Painel: o título em cima (de início, o nome da nota; clique
         nele para mudar) e o texto no card com o destaque da cor. No menu da edição (logo abaixo das abas, com o bloco escolhido), a formatação do
         texto da anotação e da legenda da imagem: negrito, itálico, sublinhado, aumentar e diminuir a fonte, a cor (Padrão — a cor do tema —, cinza, ouro,
-        verde, azul, amarelo, laranja, vermelho e branco) e os marcadores (quadrado, seta, check e erro, o “x”); o tamanho da fonte é o botão com o número (clique nele para escolher, de 10 a 144; o padrão, 14, tem asterisco). Nas anotações e no Texto Livre, também a fonte (o botão Aa: Padrão, Arial, Calibri, Segoe UI, Verdana, Georgia e as abertas Roboto, Open Sans, Montserrat, Lato e Poppins; a fonte do texto onde está o cursor fica destacada na lista, em negrito e com o fundo cinza) e o espaçamento entre as linhas (de 0,50 a 2,00, para o texto todo do bloco; 1,00 é o simples, e Padrão volta ao de antes). Ela vale para o trecho selecionado (diminuir ou voltar ao padrão vale também para parte de um trecho aumentado); sem seleção,
+        verde, azul, amarelo, laranja, vermelho e branco) e os marcadores (quadrado, seta, check e erro, o “x”); o tamanho da fonte é o botão com o número (clique nele para escolher, de 10 a 144; o padrão, com asterisco, é o do bloco: 20 nas anotações, nos Textos Livres e nas legendas novos; os blocos mais antigos têm 14). Nas anotações e no Texto Livre, também a fonte (o botão Aa: Padrão, Arial, Calibri, Segoe UI, Verdana, Georgia e as abertas Roboto, Open Sans, Montserrat, Lato e Poppins; a fonte do texto onde está o cursor fica destacada na lista, em negrito e com o fundo cinza) e o espaçamento entre as linhas (de 0,50 a 2,00, para o texto todo do bloco; 1,00 é o simples, e Padrão volta ao de antes). Ela vale para o trecho selecionado (diminuir ou voltar ao padrão vale também para parte de um trecho aumentado); sem seleção,
         para todo o texto. Com o cursor no título da anotação, o botão do tamanho muda o do título (de 12 a 32; o padrão, 18), e o da fonte, a dele. No menu da edição, escolha a nota: Positivo (verde; azul com a Acessibilidade Daltonismo, no menu do usuário),
         Negativo (vermelho) ou Atenção (laranja). A anotação pode ficar baixa a ponto de mostrar uma linha só do texto. Enquanto você escreve, ela cresce
         sozinha quando o texto passa da altura dela (até o pé da página), e os blocos de baixo descem.

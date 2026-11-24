@@ -26,7 +26,7 @@ import { CortarImagemDialog, type CorteDaImagem } from "./CortarImagem";
 import { CamadaDoFundo } from "./FundoDoSlide";
 import { NaTelaPadrao, TELA_PADRAO } from "./TelaPadrao";
 import { BarraDoSumario, ConfigurarSumarioDialog, ListaDoSumario } from "./SumarioDoRelatorio";
-import { alturaDaLinha, BarraDeTexto, familiaDa, TAMANHO_DO_TITULO, TextoRico } from "./TextoRico";
+import { alturaDaLinha, BarraDeTexto, familiaDa, TAMANHO_DO_TITULO, TAMANHO_PADRAO, tamanhoDoTexto, TextoRico } from "./TextoRico";
 import { BordasDialog, estiloDaBorda } from "./BordasDoTexto";
 import { estadoDoPlayer, irPara, pausarPlayer, PlayerDoVideo } from "./PlayerDoVideo";
 import { ConfiguracoesDoVideoDialog } from "./VideoDialog";
@@ -197,11 +197,13 @@ export function linhasDaFoto(w: number, proporcao: number, largura: number, semL
  * As linhas para um texto colado (24/10/2026) caber num bloco de `w` colunas: uma estimativa pelo número de letras (a fonte
  * padrão, de 14 px: uns 7,5 px por letra e 20 px por linha), mais `extra` px (o título da anotação), até a altura da página.
  */
-export function linhasDoTexto(texto: string, w: number, extra = 0) {
+export function linhasDoTexto(texto: string, w: number, extra = 0, tamanho = TAMANHO_PADRAO) {
   const coluna = (larguraDoSlide() - MARGEM * (COLUNAS - 1) - MARGEM * 2) / COLUNAS;
-  const porLinha = Math.max(10, Math.floor((coluna * w + MARGEM * (w - 1) - 32) / 7.5));
+  // A largura média de uma letra e a altura de uma linha no tamanho do texto (7,5 e 20 px no de 14).
+  const escala = tamanho / 14;
+  const porLinha = Math.max(10, Math.floor((coluna * w + MARGEM * (w - 1) - 32) / (7.5 * escala)));
   const linhas = texto.split("\n").reduce((n, p) => n + Math.max(1, Math.ceil(p.length / porLinha)), 0);
-  return Math.max(2, Math.min(linhasDaPagina(), Math.round((linhas * 20 + 24 + extra + MARGEM) / (ALTURA_DA_LINHA + MARGEM))));
+  return Math.max(2, Math.min(linhasDaPagina(), Math.round((linhas * 20 * escala + 24 + extra + MARGEM) / (ALTURA_DA_LINHA + MARGEM))));
 }
 
 /**
@@ -1381,11 +1383,11 @@ function ConteudoDoBloco({
             texto={b.texto}
             editavel={editavel}
             placeholder="Escreva a anotação…"
-            estilo={{ lineHeight: alturaDaLinha(b.espacamento) }}
+            estilo={{ lineHeight: alturaDaLinha(b.espacamento), fontSize: tamanhoDoTexto(b) }}
             rotulo={`Anotação (${titulo})`}
             registrar={registrar}
             onMudar={(html, texto) => onMudar({ html, texto } as Partial<Bloco>)}
-            className="min-h-0 w-full flex-1 overflow-auto px-4 py-2 text-sm text-gray-900"
+            className="min-h-0 w-full flex-1 overflow-auto px-4 py-2 text-gray-900"
           />
         </article>
       </div>
@@ -1400,11 +1402,11 @@ function ConteudoDoBloco({
         texto={b.texto}
         editavel={editavel}
         placeholder="Escreva o texto…"
-        estilo={{ lineHeight: alturaDaLinha(b.espacamento) }}
+        estilo={{ lineHeight: alturaDaLinha(b.espacamento), fontSize: tamanhoDoTexto(b) }}
         rotulo="Texto livre"
         registrar={registrar}
         onMudar={(html, texto) => onMudar({ html, texto } as Partial<Bloco>)}
-        className={`h-full w-full overflow-auto text-sm text-gray-900 ${editavel ? "rounded-sm border border-dashed border-transparent px-1 hover:border-gray-300 focus:border-gray-300" : "px-1"}`}
+        className={`h-full w-full overflow-auto text-gray-900 ${editavel ? "rounded-sm border border-dashed border-transparent px-1 hover:border-gray-300 focus:border-gray-300" : "px-1"}`}
       />
     );
     const borda = estiloDaBorda(b.borda);
@@ -1457,8 +1459,8 @@ function ConteudoDoBloco({
         {/* A legenda formatada (17/10/2026; antes, só texto): a formatação no menu da edição. A Imagem Livre não a tem. */}
         {!b.livre && (editavel || b.legenda) ? (
           <figcaption
-            className="max-h-[40%] min-h-9 shrink-0 overflow-auto rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white text-sm font-semibold text-gray-900"
-            style={ampliado ? { zoom: 0.5 } : undefined}
+            className="max-h-[40%] min-h-9 shrink-0 overflow-auto rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white font-semibold text-gray-900"
+            style={{ fontSize: tamanhoDoTexto(b), ...(ampliado ? { zoom: 0.5 } : {}) }}
           >
             <TextoRico
               html={b.legendaHtml}
@@ -1498,8 +1500,8 @@ function ConteudoDoBloco({
         </div>
         {editavel || b.legenda ? (
           <figcaption
-            className="max-h-[40%] min-h-9 shrink-0 overflow-auto rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white text-sm font-semibold text-gray-900"
-            style={ampliado ? { zoom: 0.5 } : undefined}
+            className="max-h-[40%] min-h-9 shrink-0 overflow-auto rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white font-semibold text-gray-900"
+            style={{ fontSize: tamanhoDoTexto(b), ...(ampliado ? { zoom: 0.5 } : {}) }}
           >
             <TextoRico
               html={b.legendaHtml}

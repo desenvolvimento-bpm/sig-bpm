@@ -5,7 +5,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { temPermissao } from "../../middlewares/verificarPermissao.js";
 import { anoMesSchema } from "../../schemas/importacoes/importacaoSchemas.js";
 import { departamentoDaLinha, gestaoDoCentro } from "../../services/acesso/recorteDepartamento.js";
-import { centroForaDaContestacao, contestacoesService, RegraContestacaoError, type UsuarioDaContestacao } from "../../services/contestacoes/contestacoesService.js";
+import { centroForaDaContestacao, contestacoesService, fechamentoAberto, RegraContestacaoError, type UsuarioDaContestacao } from "../../services/contestacoes/contestacoesService.js";
 
 /** As contestações de gastos (27/10/2026): o pedido, as abas, a resposta, a validação e a importação para os lançamentos. */
 
@@ -72,6 +72,9 @@ export const contestacoesController = {
     if (!temPermissao(request, LER_DA_ABA[aba.data])) return response.status(403).json({ error: "Sem acesso a esta aba das contestações." });
     return responder(response, () => contestacoesService.itensDoMovimento(id.data, movimentoId.data, aba.data, usuario(request)));
   },
+
+  /** A competência do Fechamento Mensal aberta (23/11/2026): com ela, as telas das Contestações e o Contestar ficam somente leitura. */
+  fechamentoAberto: (_request: Request, response: Response) => responder(response, async () => ({ competencia: await fechamentoAberto() })),
 
   async criar(request: Request, response: Response) {
     const b = criarSchema.safeParse(request.body);

@@ -535,7 +535,7 @@ export function DREContent() {
               Em Sem Centros de Custo, os lançamentos de mão de obra e de gastos gerais sem centro de custo do cadastro, por grupo (pelo departamento da
               conta e pela filial), como em Resultados Empresariais.
             </li>
-            <li>Clique numa linha com lupa para ver os lançamentos de origem; nas linhas de volume (Produção, Expedição, Montagem, Acompanhamento), as listas somadas por obra. Nas linhas de Receita Bruta e Líquida de Frete e de Montagem, a parte da receita prévia traz no extrato a tabela dos itens importados (os valores e, nos serviços, o andamento de cada medição); nas demais receitas, o botão abre a memória de cálculo.</li>
+            <li>Clique numa linha com lupa para ver os lançamentos de origem; nas linhas de volume (Produção, Expedição, Montagem, Acompanhamento), as listas somadas por obra. Nas linhas de Receita Bruta e Líquida de Frete, de Montagem e Complementar, a parte da receita prévia traz no extrato a tabela dos itens importados (os valores e, nos serviços, o andamento de cada medição); nas demais receitas (Pré-Fabricado e Devoluções e Inventários), o botão abre a memória de cálculo.</li>
             <li>
               As colunas % e R$/m³ ficam em branco nas linhas sem elas (os volumes, as contas sem R$/m³) e quando a base é zero; nos centros de custo e sem
               centro de custo, antes da apuração, também (a base é o Consolidado apurado). O Exportar leva as duas colunas.

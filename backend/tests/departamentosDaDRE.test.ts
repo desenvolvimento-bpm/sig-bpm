@@ -64,10 +64,6 @@ describe("montarDepartamentos (a aba Departamentos dos Resultados)", () => {
       "CUSTOS DE PRODUÇÃO (CPP)",
       "ACABAMENTO",
       "PROJETO",
-      "Mão de Obra Indireta (Outros)",
-      "Encargos e Benefícios",
-      "Matérias Primas",
-      "Cimento",
       "DESPESAS TÉCNICAS (DT)",
       "PROJETO",
       "LUCRO OPERACIONAL (EBITDA)",
@@ -78,34 +74,26 @@ describe("montarDepartamentos (a aba Departamentos dos Resultados)", () => {
     assert.ok(d.centros.has("CPP.CENTRO.ACABAMENTO") && d.centros.has("DT.CENTRO.PROJETO"));
   });
 
-  it("deixa nas atribuições só o que não vem dos centros, e os totais batem com o Consolidado", () => {
-    // Mão de Obra Indireta: 200 − 190 dos centros; a Remunerações CLT (150 − 150) some, os Encargos ficam com 10.
-    assert.equal(valor("CPP.MOI.MAO_DE_OBRA_INDIRETA"), 10);
-    assert.equal(valor("CPP.MOI.ENCARGOS_E_BENEFICIOS"), 10);
-    assert.ok(!d.linhas.some((l) => l.codigo === "CPP.MOI.REMUNERACOES_CLT"));
-    // As Matérias Primas, sem centros, inteiras e sem "(Outros)"; a DT, toda do centro, sem atribuição.
-    assert.equal(valor("CPP.MP.MATERIAS_PRIMAS"), 400);
-    assert.ok(!d.parciais.has("CPP.MP.MATERIAS_PRIMAS") && d.parciais.has("CPP.MOI.MAO_DE_OBRA_INDIRETA"));
-    assert.ok(!d.linhas.some((l) => l.codigo.startsWith("DT.MOI.")));
-    const filhos = ["CPP.CENTRO.ACABAMENTO", "CPP.CENTRO.PROJETO", "CPP.MOI.MAO_DE_OBRA_INDIRETA", "CPP.MP.MATERIAS_PRIMAS"];
-    assert.equal(
-      filhos.reduce((s, c) => s + (valor(c) ?? 0), 0),
-      valor("CPP.CUSTOS_DE_PRODUCAO_CPP"),
-    );
+  it("mostra só os centros nos departamentos: sem as atribuições e as contas, com o total do Consolidado", () => {
+    // Nenhuma atribuição nem conta dos departamentos (Mão de Obra Indireta, Matérias Primas…), nem as dos centros.
+    assert.ok(!d.linhas.some((l) => /^(CPP|DT)\.(MOI|MP)\./.test(l.codigo)));
+    assert.deepEqual([...d.parciais], [...d.centros]);
+    // O total da CPP é o do Consolidado (600); os centros somam 190 (o resto não vem deles).
+    assert.equal(valor("CPP.CUSTOS_DE_PRODUCAO_CPP"), 600);
+    assert.equal((valor("CPP.CENTRO.ACABAMENTO") ?? 0) + (valor("CPP.CENTRO.PROJETO") ?? 0), 190);
     // Fora dos departamentos, o Consolidado como está; no mês 2, os centros zerados.
     assert.equal(valor("EBITDA.LUCRO_OPERACIONAL_EBITDA"), 320);
     assert.equal(valor("CPP.CENTRO.ACABAMENTO", 1), 0);
-    assert.equal(valor("CPP.MP.CIMENTO", 1), 100);
+    assert.equal(valor("CPP.CUSTOS_DE_PRODUCAO_CPP", 1), 100);
   });
 
-  it("numa série sem centros (um sintético), deixa sem valor as linhas dos centros e as parciais, e o resto com o Consolidado dela", () => {
+  it("numa série sem centros (um sintético), deixa sem valor as linhas dos centros, e o resto com o Consolidado dela", () => {
     const comSintetico = montarDepartamentos(ESTRUTURA, [
       { consolidado: CONSOLIDADO, centros: CENTROS },
       { consolidado: [mapa({ "CPP.CUSTOS_DE_PRODUCAO_CPP": 700, "CPP.MOI.MAO_DE_OBRA_INDIRETA": 300, "CPP.MOI.ENCARGOS_E_BENEFICIOS": 300, "CPP.MP.MATERIAS_PRIMAS": 400, "CPP.MP.CIMENTO": 400 })], centros: null },
     ]);
     const sint = comSintetico.series[1];
-    assert.ok(sint.semValor.has("CPP.CENTRO.ACABAMENTO") && sint.semValor.has("CPP.MOI.MAO_DE_OBRA_INDIRETA") && sint.semValor.has("CPP.MOI.ENCARGOS_E_BENEFICIOS"));
-    assert.equal(sint.valores[0].get("CPP.MP.MATERIAS_PRIMAS"), 400);
+    assert.ok(sint.semValor.has("CPP.CENTRO.ACABAMENTO") && sint.semValor.has("DT.CENTRO.PROJETO"));
     assert.equal(sint.valores[0].get("CPP.CUSTOS_DE_PRODUCAO_CPP"), 700);
   });
 
