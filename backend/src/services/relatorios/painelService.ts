@@ -49,6 +49,8 @@ export function montarPainel(quadros: QuadroPainel[], periodos: Periodos, serie:
   return quadros.map((q) => ({
     titulo: q.titulo,
     itens: q.itens.map((i) => ({
+      // O ID do card (25/11/2026): os blocos dos relatórios e dos painéis acham o card por ele.
+      id: i.id ?? null,
       titulo: i.titulo,
       sigla: i.sigla,
       // A Metodologia por extenso (21/10/2026), que o card mostra no lugar da abreviação.

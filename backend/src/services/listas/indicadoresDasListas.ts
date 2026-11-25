@@ -2,6 +2,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { auditar } from "../auditoriaService.js";
 import { catalogoDeIndicadores } from "../relatorios/catalogoIndicadores.js";
 import { RegraListaError } from "./listasService.js";
+import { indicadoresParaReferencias, nomeDaReferencia, referenciaDoNome } from "../relatorios/referenciasDosIndicadores.js";
 
 /**
  * As abas Comercial e Administrativo das Listas: os indicadores numerados do
@@ -34,17 +35,19 @@ export async function indicadoresDaLista(setor: SetorIndicadores, ano: number, m
   const prisma = getPrismaClient();
   const c = await competencia(ano, mes);
   const lista = await doSetor(setor);
-  const nomes = lista.map((i) => i.nome);
+  // Os valores guardam o ID do indicador (25/11/2026): a lista e as telas, o nome.
+  const referencias = await indicadoresParaReferencias(prisma);
+  const refs = lista.map((i) => referenciaDoNome(i.nome, referencias));
   const [importacao, digitados] = await Promise.all([
     prisma.importacao.findFirst({
       where: { competenciaId: c.id, tipo: SETORES_INDICADORES[setor].tipo, status: "CONCLUIDA", substituidaEm: null },
       orderBy: { importadoEm: "desc" },
-      select: { nomeArquivo: true, importadoEm: true, indicadores: { select: { nome: true, valor: true } } },
+      select: { nomeArquivo: true, importadoEm: true, indicadores: { select: { indicador: true, valor: true } } },
     }),
-    prisma.indicadorDigitado.findMany({ where: { competenciaId: c.id, nome: { in: nomes } }, select: { nome: true, valor: true } }),
+    prisma.indicadorDigitado.findMany({ where: { competenciaId: c.id, indicador: { in: refs } }, select: { indicador: true, valor: true } }),
   ]);
-  const importados = new Map((importacao?.indicadores ?? []).map((i) => [i.nome, Number(i.valor)]));
-  const digitado = new Map(digitados.map((i) => [i.nome, Number(i.valor)]));
+  const importados = new Map((importacao?.indicadores ?? []).map((i) => [nomeDaReferencia(i.indicador, referencias), Number(i.valor)]));
+  const digitado = new Map(digitados.map((i) => [nomeDaReferencia(i.indicador, referencias), Number(i.valor)]));
   return {
     competencia: c,
     importacao: importacao ? { nomeArquivo: importacao.nomeArquivo, importadoEm: importacao.importadoEm } : null,
@@ -66,9 +69,11 @@ export async function digitarIndicador(setor: SetorIndicadores, ano: number, mes
   if (c.status === "FECHADA") throw new RegraListaError(409, `A competência ${rotulo(ano, mes)} está fechada. Digitar nela exige reabri-la.`);
   if (!(await doSetor(setor)).some((i) => i.nome === nome)) throw new RegraListaError(400, `"${nome}" não é um indicador desta lista.`);
   const antes = await indicadoresDaLista(setor, ano, mes).then((l) => l.indicadores.find((i) => i.nome === nome));
+  // Gravado pelo ID do indicador (25/11/2026).
+  const indicador = referenciaDoNome(nome, await indicadoresParaReferencias(prisma));
   const gravado = await prisma.indicadorDigitado.upsert({
-    where: { competenciaId_nome: { competenciaId: c.id, nome } },
-    create: { competenciaId: c.id, nome, valor, digitadoPor: usuarioId },
+    where: { competenciaId_indicador: { competenciaId: c.id, indicador } },
+    create: { competenciaId: c.id, indicador, valor, digitadoPor: usuarioId },
     update: { valor, digitadoPor: usuarioId, digitadoEm: new Date() },
     select: { id: true },
   });

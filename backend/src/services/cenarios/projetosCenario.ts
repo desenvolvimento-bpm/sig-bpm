@@ -37,15 +37,16 @@ export const LIBERACOES_DA_LISTA: Readonly<Record<string, readonly string[]>> = 
  * As bases do rateio de Projeto ("PROJETO|MATRIZ" e "PROJETO|FILIAL"): os doze meses da Liberação de Projetos do cenário (o
  * mês sem valor vale zero; o mês 0, a Média de Referência, não entra).
  */
-export function basesDosProjetos(indicadores: Array<{ nome: string; mes: number; valor: unknown }>) {
+export function basesDosProjetos(indicadores: Array<{ indicador: string; mes: number; valor: unknown }>) {
   const bases = new Map<string, number[]>();
-  for (const [destino, nome] of Object.entries(LIBERACAO_DE_PROJETOS)) {
+  // Pelo ID do indicador (25/11/2026: os valores dos cenários guardam o ID).
+  for (const [destino, id] of Object.entries({ MATRIZ: IND.LIBERACAO_MATRIZ, FILIAL: IND.LIBERACAO_FILIAL })) {
     const lista = Array<number>(12).fill(0);
-    for (const i of indicadores) if (i.nome === nome && i.mes >= 1 && i.mes <= 12) lista[i.mes - 1] = Number(i.valor) || 0;
+    for (const i of indicadores) if (i.indicador === id && i.mes >= 1 && i.mes <= 12) lista[i.mes - 1] = Number(i.valor) || 0;
     bases.set(`PROJETO|${destino}`, lista);
   }
   return bases;
 }
 
 /** Os indicadores que dão as bases do rateio de Projeto, para a leitura no banco. */
-export const ondeEstaoOsProjetos = (cenarioId: string) => ({ cenarioId, nome: { in: [...LIBERACOES_DIGITADAS] }, mes: { gte: 1, lte: 12 } });
+export const ondeEstaoOsProjetos = (cenarioId: string) => ({ cenarioId, indicador: { in: [IND.LIBERACAO_MATRIZ, IND.LIBERACAO_FILIAL] }, mes: { gte: 1, lte: 12 } });

@@ -12,6 +12,7 @@ import { plural } from "../../utils/plural.js";
 import { limparNome, nomeDoDepartamento, TIPO_ZIP, zipDeArquivos } from "../../lib/arquivosExportados.js";
 import type { Comparacao } from "../cenarios/indicadoresDoCenario.js";
 import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
+import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * Exportação dos relatórios em Excel e PDF, como a tela: os Resultados (uma
@@ -92,14 +93,8 @@ const pontos = (pp: number) => {
   return `${pp > 0 ? "+" : ""}${t} p.p.`;
 };
 
-const VISOES: Array<{ visao: 0 | 1 | 2 | 3 | 4 | 5; nome: string }> = [
-  { visao: 0, nome: "Consolidado" },
-  { visao: 1, nome: "Matriz" },
-  { visao: 2, nome: "Filial" },
-  { visao: 3, nome: "Serviços" },
-  { visao: 4, nome: "Despesas e Extra" },
-  { visao: 5, nome: "RN" },
-];
+// As visões com o nome das unidades no cadastro (25/11/2026: mudam a qualquer momento).
+const visoes = () => ([0, 1, 2, 3, 4, 5] as const).map((visao) => ({ visao, nome: nomeDaVisao(visao) }));
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 const dataHora = (d: Date) =>
@@ -134,7 +129,7 @@ const abaDetalhada = (b: Bloco): AbaDetalhada => ({ nome: b.nome, codigos: b.dad
 async function blocos(ano: number, ate: number | undefined, escopo: EscopoResultados, acesso: Acesso, comparacao: ComparacaoDaTela = SEM_COMPARACAO): Promise<Bloco[]> {
   const daVisao = (visao: 0 | 1 | 2 | 3 | 4 | 5) => resultadosService.unidade(ano, visao, ate, acesso, true, comparacao.comparaCom, comparacao.prova);
   if (escopo.tipo === "visao") {
-    const v = VISOES.find((x) => x.visao === escopo.visao)!;
+    const v = visoes().find((x) => x.visao === escopo.visao)!;
     return [{ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) }];
   }
   // A aba Departamentos (23/11/2026), sem a aba Detalhes (as linhas dos centros não são as do balancete).
@@ -168,7 +163,7 @@ async function blocos(ano: number, ate: number | undefined, escopo: EscopoResult
     }
     return r;
   }
-  if (escopo.tipo === "unidades") return Promise.all(VISOES.map(async (v) => ({ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) })));
+  if (escopo.tipo === "unidades") return Promise.all(visoes().map(async (v) => ({ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) })));
   // Os centros, com o departamento de cada um (o do cadastro; com mais de um, todos) para o nome do arquivo.
   const lista = (await resultadosService.listarCentros(ano, ate, acesso, true)).grupos;
   const departamento = (g: string) => (lista.find((x) => x.grupo === g)?.departamentos ?? []).map(nomeDoDepartamento).join(" e ") || nomeDoDepartamento(null);

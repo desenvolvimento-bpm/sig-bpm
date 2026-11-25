@@ -23,6 +23,8 @@ import { InfoAgrupamento } from "./components/InfoAgrupamento";
 import { VolumesDialog } from "./components/VolumesDialog";
 import { Agrupador, fundoDaLinha, SeletorNivel, semPrimeiroTotalDaRol, useNiveisDRE } from "./components/NiveisDRE";
 import { dreService, mensagemDeErro, ROTULO_CHAVE, UNIDADES, type LinhaDRE, type VisaoDetalhe } from "./services/dreService";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
+import { descricaoDeOrigem, ehAConta, slugDaDRE } from "@/lib/contasDaDRE";
 
 const ehVolume = (l: LinhaDRE) => l.grupoSigla === "P" || l.grupoSigla === "S";
 /** As larguras das colunas de números, iguais nos rótulos da faixa do título e nas células (13/11/2026: o % e o R$/m³). */
@@ -34,7 +36,13 @@ type Visao = "consolidado" | "centros" | "sem_centros" | "obras" | "impostos" | 
 const ABA_DA_UNIDADE = ["consolidado", "matriz", "filial", "servicos", "despesas", "rn"];
 const VISOES: Array<{ visao: Visao; aba: string; nome: string }> = [
   { visao: "consolidado", aba: "consolidado", nome: "Consolidado" },
-  ...UNIDADES.map((u) => ({ visao: u.codigo as Visao, aba: ABA_DA_UNIDADE[u.codigo], nome: u.nome })),
+  ...UNIDADES.map((u) => ({
+    visao: u.codigo as Visao,
+    aba: ABA_DA_UNIDADE[u.codigo],
+    get nome() {
+      return u.nome;
+    },
+  })),
   { visao: "centros", aba: "centros", nome: "Centros de Custo" },
   // Os movimentos sem centro de custo (15/10/2026), como em Resultados Empresariais.
   { visao: "sem_centros", aba: "sem_centros", nome: "Sem Centros de Custo" },
@@ -48,7 +56,8 @@ const VISOES: Array<{ visao: Visao; aba: string; nome: string }> = [
  * das unidades, desde que o usuário alcance as movimentações delas (o recorte
  * do Gestor por departamento, Passo 22, que o backend informa em podeDetalhar).
  */
-const detalhavel = (l: LinhaDRE) => !ehVolume(l) && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") && l.podeDetalhar !== false;
+// Os Impostos Operacionais pela descrição de origem (25/11/2026), que não muda com a Descrição.
+const detalhavel = (l: LinhaDRE) => !ehVolume(l) && (l.tipo === "ITEM" || ehAConta(l, "Impostos Operacionais")) && l.podeDetalhar !== false;
 
 /** Linhas de volume (Produção, Expedição, Montagem, Acompanhamento): abrem as listas por obra, no consolidado, nas unidades e na obra (só as dela). */
 const listavel = (l: LinhaDRE, visao: VisaoDetalhe) => ehVolume(l) && l.tipo === "ITEM" && ("unidade" in visao || "consolidado" in visao || "obra" in visao);
@@ -219,15 +228,10 @@ const SemLancamento = ({ oQue }: { oQue: string }) => (
  * soma só as atribuições que aparecem.
  */
 const TOTAIS_DO_CENTRO = new Set(["CPP", "CSM", "CSC", "DL", "DT", "DC", "DA"]);
-const ATRIBUICOES_DO_CENTRO = new Set([
-  "MÃO DE OBRA DIRETA",
-  "MÃO DE OBRA INDIRETA",
-  "GASTOS GERAIS VARIÁVEIS",
-  "GASTOS GERAIS DIRETOS",
-  "GASTOS GERAIS INDIRETOS",
-  "GASTOS GERAIS COMERCIAIS",
-  "DEPRECIAÇÃO",
-]);
+// Pela descrição de origem dos subtotais (25/11/2026: a última parte do código, que não muda com a Descrição).
+const ATRIBUICOES_DO_CENTRO = new Set(
+  ["MÃO DE OBRA DIRETA", "MÃO DE OBRA INDIRETA", "GASTOS GERAIS VARIÁVEIS", "GASTOS GERAIS DIRETOS", "GASTOS GERAIS INDIRETOS", "GASTOS GERAIS COMERCIAIS", "DEPRECIAÇÃO"].map(slugDaDRE),
+);
 function linhasDoCentro(linhas: LinhaDRE[]) {
   const partes = (c: string) => c.split(".");
   const prefixo = (c: string) => partes(c).slice(0, 2).join(".");
@@ -236,7 +240,7 @@ function linhasDoCentro(linhas: LinhaDRE[]) {
       l.tipo !== "ITEM" &&
       partes(l.codigo).length === 3 &&
       TOTAIS_DO_CENTRO.has(partes(l.codigo)[0]) &&
-      ATRIBUICOES_DO_CENTRO.has(l.descricao.trim().toUpperCase()) &&
+      ATRIBUICOES_DO_CENTRO.has(descricaoDeOrigem(l.codigo)) &&
       Number(l.valor ?? 0) !== 0,
   );
   const atribuicoes = new Set(mostradas.map((l) => prefixo(l.codigo)));
@@ -450,6 +454,8 @@ function VisaoSemCentros({ anoMes, escolhido, onEscolher }: { anoMes: string; es
 }
 
 export function DREContent() {
+  // O nome das unidades no cadastro nas abas (25/11/2026): a tela se desenha de novo quando os nomes chegam.
+  useNomesDasUnidades();
   const { anoMes } = useParams<{ anoMes: string }>();
   useRegistrarAcessoTela(`/competencias/${anoMes}/dre`);
   const periodo = lerAnoMes(anoMes);

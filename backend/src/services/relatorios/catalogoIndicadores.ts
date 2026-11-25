@@ -5,6 +5,8 @@ import { compilarFormula, DEPARTAMENTOS_DO_QUADRO, formulaPorExtenso, type Item 
 import { acumular, calculoDoSistema, type DadosDoMes, type Indicador, type Parte } from "./indicadores.js";
 import { IndicadoresPeloId } from "./indicadoresDoSistema.js";
 import { acumularMeta } from "./metasOrcamento.js";
+import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
+import { comNomesNasFormulas, mapasDosIndicadores } from "./referenciasDosIndicadores.js";
 
 /**
  * O catálogo dos indicadores, lido do cadastro Estrutura dos Indicadores (11/10/2026): cada indicador com a fórmula
@@ -57,7 +59,6 @@ export const rotuloDoQuadro = (chave: string, centros?: Map<string, string>) => 
 export const rotuloDoMovimento = (nome: string) =>
   nome === "#POSITIVA" ? "Todas as de Contagem Positiva" : nome === "#NEGATIVA" ? "Todas as de Contagem Negativa" : nome;
 
-const NOME_DA_VISAO: Record<number, string> = { 0: "Consolidado", 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
 
 /** O nome de cada item, para a fórmula por extenso. */
 export async function rotulosDosItens() {
@@ -69,7 +70,7 @@ export async function rotulosDosItens() {
   );
   return (i: Item) =>
     i.tipo === "DRE"
-      ? `${linhas.get(i.codigo) ?? i.codigo} (${NOME_DA_VISAO[i.unidade] ?? i.unidade})`
+      ? `${linhas.get(i.codigo) ?? i.codigo} (${nomeDaVisao(i.unidade) ?? i.unidade})`
       : i.tipo === "LISTA"
         ? `${listas.get(i.codigo) ?? i.codigo} [Listas]`
         : i.tipo === "QL"
@@ -171,7 +172,7 @@ export type LinhaEstruturaIndicador = {
 
 /** Um indicador do cadastro pronto para calcular; `irmaos`: os indicadores pelo nome, para o item [INDICADOR]. */
 export function montarIndicador(r: LinhaEstruturaIndicador, irmaos?: Map<string, Indicador>): Indicador {
-  const base = { grupo: r.grupo, numero: r.numero, nome: r.nome, sentido: r.sentido, unidade: r.unidade, metodologia: r.descricao ?? "" };
+  const base = { ...(r.id ? { id: r.id } : {}), grupo: r.grupo, numero: r.numero, nome: r.nome, sentido: r.sentido, unidade: r.unidade, metodologia: r.descricao ?? "" };
   const formula = formulaEfetiva(r);
   if (r.modo === "SISTEMA" || !formula) {
     const s = calculoDoSistema(r);
@@ -216,7 +217,10 @@ export function montarCatalogo(linhas: LinhaEstruturaIndicador[]): Indicador[] {
 
 /** Os indicadores ativos do cadastro, na ordem da tela (um inativo usado na Metodologia de outro ainda se conta). */
 export async function catalogoDeIndicadores(): Promise<Indicador[]> {
-  const linhas = await getPrismaClient().indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
+  const gravadas = await getPrismaClient().indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
+  // As fórmulas com os nomes atuais (25/11/2026: gravadas pelo ID).
+  const { nomePorId } = mapasDosIndicadores(gravadas);
+  const linhas = gravadas.map((r) => comNomesNasFormulas(r, nomePorId));
   const todos = montarCatalogo(linhas);
   return todos.filter((_, k) => linhas[k].ativo);
 }

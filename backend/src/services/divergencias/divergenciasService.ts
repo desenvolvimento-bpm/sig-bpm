@@ -196,7 +196,7 @@ export type FiltroDivergencias = { ano?: number; mes?: number; tipo?: "BALANCETE
  */
 async function filtroDoAcesso(acesso: Acesso): Promise<Prisma.DivergenciaWhereInput> {
   if (!acesso.recorteDepartamento) return {};
-  const linhas = await getPrismaClient().linhaDRE.findMany({ select: { id: true, grupoSigla: true, descricao: true } });
+  const linhas = await getPrismaClient().linhaDRE.findMany({ select: { id: true, codigo: true, grupoSigla: true, descricao: true } });
   const permitidas = linhas.filter((l) => podeVerMovimentos(acesso, l)).map((l) => l.id);
   const contas = await getPrismaClient().contaResultado.findMany({ where: { linhaDREId: { in: permitidas } }, select: { id: true } });
   return { tipo: "BALANCETE", contaResultadoId: { in: contas.map((c) => c.id) } };

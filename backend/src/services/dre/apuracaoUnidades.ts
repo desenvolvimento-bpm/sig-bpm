@@ -1,6 +1,7 @@
 import { Prisma } from "../../generated/prisma/client.js";
 import { avaliarExpressao, codigosDaExpressao } from "./expressao.js";
 import type { CodigoTotais } from "../volumes/totaisOperacao.js";
+import { descricaoDeOrigem, ehAConta, semOGrupo, slugDaDRE } from "./descricaoDeOrigem.js";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -124,24 +125,27 @@ export type ResultadoLinha = { unidade: number; linhaId: string; codigo: string;
 const zero = () => new Decimal(0);
 const n = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 
+/** As chaves de um mapa pela descrição de origem das linhas (descricaoDeOrigem.ts). */
+const pelaOrigem = <T>(o: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(o).map(([k, v]) => [slugDaDRE(k), v]));
+
 /**
- * As linhas de volume (P e S) de cada unidade, pela descrição em maiúsculas, e
- * as linhas da aba Totais que as somam. Também usado pelo extrato das listas
- * de uma linha de volume da DRE.
+ * As linhas de volume (P e S) de cada unidade, pela descrição de origem (25/11/2026: a última parte do código; antes, a
+ * descrição em maiúsculas, que agora muda a qualquer momento), e as linhas da aba Totais que as somam. Também usado pelo
+ * extrato das listas de uma linha de volume da DRE.
  */
 export const VOLUMES_DA_DRE: Record<number, Record<string, CodigoTotais[]>> = {
-  1: { "PRODUÇÃO DO PRÉ-FABRICADO (M³)": ["PREFABRICADO_MATRIZ"], "PRODUÇÃO DA METALURGIA (KG)": ["METALURGIA_MATRIZ"], "EXPEDIÇÃO DO PRÉ-FABRICADO (M³)": ["EXPEDICAO_MATRIZ"] },
-  2: {
+  1: pelaOrigem({ "PRODUÇÃO DO PRÉ-FABRICADO (M³)": ["PREFABRICADO_MATRIZ"], "PRODUÇÃO DA METALURGIA (KG)": ["METALURGIA_MATRIZ"], "EXPEDIÇÃO DO PRÉ-FABRICADO (M³)": ["EXPEDICAO_MATRIZ"] }),
+  2: pelaOrigem({
     "PRODUÇÃO DO PRÉ-FABRICADO (M³)": ["PREFABRICADO_FILIAL"],
     "PRODUÇÃO DO PRÉ-FABRICADO (PISTAS)": ["PREFABRICADO_PISTAS"],
     "PRODUÇÃO DA METALURGIA (KG)": ["METALURGIA_FILIAL"],
     "EXPEDIÇÃO DO PRÉ-FABRICADO (M³)": ["EXPEDICAO_FILIAL"],
-  },
-  3: {
+  }),
+  3: pelaOrigem({
     "PRODUÇÃO DA METALURGIA (KG)": ["METALURGIA_MONTAGEM", "METALURGIA_COMPLEMENTAR"],
     "MONTAGEM DO PRÉ-FABRICADO (M³)": ["MONTAGEM"],
     "ACOMPANHAMENTO DE OBRA (D)": ["ACOMPANHAMENTO_MONTAGEM", "ACOMPANHAMENTO_COMPLEMENTAR"],
-  },
+  }),
 };
 
 /** O nome das chaves de rateio, para os avisos. */
@@ -183,7 +187,7 @@ const RECEITAS_DA_DRE = new Set(["ROB", "RFC", "RFNC"]);
 /** O valor do lançamento manual (no sinal da DRE) no sinal do balancete. */
 export const manualNoSinalDoBalancete = (grupoSigla: string, valor: Decimal) => (RECEITAS_DA_DRE.has(grupoSigla) ? valor.neg() : valor);
 
-/** As linhas que as abas calculam (não somam o balancete): as receitas da receita prévia e as líquidas. */
+/** As linhas que as abas calculam (não somam o balancete): as receitas da receita prévia e as líquidas (pela descrição de origem). */
 const CALCULADAS = new Set(
   [
     "Receita Bruta de Frete",
@@ -193,7 +197,7 @@ const CALCULADAS = new Set(
     "Receita Bruta Complementar",
     "Receita Líquida Complementar",
     "Receita Líquida de Montagem",
-  ].map((x) => x.toUpperCase()),
+  ].map(slugDaDRE),
 );
 
 /**
@@ -204,17 +208,18 @@ const CALCULADAS = new Set(
  * vai só para a aba RN).
  */
 export function abasQueSomam(
-  linha: Pick<LinhaEstrutura, "tipo" | "grupoSigla" | "descricao" | "unidades">,
+  linha: Pick<LinhaEstrutura, "tipo" | "codigo" | "grupoSigla" | "unidades">,
   l: { filial: number; balde: string | null; rateio: boolean; manual?: boolean; /** A linha de Montagem tem a equivalente nos Complementares (CSC). */ parNaComplementar?: boolean },
 ): number[] {
   if (linha.tipo !== "ITEM") return [];
   const b = l.balde ?? "";
-  const desc = n(linha.descricao);
+  // A conta pela descrição de origem (25/11/2026), que não muda com a Descrição.
+  const desc = descricaoDeOrigem(linha.codigo);
   const g = linha.grupoSigla;
   if (l.manual && b === "RN") return linha.unidades.includes(UNIDADE.RN) ? [UNIDADE.RN] : [];
   if (g === "P" || g === "S" || CALCULADAS.has(desc)) return [];
-  const comissao = desc === n("Comissões de Representantes e Terceiros");
-  const impostos = desc === n("Impostos Operacionais");
+  const comissao = desc === slugDaDRE("Comissões de Representantes e Terceiros");
+  const impostos = desc === slugDaDRE("Impostos Operacionais");
   const abas: number[] = [];
   for (const u of linha.unidades) {
     if (l.rateio) {
@@ -228,15 +233,15 @@ export function abasQueSomam(
     }
     if (u === UNIDADE.MATRIZ || u === UNIDADE.FILIAL) {
       const destino = DESTINO_DA_UNIDADE[u];
-      const receita = impostos || desc === n("Receita Bruta do Pré-Fabricado") || desc === n("Receita Bruta de Devoluções e Inventários");
+      const receita = impostos || desc === slugDaDRE("Receita Bruta do Pré-Fabricado") || desc === slugDaDRE("Receita Bruta de Devoluções e Inventários");
       if (comissao || b === destino || (b === "UNIDADE" && l.filial === u) || (receita && b === "DESPESAS" && l.filial === u)) abas.push(u);
     } else if (u === UNIDADE.SERVICOS) {
-      if (comissao || desc === n("Receita Bruta de Montagem")) abas.push(u);
+      if (comissao || desc === slugDaDRE("Receita Bruta de Montagem")) abas.push(u);
       else if (impostos) { if (b === "OBRAS") abas.push(u); }
       else if (g === "CSM" && b === "OBRAS") abas.push(u);
       else if (g === "CSC" && b === "COMPLEMENTAR") abas.push(u);
       // O frete dos complementares (24/10/2026): o Frete e Descarga do DVV, só do balde COMPLEMENTAR.
-      else if (g === "DVV" && desc === n("Frete e Descarga") && b === "COMPLEMENTAR") abas.push(u);
+      else if (g === "DVV" && desc === slugDaDRE("Frete e Descarga") && b === "COMPLEMENTAR") abas.push(u);
       // A Montagem com o balde COMPLEMENTAR vai para a linha equivalente dos Complementares, quando ela existe.
       else if (g === "CSM" && b === "COMPLEMENTAR" && l.parNaComplementar) abas.push(u);
     } else if (u === UNIDADE.DESPESAS) abas.push(u);
@@ -244,8 +249,9 @@ export function abasQueSomam(
   return abas;
 }
 
-type LinhaDaConta = Pick<LinhaEstrutura, "id" | "tipo" | "grupo" | "grupoSigla" | "atribuicao" | "descricao" | "unidades">;
-const mesmaLinha = (a: LinhaDaConta, b: LinhaDaConta) => n(a.atribuicao) === n(b.atribuicao) && n(a.descricao) === n(b.descricao);
+type LinhaDaConta = Pick<LinhaEstrutura, "id" | "codigo" | "tipo" | "grupo" | "grupoSigla" | "atribuicao" | "descricao" | "unidades">;
+// A mesma atribuição e a mesma descrição de origem (25/11/2026: pelo código sem o grupo, que não muda com os nomes).
+const mesmaLinha = (a: LinhaDaConta, b: LinhaDaConta) => semOGrupo(a.codigo) === semOGrupo(b.codigo);
 
 /**
  * As abas que leem uma conta com esta linha e este rateio, na filial 1 e na 2 (24/10/2026): as dos lançamentos que
@@ -271,11 +277,13 @@ export function combinacoesDaConta(escolhida: LinhaDaConta, linhas: LinhaDaConta
 
 export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]; avisos: string[] } {
   const avisos: string[] = [];
-  const porTripla = new Map(d.linhas.filter((l) => l.tipo === "ITEM").map((l) => [`${n(l.grupo)}|${n(l.atribuicao)}|${n(l.descricao)}`, l]));
+  // A linha equivalente de outro departamento: a mesma atribuição e descrição de origem (25/11/2026: pelo código, e não
+  // pelos nomes do grupo, da atribuição e da conta, que mudam a qualquer momento).
+  const porGrupoESemGrupo = new Map(d.linhas.filter((l) => l.tipo === "ITEM").map((l) => [`${l.grupoSigla}|${semOGrupo(l.codigo)}`, l]));
   const porCodigo = new Map(d.linhas.map((l) => [l.codigo, l]));
-  const linhaCP = (l: LinhaEstrutura) => porTripla.get(`${n("CUSTOS DE PRODUÇÃO (CP)")}|${n(l.atribuicao)}|${n(l.descricao)}`);
-  const linhaCSM = (l: LinhaEstrutura) => porTripla.get(`${n("CUSTOS DE SERVIÇOS: MONTAGEM (CSM)")}|${n(l.atribuicao)}|${n(l.descricao)}`);
-  const linhaCSC = (l: LinhaEstrutura) => porTripla.get(`${n("CUSTOS DE SERVIÇOS: COMPLEMENTARES (CSC)")}|${n(l.atribuicao)}|${n(l.descricao)}`);
+  const linhaCP = (l: LinhaEstrutura) => porGrupoESemGrupo.get(`CPP|${semOGrupo(l.codigo)}`);
+  const linhaCSM = (l: LinhaEstrutura) => porGrupoESemGrupo.get(`CSM|${semOGrupo(l.codigo)}`);
+  const linhaCSC = (l: LinhaEstrutura) => porGrupoESemGrupo.get(`CSC|${semOGrupo(l.codigo)}`);
 
   // Os lançamentos manuais fora do balde RN (21/10/2026): como lançamentos do balancete do mesmo balde, filial e linha,
   // no sinal do balancete; os que nenhuma aba soma ficam num aviso.
@@ -375,7 +383,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
   };
   const valorDe = (u: number, codigo: string) => valores.get(u)?.get(codigo) ?? zero();
   const itemDe = (u: number, descricao: string) => {
-    const l = d.linhas.find((x) => x.tipo === "ITEM" && n(x.descricao) === n(descricao) && x.unidades.includes(u));
+    const l = d.linhas.find((x) => x.tipo === "ITEM" && ehAConta(x, descricao) && x.unidades.includes(u));
     return l ? valorDe(u, l.codigo) : zero();
   };
 
@@ -388,9 +396,9 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
 
   const itensDa = (u: number) => d.linhas.filter((l) => l.tipo === "ITEM" && l.unidades.includes(u));
   const ehVolume = (l: LinhaEstrutura) => l.grupoSigla === "P" || l.grupoSigla === "S";
-  const ehComissao = (l: LinhaEstrutura) => n(l.descricao) === n("Comissões de Representantes e Terceiros");
+  const ehComissao = (l: LinhaEstrutura) => ehAConta(l, "Comissões de Representantes e Terceiros");
   const linhaPorDescricao = (u: number, descricao: string) =>
-    d.linhas.find((x) => n(x.descricao) === n(descricao) && x.unidades.includes(u) && (x.tipo === "ITEM" || x.tipo === "TOTAL"));
+    d.linhas.find((x) => ehAConta(x, descricao) && x.unidades.includes(u) && (x.tipo === "ITEM" || x.tipo === "TOTAL"));
 
   // --- Matriz e Filial -----------------------------------------------------
   // Os diretos da unidade são o balde dela (MATRIZ ou FILIAL), de qualquer
@@ -404,13 +412,13 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     const paresReceita: ParBalde[] = [...paresCusto, { balde: "DESPESAS", filial: u }];
     for (const l of itensDa(u)) {
       if (ehVolume(l)) {
-        const cods = VOLUMES[u][n(l.descricao)] ?? [];
+        const cods = VOLUMES[u][descricaoDeOrigem(l.codigo)] ?? [];
         gravar(u, l, cods.reduce((a, c) => a.plus(total(c)), zero()), { regra: `Volume da aba Totais: ${cods.join(" + ") || "—"}` });
         continue;
       }
       if (ehComissao(l)) continue; // depois da ROB consolidada
-      const desc = n(l.descricao);
-      if (desc === n("Receita Bruta do Pré-Fabricado")) {
+      const desc = descricaoDeOrigem(l.codigo);
+      if (desc === slugDaDRE("Receita Bruta do Pré-Fabricado")) {
         const contabil = somaPares(l.id, paresReceita);
         gravar(u, l, receitaFrete.receitaBruta.neg().minus(contabil), {
           regra: `−(frete da receita prévia) − (receita contábil: ${descreverPares(paresReceita)})`,
@@ -418,12 +426,12 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
           observacao: `Frete da receita prévia: ${receitaFrete.receitaBruta.toFixed(2)}`,
           origem: { contabil: { linhaId: l.id, pares: paresReceita, fator: "-1" }, previa: [{ unidade: u, natureza: "FRETE", componente: "BRUTA", sinal: -1 }] },
         });
-      } else if (desc === n("Receita Bruta de Frete")) {
+      } else if (desc === slugDaDRE("Receita Bruta de Frete")) {
         gravar(u, l, receitaFrete.receitaBruta, {
           regra: "Receita bruta de frete da receita prévia",
           origem: { previa: [{ unidade: u, natureza: "FRETE", componente: "BRUTA", sinal: 1 }] },
         });
-      } else if (desc === n("Receita Bruta de Devoluções e Inventários")) {
+      } else if (desc === slugDaDRE("Receita Bruta de Devoluções e Inventários")) {
         // Negativa, como a receita bruta do pré-fabricado (correção do usuário de 06/10/2026).
         const c = somaPares(l.id, paresReceita);
         gravar(u, l, c.neg(), {
@@ -431,12 +439,12 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
           direto: c.toFixed(2),
           origem: { contabil: { linhaId: l.id, pares: paresReceita, fator: "-1" } },
         });
-      } else if (desc === n("Receita Líquida de Frete")) {
+      } else if (desc === slugDaDRE("Receita Líquida de Frete")) {
         gravar(u, l, receitaFrete.receitaLiquida, {
           regra: "Receita líquida de frete da receita prévia",
           origem: { previa: [{ unidade: u, natureza: "FRETE", componente: "LIQUIDA", sinal: 1 }] },
         });
-      } else if (desc === n("Receita Líquida do Pré-Fabricado") || desc === n("Receita Líquida de Devoluções e Inventários")) {
+      } else if (desc === slugDaDRE("Receita Líquida do Pré-Fabricado") || desc === slugDaDRE("Receita Líquida de Devoluções e Inventários")) {
         continue; // depois dos impostos
       } else {
         const dir = somaPares(l.id, paresCusto);
@@ -506,14 +514,14 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     const frete = previa(u, "FRETE");
     const comFrete = !frete.receitaBruta.isZero() || !frete.receitaLiquida.isZero();
     for (const l of itensDa(u)) {
-      const desc = n(l.descricao);
+      const desc = descricaoDeOrigem(l.codigo);
       if (ehVolume(l)) {
         const cods = VOLUMES[u][desc] ?? [];
         gravar(u, l, cods.reduce((a, c) => a.plus(total(c)), zero()), { regra: `Volume da aba Totais: ${cods.join(" + ") || "—"}` });
         continue;
       }
       if (ehComissao(l)) continue;
-      if (desc === n("Receita Bruta de Montagem")) {
+      if (desc === slugDaDRE("Receita Bruta de Montagem")) {
         const c = somaDireto(l.id);
         gravar(u, l, compl.receitaBruta.neg().minus(frete.receitaBruta).minus(c), {
           regra: comFrete
@@ -528,25 +536,25 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
             ],
           },
         });
-      } else if (desc === n("Receita Bruta de Frete") || desc === n("Receita Líquida de Frete")) {
-        const liquida = desc === n("Receita Líquida de Frete");
+      } else if (desc === slugDaDRE("Receita Bruta de Frete") || desc === slugDaDRE("Receita Líquida de Frete")) {
+        const liquida = desc === slugDaDRE("Receita Líquida de Frete");
         gravar(u, l, liquida ? frete.receitaLiquida : frete.receitaBruta, {
           regra: `Receita ${liquida ? "líquida" : "bruta"} de frete da receita prévia de Serviços`,
           origem: { previa: [{ unidade: u, natureza: "FRETE", componente: liquida ? "LIQUIDA" : "BRUTA", sinal: 1 }] },
         });
-      } else if (desc === n("Receita Bruta Complementar")) {
+      } else if (desc === slugDaDRE("Receita Bruta Complementar")) {
         gravar(u, l, compl.receitaBruta, {
           regra: "Receita bruta complementar da receita prévia",
           origem: { previa: [{ unidade: u, natureza: "COMPLEMENTAR", componente: "BRUTA", sinal: 1 }] },
         });
-      } else if (desc === n("Receita Líquida Complementar")) {
+      } else if (desc === slugDaDRE("Receita Líquida Complementar")) {
         gravar(u, l, compl.receitaLiquida, {
           regra: "Receita líquida complementar da receita prévia",
           origem: { previa: [{ unidade: u, natureza: "COMPLEMENTAR", componente: "LIQUIDA", sinal: 1 }] },
         });
-      } else if (desc === n("Receita Líquida de Montagem")) {
+      } else if (desc === slugDaDRE("Receita Líquida de Montagem")) {
         continue; // depois dos impostos
-      } else if (l.grupoSigla === "DVV" && desc === n("Frete e Descarga")) {
+      } else if (l.grupoSigla === "DVV" && desc === slugDaDRE("Frete e Descarga")) {
         // O frete dos complementares (24/10/2026, pedido do Adão): em Serviços, só o balde COMPLEMENTAR; o de montagem
         // (OBRAS) não tem a linha. Na Matriz e na Filial, o frete segue como antes.
         const v = somaDireto(l.id, { balde: (b) => b === "COMPLEMENTAR" });
@@ -576,7 +584,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
         // A depreciação de montagem fica com o acompanhamento inteiro: o bloco
         // complementar não tem linha de depreciação (aba Resultados (Serviços),
         // linha 68, correção do usuário de 06/10/2026).
-        const acompanhamentoInteiro = montagem && n(l.descricao) === n("Depreciação do Maquinário");
+        const acompanhamentoInteiro = montagem && ehAConta(l, "Depreciação do Maquinário");
         for (const [chave, linhaBase, exige] of partes) {
           for (const f of basesDoRateio(chave, linhaBase?.id, exige)) {
             const p = chave === "ACOMPANHAMENTO" && acompanhamentoInteiro ? zero().plus(1) : pct(chave, destino, f.percentuais);

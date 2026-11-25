@@ -256,10 +256,16 @@ export const nomeDo = (id: string): string => atuais.get(id) ?? id;
 /** O ID do indicador da tabela com este nome atual, ou nulo. */
 export const idPeloNome = (nome: string): string | null => porNome.get(nome) ?? null;
 
-/** O nome original (o de 19/11/2026) do indicador com este nome atual; fora da tabela, o próprio nome. */
+/**
+ * O nome original (o de 19/11/2026) do indicador com este nome atual; fora da tabela, o primeiro nome dele (25/11/2026: o de
+ * antes da primeira troca na Auditoria; sem troca, o próprio nome) — as regras pelo nome original (o acumulado das metas, a
+ * classe dos indicadores dos cenários) não mudam com a troca.
+ */
 export const originalDe = (nome: string): string => {
   const id = porNome.get(nome);
-  return id ? NOMES_ORIGINAIS[id] : nome;
+  if (id) return NOMES_ORIGINAIS[id];
+  const doCad = idDoCadastro.get(nome);
+  return (doCad && primeiros.get(doCad)) || nome;
 };
 
 /** O nome atual do indicador que tinha este nome original; fora da tabela, o próprio nome. */
@@ -275,6 +281,10 @@ export const idPeloOriginal = (original: string): string | null => porOriginal.g
 let doCadastro = new Map<string, string>();
 /** Os nomes antigos das trocas registradas na Auditoria (RENOMEACAO) → o ID do indicador. */
 let renomeados = new Map<string, string>();
+/** O nome atual → o ID, de todos os indicadores do cadastro (25/11/2026). */
+let idDoCadastro = new Map<string, string>();
+/** O nome de antes da primeira troca na Auditoria, pelo ID (25/11/2026): o original dos indicadores fora da tabela. */
+let primeiros = new Map<string, string>();
 
 /** A ação da Auditoria da troca do nome (de um indicador ou de um card do Painel de Bordo). */
 export const ACAO_RENOMEACAO = "RENOMEACAO";
@@ -289,13 +299,18 @@ export async function carregarNomesDoSistema(db: Pick<ReturnType<typeof getPrism
     db.auditLog.findMany({ where: { entidade: "indicador_estrutura", acao: ACAO_RENOMEACAO }, orderBy: { createdAt: "asc" }, select: { entidadeId: true, dadosAntes: true } }),
   ]);
   doCadastro = new Map(linhas.map((l) => [l.id, l.nome]));
+  idDoCadastro = new Map(linhas.map((l) => [l.nome, l.id]));
   atuais.clear();
   for (const [id, nome] of Object.entries(NOMES_ORIGINAIS)) atuais.set(id, doCadastro.get(id) ?? nome);
   indexar();
   renomeados = new Map();
+  primeiros = new Map();
   for (const t of trocas) {
     const antes = t.dadosAntes as { nome?: unknown } | null;
-    if (t.entidadeId && typeof antes?.nome === "string") renomeados.set(antes.nome, t.entidadeId);
+    if (t.entidadeId && typeof antes?.nome === "string") {
+      renomeados.set(antes.nome, t.entidadeId);
+      if (!primeiros.has(t.entidadeId)) primeiros.set(t.entidadeId, antes.nome);
+    }
   }
   return Object.entries(NOMES_ORIGINAIS)
     .filter(([id]) => !doCadastro.has(id))

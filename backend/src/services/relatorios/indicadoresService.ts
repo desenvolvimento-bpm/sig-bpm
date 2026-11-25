@@ -6,6 +6,7 @@ import { totaisDaCompetencia } from "../volumes/volumesService.js";
 import { orcamentoDoExercicio, type CenariosDoProva } from "./orcamento.js";
 import { rotuloDaComparacao, type Comparacao } from "../cenarios/indicadoresDoCenario.js";
 import { mesesDoExercicio } from "./resultadosService.js";
+import { indicadoresParaReferencias, nomeDaReferencia } from "./referenciasDosIndicadores.js";
 
 /**
  * Os dados de um mês: a DRE de todas as visões e os volumes congelados dos
@@ -16,7 +17,7 @@ import { mesesDoExercicio } from "./resultadosService.js";
  */
 export async function dadosDoMes(competenciaId: string, apurado: boolean, metasDoOrcamento?: Map<string, number> | null): Promise<DadosDoMes> {
   const prisma = getPrismaClient();
-  const [dre, volumes, importados, digitados, totaisListas, competencia] = await Promise.all([
+  const [dre, volumes, importados, digitados, totaisListas, competencia, referencias] = await Promise.all([
     apurado
       ? prisma.resultadoApurado.findMany({
           where: { competenciaId, centroCustoId: null },
@@ -24,12 +25,14 @@ export async function dadosDoMes(competenciaId: string, apurado: boolean, metasD
         })
       : [],
     apurado ? prisma.volumeOperacional.findMany({ where: { competenciaId }, select: { quantidade: true, regraRateio: { select: { origemDoVolume: true } } } }) : [],
-    prisma.indicadorImportado.findMany({ where: { competenciaId }, select: { nome: true, valor: true } }),
+    prisma.indicadorImportado.findMany({ where: { competenciaId }, select: { indicador: true, valor: true } }),
     // Os digitados nas abas Comercial e Administrativo das Listas sobrepõem os importados.
-    prisma.indicadorDigitado.findMany({ where: { competenciaId }, select: { nome: true, valor: true } }),
+    prisma.indicadorDigitado.findMany({ where: { competenciaId }, select: { indicador: true, valor: true } }),
     // Os totais das listas do mês (os totalizadores que não têm volume congelado: Expedição, Montagem, Pistas…).
     apurado ? totaisDaCompetencia(competenciaId) : [],
     prisma.competencia.findUnique({ where: { id: competenciaId }, select: { ano: true, mes: true } }),
+    // Os valores guardam o ID do indicador (25/11/2026): o nome atual, pelo cadastro.
+    indicadoresParaReferencias(prisma),
   ]);
   // O Quadro de Lotação do mês (os itens [QL] e [MQL], 06/11/2026), da competência dele no mesmo mês.
   const doQuadro = competencia ? await valoresDoQuadro(competencia.ano, competencia.mes) : null;
@@ -39,7 +42,7 @@ export async function dadosDoMes(competenciaId: string, apurado: boolean, metasD
   const porVisao = new Map(dre.map((r) => [`${r.unidadeNegocio?.codigo ?? 0}|${r.linhaDRE.codigo}`, Number(r.valor)]));
   // Cada origem aparece em mais de uma regra de rateio com o mesmo volume: vale uma vez.
   const porOrigem = new Map(volumes.map((v) => [v.regraRateio.origemDoVolume, Number(v.quantidade)]));
-  const porNome = new Map([...importados, ...digitados].map((i) => [i.nome, Number(i.valor)]));
+  const porNome = new Map([...importados, ...digitados].map((i) => [nomeDaReferencia(i.indicador, referencias), Number(i.valor)]));
   return {
     dre: (u, c) => (apurado ? (porVisao.get(`${u}|${c}`) ?? 0) : NaN),
     volume: (o) => (apurado ? (porOrigem.get(o) ?? 0) : NaN),
@@ -90,13 +93,14 @@ export const indicadoresService = {
     );
     const doProva = await prova;
     // Os meses de cada indicador apurados no Quadro de Lotação (06/11/2026): a lupa com as movimentações do mês.
+    const referencias = await indicadoresParaReferencias(getPrismaClient());
     const apurados = new Set(
       (
         await getPrismaClient().indicadorDigitado.findMany({
           where: { competenciaId: { in: [...competencias.values()] }, origem: "APURADO" },
-          select: { competenciaId: true, nome: true },
+          select: { competenciaId: true, indicador: true },
         })
-      ).map((d) => `${d.competenciaId}|${d.nome}`),
+      ).map((d) => `${d.competenciaId}|${nomeDaReferencia(d.indicador, referencias)}`),
     );
     return {
       ano,
@@ -109,6 +113,8 @@ export const indicadoresService = {
       indicadores: catalogo.map((i) => {
         const partes = dados.map((d) => (d ? i.calculo(d) : null));
         return {
+          // O ID do indicador (25/11/2026): os blocos dos relatórios e dos painéis acham o card por ele.
+          id: i.id ?? null,
           grupo: i.grupo,
           numero: i.numero,
           nome: i.nome,

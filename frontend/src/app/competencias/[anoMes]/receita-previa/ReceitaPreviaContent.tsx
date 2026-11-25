@@ -32,6 +32,7 @@ import {
   type LancamentoReceita,
   type Natureza,
 } from "./services/receitaPreviaService";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 const COLUNAS: Coluna<LancamentoReceita>[] = [
   { chave: "unidade", rotulo: "Unidade", valor: (l) => ROTULO_UNIDADE[l.unidade] },
@@ -43,6 +44,8 @@ const COLUNAS: Coluna<LancamentoReceita>[] = [
 ];
 
 export function ReceitaPreviaContent() {
+  // O nome das unidades no cadastro (25/11/2026): a tela e os modais se desenham de novo quando os nomes chegam.
+  useNomesDasUnidades();
   const { anoMes } = useParams<{ anoMes: string }>();
   useRegistrarAcessoTela(`/competencias/${anoMes}/receita-previa`);
   const periodo = lerAnoMes(anoMes);

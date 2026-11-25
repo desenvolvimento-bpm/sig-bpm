@@ -10,6 +10,8 @@ import { valeNoMes } from "../volumes/vigenciasRateio.js";
 import { alocar, fracoesDaTarefa, numeroDaObra, ROTULO_DO_NIVEL, semLinha, type Nivel, type Passo } from "./alocacaoNasLinhas.js";
 import { linhasDoNegocio, pesosDaBase, receitaDoMes, volumeDaLinhaDRE, volumesDoMes, type Base, type ItemDaReceita, type LinhaDoNegocio, type Volume } from "./basesDasLinhas.js";
 import { basesDoRateio, dividirPelasObras, pesosDasObras, ratearEntreObras, SEM_OBRA, somarNaObra, type BaseDaObra, type ValoresDasObras } from "./divisaoEntreObras.js";
+import { nomeDaUnidade } from "../cadastros/nomesDasUnidades.js";
+import { descricaoDeOrigem } from "../dre/descricaoDeOrigem.js";
 
 /**
  * Os Resultados por Linha (26/10/2026, pedido do Adão): a DRE de cada linha de produto e de obra, da receita à Margem de
@@ -34,7 +36,6 @@ import { basesDoRateio, dividirPelasObras, pesosDasObras, ratearEntreObras, SEM_
 const Decimal = Prisma.Decimal;
 const n = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 const prefixo = (codigo: string) => codigo.split(".")[0];
-const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços" };
 /** As chaves de rateio (os lançamentos manuais delas entram como rateio, como na apuração). */
 const CHAVES_DE_RATEIO = new Set(["PROJETO", "PRODUCAO", "METALURGIA", "ARMADURA", "ACOMPANHAMENTO"]);
 /** Os itens da DRE dos Resultados por Linha: os volumes, as receitas, os custos e as despesas variáveis de venda. */
@@ -345,7 +346,7 @@ async function calcularMes(
         for (const [obra, v] of dividirPelasObras(p.valor, daObra)) somarNaObra(r.obras, p.linhaId, obra, codigo, v, true);
       }
       const sem = partes.filter((p) => p.nivel === "SEM_LINHA").reduce((s, p) => s + p.valor, 0);
-      if (Math.abs(sem) >= 1) r.avisos.push(`${NOME_DA_UNIDADE[u]}: ${linhaDRE.get(codigo)?.descricao ?? codigo} de ${sem.toFixed(2)} sem linha na Receita Prévia e sem receita na unidade: ficou Sem Linha.`);
+      if (Math.abs(sem) >= 1) r.avisos.push(`${nomeDaUnidade(u)}: ${linhaDRE.get(codigo)?.descricao ?? codigo} de ${sem.toFixed(2)} sem linha na Receita Prévia e sem receita na unidade: ficou Sem Linha.`);
       continue;
     }
     if (!CUSTOS.has(grupo)) continue;
@@ -368,7 +369,7 @@ async function calcularMes(
     if (Math.abs(V - refeito) >= 0.01) {
       partes.push({ f: null, a: V - refeito });
       if (Math.abs(V - refeito) >= 1)
-        r.avisos.push(`${NOME_DA_UNIDADE[u]}: ${linhaDRE.get(codigo)?.descricao ?? codigo} — a DRE (${V.toFixed(2)}) difere dos lançamentos (${refeito.toFixed(2)}); a diferença foi pelo volume da unidade.`);
+        r.avisos.push(`${nomeDaUnidade(u)}: ${linhaDRE.get(codigo)?.descricao ?? codigo} — a DRE (${V.toFixed(2)}) difere dos lançamentos (${refeito.toFixed(2)}); a diferença foi pelo volume da unidade.`);
     }
     for (const { f, a, destino } of partes) {
       if (Math.abs(a) < 1e-9) continue;
@@ -399,7 +400,7 @@ async function calcularMes(
   for (const u of [1, 2, 3]) {
     for (const l of est) {
       if (l.tipo !== "ITEM" || !l.unidades.includes(u) || (prefixo(l.codigo) !== "P" && prefixo(l.codigo) !== "S")) continue;
-      const totais = VOLUMES_DA_DRE[u]?.[n(l.descricao)] ?? [];
+      const totais = VOLUMES_DA_DRE[u]?.[descricaoDeOrigem(l.codigo)] ?? [];
       for (const [linhaId, v] of volumeDaLinhaDRE(totais, dadosDoMes.volumes)) if (porUnidade.get(u)!.has(linhaId)) somar(r.valores, linhaId, l.codigo, v);
       // E os de cada obra (03/11/2026).
       for (const v of dadosDoMes.volumes) if (totais.includes(v.total) && porUnidade.get(u)!.has(v.linhaId)) somarNaObra(r.obras, v.linhaId, v.obraId ?? SEM_OBRA, l.codigo, v.quantidade, true);
@@ -555,7 +556,7 @@ async function periodo(ano: number, ate?: number, soOMes = false) {
   };
 }
 
-const descricaoDaLinha = (l: LinhaDoNegocio) => ({ id: l.id, codigo: l.codigo, nome: l.nome, unidade: l.unidade, nomeUnidade: NOME_DA_UNIDADE[l.unidade], ativo: l.ativo });
+const descricaoDaLinha = (l: LinhaDoNegocio) => ({ id: l.id, codigo: l.codigo, nome: l.nome, unidade: l.unidade, nomeUnidade: nomeDaUnidade(l.unidade), ativo: l.ativo });
 
 export const resultadosLinhaService = {
   /**
@@ -727,7 +728,7 @@ export const resultadosLinhaService = {
       situacao,
       unidades: [1, 2, 3].map((u) => ({
         unidade: u,
-        nome: NOME_DA_UNIDADE[u],
+        nome: nomeDaUnidade(u),
         mcDaDRE: arredonda(resumo.mcDaDRE[u] ?? 0),
         mcDasLinhas: soma([...linhas.filter((l) => l.unidade === u).map((l) => l.id), semLinha(u)].map((k) => totais.get(k)?.get(MC) ?? 0)),
         semLinha: soma([...(gravado.valores.get(semLinha(u)) ?? [])].filter(([cod]) => CUSTOS.has(prefixo(cod)) || prefixo(cod) === "ROB").map(([, v]) => v)),

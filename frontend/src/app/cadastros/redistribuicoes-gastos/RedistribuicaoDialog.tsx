@@ -6,6 +6,7 @@ import { Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { BuscaNaLista, type OpcaoDaBusca } from "@/components/shared/BuscaNaLista";
+import { CampoMesAno } from "@/components/shared/CampoMesAno";
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { SemResultado, useTabelaFiltravel } from "@/components/shared/TabelaFiltravel";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,6 @@ import {
   type DadosDaRedistribuicao,
   type EfeitoDaRedistribuicao,
   type FornecedorDaCombinacao,
-  nomeDasContas,
   type OpcoesDaRedistribuicao,
   type Redistribuicao,
 } from "../services/redistribuicoesService";
@@ -63,7 +63,8 @@ export type ServicoDaRedistribuicao = {
   excluir: (id: string) => Promise<string>;
   aoConcluir: (queryClient: QueryClient) => void;
   descricao: string;
-  descricaoDaExclusao: (conta: string) => string;
+  /** O texto da confirmação da exclusão, com o nome da redistribuição. */
+  descricaoDaExclusao: (nome: string) => string;
 };
 
 /** O cadastro (Cadastros Gerais / Redistribuições de Gastos): grava e reclassifica as competências ainda não apuradas. */
@@ -78,8 +79,8 @@ const DO_CADASTRO: ServicoDaRedistribuicao = {
   },
   descricao:
     "Os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência — cada centro na Conta da DRE escolhida para ele, uma do departamento e da atribuição do centro. Movimentos redistribuídos não podem ser contestados.",
-  descricaoDaExclusao: (conta) =>
-    `A redistribuição de ${conta} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`,
+  descricaoDaExclusao: (nome) =>
+    `A redistribuição ${nome} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`,
 };
 const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
   { chave: "marcar", rotulo: "", semFiltro: true, classe: "w-10" },
@@ -120,17 +121,8 @@ const percentualNoCampo = (texto: string) => {
   return typeof v === "number" ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : texto;
 };
 
-/** O mês gravado ("AAAA-MM") no calendário do Início: o primeiro dia dele. */
-const diaDoInicio = (mes: string) => (/^\d{4}-\d{2}$/.test(mes) ? `${mes}-01` : mes);
-/** O mês gravado no calendário do Fim: o último dia dele. */
-const diaDoFim = (mes: string) => {
-  if (!/^\d{4}-\d{2}$/.test(mes)) return mes;
-  const [a, m] = mes.split("-").map(Number);
-  return `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, "0")}`;
-};
-
 /**
- * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Departamento da DRE (ou Todos), a Unidade (ou Todas; só
+ * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Nome (25/11/2026, o primeiro campo), o Departamento da DRE (ou Todos), a Unidade (ou Todas; só
  * filtra as contas) e as Contas da DRE (20/11/2026: uma ou mais, pela busca ou pela lupa, listadas abaixo do campo), os
  * fornecedores com movimentos em qualquer das contas (de competências fechadas ou abertas; a tabela com os filtros nos rótulos
  * e a caixa de cada um e a de todos), os centros de Redistribuir Para (pela busca ou pela lupa, como no modal Contestar) com a Conta
@@ -151,6 +143,7 @@ export function RedistribuicaoDialog({
   fonte?: ServicoDaRedistribuicao;
 }) {
   const queryClient = useQueryClient();
+  const [nome, setNome] = useState(registro?.nome ?? "");
   const [departamentoId, setDepartamentoId] = useState(registro?.departamentoId ?? "");
   const [linhasDREIds, setLinhasDREIds] = useState<string[]>(registro?.linhasDREIds ?? []);
   const [unidade, setUnidade] = useState("");
@@ -163,11 +156,9 @@ export function RedistribuicaoDialog({
       ? registro.destinos.map((d) => ({ centroCustoId: d.centroCustoId, linhaDREId: d.linhaDREId ?? "", texto: d.percentual.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }))
       : [{ centroCustoId: "", linhaDREId: "", texto: "" }],
   );
-  // A vigência no calendário (21/11/2026, pedido do Adão: como nas Regras de Rateio): o dia escolhido vale o mês dele.
-  const [inicio, setInicio] = useState(diaDoInicio(registro?.vigenciaInicio ?? ""));
-  const [fim, setFim] = useState(diaDoFim(registro?.vigenciaFim ?? ""));
-  const mesDoInicio = inicio.slice(0, 7);
-  const mesDoFim = fim.slice(0, 7);
+  // A vigência por mês, em MM/AAAA, com o calendário só de anos e meses (25/11/2026, pedido do Adão): "AAAA-MM" (vazio sem mês).
+  const [mesDoInicio, setInicio] = useState((registro?.vigenciaInicio ?? "").slice(0, 7));
+  const [mesDoFim, setFim] = useState((registro?.vigenciaFim ?? "").slice(0, 7));
   const [descricao, setDescricao] = useState(registro?.descricao ?? "");
   const [ativo, setAtivo] = useState(registro?.ativo ?? true);
   const [excluindo, setExcluindo] = useState(false);
@@ -256,7 +247,7 @@ export function RedistribuicaoDialog({
   const semConta = lidos.some((d) => d.centroCustoId && contasDoCentro(d.centroCustoId).length > 0 && !contaCerta(d));
   const destinosCompletos = lidos.length > 0 && lidos.every((d) => d.centroCustoId && contaCerta(d) && typeof d.valor === "number");
   const vigenciaCerta = !!mesDoInicio && (!mesDoFim || mesDoFim >= mesDoInicio);
-  const pronto = pode && linhasDREIds.length > 0 && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
+  const pronto = pode && !!nome.trim() && linhasDREIds.length > 0 && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
 
   const concluir = (msg: string, efeito: string) => {
     fonte.aoConcluir(queryClient);
@@ -266,6 +257,7 @@ export function RedistribuicaoDialog({
   const gravar = useMutation({
     mutationFn: () =>
       fonte.gravar(registro?.id ?? null, {
+        nome: nome.trim(),
         departamentoId: departamentoId || null,
         linhasDREIds,
         fornecedores: marcadosNaLista.map((f) => nomes.get(chave(f.fornecedor)) ?? f.fornecedor),
@@ -289,6 +281,19 @@ export function RedistribuicaoDialog({
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-[1fr_14rem]">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="rd-nome">Nome</Label>
+            <Input
+              id="rd-nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              maxLength={120}
+              disabled={!pode}
+              autoFocus={!registro}
+              placeholder="Como a redistribuição aparece na tabela"
+              className="rounded-sm"
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="rd-departamento">Departamento da DRE</Label>
             <select
@@ -343,8 +348,8 @@ export function RedistribuicaoDialog({
                   size="icon"
                   className="shrink-0 rounded-sm"
                   onClick={() => setConsulta({ tipo: "contas" })}
-                  aria-label="Ver todas as contas da DRE e incluir uma"
-                  title="Ver todas as contas da DRE e incluir uma"
+                  aria-label="Ver todas as contas da DRE e incluir uma ou mais"
+                  title="Ver todas as contas da DRE e incluir uma ou mais"
                 >
                   <Search className="size-4" />
                 </Button>
@@ -549,21 +554,20 @@ export function RedistribuicaoDialog({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="rd-inicio">Vigência: Início</Label>
-            <Input id="rd-inicio" type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} disabled={!pode} className="rounded-sm" title="A redistribuição vale a partir do mês da data escolhida" />
+            <CampoMesAno id="rd-inicio" valor={mesDoInicio} onChange={setInicio} disabled={!pode} title="A redistribuição vale a partir deste mês (MM/AAAA)" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="rd-fim">Vigência: Fim (opcional)</Label>
-            <Input
+            <CampoMesAno
               id="rd-fim"
-              type="date"
-              value={fim}
-              onChange={(e) => setFim(e.target.value)}
+              valor={mesDoFim}
+              onChange={setFim}
               disabled={!pode}
-              title="A redistribuição vale até o mês da data escolhida, inteiro"
-              className={`rounded-sm ${mesDoFim && mesDoInicio && mesDoFim < mesDoInicio ? "border-red-400" : ""}`}
+              title="A redistribuição vale até este mês (MM/AAAA), inteiro; vazio, sem fim"
+              invalido={!!mesDoFim && !!mesDoInicio && mesDoFim < mesDoInicio}
             />
           </div>
-          <p className="-mt-2 text-xs text-gray-500 sm:col-span-2">A vigência é por mês: a data escolhida vale o mês inteiro dela, do primeiro ao último dia.</p>
+          <p className="-mt-2 text-xs text-gray-500 sm:col-span-2">A vigência é por mês (MM/AAAA): digite o mês ou escolha no calendário; vale do primeiro ao último dia de cada mês.</p>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="rd-descricao">Descrição (opcional)</Label>
             <Input id="rd-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} disabled={!pode} className="rounded-sm" />
@@ -594,7 +598,7 @@ export function RedistribuicaoDialog({
         {excluindo && registro ? (
           <ConfirmacaoDialog
             titulo="Excluir a Redistribuição"
-            descricao={fonte.descricaoDaExclusao(nomeDasContas(registro.contas))}
+            descricao={fonte.descricaoDaExclusao(registro.nome)}
             pendente={apagar.isPending}
             onConfirmar={() => apagar.mutate(undefined, { onSettled: () => setExcluindo(false) })}
             onFechar={() => setExcluindo(false)}
@@ -608,8 +612,8 @@ export function RedistribuicaoDialog({
             nomeDoDepartamento={departamentoId ? (opcoes.departamentos.find((d) => d.id === departamentoId)?.nome ?? null) : null}
             unidade={codigoDaUnidade}
             escolhidas={escolhidas}
-            onEscolher={(c) => {
-              incluirConta(c.id);
+            onEscolher={(marcadas) => {
+              for (const c of marcadas) incluirConta(c.id);
               setConsulta(null);
             }}
             onFechar={() => setConsulta(null)}

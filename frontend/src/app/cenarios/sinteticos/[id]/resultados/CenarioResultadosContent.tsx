@@ -32,6 +32,7 @@ import { cenariosService, type Cenario } from "../../../services/cenariosService
 import { botaoPrimario } from "../../../components/CenarioDialog";
 import { useTipoDoCenario } from "../../../components/tipoDoCenario";
 import { IndicadoresDoCenario } from "../indicadores/CenarioIndicadoresContent";
+import { ehAConta } from "@/lib/contasDaDRE";
 
 /** As visões da DRE do cenário: as de Resultados Empresariais, sem os centros de custo. */
 const VISOES = [
@@ -77,7 +78,7 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
       acaoDaLinha={
         analitico
           ? (l) =>
-              !l.volume && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
+              !l.volume && (l.tipo === "ITEM" || ehAConta(l, "Impostos Operacionais")) ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
           : undefined
       }
     />
@@ -210,7 +211,7 @@ function VisaoDepartamentos({ id }: { id: string }) {
         doCenario
         // As Contas do Balancete nas contas (não nas linhas dos centros), como no Consolidado.
         acaoDaLinha={(l) =>
-          !l.volume && !l.centro && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
+          !l.volume && !l.centro && (l.tipo === "ITEM" || ehAConta(l, "Impostos Operacionais")) ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null
         }
       />
     </div>

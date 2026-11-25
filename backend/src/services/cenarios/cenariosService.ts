@@ -178,6 +178,7 @@ import {
   RegraDoCenarioError,
   regrasDoCenario as regrasDeRateioDoCenario,
 } from "./regrasDoCenario.js";
+import { comNomesDosIndicadores, indicadoresParaReferencias, nomeDaReferencia, referenciaDoNome } from "../relatorios/referenciasDosIndicadores.js";
 
 /**
  * Os cenários sintéticos (Criação de Cenários, 11/10/2026): a lista dos cenários gerados, a criação (vazio ou cópia
@@ -398,7 +399,7 @@ async function conteudo(ids: string[]) {
   const prisma = getPrismaClient();
   const [visoes, metas] = await Promise.all([
     prisma.cenarioResultado.groupBy({ by: ["cenarioId", "visao"], where: { cenarioId: { in: ids } } }),
-    prisma.cenarioIndicador.groupBy({ by: ["cenarioId", "nome"], where: { cenarioId: { in: ids } } }),
+    prisma.cenarioIndicador.groupBy({ by: ["cenarioId", "indicador"], where: { cenarioId: { in: ids } } }),
   ]);
   return (id: string) => ({
     visoes: visoes.filter((v) => v.cenarioId === id).map((v) => v.visao).sort(),
@@ -761,7 +762,10 @@ async function previa(lido: Awaited<ReturnType<typeof lerArquivo>>, cenarioId: s
   const [resultados, metasAtuais] = existente
     ? await Promise.all([
         prisma.cenarioResultado.findMany({ where: { cenarioId: existente.id }, select: { visao: true, linhaDREId: true, mes: true, valor: true } }),
-        prisma.cenarioIndicador.findMany({ where: { cenarioId: existente.id }, select: { nome: true, mes: true, valor: true, origem: true } }),
+        prisma.cenarioIndicador.findMany({ where: { cenarioId: existente.id }, select: { indicador: true, mes: true, valor: true, origem: true } }).then(async (r) =>
+          // Os valores guardam o ID do indicador (25/11/2026): a prévia compara pelo nome, como o arquivo.
+          comNomesDosIndicadores(r, await indicadoresParaReferencias(prisma)),
+        ),
       ])
     : [[], []];
   const visoesAtuais = new Set(resultados.map((r) => r.visao));
@@ -948,6 +952,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
   if (detalhe.tipo === "CENARIO") {
     const origem = await prisma.cenario.findUnique({ where: { id: detalhe.cenarioId }, select: { id: true, nome: true, versao: true, ano: true, tipo: true } });
     if (!origem || origem.tipo !== "ANALITICO") return null;
+    const referencias = await indicadoresParaReferencias(prisma);
     const [premissas, centros, indicadores, quadro, coluna] = await Promise.all([
       prisma.cenarioPremissa.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } } }),
       prisma.cenarioCentro.findMany({ where: { cenarioId: origem.id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
@@ -962,7 +967,7 @@ async function fontesDaReferencia(c: { id: string; ano: number; nomeArquivo: str
       descricao: `o Cenário ${origem.nome} ${rotuloVersao(origem.versao)} (${origem.ano})`,
       prem: new Map(premissas.map((p) => [`${p.unidade}|${p.venda}|${p.chave}|${p.mes}`, Number(p.valor)])),
       cen: new Map(centros.map((x) => [`${x.grupo}|${x.linhaDRE.codigo}|${x.mes}`, Number(x.valor)])),
-      ind: new Map(indicadores.map((i) => [`${i.nome}|${i.mes}`, Number(i.valor)])),
+      ind: new Map(comNomesDosIndicadores(indicadores, referencias).map((i) => [`${i.nome}|${i.mes}`, Number(i.valor)])),
       linhasDoQuadro: quadro,
       colunaDoQuadro: coluna ? { rotulo: coluna.rotulo, daLinha: (l) => coluna.daLinha(l) ?? 0 } : null,
     };
@@ -1064,6 +1069,8 @@ async function colaboradoresRealizados(ano: number, meses: number[], grupos: Gru
  */
 async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesDaReferencia | null = null): Promise<LinhaDaPlanilha[]> {
   const prisma = getPrismaClient();
+  // Os valores dos indicadores guardam o ID (25/11/2026): as linhas, o nome atual; o código, o ID (I|id).
+  const referencias = await indicadoresParaReferencias(prisma);
   const [est, cadastro, premissas, centros, indicadores, grupos, justificativas, calculo, linhasDoQuadroDoCenario] = await Promise.all([
     estruturaDRE(),
     linhasDoCadastro(),
@@ -1304,12 +1311,12 @@ async function linhasDaPlanilha(c: { id: string } & ComVariacoes, fonte: FontesD
       add({ aba: "extra", chave: `X|${chave}`, descricao: [u.nome, secao, l.descricao], und: "R$", conta: l.codigo, media: ler(0) ?? null, meses: doze(ler), referencia: refP(`${u.unidade}|${VENDA_EXTRA}|${chave}`) });
     }
   }
-  const ind = new Map(indicadores.map((i) => [`${i.nome}|${i.mes}`, Number(i.valor)]));
+  const ind = new Map(comNomesDosIndicadores(indicadores, referencias).map((i) => [`${i.nome}|${i.mes}`, Number(i.valor)]));
   for (const i of calculo.indicadores.filter((x) => x.classe === "MANUAL" && !QUADROS_DE_LOTACAO.has(x.indicador.nome))) {
     const ler = (mes: number) => ind.get(`${i.indicador.nome}|${mes}`);
     add({
       aba: "manuais",
-      chave: `I|${i.indicador.nome}`,
+      chave: `I|${referenciaDoNome(i.indicador.nome, referencias)}`,
       descricao: [i.indicador.grupo, i.indicador.nome],
       und: i.indicador.unidade,
       conta: null,
@@ -1495,7 +1502,7 @@ async function aplicarMudancas(tx: Prisma.TransactionClient, cenarioId: string, 
   const idDaConta = new Map(est.map((l) => [l.codigo, l.id]));
   type Prem = { unidade: number; venda: string; chave: string; mes: number };
   type Cen = { grupo: string; linhaDREId: string; mes: number };
-  type Ind = { nome: string; mes: number };
+  type Ind = { indicador: string; mes: number };
   const prem: Array<Prem & { valor: number | null }> = [];
   const cen: Array<Cen & { valor: number | null }> = [];
   const ind: Array<Ind & { valor: number | null }> = [];
@@ -1516,14 +1523,14 @@ async function aplicarMudancas(tx: Prisma.TransactionClient, cenarioId: string, 
       const linhaDREId = idDaConta.get(resto[resto.length - 1]);
       // Nos centros, o zero também apaga (como na tela). A conta Encargos e Benefícios é calculada (19/10/2026).
       if (linhaDREId && !ehContaDeEncargos(resto[resto.length - 1])) cen.push({ grupo: resto.slice(0, -1).join("|"), linhaDREId, mes: m.mes, valor: m.valor || null });
-    } else if (tipo === "I") ind.push({ nome: resto.join("|"), mes: m.mes, valor: m.valor });
+    } else if (tipo === "I") ind.push({ indicador: resto.join("|"), mes: m.mes, valor: m.valor });
   }
   const emLotes = async <T>(xs: T[], fn: (lote: T[]) => Promise<unknown>) => {
     for (let i = 0; i < xs.length; i += 200) await fn(xs.slice(i, i + 200));
   };
   await emLotes(prem, (l) => tx.cenarioPremissa.deleteMany({ where: { cenarioId, OR: l.map(({ unidade, venda, chave, mes }) => ({ unidade, venda, chave, mes })) } }));
   await emLotes(cen, (l) => tx.cenarioCentro.deleteMany({ where: { cenarioId, OR: l.map(({ grupo, linhaDREId, mes }) => ({ grupo, linhaDREId, mes })) } }));
-  await emLotes(ind, (l) => tx.cenarioIndicador.deleteMany({ where: { cenarioId, OR: l.map(({ nome, mes }) => ({ nome, mes })) } }));
+  await emLotes(ind, (l) => tx.cenarioIndicador.deleteMany({ where: { cenarioId, OR: l.map(({ indicador, mes }) => ({ indicador, mes })) } }));
   await gravarEmLotes(
     prem.filter((p) => p.valor !== null).map((p) => ({ cenarioId, unidade: p.unidade, venda: p.venda, chave: p.chave, mes: p.mes, valor: new Prisma.Decimal(p.valor!.toFixed(6)) })),
     (lote) => tx.cenarioPremissa.createMany({ data: lote }),
@@ -1533,7 +1540,7 @@ async function aplicarMudancas(tx: Prisma.TransactionClient, cenarioId: string, 
     (lote) => tx.cenarioCentro.createMany({ data: lote }),
   );
   await gravarEmLotes(
-    ind.filter((x) => x.valor !== null).map((x) => ({ cenarioId, nome: x.nome, mes: x.mes, valor: new Prisma.Decimal(x.valor!.toFixed(8)), origem: "DIGITADO" as const })),
+    ind.filter((x) => x.valor !== null).map((x) => ({ cenarioId, indicador: x.indicador, mes: x.mes, valor: new Prisma.Decimal(x.valor!.toFixed(8)), origem: "DIGITADO" as const })),
     (lote) => tx.cenarioIndicador.createMany({ data: lote }),
   );
 }
@@ -1788,8 +1795,12 @@ export const cenariosService = {
         // Os totais das unidades e o Consolidado são calculados (12/10/2026), como na edição pela ferramenta.
         if (dre.length) await recalcular(tx, c.id, Array.from({ length: 12 }, (_, k) => k + 1), UNIDADES);
         if (metas) {
+          // Gravadas pelo ID do indicador (25/11/2026); o arquivo cita o indicador pelo nome.
+          const referencias = await indicadoresParaReferencias(tx);
           await tx.cenarioIndicador.deleteMany({ where: { cenarioId: c.id } });
-          await gravarEmLotes(metas.valores, (lote) => tx.cenarioIndicador.createMany({ data: lote.map((v) => ({ cenarioId: c.id, ...v, origem: "IMPORTADO" })) }));
+          await gravarEmLotes(metas.valores, (lote) =>
+            tx.cenarioIndicador.createMany({ data: lote.map(({ nome, ...v }) => ({ cenarioId: c.id, indicador: referenciaDoNome(nome, referencias), ...v, origem: "IMPORTADO" })) }),
+          );
         }
         return c;
       },
@@ -1879,9 +1890,11 @@ export const cenariosService = {
       calcularCenario(id),
       comparado ? calcularCenario(comparado.id) : null,
       // A Média de Referência dos indicadores manuais (o mês 0; 15/10/2026).
-      getPrismaClient().cenarioIndicador.findMany({ where: { cenarioId: id, mes: 0 }, select: { nome: true, valor: true } }),
+      getPrismaClient().cenarioIndicador.findMany({ where: { cenarioId: id, mes: 0 }, select: { indicador: true, valor: true } }),
     ]);
-    const mediaDe = new Map(medias.map((m) => [m.nome, Number(m.valor)]));
+    // Os valores guardam o ID do indicador (25/11/2026).
+    const referenciasDasMedias = await indicadoresParaReferencias(getPrismaClient());
+    const mediaDe = new Map(medias.map((m) => [nomeDaReferencia(m.indicador, referenciasDasMedias), Number(m.valor)]));
     // Com um cenário comparado (13/10/2026), o acumulado dele no lugar do orçado acumulado (pelo nome do indicador).
     const comparados = new Map((doComparado?.indicadores ?? []).map((i) => [i.indicador.nome, i]));
     const acumuladoComparado = (nome: string) => {
@@ -1907,6 +1920,8 @@ export const cenariosService = {
         meses: i.partes.map((p) => p?.valor ?? null),
         total: calculo.acumulado(i, 12),
         digitados: i.digitados,
+        // A Liberação de Projetos digitada (Matriz e Filial) recalcula a DRE do analítico (25/11/2026: pelo ID, e não pelo nome).
+        recalculaDRE: LIBERACOES_DIGITADAS.has(i.indicador.nome),
         referencia: i.classe === "MANUAL" ? (mediaDe.get(i.indicador.nome) ?? null) : null,
         // Os meses do comparado (16/10/2026), para o gráfico do indicador (o cenário × o comparado); sem comparado, vazio.
         orcado: doComparado ? Array.from({ length: 12 }, (_, k) => comparados.get(i.indicador.nome)?.partes[k]?.valor ?? null) : [],
@@ -2029,11 +2044,12 @@ export const cenariosService = {
     // (17/11/2026: também os sem valor), nos doze meses (os que saem da DRE o cenário recalcula das contas médias).
     const noPeriodo = (k: number) => fechadas.some((f) => f.mes === k + 1);
     const indicadores = realizados.indicadores.flatMap((i) => {
-      if (!media) return i.meses.flatMap((v, k) => (v === null || !Number.isFinite(v) || !noPeriodo(k) ? [] : [{ nome: i.nome, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(8)) }]));
+      // O nome (para os filtros) e o ID do indicador (o que se grava, 25/11/2026).
+      if (!media) return i.meses.flatMap((v, k) => (v === null || !Number.isFinite(v) || !noPeriodo(k) ? [] : [{ nome: i.nome, indicador: i.id ?? i.nome, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(8)) }]));
       const vs = i.meses.filter((v, k): v is number => v !== null && Number.isFinite(v) && noPeriodo(k));
       if (!vs.length) return [];
       const valor = new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / fechadas.length).toFixed(8));
-      return doze.map((mes) => ({ nome: i.nome, mes, valor }));
+      return doze.map((mes) => ({ nome: i.nome, indicador: i.id ?? i.nome, mes, valor }));
     });
     // Nos analíticos, a média vai só para as Médias de Referência (15/10/2026).
     const nomeArquivo = media ? `Médias do realizado de ${ano} (${periodo})` : `Resultado realizado de ${ano} (${periodo})`;
@@ -2147,10 +2163,10 @@ export const cenariosService = {
         // Adão, também os sem valor) e, no Mês a Mês, os meses (15/10/2026: antes, na média, os doze meses iguais a ela).
         const medias = realizados.indicadores.flatMap((i) => {
           const vs = i.meses.filter((v, k): v is number => v !== null && Number.isFinite(v) && noPeriodo(k));
-          return vs.length ? [{ nome: i.nome, mes: 0, valor: new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / fechadas.length).toFixed(8)) }] : [];
+          return vs.length ? [{ nome: i.nome, indicador: i.id ?? i.nome, mes: 0, valor: new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / fechadas.length).toFixed(8)) }] : [];
         });
         const semQuadros = [...medias, ...(media || manter ? [] : indicadores)].filter((v) => !QUADROS_DE_LOTACAO.has(v.nome));
-        await gravarEmLotes(semQuadros, (lote) => tx.cenarioIndicador.createMany({ data: lote.map((v) => ({ cenarioId: id, ...v, origem: "IMPORTADO" as const })) }));
+        await gravarEmLotes(semQuadros, (lote) => tx.cenarioIndicador.createMany({ data: lote.map(({ nome: _nome, ...v }) => ({ cenarioId: id, ...v, origem: "IMPORTADO" as const })) }));
         await alteradoSemRecalcular(tx, id, "configuracoes");
         // O detalhe da referência (11/11/2026): o ano e os meses do período, para os realizados do Exportar Premissas.
         const referenciaDetalhe: DetalheDaReferencia = { tipo: "REALIZADO", ano, meses: fechadas.map((f) => f.mes) };
@@ -2210,7 +2226,8 @@ export const cenariosService = {
     }
     const prisma = getPrismaClient();
     const dre: Array<{ visao: number; linhaDREId: string; mes: number; valor: Prisma.Decimal }> = [];
-    const indicadores: Array<{ nome: string; mes: number; valor: Prisma.Decimal }> = [];
+    // Pelo ID do indicador (25/11/2026).
+    const indicadores: Array<{ indicador: string; mes: number; valor: Prisma.Decimal }> = [];
     const nomes: string[] = [];
     const preenchidos: number[] = [];
     for (const [i, p] of partes.entries()) {
@@ -2220,7 +2237,7 @@ export const cenariosService = {
         if (p.origemId === id) throw new CenarioError(400, "Escolha outro cenário: a referência não pode ser o próprio cenário.");
         const o = await obterOuFalhar(p.origemId, usuario);
         dre.push(...(await prisma.cenarioResultado.findMany({ where: { cenarioId: o.id, mes: { in: alvo } }, select: { visao: true, linhaDREId: true, mes: true, valor: true } })));
-        indicadores.push(...(await prisma.cenarioIndicador.findMany({ where: { cenarioId: o.id, mes: { in: alvo } }, select: { nome: true, mes: true, valor: true } })));
+        indicadores.push(...(await prisma.cenarioIndicador.findMany({ where: { cenarioId: o.id, mes: { in: alvo } }, select: { indicador: true, mes: true, valor: true } })));
         preenchidos.push(...alvo);
         nomes.push(`Cenário ${o.nome} ${rotuloVersao(o.versao)}${o.ano !== c.ano ? ` de ${o.ano}` : ""}${todos ? "" : ` (${rotuloFaixa(alvo)})`}`);
         continue;
@@ -2264,14 +2281,14 @@ export const cenariosService = {
       for (const ind of realizados.indicadores) {
         if (!media) {
           ind.meses.forEach((v, k) => {
-            if (v !== null && Number.isFinite(v) && noPeriodo(k)) indicadores.push({ nome: ind.nome, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(8)) });
+            if (v !== null && Number.isFinite(v) && noPeriodo(k)) indicadores.push({ indicador: ind.id ?? ind.nome, mes: k + 1, valor: new Prisma.Decimal(v.toFixed(8)) });
           });
           continue;
         }
         const vs = ind.meses.filter((v, k): v is number => v !== null && Number.isFinite(v) && noPeriodo(k));
         if (!vs.length) continue;
         const valor = new Prisma.Decimal((vs.reduce((s, v) => s + v, 0) / vs.length).toFixed(8));
-        for (const mes of alvo) indicadores.push({ nome: ind.nome, mes, valor });
+        for (const mes of alvo) indicadores.push({ indicador: ind.id ?? ind.nome, mes, valor });
       }
       preenchidos.push(...(media ? alvo : fechadas.map((f) => f.mes)));
       const periodo = rotuloFaixa(fechadas.map((f) => f.mes));
@@ -3666,7 +3683,7 @@ export const cenariosService = {
       gruposDoCenario(id),
       // Só os meses: o mês 0 é a Média de Referência (15/10/2026).
       prisma.cenarioCentro.findMany({ where: { cenarioId: id, mes: { gte: 1 } }, include: { linhaDRE: { select: { codigo: true } } } }),
-      prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(id), select: { nome: true, mes: true, valor: true } }),
+      prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(id), select: { indicador: true, mes: true, valor: true } }),
     ]);
     const { bases } = calcularPremissas(est, linhas, c.ano, gravadas);
     // A base do rateio de Projeto (16/11/2026): a Liberação de Projetos dos Indicadores Manuais.
@@ -4093,6 +4110,8 @@ export const cenariosService = {
     exigirAnalitico(c);
     const atuais = await linhasDaPlanilha(c);
     const porChave = new Map(atuais.map((l) => [l.chave, l]));
+    // Os manuais pelo nome (os arquivos de antes de 25/11/2026 têm o código I|nome).
+    const chaveDoManual = new Map(atuais.filter((l) => l.chave.startsWith("I|")).map((l) => [String(l.descricao[1] ?? ""), l.chave]));
     // O recorte (12/11/2026): as linhas, os investimentos e o Quadro de Lotação de fora dele recusam o arquivo.
     const recorte = recorteDoCenario(c, usuario);
     const gruposPorNome = new Map((await gruposDoCenario(id)).map((g) => [g.grupo, g]));
@@ -4254,7 +4273,9 @@ export const cenariosService = {
       // repetidos entre os arquivos de uma importação.
       const blocos = new Set<string>();
       for (const l of r.linhas) {
-        const doIndicador = l.chave?.startsWith("I|") ? l.chave.slice(2) : l.doTipo === "manuais" ? String(l.descricao.at(-1) ?? "").replace(/\s+/g, " ").trim() : null;
+        // O código dos manuais é I|id (25/11/2026); o dos arquivos de antes, I|nome, vale pelo indicador com esse nome.
+        if (l.chave?.startsWith("I|") && !porChave.has(l.chave)) l.chave = chaveDoManual.get(l.chave.slice(2)) ?? l.chave;
+        const doIndicador = l.chave?.startsWith("I|") ? (porChave.get(l.chave)?.descricao[1] ?? l.chave.slice(2)) : l.doTipo === "manuais" ? String(l.descricao.at(-1) ?? "").replace(/\s+/g, " ").trim() : null;
         const nomeNovo = doIndicador ? antigos.get(doIndicador) : undefined;
         if (doIndicador && nomeNovo) {
           comNomeAntigo.push(`${l.aba}, linha ${l.numero}: ${doIndicador} → ${nomeNovo}`);
@@ -5506,6 +5527,7 @@ export const cenariosService = {
       editavel: !c.marcacao && !c.versaoSalvaEm && !c.reajustesAplicados,
       redistribuicoes: rs.map((r) => ({
         id: r.id,
+        nome: r.nome,
         departamentoId: r.departamentoId,
         departamento: r.departamento ? `${r.departamento.nome} (${nomeDaUnidade.get(r.departamento.unidadeNegocioId) ?? ""})` : null,
         linhasDREIds: r.contas.map((x) => x.linhaDREId),
@@ -5564,7 +5586,7 @@ export const cenariosService = {
       : null;
     if (redistribuicaoId && !antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
     const campos = await daRegra(() => prepararRedistribuicao(prisma, id, dados, redistribuicaoId));
-    const { destinos, linhasDREIds, nomeDasContas: _nome, ...regra } = campos;
+    const { destinos, linhasDREIds, ...regra } = campos;
     const contas = contasParaGravar(linhasDREIds);
     const gravada = await prisma.$transaction(async (tx) => {
       if (antes) {
@@ -5584,7 +5606,7 @@ export const cenariosService = {
       entidadeId: gravada.id,
       antes: antes ? redistribuicaoParaAuditoria(antes) : undefined,
       depois: redistribuicaoParaAuditoria({ ...regra, contas, destinos }),
-      metadados: { cenario: c.nome },
+      metadados: { cenario: c.nome, nome: regra.nome },
     });
     return this.redistribuicoesDoCenario(id, usuario);
   },
@@ -5600,7 +5622,7 @@ export const cenariosService = {
     const antes = await prisma.cenarioRedistribuicao.findFirst({ where: { id: redistribuicaoId, cenarioId: id }, include: { destinos: { orderBy: { ordem: "asc" } }, contas: { orderBy: { ordem: "asc" } } } });
     if (!antes) throw new CenarioError(404, "Redistribuição não encontrada no cenário.");
     await prisma.cenarioRedistribuicao.delete({ where: { id: redistribuicaoId } });
-    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_redistribuicao", entidadeId: redistribuicaoId, antes: redistribuicaoParaAuditoria(antes), metadados: { cenario: c.nome } });
+    await auditar({ usuarioId: usuario.id, usuarioNome: usuario.nome, acao: "EXCLUSAO", entidade: "cenario_redistribuicao", entidadeId: redistribuicaoId, antes: redistribuicaoParaAuditoria(antes), metadados: { cenario: c.nome, nome: antes.nome } });
     return this.redistribuicoesDoCenario(id, usuario);
   },
 
@@ -5752,7 +5774,9 @@ export const cenariosService = {
     const ind = await prisma.indicadorEstrutura.findFirst({ where: { nome }, select: { grupo: true } });
     const departamentos = departamentosDoGrupoDoIndicador(ind?.grupo ?? "");
     if (recorte) exigirNoRecorte(veDepartamentos(recorte, departamentos));
-    const antes = await prisma.cenarioIndicador.findMany({ where: { cenarioId: id, nome, mes: { gte: 1 } }, orderBy: { mes: "asc" } });
+    // Gravado pelo ID do indicador (25/11/2026).
+    const indicador = referenciaDoNome(nome, await indicadoresParaReferencias(prisma));
+    const antes = await prisma.cenarioIndicador.findMany({ where: { cenarioId: id, indicador, mes: { gte: 1 } }, orderBy: { mes: "asc" } });
     // Os meses que mudam (o valor ou o em branco), para o Histórico.
     const valorAntes = (mes: number) => {
       const a = antes.find((x) => x.mes === mes);
@@ -5765,14 +5789,14 @@ export const cenariosService = {
     });
     await prisma.$transaction(async (tx) => {
       // Só os meses: a Média de Referência (o mês 0) fica (15/10/2026).
-      await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, nome, mes: { gte: 1 } } });
+      await tx.cenarioIndicador.deleteMany({ where: { cenarioId: id, indicador, mes: { gte: 1 } } });
       const novos = valores.map((v, k) => ({ v, mes: k + 1 })).filter((x) => x.v !== null);
       await tx.cenarioIndicador.createMany({
         data: novos.map(({ v, mes }) => {
           // O mês que não mudou continua com a origem dele.
           const anterior = antes.find((a) => a.mes === mes);
           const igual = anterior && Math.abs(Number(anterior.valor) - v!) < 1e-9;
-          return { cenarioId: id, nome, mes, valor: v!, origem: igual ? anterior.origem : "DIGITADO" };
+          return { cenarioId: id, indicador, mes, valor: v!, origem: igual ? anterior.origem : "DIGITADO" };
         }),
       });
       // A Liberação de Projetos muda os percentuais do rateio de Projeto: a DRE do cenário se recalcula.

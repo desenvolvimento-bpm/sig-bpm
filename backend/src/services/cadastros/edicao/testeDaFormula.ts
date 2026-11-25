@@ -7,6 +7,7 @@ import { mesesDoExercicio } from "../../relatorios/resultadosService.js";
 import { compilarFormula, DEPARTAMENTOS_DO_QUADRO, FormulaInvalidaError, PARTES_DO_DEPARTAMENTO } from "../../relatorios/formulaIndicador.js";
 import { contaDaFormula } from "../../relatorios/painelDeBordo.js";
 import { RegraCadastroError } from "./definicoesCadastros.js";
+import { comNomesNasFormulas, mapasDosIndicadores } from "../../relatorios/referenciasDosIndicadores.js";
 
 /**
  * Os valores da Metodologia nos modais dos cards (Painel de Bordo) e dos indicadores (11/11/2026, pedido do Adão), em
@@ -35,7 +36,10 @@ async function baseDoTeste() {
   const fechados = new Map(meses.filter((m) => m.competenciaId !== null).map((m) => [m.mes, m.competenciaId!]));
   const orcamento = await orcamentoDoExercicio();
   const dados = encadearMeses(await Promise.all(meses.map((m) => (fechados.has(m.mes) ? dadosDoMes(fechados.get(m.mes)!, true, orcamento.porMes[m.mes - 1]) : null))));
-  const linhas = await prisma.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
+  const gravadas = await prisma.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
+  // As fórmulas com os nomes atuais (25/11/2026: gravadas pelo ID).
+  const { nomePorId } = mapasDosIndicadores(gravadas);
+  const linhas = gravadas.map((r) => comNomesNasFormulas(r, nomePorId));
   return { ano: ultima.ano, ultimo, competencia: `${MESES[ultimo - 1]}/${ultima.ano}`, dados, orcamento, linhas };
 }
 

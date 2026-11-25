@@ -1,3 +1,5 @@
+import { descricaoDeOrigem, slugDaDRE } from "./descricaoDeOrigem.js";
+
 /**
  * O que a DRE de um centro de custo mostra (tela, lista dos centros e
  * exportação): só os totais CPP, CSM, CSC, DL, DT, DC e DA, e neles só as
@@ -6,15 +8,10 @@
  * repete a regra em linhasDoCentro (DREContent.tsx).
  */
 export const TOTAIS_DO_CENTRO = new Set(["CPP", "CSM", "CSC", "DL", "DT", "DC", "DA"]);
-export const ATRIBUICOES_DO_CENTRO = new Set([
-  "MÃO DE OBRA DIRETA",
-  "MÃO DE OBRA INDIRETA",
-  "GASTOS GERAIS VARIÁVEIS",
-  "GASTOS GERAIS DIRETOS",
-  "GASTOS GERAIS INDIRETOS",
-  "GASTOS GERAIS COMERCIAIS",
-  "DEPRECIAÇÃO",
-]);
+/** As atribuições dos centros pela descrição de origem dos subtotais (25/11/2026: a última parte do código, que não muda com a Descrição). */
+export const ATRIBUICOES_DO_CENTRO = new Set(
+  ["MÃO DE OBRA DIRETA", "MÃO DE OBRA INDIRETA", "GASTOS GERAIS VARIÁVEIS", "GASTOS GERAIS DIRETOS", "GASTOS GERAIS INDIRETOS", "GASTOS GERAIS COMERCIAIS", "DEPRECIAÇÃO"].map(slugDaDRE),
+);
 
 const partes = (c: string) => c.split(".");
 /** "CPP.MOD.REMUNERACOES_CLT" → "CPP.MOD": a atribuição de uma conta. */
@@ -31,7 +28,7 @@ export function atribuicoesDoCentro(linhas: Linha[]) {
           l.tipo !== "ITEM" &&
           partes(l.codigo).length === 3 &&
           TOTAIS_DO_CENTRO.has(partes(l.codigo)[0]) &&
-          ATRIBUICOES_DO_CENTRO.has(l.descricao.trim().toUpperCase()),
+          ATRIBUICOES_DO_CENTRO.has(descricaoDeOrigem(l.codigo)),
       )
       .map((l) => prefixoDaAtribuicao(l.codigo)),
   );

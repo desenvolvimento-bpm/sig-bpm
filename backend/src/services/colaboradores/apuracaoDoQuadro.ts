@@ -7,6 +7,7 @@ import { quadrosDeLotacao } from "../cenarios/lotacaoCenario.js";
 import { gravarLotacaoDoMes } from "../importacoes/lotacao/processarLotacao.js";
 import { IND, nomeDo } from "../relatorios/indicadoresDoSistema.js";
 import { calcularQuadros, indicadoresDoMes, lerAnoMes, QuadroError, type QuadroDoMes } from "./quadroService.js";
+import { indicadoresParaReferencias, nomeDaReferencia, referenciaDoNome } from "../relatorios/referenciasDosIndicadores.js";
 
 /**
  * O Apurar das Importações (06/11/2026, pedido do Adão; Gestão de Colaboradores, etapa 3): no Importar da linha dos tipos
@@ -126,13 +127,16 @@ export const apuracaoDoQuadroService = {
     const q = await quadroDoMes(db, c.ano, c.mes);
     if (tipo === "INDICADORES_ADMIN") {
       const valores = await indicadoresApurados(db, q);
+      // Os valores guardam o ID do indicador (25/11/2026).
+      const referencias = await indicadoresParaReferencias(db);
+      const refs = valores.map((v) => referenciaDoNome(v.nome, referencias));
       const [importados, digitados] = await Promise.all([
-        db.indicadorImportado.findMany({ where: { competenciaId: c.id, nome: { in: valores.map((v) => v.nome) } }, select: { nome: true, valor: true } }),
-        db.indicadorDigitado.findMany({ where: { competenciaId: c.id, nome: { in: valores.map((v) => v.nome) } }, select: { nome: true, valor: true, origem: true } }),
+        db.indicadorImportado.findMany({ where: { competenciaId: c.id, indicador: { in: refs } }, select: { indicador: true, valor: true } }),
+        db.indicadorDigitado.findMany({ where: { competenciaId: c.id, indicador: { in: refs } }, select: { indicador: true, valor: true, origem: true } }),
       ]);
       const atual = new Map([
-        ...importados.map((i) => [i.nome, { valor: Number(i.valor), origem: "IMPORTADO" }] as const),
-        ...digitados.map((d) => [d.nome, { valor: Number(d.valor), origem: d.origem }] as const),
+        ...importados.map((i) => [nomeDaReferencia(i.indicador, referencias), { valor: Number(i.valor), origem: "IMPORTADO" }] as const),
+        ...digitados.map((d) => [nomeDaReferencia(d.indicador, referencias), { valor: Number(d.valor), origem: d.origem }] as const),
       ]);
       return { tipo, competencia: mesAno(c.ano, c.mes), indicadores: valores.map((v) => ({ ...v, atual: atual.get(v.nome) ?? null })) };
     }
@@ -153,11 +157,14 @@ export const apuracaoDoQuadroService = {
     const q = await quadroDoMes(db, c.ano, c.mes);
     if (tipo === "INDICADORES_ADMIN") {
       const valores = (await indicadoresApurados(db, q)).filter((v) => v.valor !== null && Number.isFinite(v.valor));
+      // Gravados pelo ID do indicador (25/11/2026).
+      const referencias = await indicadoresParaReferencias(db);
       await db.$transaction(async (tx) => {
         for (const v of valores) {
+          const indicador = referenciaDoNome(v.nome, referencias);
           await tx.indicadorDigitado.upsert({
-            where: { competenciaId_nome: { competenciaId: c.id, nome: v.nome } },
-            create: { competenciaId: c.id, nome: v.nome, valor: v.valor!, digitadoPor: quem.id, origem: "APURADO" },
+            where: { competenciaId_indicador: { competenciaId: c.id, indicador } },
+            create: { competenciaId: c.id, indicador, valor: v.valor!, digitadoPor: quem.id, origem: "APURADO" },
             update: { valor: v.valor!, digitadoPor: quem.id, digitadoEm: new Date(), origem: "APURADO" },
           });
         }

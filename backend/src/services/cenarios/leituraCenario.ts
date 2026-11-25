@@ -1,5 +1,6 @@
 import type { LinhaPlanilha, ValorCelula } from "../../lib/xlsx.js";
 import { atualDe, nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
+import { ehAConta } from "../dre/descricaoDeOrigem.js";
 
 /**
  * A leitura de um cenário sintético (11/10/2026): as abas da DRE por unidade, como as do ORÇAMENTO BPM 2026 -
@@ -104,7 +105,8 @@ export function lerAbaDRE(visao: number, aba: string, linhas: LinhaPlanilha[], e
     const bruta = normalizar(l.celulas[0]);
     if (!bruta || TOTAIS_SO_DA_PLANILHA.has(bruta)) continue;
     const desc = GRAFIAS[bruta] ?? bruta;
-    const k = estrutura.findIndex((e, i) => i >= j && normalizar(e.descricao) === desc);
+    // Pela Descrição atual ou pela de origem (25/11/2026: o arquivo com o nome de antes de uma troca).
+    const k = estrutura.findIndex((e, i) => i >= j && (normalizar(e.descricao) === desc || ehAConta(e, desc)));
     if (k >= 0) {
       j = k + 1;
       ligadas.set(desc, estrutura[k].id);

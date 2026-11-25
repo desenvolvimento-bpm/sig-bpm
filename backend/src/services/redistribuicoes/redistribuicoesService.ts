@@ -25,6 +25,8 @@ export class RegraRedistribuicaoError extends Error {
 }
 
 export type DadosDaRedistribuicao = {
+  /** O nome (25/11/2026, pedido do Adão): o primeiro campo do modal e da tabela. */
+  nome: string;
   departamentoId: string | null;
   /** As contas da DRE (uma ou mais), na ordem do modal. */
   linhasDREIds: string[];
@@ -48,6 +50,13 @@ export function mesDe(texto: string, campo: string) {
 export const textoDoMes = (d: Date | null) => (d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}` : null);
 const mesDaCompetencia = (c: { ano: number; mes: number }) => new Date(Date.UTC(c.ano, c.mes - 1, 1));
 const naVigencia = (c: { ano: number; mes: number }, inicio: Date, fim: Date | null) => mesDaCompetencia(c) >= inicio && (!fim || mesDaCompetencia(c) <= fim);
+/** O nome da redistribuição (25/11/2026): obrigatório, até 120 caracteres, sem espaços nas pontas. */
+export function nomeDaRedistribuicao(texto: string) {
+  const nome = texto.trim().replace(/\s+/g, " ");
+  if (!nome) throw new RegraRedistribuicaoError(400, "Dê um nome à redistribuição.");
+  if (nome.length > 120) throw new RegraRedistribuicaoError(400, "O nome da redistribuição passa de 120 caracteres.");
+  return nome;
+}
 export const rotuloDaLinha = (l: { grupoSigla: string | null; atribuicao: string | null; descricao: string }) => [l.grupoSigla, l.atribuicao, l.descricao].filter(Boolean).join(" · ");
 
 export const LINHA_SEL = { id: true, codigo: true, descricao: true, grupo: true, grupoSigla: true, atribuicao: true, tipo: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } } as const;
@@ -157,11 +166,6 @@ export const opcaoDoCentro = (c: { id: string; codigoRM: string | null; nomeRM: 
   departamentoDoRecorte: gestaoDoCentro(c.departamento),
 });
 
-/** O nome das contas para a auditoria: a primeira e quantas mais. */
-export function nomeDasContas(linhas: Array<{ descricao: string; grupoSigla: string | null; atribuicao: string | null }>) {
-  const nomes = linhas.map(rotuloDaLinha);
-  return nomes.length > 1 ? `${nomes[0]} e mais ${nomes.length - 1}` : (nomes[0] ?? "");
-}
 
 /** Depois de gravar: reclassifica as competências ainda não apuradas da vigência e diz quais apuradas pedem reapurar. */
 async function aplicarNasCompetencias(vigencias: Array<{ inicio: Date; fim: Date | null }>) {
@@ -189,6 +193,7 @@ async function ler(id: string) {
 }
 /** Para a auditoria: os campos como a tela os mostra. */
 const paraAuditoria = (r: Awaited<ReturnType<typeof ler>>) => ({
+  nome: r.nome,
   departamentoId: r.departamentoId,
   linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,
@@ -202,6 +207,7 @@ const paraAuditoria = (r: Awaited<ReturnType<typeof ler>>) => ({
 /** Valida e normaliza o que veio do modal. */
 async function preparar(d: DadosDaRedistribuicao, id: string | null) {
   const prisma = getPrismaClient();
+  const nome = nomeDaRedistribuicao(d.nome);
   let departamento: Prisma.DepartamentoGetPayload<{ select: typeof DEPARTAMENTO_SEL }> | null = null;
   if (d.departamentoId) {
     departamento = await prisma.departamento.findUnique({ where: { id: d.departamentoId }, select: DEPARTAMENTO_SEL });
@@ -237,7 +243,7 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
   if (d.ativo) {
     const outras = await prisma.redistribuicaoGasto.findMany({
       where: { ativo: true, contas: { some: { linhaDREId: { in: idsDasContas } } }, ...(id ? { id: { not: id } } : {}) },
-      select: { id: true, departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
+      select: { id: true, nome: true, departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
     });
     const cruza = (o: (typeof outras)[number]) =>
       (!o.departamentoId || !d.departamentoId || o.departamentoId === d.departamentoId) &&
@@ -249,14 +255,14 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
       const comuns = conflito.fornecedores.filter((f) => porChave.has(chaveDoFornecedor(f)));
       throw new RegraRedistribuicaoError(
         409,
-        `Já há uma redistribuição ativa ${contaEmComum(linhas, conflito.contas)} (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
+        `Já há uma redistribuição ativa, ${conflito.nome}, ${contaEmComum(linhas, conflito.contas)} (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
       );
     }
   }
   return {
+    nome,
     departamentoId: departamento?.id ?? null,
     linhasDREIds: idsDasContas,
-    nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
     destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, linhaDREId: x.linhaDREId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
@@ -296,6 +302,7 @@ export const redistribuicoesService = {
     }
     return rs.map((r) => ({
       id: r.id,
+      nome: r.nome,
       departamentoId: r.departamentoId,
       departamento: r.departamento ? `${r.departamento.nome} (${r.departamento.unidadeNegocio.nome})` : null,
       linhasDREIds: r.contas.map((c) => c.linhaDREId),
@@ -359,12 +366,12 @@ export const redistribuicoesService = {
   async criar(d: DadosDaRedistribuicao, usuarioId: string) {
     const prisma = getPrismaClient();
     const dados = await preparar(d, null);
-    const { destinos, linhasDREIds, nomeDasContas: nome, ...regra } = dados;
+    const { destinos, linhasDREIds, ...regra } = dados;
     const criada = await prisma.redistribuicaoGasto.create({
       data: { ...regra, ordem: (await prisma.redistribuicaoGasto.count()) + 1, contas: { create: contasParaGravar(linhasDREIds) }, destinos: { create: destinos } },
     });
     const depois = paraAuditoria(await ler(criada.id));
-    await auditar({ usuarioId, acao: "CRIACAO", entidade: "redistribuicao_gasto", entidadeId: criada.id, depois, metadados: { nome: `${nome} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
+    await auditar({ usuarioId, acao: "CRIACAO", entidade: "redistribuicao_gasto", entidadeId: criada.id, depois, metadados: { nome: regra.nome } });
     return { id: criada.id, ...(await aplicarNasCompetencias([{ inicio: regra.vigenciaInicio, fim: regra.vigenciaFim }])) };
   },
 
@@ -372,14 +379,14 @@ export const redistribuicoesService = {
     const prisma = getPrismaClient();
     const anterior = await ler(id);
     const dados = await preparar(d, id);
-    const { destinos, linhasDREIds, nomeDasContas: nome, ...regra } = dados;
+    const { destinos, linhasDREIds, ...regra } = dados;
     await prisma.$transaction([
       prisma.redistribuicaoDestino.deleteMany({ where: { redistribuicaoId: id } }),
       prisma.redistribuicaoConta.deleteMany({ where: { redistribuicaoId: id } }),
       prisma.redistribuicaoGasto.update({ where: { id }, data: { ...regra, contas: { create: contasParaGravar(linhasDREIds) }, destinos: { create: destinos } } }),
     ]);
     const depois = paraAuditoria(await ler(id));
-    await auditar({ usuarioId, acao: "ALTERACAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), depois, metadados: { nome: `${nome} · ${regra.fornecedores.length} ${plural(regra.fornecedores.length, "fornecedor", "fornecedores")}` } });
+    await auditar({ usuarioId, acao: "ALTERACAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), depois, metadados: { nome: regra.nome } });
     // A vigência de antes e a de agora: as competências que saíram e as que entraram se reclassificam.
     return { id, ...(await aplicarNasCompetencias([{ inicio: anterior.vigenciaInicio, fim: anterior.vigenciaFim }, { inicio: regra.vigenciaInicio, fim: regra.vigenciaFim }])) };
   },
@@ -402,7 +409,7 @@ export const redistribuicoesService = {
       prisma.lancamentoRedistribuido.deleteMany({ where: { redistribuicaoId: id } }),
       prisma.redistribuicaoGasto.delete({ where: { id } }),
     ]);
-    await auditar({ usuarioId, acao: "EXCLUSAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), metadados: { nome: nomeDasContas(anterior.contas.map((c) => c.linhaDRE)) } });
+    await auditar({ usuarioId, acao: "EXCLUSAO", entidade: "redistribuicao_gasto", entidadeId: id, antes: paraAuditoria(anterior), metadados: { nome: anterior.nome } });
     return aplicarNasCompetencias([{ inicio: anterior.vigenciaInicio, fim: anterior.vigenciaFim }]);
   },
 };

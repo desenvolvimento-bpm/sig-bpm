@@ -34,6 +34,8 @@ export const FORMATOS_DO_PAINEL: Array<[Formato, string]> = [
 ];
 
 export type ItemPainel = {
+  /** O ID do card no cadastro (25/11/2026: os blocos dos relatórios e dos painéis acham o card por ele). */
+  id?: string;
   /** O nome do card, por extenso (13/10/2026; antes, abreviado como na planilha: "Receita Oper. Líquida"). */
   titulo: string;
   /** A sigla da linha de baixo do item, como no painel (▪ ROL). */
@@ -306,6 +308,7 @@ export function sinal(item: Pick<ItemPainel, "sentido">, realizado: number | nul
 
 /** Um item do cadastro do Painel de Bordo (o que a tabela painel_itens guarda). */
 export type ItemDoCadastroPainel = {
+  id?: string;
   grupo: string;
   quadro: string;
   nome: string;
@@ -331,6 +334,7 @@ export function quadrosDoCadastro(itens: ItemDoCadastroPainel[]): Record<"result
     let item: ItemPainel;
     try {
       item = itemDoPainel({
+        ...(i.id ? { id: i.id } : {}),
         titulo: i.nome,
         sigla: i.sigla,
         sentido: i.sentido === "↓" ? "↓" : "↑",

@@ -9,6 +9,7 @@ import { caminhoDoArquivo } from "../arquivosImportados.js";
 import { SEM_REGISTROS_NO_MES } from "../listas/processarLista.js";
 import { escolherAba, recusarImportacao, registrarProgresso } from "../statusImportacao.js";
 import { ABA_CREDITOS, chaveDaConta, lerCreditos, type ItemCredito, type LeituraCreditos, type RejeicaoCredito } from "./leituraCreditos.js";
+import { descricaoDeOrigem, slugDaDRE } from "../../dre/descricaoDeOrigem.js";
 
 class ArquivoRecusado extends Error {}
 
@@ -16,7 +17,9 @@ class ArquivoRecusado extends Error {}
 export type CreditoDaConta = ItemCredito & { linhaDREId: string };
 
 /** Uma conta da Estrutura da DRE: a atribuição e o nome. */
-type ContaDaEstrutura = { atribuicao: string | null; descricao: string };
+type ContaDaEstrutura = { atribuicao: string | null; codigo: string; descricao: string };
+/** A chave da conta pela descrição de origem (25/11/2026): o arquivo com o nome de antes de uma troca. */
+const chaveDeOrigem = (atribuicao: string | null, origem: string) => `${chaveDaConta(atribuicao, "")}#${origem}`;
 
 /**
  * As linhas da aba nas contas dos créditos (Matérias Primas e Gastos Gerais Variáveis da Produção e o Frete e Descarga), pela
@@ -24,16 +27,18 @@ type ContaDaEstrutura = { atribuicao: string | null; descricao: string };
  * Indiretos, montagem…), ignoradas (04/11/2026, pedido do Adão); e a rejeição das de conta que a Estrutura não tem.
  */
 export function separarPorConta(itens: ItemCredito[], dosCreditos: Array<ContaDaEstrutura & { id: string }>, daEstrutura: ContaDaEstrutura[]) {
-  const porChave = new Map(dosCreditos.map((c) => [chaveDaConta(c.atribuicao, c.descricao), c.id]));
-  const naEstrutura = new Set(daEstrutura.map((c) => chaveDaConta(c.atribuicao, c.descricao)));
+  // Pela Descrição atual ou pela de origem (25/11/2026: os nomes da Estrutura da DRE mudam a qualquer momento).
+  const porChave = new Map(dosCreditos.flatMap((c) => [[chaveDaConta(c.atribuicao, c.descricao), c.id] as const, [chaveDeOrigem(c.atribuicao, descricaoDeOrigem(c.codigo)), c.id] as const]));
+  const naEstrutura = new Set(daEstrutura.flatMap((c) => [chaveDaConta(c.atribuicao, c.descricao), chaveDeOrigem(c.atribuicao, descricaoDeOrigem(c.codigo))]));
   const creditos: CreditoDaConta[] = [];
   const ignoradas: ItemCredito[] = [];
   const rejeicoes: RejeicaoCredito[] = [];
   for (const i of itens) {
     const chave = chaveDaConta(i.atribuicao, i.conta);
-    const linhaDREId = porChave.get(chave);
+    const deOrigem = chaveDeOrigem(i.atribuicao === undefined || i.atribuicao === null ? null : String(i.atribuicao), slugDaDRE(String(i.conta ?? "")));
+    const linhaDREId = porChave.get(chave) ?? porChave.get(deOrigem);
     if (linhaDREId) creditos.push({ ...i, linhaDREId });
-    else if (naEstrutura.has(chave)) ignoradas.push(i);
+    else if (naEstrutura.has(chave) || naEstrutura.has(deOrigem)) ignoradas.push(i);
     else rejeicoes.push({ linha: i.linhaArquivo, codigo: "CONTA_DESCONHECIDA", mensagem: `${i.atribuicao} › ${i.conta}: a Estrutura da DRE não tem esta conta (a ATRIBUIÇÃO e a CONTA).` });
   }
   return { creditos, ignoradas, rejeicoes };
@@ -43,7 +48,7 @@ export function separarPorConta(itens: ItemCredito[], dosCreditos: Array<ContaDa
 export async function comAsContas(itens: ItemCredito[]) {
   const [dosCreditos, daEstrutura] = await Promise.all([
     contasDosCreditos(),
-    getPrismaClient().linhaDRE.findMany({ where: { ativo: true, tipo: "ITEM" }, select: { atribuicao: true, descricao: true } }),
+    getPrismaClient().linhaDRE.findMany({ where: { ativo: true, tipo: "ITEM" }, select: { atribuicao: true, codigo: true, descricao: true } }),
   ]);
   return separarPorConta(itens, dosCreditos, daEstrutura);
 }

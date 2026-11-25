@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import type { Prisma } from "../../generated/prisma/client.js";
-import { nomeDasContas } from "../redistribuicoes/redistribuicoesService.js";
 import { lerRealocacoes } from "./realocacoesCenario.js";
 import { copiarRegras, trazerNovasRegras } from "./regrasDoCenario.js";
 import { copiarBeneficios } from "./quadroDoCenario.js";
@@ -118,6 +117,7 @@ type RedistribuicaoParaCopiar = Omit<Prisma.CenarioRedistribuicaoCreateManyInput
 function camposDaRedistribuicaoGeral(r: Prisma.RedistribuicaoGastoGetPayload<{ include: { destinos: true; contas: true } }>, deps: Map<string, string>): RedistribuicaoParaCopiar {
   return {
     origemId: r.id,
+    nome: r.nome,
     departamentoId: r.departamentoId ? (deps.get(r.departamentoId) ?? null) : null,
     fornecedores: r.fornecedores,
     vigenciaInicio: r.vigenciaInicio,
@@ -236,7 +236,7 @@ export async function trazerNovosDosCadastros(tx: Tx, cenarioId: string) {
 
   // As redistribuições (etapa 2): as que não têm cópia pela origem, com os centros da cópia (pela origem ou pelo código).
   const [redistribuicoes, minhasRedistribuicoes, centrosDaCopia] = await Promise.all([
-    tx.redistribuicaoGasto.findMany({ include: { destinos: true, contas: { orderBy: { ordem: "asc" }, include: { linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } } } } }),
+    tx.redistribuicaoGasto.findMany({ include: { destinos: true, contas: { orderBy: { ordem: "asc" } } } }),
     tx.cenarioRedistribuicao.findMany({ where: { cenarioId }, select: { origemId: true } }),
     tx.cenarioCentroCusto.findMany({ where: { cenarioId }, select: { id: true, origemId: true, codigoRM: true } }),
   ]);
@@ -255,14 +255,12 @@ export async function trazerNovosDosCadastros(tx: Tx, cenarioId: string) {
     novasRedistribuicoes.map((r) => camposDaRedistribuicaoGeral(r, depDaOrigem)),
     centroDaCopia,
   );
-  const rotuloDaRegra = (r: (typeof redistribuicoes)[number]) =>
-    `${nomeDasContas(r.contas.map((c) => c.linhaDRE))} (${r.fornecedores.length} ${r.fornecedores.length === 1 ? "fornecedor" : "fornecedores"})`;
 
   return {
     unidades: novasUnidades.map((u) => u.nome),
     centros: novosCentros.map((c) => `${c.codigoRM ? `${c.codigoRM} - ` : ""}${c.nomeRM}`),
     departamentos: novosDepartamentos.map((d) => `${d.nome} (${d.unidadeNegocio.nome})`),
-    redistribuicoes: novasRedistribuicoes.filter((r) => !semCentro.includes(r.id)).map(rotuloDaRegra),
+    redistribuicoes: novasRedistribuicoes.filter((r) => !semCentro.includes(r.id)).map((r) => r.nome),
     // As Regras de Rateio (21/11/2026): as de Cadastros Gerais ainda sem cópia no cenário.
     regras: await trazerNovasRegras(tx, cenarioId),
   };

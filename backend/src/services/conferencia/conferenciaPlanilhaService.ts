@@ -4,6 +4,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { ArquivoInvalidoError, lerAba, listarAbas } from "../../lib/xlsx.js";
 import { auditar } from "../auditoriaService.js";
 import { dreService } from "../dre/dreService.js";
+import { ehAConta } from "../dre/descricaoDeOrigem.js";
 
 /**
  * Relatório de conferência contra a planilha (Passo 27, RF013). Durante o
@@ -93,7 +94,8 @@ async function lerPlanilha(buffer: Uint8Array, ano: number, mes: number): Promis
       if (!desc) continue;
       const bruto = l.celulas[col];
       const valor = typeof bruto === "number" ? bruto : bruto !== null && bruto !== "" && !Number.isNaN(Number(bruto)) ? Number(bruto) : null;
-      const k = estrutura.findIndex((e, i) => i >= j && n(e.descricao) === desc);
+      // Pela Descrição atual ou pela de origem (25/11/2026: a planilha com o nome de antes de uma troca).
+      const k = estrutura.findIndex((e, i) => i >= j && (n(e.descricao) === desc || ehAConta(e, desc)));
       const base = { unidade, aba, linha: l.numero, descricao: String(l.celulas[0]).trim(), valor };
       if (k >= 0) {
         j = k + 1;
@@ -168,7 +170,8 @@ export const conferenciaPlanilhaService = {
     const valores = conferencia.valores as ValorPlanilha[];
     const unidades = await prisma.unidadeNegocio.findMany({ select: { codigo: true, nome: true } });
     const consolidado = await dreService.consultarConsolidado(ano, mes);
-    const rolConsolidada = consolidado.linhas.find((l) => n(l.descricao) === ROL) ?? null;
+    // A ROL pela descrição de origem (25/11/2026), que não muda com a Descrição.
+    const rolConsolidada = consolidado.linhas.find((l) => ehAConta(l, ROL)) ?? null;
 
     const visoes = [];
     for (const { unidade, aba } of ABAS) {
@@ -190,7 +193,7 @@ export const conferenciaPlanilhaService = {
         let s = porCodigo.get(v.codigo) ?? null;
         const observacoes: string[] = [];
         // Nas abas de Desp.+Extra e de RN, a ROL é a consolidada: a base dos percentuais.
-        if ((unidade === 4 || unidade === 5) && n(v.descricao) === ROL && rolConsolidada) {
+        if ((unidade === 4 || unidade === 5) && (v.codigo ? ehAConta({ codigo: v.codigo }, ROL) : n(v.descricao) === ROL) && rolConsolidada) {
           s = rolConsolidada;
           observacoes.push("Nesta aba, a ROL é a consolidada (base dos percentuais): comparada com a ROL do Consolidado.");
         }

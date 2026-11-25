@@ -625,7 +625,7 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     tx.cenarioInvestimento.findMany({ where: { cenarioId } }),
     // As regras da cópia do cenário (21/11/2026: Configurações / Regras de Rateio), no lugar das de Cadastros Gerais.
     regrasDoCenario(tx, cenarioId),
-    tx.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
+    tx.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { indicador: true, mes: true, valor: true } }),
   ]);
   const porCodigo = new Map(est.map((l) => [l.codigo, l]));
   const { somas, porVenda, bases, juntar } = calcularPremissas(est, linhas, cenario.ano, gravadas);
@@ -752,7 +752,7 @@ async function rateioDoCenario(db: Tx, cenarioId: string, ano: number, est: Linh
     linhasDoCadastro(),
     db.cenarioPremissa.findMany({ where: { cenarioId } }),
     regrasDoCenario(db, cenarioId),
-    db.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { nome: true, mes: true, valor: true } }),
+    db.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(cenarioId), select: { indicador: true, mes: true, valor: true } }),
   ]);
   const { porVenda, bases } = calcularPremissas(est, linhas, ano, gravadas);
   for (const [chave, lista] of basesDosProjetos(projetos)) bases.set(chave, lista);

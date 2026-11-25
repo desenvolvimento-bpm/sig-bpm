@@ -6,9 +6,9 @@ import { VOLUMES_DA_DRE } from "./apuracaoUnidades.js";
 import { RegraDREError } from "./dreService.js";
 import { chaveDaLinha } from "../../lib/linhas.js";
 import { numeroDaObra } from "../resultadosLinha/alocacaoNasLinhas.js";
+import { descricaoDeOrigem } from "./descricaoDeOrigem.js";
 
 const Decimal = Prisma.Decimal;
-const n = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
 
 /** Uma linha do extrato: os registros da mesma obra, linha e destino somados. */
 export type LinhaVolume = {
@@ -25,7 +25,7 @@ type Registro = {
   quantidade: Prisma.Decimal;
   unidadeNegocio: { codigo: number } | null;
   obra: { codigo: string; nome: string; tipoVenda: string | null } | null;
-  linha?: { nome: string } | null;
+  linha?: { nome: string; codigo: string } | null;
   categoria?: string | null;
   finalidade?: string | null;
   etapa?: string | null;
@@ -40,7 +40,7 @@ async function registrosDasListas(competenciaId: string, tipos: Array<ItemVolume
     unidadeNegocio: { select: { codigo: true } },
     obra: { select: { codigo: true, nome: true, tipoVenda: true } },
   } as const;
-  const comLinha = { ...base, linha: { select: { nome: true } } } as const;
+  const comLinha = { ...base, linha: { select: { nome: true, codigo: true } } } as const;
   const buscar: Record<ItemVolume["tipo"], () => Promise<Registro[]>> = {
     PROJETO: () => prisma.projeto.findMany({ where, select: comLinha }),
     PRODUCAO: () => prisma.producao.findMany({ where, select: comLinha }),
@@ -60,7 +60,7 @@ const destinoDoRegistro = (tipo: ItemVolume["tipo"], r: Registro) =>
     tipo,
     quantidade: r.quantidade,
     unidade: r.unidadeNegocio?.codigo ?? null,
-    linha: r.linha ? chaveDaLinha(r.linha.nome) : null,
+    linha: r.linha ? chaveDaLinha(r.linha.codigo) : null,
     obraGlobal: r.obra?.tipoVenda === "GLOBAL",
     categoria: r.categoria ?? null,
     finalidade: r.finalidade ?? null,
@@ -74,11 +74,11 @@ const destinoDoRegistro = (tipo: ItemVolume["tipo"], r: Registro) =>
  * dessa obra.
  */
 export async function volumesDasObras(competenciaId: string, linhas: Array<{ codigo: string; tipo: string; grupoSigla: string | null; descricao: string }>, numero?: string) {
-  // Cada linha da aba Totais na linha de volume da DRE com a mesma descrição, em todas as unidades.
+  // Cada linha da aba Totais na linha de volume da DRE com a mesma descrição de origem (25/11/2026), em todas as unidades.
   const linhaDoCodigo = new Map<CodigoTotais, string>();
   for (const l of linhas) {
     if (l.tipo !== "ITEM" || (l.grupoSigla !== "P" && l.grupoSigla !== "S")) continue;
-    for (const porDescricao of Object.values(VOLUMES_DA_DRE)) for (const c of porDescricao[n(l.descricao)] ?? []) linhaDoCodigo.set(c, l.codigo);
+    for (const porOrigem of Object.values(VOLUMES_DA_DRE)) for (const c of porOrigem[descricaoDeOrigem(l.codigo)] ?? []) linhaDoCodigo.set(c, l.codigo);
   }
   const tipos = [...new Set(LINHAS_TOTAIS.filter((t) => linhaDoCodigo.has(t.codigo)).map((t) => t.tipo))];
   const obras = new Map<string, Map<string, Prisma.Decimal>>();
@@ -117,7 +117,7 @@ export async function volumesDaLinha(ano: number, mes: number, codigoLinha: stri
   if (!linhaDRE || (linhaDRE.grupoSigla !== "P" && linhaDRE.grupoSigla !== "S")) throw new RegraDREError(400, "A linha não é de volume.");
 
   const unidades = unidade === null ? Object.keys(VOLUMES_DA_DRE).map(Number) : [unidade];
-  const codigos = new Set<CodigoTotais>(unidades.flatMap((u) => VOLUMES_DA_DRE[u]?.[n(linhaDRE.descricao)] ?? []));
+  const codigos = new Set<CodigoTotais>(unidades.flatMap((u) => VOLUMES_DA_DRE[u]?.[descricaoDeOrigem(codigoLinha)] ?? []));
   const totais = LINHAS_TOTAIS.filter((t) => codigos.has(t.codigo));
   const tipos = [...new Set(totais.map((t) => t.tipo))];
   for (const t of tipos) {

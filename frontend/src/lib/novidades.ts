@@ -28,6 +28,111 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 25/11/2026 (noite): os nomes dos cadastros a qualquer momento (Unidades, Linhas, Indicadores, cards e a Descrição das contas da DRE), o Nome das Redistribuições de Gastos, as contas marcadas e a vigência MM/AAAA, os ícones dos Cenários Analíticos, a Conta mais larga nos índices e a etiqueta da versão.
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/unidades",
+    itens: [
+      "O nome das Unidades pode ser trocado a qualquer momento: as telas, os relatórios, as exportações e as APIs mostram o nome atual, e a Recarga dos Cadastros acha as unidades pelo código.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/linhas",
+    itens: [
+      "O nome das Linhas pode ser trocado a qualquer momento: o SIG acha cada linha pelo código, que não muda depois da criação. Um nome não pode ser igual ao código de outra linha.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/estrutura-dre",
+    itens: [
+      "A Descrição das contas da Estrutura da DRE pode ser trocada a qualquer momento, também nas contas com movimentos: a apuração acha as contas pelo código, que não muda. A Recarga dos Cadastros mantém o código de uma conta renomeada, e as importações aceitam a descrição atual ou a original.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: [
+      "No modal Redistribuição de Gastos, o Nome é o primeiro campo (obrigatório), e a tabela ganha a coluna Nome, a primeira. As redistribuições que já existiam receberam um nome a partir das contas (a primeira conta, quantas mais e o departamento): troque-o no modal, se quiser.",
+      "A coluna Contas da DRE mostra a quantidade de contas (“6 contas”), como a Fornecedores; os nomes aparecem com o mouse sobre a quantidade e no Exportar.",
+      "Na lupa das Contas da DRE, marque várias contas de uma vez (a caixa de cada linha, ou a do rótulo para todas as da tabela) e clique em “Incluir Marcadas”.",
+      "A vigência (Início e Fim) é em MM/AAAA: digite o mês ou escolha no calendário do campo, com o ano nas setas e os doze meses.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Analítico",
+    rota: "/cadastros/estrutura-indicadores",
+    itens: [
+      "Trocar o nome de um indicador muda só o cadastro: as fórmulas, os cards dos Relatórios Executivos e dos Painéis e os valores importados, digitados e dos cenários ficam ligados ao indicador pelo ID e mostram sempre o nome atual. As APIs aceitam também o ID do indicador.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cadastros Gerais",
+    tela: "Analítico",
+    rota: "/cadastros/painel-bordo",
+    itens: [
+      "Trocar o nome, a sigla ou o quadro de um card muda só o cadastro, sem confirmação: os Relatórios Executivos e os Painéis ligam os cards pelo ID.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "No modal Redistribuição de Gastos, o Nome é o primeiro campo (obrigatório), e a tabela ganha a coluna Nome, a primeira. As redistribuições que já existiam receberam um nome a partir das contas (a primeira conta, quantas mais e o departamento): troque-o no modal, se quiser.",
+      "A coluna Contas da DRE mostra a quantidade de contas (“6 contas”), como a Fornecedores; os nomes aparecem com o mouse sobre a quantidade e no Exportar.",
+      "Na lupa das Contas da DRE, marque várias contas de uma vez (a caixa de cada linha, ou a do rótulo para todas as da tabela) e clique em “Incluir Marcadas”.",
+      "A vigência (Início e Fim) é em MM/AAAA: digite o mês ou escolha no calendário do campo, com o ano nas setas e os doze meses.",
+      "No modal dos Índices de Comparação e de Reajuste, nas combinações, a coluna Departamento ficou mais estreita e a Conta, mais larga.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Os botões ganharam ícones: Reajustar Marcados (o de percentual), Replicar Referências (o de cópia, nas tabelas das Premissas e no Quadro de Lotação) e De Acordo (o visto duplo, na aba Verificações).",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cenários Analíticos",
+    rota: "/cenarios/analiticos",
+    itens: [
+      "A etiqueta da versão congelada mostra só o cadeado e a versão (VER00), do tamanho das outras etiquetas, na barra do cenário e na lista dos cenários; a dica continua dizendo que ela está congelada.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: [
+      "Na edição da DRE do cenário, o botão Reajustar Marcados ganhou o ícone de percentual.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T20:15",
+    processo: "Cenários Sintéticos",
+    rota: "/cenarios/sinteticos",
+    itens: [
+      "A etiqueta da versão congelada mostra só o cadeado e a versão (VER00), do tamanho das outras etiquetas, na barra do cenário e na lista dos cenários; a dica continua dizendo que ela está congelada.",
+    ],
+  },
   // 25/11/2026: a Conta da DRE de cada destino das redistribuições, os níveis das Premissas dos Centros de Custo, os cards nos slides e o Importar Valores sem os avisos das abas fora do padrão.
   {
     publicada: "2026-11-25T08:40",

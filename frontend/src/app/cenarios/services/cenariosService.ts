@@ -548,7 +548,7 @@ export type PreviaCenario = {
 
 /** RESULTADO: sai da DRE do cenário; MANUAL: lançamento manual; CALCULADO: DRE e lançamentos (eficiências); IMPORTADO: da aba das metas. */
 export type ClasseIndicador = "RESULTADO" | "MANUAL" | "CALCULADO" | "IMPORTADO";
-export type IndicadorDoCenario = Indicador & { classe: ClasseIndicador; digitados: boolean[] };
+export type IndicadorDoCenario = Indicador & { classe: ClasseIndicador; digitados: boolean[]; /** A Liberação de Projetos digitada recalcula a DRE do analítico (25/11/2026). */ recalculaDRE?: boolean };
 /** `comparado`: o cenário comparado (13/10/2026), cujo acumulado vem em `totalOrcado` de cada indicador. */
 export type IndicadoresDoCenario = { ano: number; ate: number; meses: MesRelatorio[]; indicadores: IndicadorDoCenario[]; comparado?: { nome: string; ano: number } | null };
 

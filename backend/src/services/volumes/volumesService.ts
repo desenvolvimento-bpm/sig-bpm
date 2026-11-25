@@ -14,7 +14,7 @@ export async function totaisDaCompetencia(competenciaId: string) {
     unidadeNegocio: { select: { codigo: true } },
     obra: { select: { tipoVenda: true } },
   } as const;
-  const comLinha = { ...comum, linha: { select: { nome: true } } } as const;
+  const comLinha = { ...comum, linha: { select: { codigo: true } } } as const;
 
   const [projetos, producoes, pistas, armaduras, metalurgia, expedicoes, montagens, acompanhamentos] =
     await Promise.all([
@@ -32,7 +32,7 @@ export async function totaisDaCompetencia(competenciaId: string) {
     quantidade: ItemVolume["quantidade"];
     unidadeNegocio: { codigo: number } | null;
     obra: { tipoVenda: string | null } | null;
-    linha?: { nome: string } | null;
+    linha?: { codigo: string } | null;
     categoria?: string | null;
     finalidade?: string | null;
     etapa?: string | null;
@@ -42,7 +42,7 @@ export async function totaisDaCompetencia(competenciaId: string) {
       tipo,
       quantidade: l.quantidade,
       unidade: l.unidadeNegocio?.codigo ?? null,
-      linha: l.linha ? chaveDaLinha(l.linha.nome) : null,
+      linha: l.linha ? chaveDaLinha(l.linha.codigo) : null,
       obraGlobal: l.obra?.tipoVenda === "GLOBAL",
       categoria: l.categoria ?? null,
       finalidade: l.finalidade ?? null,

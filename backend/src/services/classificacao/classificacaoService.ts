@@ -14,6 +14,7 @@ import {
   type ContaParaClassificar,
 } from "./regrasClassificacao.js";
 import { abasQueSomam } from "../dre/apuracaoUnidades.js";
+import { semOGrupo } from "../dre/descricaoDeOrigem.js";
 
 /** Erro de regra — vira 404/409 no controller, não 500. */
 export class RegraClassificacaoError extends Error {
@@ -139,11 +140,12 @@ export const classificacaoService = {
     // As linhas da DRE com as abas de cada uma (21/10/2026): a verificação "Sem Aba de Resultado".
     const linhasDRE = await prisma.linhaDRE.findMany({
       where: { ativo: true },
-      select: { id: true, tipo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
+      select: { id: true, codigo: true, tipo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
     });
     const linhaPorId = new Map(linhasDRE.map((l) => [l.id, { ...l, unidades: l.unidades.map((u) => u.unidadeNegocio.codigo) }]));
-    const tripla = (g: string, a: string | null, d: string) => `${g.trim().toUpperCase()}|${(a ?? "").trim().toUpperCase()}|${d.trim().toUpperCase()}`;
-    const complementares = new Set(linhasDRE.filter((l) => l.tipo === "ITEM" && l.grupoSigla === "CSC").map((l) => tripla("", l.atribuicao, l.descricao)));
+    // O par da Montagem nos Complementares pelo código sem o grupo (25/11/2026: a atribuição e a descrição de origem, que não
+    // mudam com os nomes).
+    const complementares = new Set(linhasDRE.filter((l) => l.tipo === "ITEM" && l.grupoSigla === "CSC").map((l) => semOGrupo(l.codigo)));
 
     const regras = {
       contaDestino: new Map(reclassificacoes.map((r) => [`${r.codigoCentroCusto}|${r.contaOrigemId}`, r.contaDestinoId])),
@@ -188,7 +190,7 @@ export const classificacaoService = {
     const semAba = (linhaDREId: string | null, filial: number, balde: (typeof centros)[number]["balde"], alocacao: string) => {
       const linha = linhaDREId ? linhaPorId.get(linhaDREId) : undefined;
       if (!linha || linha.tipo !== "ITEM") return false;
-      const par = linha.grupoSigla === "CSM" && complementares.has(tripla("", linha.atribuicao, linha.descricao));
+      const par = linha.grupoSigla === "CSM" && complementares.has(semOGrupo(linha.codigo));
       return !abasQueSomam(linha, { filial, balde, rateio: alocacao === "RATEIO", parNaComplementar: par }).length;
     };
 

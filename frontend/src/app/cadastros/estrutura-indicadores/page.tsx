@@ -49,11 +49,10 @@ export default function EstruturaIndicadoresPage() {
                 outros é calculado com os valores deles no cenário (os importados, com as metas).
               </li>
               <li>
-                O Nome se edita: ao gravar, depois de confirmar, ele muda de uma vez em tudo o que usa o indicador — os valores importados e
-                digitados, as metas, os cenários (também as justificativas das Premissas), as fórmulas dos indicadores e dos cards do Painel de
-                Bordo e os cards dos Relatórios Executivos e dos Painéis de Bordo —, e a mensagem diz o que mudou. Se algo ficasse com o nome
-                antigo, nada se grava. O sistema conhece cada indicador pelo ID, e não pelo nome. O nome não pode ter | [ ou ], nem ser o de
-                outro indicador (nem com diferença só de maiúsculas, acentos ou espaços).
+                O Nome se edita a qualquer momento: as fórmulas dos indicadores e dos cards do Painel de Bordo, os cards dos Relatórios
+                Executivos e dos Painéis de Bordo, os valores importados e digitados, as metas e os valores dos cenários (também as
+                justificativas das Premissas) citam o indicador pelo ID e mostram o nome novo sem mudar. O nome não pode ter | [ ou ], nem ser o
+                de outro indicador (nem com diferença só de maiúsculas, acentos ou espaços).
               </li>
               <li>
                 As importações recusam o nome antigo de um indicador renomeado (as abas Indicadores (Admin.) e Indicadores (Comercial), a aba das
@@ -61,7 +60,7 @@ export default function EstruturaIndicadoresPage() {
                 diz o nome novo.
               </li>
               <li>Um indicador com metas em cenários, valores importados ou digitados, usado no Painel de Bordo ou na Metodologia de outro indicador, não se exclui: inative-o.</li>
-              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais; trocar o nome ou a Descrição, não): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
             </ul>
           }
           descricao="Os indicadores de resultado, com a fórmula que os calcula no Painel de Bordo de Resultados Empresariais (também na aba Indicadores e no Exportar): linhas da DRE apurada por unidade, totalizadores das Listas, indicadores do Comercial e do Administrativo e metas do Orçamento (o cenário marcado) e outros indicadores do cadastro."

@@ -764,7 +764,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
       aoConcluir: (queryClient) => queryClient.invalidateQueries({ queryKey: ["cenarios", id, "cadastros"] }),
       descricao:
         "Na carga do realizado da referência deste cenário, os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), vão divididos entre os centros de custo de Redistribuir Para (os do cenário), cada um na Conta da DRE escolhida para ele (uma do departamento e da atribuição do centro), pelos percentuais, nos meses da vigência. Vale só aqui: o resto do SIG segue as redistribuições dos Cadastros Gerais.",
-      descricaoDaExclusao: (conta) => `A redistribuição de ${conta} sai deste cenário (nos Cadastros Gerais, as redistribuições continuam); a próxima carga do realizado da referência fica sem ela.`,
+      descricaoDaExclusao: (nome) => `A redistribuição ${nome} sai deste cenário (nos Cadastros Gerais, as redistribuições continuam); a próxima carga do realizado da referência fica sem ela.`,
     }),
     [id],
   );
@@ -775,6 +775,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
   const pode = podeEditar && dados.editavel;
   // O arquivo leva os nomes dos fornecedores (na tela, a quantidade).
   const colunas: ColunaExportavel<RedistribuicaoDoCenario>[] = [
+    { chave: "nome", rotulo: "Nome", valor: (r) => r.nome },
     { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
     { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
     { chave: "fornecedores", rotulo: "Fornecedores", valor: (r) => r.fornecedores.join("; ") },
@@ -819,19 +820,14 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
                 onClick={() => setAberta(r)}
                 title={pode ? "Editar a redistribuição no cenário" : "Ver a redistribuição"}
               >
+                <td className={`${TD} font-medium`} title={r.nome}>
+                  {r.nome}
+                </td>
                 <td className={TD} title={r.departamento ?? "Todos"}>
                   {r.departamento ?? "Todos"}
                 </td>
-                <td className="px-3 py-1.5">
-                  <ul className="space-y-1">
-                    {r.contas.map((c) => (
-                      <li key={c.codigo}>
-                        <div className="truncate" title={c.rotulo}>
-                          {c.rotulo}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                <td className={`${TD} text-right`} title={r.contas.map((c) => c.rotulo).join("\n")}>
+                  {r.contas.length} {plural(r.contas.length, "conta", "contas")}
                 </td>
                 <td className={`${TD} text-right`} title={r.fornecedores.join("\n")}>
                   {r.fornecedores.length} {plural(r.fornecedores.length, "fornecedor", "fornecedores")}
@@ -869,8 +865,17 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
 
 const destinosTexto = (r: RedistribuicaoDoCenario) => r.destinos.map((d) => `${d.centro}${d.conta ? ` (${d.conta})` : ""}: ${pctTexto(d.percentual)}`).join("; ");
 const COLUNAS_DAS_REDISTRIBUICOES: Coluna<RedistribuicaoDoCenario>[] = [
+  { chave: "nome", rotulo: "Nome", valor: (r) => r.nome },
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
-  { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
+  // A quantidade de contas, como nos Fornecedores (25/11/2026, pedido do Adão); o arquivo e a dica levam os nomes.
+  {
+    chave: "contas",
+    rotulo: "Contas da DRE",
+    tipo: "numero",
+    alinhamento: "direita",
+    valor: (r) => r.contas.length,
+    texto: (r) => `${r.contas.length} ${plural(r.contas.length, "conta", "contas")}`,
+  },
   {
     chave: "fornecedores",
     rotulo: "Fornecedores",
@@ -884,4 +889,4 @@ const COLUNAS_DAS_REDISTRIBUICOES: Coluna<RedistribuicaoDoCenario>[] = [
   { chave: "situacao", rotulo: "Situação", valor: (r) => (r.ativo ? "Ativa" : "Inativa") },
   { chave: "origem", rotulo: "Origem", valor: (r) => (r.doCenario ? "Só no cenário" : "Cadastros Gerais") },
 ];
-const LARGURAS_DAS_REDISTRIBUICOES = [200, 260, 140, 340, 140, 100, 140];
+const LARGURAS_DAS_REDISTRIBUICOES = [240, 200, 120, 140, 340, 140, 100, 140];

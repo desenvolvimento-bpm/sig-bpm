@@ -8,6 +8,7 @@ import { acumularMeta } from "../relatorios/metasOrcamento.js";
 import { gruposDoCenario } from "./centrosCenario.js";
 import { QUADROS_DE_LOTACAO, quadrosDeLotacao, VENDAS_LOTACAO } from "./lotacaoCenario.js";
 import { liberacaoTotal, LIBERACOES_DA_LISTA, LIBERACOES_DIGITADAS } from "./projetosCenario.js";
+import { comNomesDosIndicadores, comNomesNasFormulas, mapasDosIndicadores } from "../relatorios/referenciasDosIndicadores.js";
 
 /**
  * Os indicadores de um cenário sintético (11/10/2026), com as fórmulas do cadastro Estrutura dos Indicadores — as
@@ -78,13 +79,18 @@ export type CalculoDoCenario = {
 /** Calcula os indicadores do cenário, mês a mês. */
 export async function calcularCenario(cenarioId: string): Promise<CalculoDoCenario> {
   const prisma = getPrismaClient();
-  const [cenario, dre, metas, estrutura] = await Promise.all([
+  const [cenario, dre, metasGravadas, gravada] = await Promise.all([
     prisma.cenario.findUniqueOrThrow({ where: { id: cenarioId }, select: { ano: true, tipo: true } }),
     prisma.cenarioResultado.findMany({ where: { cenarioId }, select: { visao: true, mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
-    prisma.cenarioIndicador.findMany({ where: { cenarioId }, select: { nome: true, mes: true, valor: true, origem: true } }),
+    prisma.cenarioIndicador.findMany({ where: { cenarioId }, select: { indicador: true, mes: true, valor: true, origem: true } }),
     // Todos (os inativos também), para o item [INDICADOR]; só os ativos vão no resultado.
     prisma.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } }),
   ]);
+  // As fórmulas com os nomes atuais (25/11/2026: gravadas pelo ID).
+  const referencias = mapasDosIndicadores(gravada);
+  const estrutura = gravada.map((r) => comNomesNasFormulas(r, referencias.nomePorId));
+  // Os valores do cenário pelo nome atual do indicador (25/11/2026: gravados pelo ID).
+  const metas = comNomesDosIndicadores(metasGravadas, referencias);
   const porLinha = new Map(dre.map((r) => [`${r.mes}|${r.visao}|${r.linhaDRE.codigo}`, Number(r.valor)]));
   // No analítico, os quadros de lotação dos grupos de centros de custo.
   const analitico = cenario.tipo === "ANALITICO";

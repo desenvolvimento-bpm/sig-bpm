@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 
 import type { Indicadores, MarcacaoComparavel, Painel, Resultados } from "@/app/relatorios/services/relatoriosService";
 import type { MarcacaoCenario } from "@/app/cenarios/services/cenariosService";
+import { nomeDaVisao } from "@/lib/nomesDasUnidades";
 
 /**
  * Os Relatórios Executivos (15/10/2026, Análises Gerenciais): um relatório por competência fechada, com sete abas (17/10/2026:
@@ -41,6 +42,8 @@ export type Bloco = Posicao &
   (
     | {
         tipo: "PAINEL";
+        /** O ID do card no cadastro do Painel de Bordo (25/11/2026: a tela acha o card por ele; sem ele, pela aba, o quadro, o título e a sigla). */
+        cardId?: string;
         aba: "resultados" | "performance";
         quadro: string;
         titulo: string;
@@ -63,7 +66,7 @@ export type Bloco = Posicao &
      * O gráfico do card do indicador (22/10/2026): os meses e o acumulado ou só o acumulado; sem ele, só os valores. As
      * opções do gráfico, como as dos cards do Painel.
      */
-    | { tipo: "INDICADOR"; nome: string; grafico?: "MESES" | "ACUMULADO"; /** Os dados antes do gráfico (12/11/2026). */ periodos?: PeriodosDoCard; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
+    | { tipo: "INDICADOR"; /** O ID do indicador no cadastro (25/11/2026: a tela acha o indicador por ele; sem ele, pelo nome). */ indicadorId?: string; nome: string; grafico?: "MESES" | "ACUMULADO"; /** Os dados antes do gráfico (12/11/2026). */ periodos?: PeriodosDoCard; tipoGrafico?: "barras" | "area"; comRotulos?: boolean; /** O Zoom do card (30/10/2026). */ zoom?: number; /** O card PROVA (31/10/2026). */ prova?: true | MarcacaoComparavel[] }
     /** O título da anotação (16/10/2026); sem ele, o nome da nota. */
     | {
         tipo: "ANOTACAO";
@@ -137,14 +140,13 @@ export type VisaoDaTabela = 0 | 1 | 2 | 3 | 4 | 5;
 /** As colunas que a tabela mostra ou não (30/10/2026, pedido do Adão): o R$/m³ e as três da variação. */
 export type ColunasDaTabela = { unitario: boolean; diferenca: boolean; atingimento: boolean; eficiencia: boolean };
 /** As visões da tabela (as abas de Resultados das unidades), com o nome. */
-export const VISOES_DA_TABELA: Array<{ visao: VisaoDaTabela; nome: string }> = [
-  { visao: 0, nome: "Consolidado" },
-  { visao: 1, nome: "Matriz" },
-  { visao: 2, nome: "Filial" },
-  { visao: 3, nome: "Serviços" },
-  { visao: 4, nome: "Despesas e Extra" },
-  { visao: 5, nome: "RN" },
-];
+export const VISOES_DA_TABELA: Array<{ visao: VisaoDaTabela; nome: string }> = ([0, 1, 2, 3, 4, 5] as VisaoDaTabela[]).map((visao) => ({
+  visao,
+  // O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
+  get nome() {
+    return nomeDaVisao(visao);
+  },
+}));
 export type ListarDoSumario = "TELAS" | "TELAS_E_SLIDES";
 export type LinhaDoSumario = "PONTOS" | "TRACOS" | "LINHA" | "NENHUM";
 /** A formatação de um nível do Sumário (20/10/2026): o tamanho em px, a cor (#rrggbb) e a fonte (a chave de FONTES). */

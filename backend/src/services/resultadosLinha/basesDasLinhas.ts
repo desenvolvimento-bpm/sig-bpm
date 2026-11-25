@@ -52,13 +52,13 @@ export async function volumesDoMes(competenciaId: string, linhas: LinhaDoNegocio
     quantidade: true,
     unidadeNegocio: { select: { codigo: true } },
     obra: { select: { id: true, tipoVenda: true } },
-    linha: { select: { id: true, nome: true } },
+    linha: { select: { id: true, codigo: true } },
   } as const;
   type Registro = {
     quantidade: Prisma.Decimal;
     unidadeNegocio: { codigo: number } | null;
     obra: { id: string; tipoVenda: string | null } | null;
-    linha: { id: string; nome: string } | null;
+    linha: { id: string; codigo: string } | null;
     categoria?: string | null;
     finalidade?: string | null;
     etapa?: string | null;
@@ -84,7 +84,7 @@ export async function volumesDoMes(competenciaId: string, linhas: LinhaDoNegocio
         tipo,
         quantidade: r.quantidade,
         unidade: r.unidadeNegocio?.codigo ?? null,
-        linha: chaveDaLinha(r.linha.nome),
+        linha: chaveDaLinha(r.linha.codigo),
         obraGlobal: r.obra?.tipoVenda === "GLOBAL",
         categoria: r.categoria ?? null,
         finalidade: r.finalidade ?? null,

@@ -1,5 +1,6 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { mesesDoExercicio } from "../relatorios/resultadosService.js";
+import { nomeDaUnidade } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * Os Créditos de Impostos (03/11/2026, pedido do Adão): a tela Impostos do Fechamento Mensal. Desde 04/11/2026, a aba Impostos
@@ -23,10 +24,7 @@ export const GRUPOS_DOS_CREDITOS: ReadonlyArray<{ subtotal: string; prefixo: str
 ];
 
 /** As unidades dos créditos, pelo código da unidade de negócio. */
-export const UNIDADES_DOS_CREDITOS = [
-  { codigo: 1, nome: "Matriz" },
-  { codigo: 2, nome: "Filial" },
-] as const;
+export const UNIDADES_DOS_CREDITOS = [{ codigo: 1 }, { codigo: 2 }] as const;
 
 /** Uma conta dos créditos (CPP.MP.*, CPP.GGV.* e o Frete e Descarga, fora os subtotais). */
 export const ehContaDosCreditos = (codigo: string) => GRUPOS_DOS_CREDITOS.some((g) => (codigo.startsWith(g.prefixo) && codigo !== g.subtotal) || g.extras.includes(codigo));
@@ -141,7 +139,7 @@ export const creditosImpostosService = {
         });
         return { codigo: g.subtotal?.codigo ?? g.itens[0]?.codigo ?? "", descricao: g.subtotal?.descricao ?? "", contas: contasDoGrupo, total: somaDe(contasDoGrupo) };
       });
-      return { codigo: u.codigo, nome: u.nome, grupos: linhas, total: somaDe(linhas.flatMap((g) => g.contas)) };
+      return { codigo: u.codigo, nome: nomeDaUnidade(u.codigo), grupos: linhas, total: somaDe(linhas.flatMap((g) => g.contas)) };
     });
     return { competencia: { ano, mes, status: c.status, apurada }, temCreditos, unidades };
   },
@@ -160,7 +158,7 @@ export const creditosImpostosService = {
       meses: fechados.map((m) => ({ mes: m.mes, rotulo: m.rotulo })),
       unidades: UNIDADES_DOS_CREDITOS.map((u, n) => ({
         codigo: u.codigo,
-        nome: u.nome,
+        nome: nomeDaUnidade(u.codigo),
         total: { meses: doMes.map((d) => dos(d, d.unidades[n].total)) },
         grupos: grupos.map((g, k) => ({
           codigo: g.codigo,

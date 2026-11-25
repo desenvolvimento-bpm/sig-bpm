@@ -153,7 +153,7 @@ const SELECAO = {
   competencia: { select: { id: true, ano: true, mes: true, status: true } },
   contaBalancete: contaSel,
   centroAntes: centroSel,
-  contaAntes: { select: { id: true, reduzido: true, descricao: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } } },
+  contaAntes: { select: { id: true, reduzido: true, descricao: true, linhaDRE: { select: { codigo: true, grupoSigla: true, descricao: true } } } },
   centroNovo: centroSel,
   contaNova: contaSel,
   solicitante: { select: { nome: true } },
@@ -176,7 +176,7 @@ const LANCAMENTO_SEL = {
   cliForn: true,
   historico: true,
   valorMovimento: true,
-  linhaDRE: { select: { grupoSigla: true, descricao: true, atribuicaoSigla: true } },
+  linhaDRE: { select: { codigo: true, grupoSigla: true, descricao: true, atribuicaoSigla: true } },
   competencia: { select: { ano: true, mes: true } },
   // Os itens do movimento (10/11/2026): o ID do RM e a conta do balancete (o código reduzido).
   idMovimento: true,
@@ -197,7 +197,7 @@ async function contaDoItem(l: LancamentoDoMovimento) {
 async function contaComDepartamento(id: string) {
   const c = await getPrismaClient().contaResultado.findUniqueOrThrow({
     where: { id },
-    select: { reduzido: true, descricao: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } },
+    select: { reduzido: true, descricao: true, linhaDRE: { select: { codigo: true, grupoSigla: true, descricao: true } } },
   });
   return { reduzido: c.reduzido, descricao: c.descricao, departamento: c.linhaDRE ? departamentoDaLinha(c.linhaDRE) : null };
 }
@@ -241,7 +241,7 @@ async function conferirDestino(atual: { centroId: string | null; contaId: string
   if (d.contaNovaId) {
     const c = await prisma.contaResultado.findUnique({
       where: { id: d.contaNovaId },
-      select: { ativo: true, reduzido: true, tipoConta: true, linhaDREId: true, linhaDRE: { select: { grupoSigla: true, descricao: true } } },
+      select: { ativo: true, reduzido: true, tipoConta: true, linhaDREId: true, linhaDRE: { select: { codigo: true, grupoSigla: true, descricao: true } } },
     });
     if (!c) throw new RegraContestacaoError(400, "Conta de resultado não encontrada.");
     if (!c.ativo || c.tipoConta !== "ANALITICA" || !c.linhaDREId) throw new RegraContestacaoError(400, `A conta ${c.reduzido} não é uma conta analítica ativa com destino na DRE.`);

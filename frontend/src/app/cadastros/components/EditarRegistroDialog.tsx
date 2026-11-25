@@ -31,6 +31,7 @@ import {
   type ValoresDaMetodologia,
 } from "../services/edicaoService";
 import { EditorFormula, formatarValorDoItem } from "./EditorFormula";
+import { CHAVE_DOS_NOMES_DAS_UNIDADES } from "@/hooks/useNomesDasUnidades";
 
 /** Os cadastros com a Metodologia testável (11/11/2026): os cards do Painel de Bordo e os indicadores. */
 const COM_TESTE = ["painel-bordo", "estrutura-indicadores"];
@@ -200,7 +201,8 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
   const [confirmaExclusao, setConfirmaExclusao] = useState(false);
   // A troca do nome de um indicador ou de um card (19/11/2026): confirmada antes, com o que ela atualiza.
   const [confirmaNome, setConfirmaNome] = useState(false);
-  const camposDaTroca = entidade === "estrutura-indicadores" ? ["nome"] : entidade === "painel-bordo" ? ["grupo", "quadro", "nome", "sigla"] : [];
+  // O card do Painel de Bordo (25/11/2026) troca sem confirmar: os cards dos relatórios o acham pelo ID.
+  const camposDaTroca = entidade === "estrutura-indicadores" ? ["nome"] : [];
   const trocaONome = !!registro && camposDaTroca.some((c) => String(valores[c] ?? "").trim().replace(/\s+/g, " ") !== String(registro[c] ?? ""));
   // A gravação recusada com as correções possíveis (24/10/2026: a conta que nenhuma aba de resultado lê).
   const [recusa, setRecusa] = useState<{ mensagem: string; sugestoes: Sugestao[] } | null>(null);
@@ -237,6 +239,8 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
     const extra = efeito ? textoDoEfeito(efeito) : "";
     toast.success(`${msg}${extra ? ` ${extra}` : ""}`);
     atualizarCompetencia(queryClient);
+    // O nome de uma unidade (25/11/2026: muda a qualquer momento) já nas abas e nos títulos das telas.
+    if (entidade === "unidades") void queryClient.invalidateQueries({ queryKey: CHAVE_DOS_NOMES_DAS_UNIDADES });
     onFechar();
   };
   const salvar = useMutation({
@@ -397,18 +401,10 @@ function Formulario({ def, registro, entidade, onFechar }: { def: DefinicaoCadas
         <ConfirmacaoDialog
           titulo="Trocar o Nome"
           descricao={
-            entidade === "estrutura-indicadores" ? (
-              <>
-                O indicador passa a se chamar <strong>{String(valores.nome ?? "").trim()}</strong> (antes, {String(registro.nome)}). O nome também muda nos valores
-                importados e digitados, nas metas, nos cenários, nas fórmulas dos indicadores e dos cards e nos cards dos Relatórios Executivos e dos Painéis de
-                Bordo, tudo de uma vez. As importações recusam o nome antigo: mude o nome nas planilhas antes de importar.
-              </>
-            ) : (
-              <>
-                O card passa a se chamar <strong>{String(valores.nome ?? "").trim()}</strong> (antes, {String(registro.nome)}). Os cards dos Relatórios Executivos e
-                dos Painéis de Bordo que o mostram são atualizados de uma vez.
-              </>
-            )
+            <>
+              O indicador passa a se chamar <strong>{String(valores.nome ?? "").trim()}</strong> (antes, {String(registro.nome)}). As fórmulas, os cards, os
+              valores e os cenários mostram o nome novo. As importações recusam o nome antigo: mude o nome nas planilhas antes de importar.
+            </>
           }
           acao="Trocar"
           acaoPendente="Trocando…"

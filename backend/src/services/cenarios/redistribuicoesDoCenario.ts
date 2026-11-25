@@ -3,7 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { gruposDaDRE } from "../cadastros/edicao/definicoesCadastros.js";
 import { chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento, partesDoValor, type DepartamentoDaRedistribuicao } from "../classificacao/regrasClassificacao.js";
 import { plural } from "../../utils/plural.js";
-import { contaEmComum, contasDaRegra, mesDe, nomeDasContas, RegraRedistribuicaoError, rotuloDaVigencia, textoDoMes, validarContasDosDestinos } from "../redistribuicoes/redistribuicoesService.js";
+import { contaEmComum, contasDaRegra, mesDe, nomeDaRedistribuicao, RegraRedistribuicaoError, rotuloDaVigencia, textoDoMes, validarContasDosDestinos } from "../redistribuicoes/redistribuicoesService.js";
 
 /**
  * Os Departamentos e as Redistribuições de Gastos de cada cenário analítico (20/11/2026, pedido do Adão: Cadastros por cenário,
@@ -102,6 +102,8 @@ function regraDoMovimento(m: MovimentoDaRedistribuicao, regras: RegraDoCenario[]
 
 /** O que vem do modal da redistribuição do cenário (como no cadastro; os centros são os da cópia do cenário). */
 export type DadosDaRedistribuicaoDoCenario = {
+  /** O nome (25/11/2026), como no cadastro. */
+  nome: string;
   departamentoId: string | null;
   linhasDREIds: string[];
   fornecedores: string[];
@@ -117,6 +119,7 @@ const DEPARTAMENTO_SEL = { id: true, nome: true, gruposDRE: true, ativo: true, u
 
 /** Valida e normaliza a redistribuição do cenário (as regras do cadastro, com o departamento e os centros da cópia). */
 export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: DadosDaRedistribuicaoDoCenario, id: string | null) {
+  const nome = nomeDaRedistribuicao(d.nome);
   let departamento: Prisma.CenarioDepartamentoGetPayload<{ select: typeof DEPARTAMENTO_SEL }> | null = null;
   if (d.departamentoId) {
     departamento = await tx.cenarioDepartamento.findFirst({ where: { id: d.departamentoId, cenarioId }, select: DEPARTAMENTO_SEL });
@@ -150,7 +153,7 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
   if (d.ativo) {
     const outras = await tx.cenarioRedistribuicao.findMany({
       where: { cenarioId, ativo: true, contas: { some: { linhaDREId: { in: idsDasContas } } }, ...(id ? { id: { not: id } } : {}) },
-      select: { departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
+      select: { nome: true, departamentoId: true, fornecedores: true, vigenciaInicio: true, vigenciaFim: true, departamento: { select: { nome: true } }, contas: { select: { linhaDREId: true } } },
     });
     const SEM_FIM = new Date(Date.UTC(9999, 0, 1));
     const conflito = outras.find(
@@ -164,14 +167,14 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
       const comuns = conflito.fornecedores.filter((f) => porChave.has(chaveDoFornecedor(f)));
       throw new RegraRedistribuicaoError(
         409,
-        `Já há uma redistribuição ativa ${contaEmComum(linhas, conflito.contas)} no cenário (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
+        `Já há uma redistribuição ativa no cenário, ${conflito.nome}, ${contaEmComum(linhas, conflito.contas)} (${conflito.departamento?.nome ?? "Todos os departamentos"}, vigência ${rotuloDaVigencia(conflito.vigenciaInicio, conflito.vigenciaFim)}) com ${plural(comuns.length, "o fornecedor", "os fornecedores")} ${comuns.slice(0, 3).join(", ")}${comuns.length > 3 ? "…" : ""} no mesmo período. Encerre a vigência de uma delas ou tire o fornecedor.`,
       );
     }
   }
   return {
+    nome,
     departamentoId: departamento?.id ?? null,
     linhasDREIds: idsDasContas,
-    nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
     destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, linhaDREId: x.linhaDREId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
@@ -183,6 +186,7 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
 
 /** Os campos de uma redistribuição para a auditoria. */
 export const redistribuicaoParaAuditoria = (r: {
+  nome: string;
   departamentoId: string | null;
   contas: Array<{ linhaDREId: string }>;
   fornecedores: string[];
@@ -192,6 +196,7 @@ export const redistribuicaoParaAuditoria = (r: {
   ativo: boolean;
   destinos: Array<{ centroCustoId: string; linhaDREId: string | null; percentual: Prisma.Decimal | number }>;
 }) => ({
+  nome: r.nome,
   departamentoId: r.departamentoId,
   linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,

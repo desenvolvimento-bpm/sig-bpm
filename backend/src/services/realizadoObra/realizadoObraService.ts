@@ -11,6 +11,7 @@ import { comTotais, DO_RESULTADO, escopo, estruturaDaDRE, NATUREZA_DA_RECEITA, o
 import { chaveDaLinha } from "../../lib/linhas.js";
 import type { LinhaVendida } from "../importacoes/dreComercial/leiauteDreComercial.js";
 import { dreDoArquivo, fonteDoVendido, VendidoIndisponivelError, vendidoNaEstrutura, versoesDaObra, type FonteDoVendido } from "./dreVendida.js";
+import { nomeDaUnidade } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * O Realizado por Obra (03/11/2026, pedido do Adão): a DRE de uma obra, da receita à Margem de Contribuição, mês a mês, contra
@@ -39,7 +40,6 @@ export class RegraRealizadoObraError extends Error {
 }
 
 const MESES_CURTOS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
-const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços" };
 const rotuloCurto = (ano: number, mes: number) => `${MESES_CURTOS[mes - 1]}/${String(ano).slice(2)}`;
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
 export const rotuloDaVersao = (versao: number) => `VER${String(versao).padStart(2, "0")}`;
@@ -380,7 +380,7 @@ export const realizadoObraService = {
       daVenda.filter((l) => l.versao === versao),
       est,
       s,
-      linhasDoCadastro.map((l) => ({ id: l.id, nome: l.nome, unidade: l.unidade })),
+      linhasDoCadastro.map((l) => ({ id: l.id, nome: l.nome, codigo: l.codigo, unidade: l.unidade })),
     );
     if (doVendido.naoAchadas.length) avisos.push(`Contas da DRE de venda fora da Estrutura da DRE: ${doVendido.naoAchadas.join("; ")}.`);
 
@@ -486,7 +486,7 @@ export const realizadoObraService = {
           chave: a.chave,
           nome: a.nome,
           unidade: a.unidade,
-          nomeUnidade: a.unidade ? NOME_DA_UNIDADE[a.unidade] : null,
+          nomeUnidade: a.unidade ? nomeDaUnidade(a.unidade) : null,
           composicao: Object.fromEntries(
             [...daAba].map(([codigo, xs]) => [codigo, xs.map((x) => (x ? { direto: arredonda(x.direto, 2), rateio: arredonda(x.rateio, 2), creditos: arredonda(x.creditos, 2) } : null))]),
           ),
@@ -596,7 +596,7 @@ export const realizadoObraService = {
       const calculado = base && base.total ? (rateado * base.daVenda) / base.total : 0;
       blocos.push({
         linha: linha?.nome ?? "Sem Linha",
-        unidade: linha ? NOME_DA_UNIDADE[linha.unidade] : null,
+        unidade: linha ? nomeDaUnidade(linha.unidade) : null,
         rateado: arredonda(rateado, 2),
         base,
         calculado: arredonda(calculado, 2),

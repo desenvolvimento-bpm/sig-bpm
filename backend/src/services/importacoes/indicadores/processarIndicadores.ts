@@ -7,6 +7,7 @@ import { caminhoDoArquivo } from "../arquivosImportados.js";
 import { escolherAba, recusarImportacao, registrarProgresso } from "../statusImportacao.js";
 import { carregarNomesDoSistema } from "../../relatorios/indicadoresDoSistema.js";
 import { DEFINICOES_INDICADORES, atualizarNomesDasMetas, lerIndicadores, recusaPorNomesAntigos, type TipoIndicadores } from "./leituraIndicadores.js";
+import { indicadoresParaReferencias, referenciaDoNome } from "../../relatorios/referenciasDosIndicadores.js";
 
 class ArquivoRecusado extends Error {}
 
@@ -36,6 +37,8 @@ export async function processarIndicadores(importacaoId: string): Promise<void> 
     const antigos = recusaPorNomesAntigos(leitura.rejeicoes);
     if (antigos) throw new ArquivoRecusado(antigos);
     if (leitura.valores.length === 0) throw new ArquivoRecusado(`A aba "${aba.nome}" não tem nenhum indicador com valor no mês.`);
+    // Os valores gravados pelo ID do indicador (25/11/2026); o arquivo cita o indicador pelo nome.
+    const referencias = await indicadoresParaReferencias(prisma);
 
     await prisma.$transaction(async (tx) => {
       const competencia = await tx.competencia.findUniqueOrThrow({ where: { id: importacao.competenciaId }, select: { status: true } });
@@ -45,7 +48,7 @@ export async function processarIndicadores(importacaoId: string): Promise<void> 
         select: { id: true },
       });
       const ids = anteriores.map((a) => a.id);
-      const dados = leitura.valores.map((v) => ({ competenciaId: importacao.competenciaId, importacaoId, nome: v.nome, valor: v.valor, linhaArquivo: v.linhaArquivo }));
+      const dados = leitura.valores.map((v) => ({ competenciaId: importacao.competenciaId, importacaoId, indicador: referenciaDoNome(v.nome, referencias), valor: v.valor, linhaArquivo: v.linhaArquivo }));
       if (def.destino === "META") {
         if (ids.length > 0) await tx.metaImportada.deleteMany({ where: { importacaoId: { in: ids } } });
         await tx.metaImportada.createMany({ data: dados });
@@ -53,7 +56,7 @@ export async function processarIndicadores(importacaoId: string): Promise<void> 
         if (ids.length > 0) await tx.indicadorImportado.deleteMany({ where: { importacaoId: { in: ids } } });
         await tx.indicadorImportado.createMany({ data: dados });
         // A importação volta a valer sobre o que foi digitado nas Listas para os indicadores que ela traz.
-        await tx.indicadorDigitado.deleteMany({ where: { competenciaId: importacao.competenciaId, nome: { in: dados.map((d) => d.nome) } } });
+        await tx.indicadorDigitado.deleteMany({ where: { competenciaId: importacao.competenciaId, indicador: { in: dados.map((d) => d.indicador) } } });
       }
       if (ids.length > 0) await tx.importacao.updateMany({ where: { id: { in: ids } }, data: { substituidaEm: new Date() } });
       await tx.importacao.update({

@@ -94,13 +94,13 @@ export function BarraDoCenario({ id, tela }: { id: string; tela: string }) {
       {/* As etiquetas da versão e da marcação à direita da barra (13/10/2026; o padrão das barras desde 27/10/2026, EtiquetasDaBarra). */}
       <EtiquetasDaBarra>
         {atual ? (
+          // Do tamanho das outras etiquetas (25/11/2026, pedido do Adão): o cadeado diz que está congelada (a dica explica), como na lista.
           <span
-            className="inline-flex items-center gap-1 rounded-sm border border-gray-300 px-2 py-0.5 text-xs font-medium whitespace-nowrap text-gray-700"
+            className={`inline-flex items-center gap-1 ${ETIQUETA}`}
             title={atual.versaoSalvaEm ? "Versão congelada: os dados não se editam (reabra a versão ou crie uma revisão)" : "Versão aberta para edição"}
           >
-            {atual.versaoSalvaEm ? <Lock className="size-3" /> : null}
+            {atual.versaoSalvaEm ? <Lock className="size-3 shrink-0" aria-label="Congelada" /> : null}
             {rotuloVersao(atual.versao)}
-            {atual.versaoSalvaEm ? " · Congelada" : ""}
           </span>
         ) : null}
         {/* Depois da versão, a etiqueta Vigente e a da marcação, com os símbolos (14/10/2026). */}

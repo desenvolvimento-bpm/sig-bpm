@@ -2,6 +2,7 @@ import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { auditoriaEmSequencia } from "./services/auditoriaService.js";
 import { iniciarSyncCadastros } from "./jobs/cadastrosTotvsSyncJob.js";
+import { carregarNomesDasUnidades } from "./services/cadastros/nomesDasUnidades.js";
 import { importacoesService } from "./services/importacoes/importacoesService.js";
 import { carregarNomesDoSistema } from "./services/relatorios/indicadoresDoSistema.js";
 import { logger } from "./utils/logger.js";
@@ -13,6 +14,12 @@ try {
   if (fora.length) logger("warn", `${fora.length} ${plural(fora.length, "indicador do sistema não está", "indicadores do sistema não estão")} nesta base pelo ID: ficam com o nome original`);
 } catch (error) {
   logger("error", "Falha ao ler os nomes dos indicadores", { error: error instanceof Error ? error.message : String(error) });
+}
+// Os nomes das unidades (25/11/2026: mudam a qualquer momento), para as telas e os relatórios; sem eles, os de sempre.
+try {
+  await carregarNomesDasUnidades();
+} catch (error) {
+  logger("error", "Falha ao ler os nomes das unidades", { error: error instanceof Error ? error.message : String(error) });
 }
 
 const server = app.listen(env.PORT, () => {

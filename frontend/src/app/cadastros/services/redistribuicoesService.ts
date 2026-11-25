@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 /** As Redistribuições de Gastos (13/11/2026): Cadastros Gerais / Controladoria / Redistribuições de Gastos. */
 export type Redistribuicao = {
   id: string;
+  /** O nome (25/11/2026, pedido do Adão): o primeiro campo do modal e da tabela. */
+  nome: string;
   departamentoId: string | null;
   /** O departamento e a unidade; nulo = Todos. */
   departamento: string | null;
@@ -68,9 +70,6 @@ export const atribuicaoCabeNoCentro = (atribuicaoDoCentro: "DIRETA" | "INDIRETA"
 export const contaDoCentro = (l: { grupo: string; atribuicao: string | null }, c: { departamento: string | null; atribuicao: "DIRETA" | "INDIRETA" | null }) =>
   contaDoDepartamento(l, c) && atribuicaoCabeNoCentro(c.atribuicao, l.atribuicao);
 
-/** As contas de uma redistribuição num texto curto: a primeira e quantas mais. */
-export const nomeDasContas = (contas: Array<{ rotulo: string }>) =>
-  contas.length > 1 ? `${contas[0].rotulo} e mais ${contas.length - 1} ${contas.length === 2 ? "conta" : "contas"}` : (contas[0]?.rotulo ?? "");
 
 /** "AAAA-MM" → "MM/AAAA". */
 export const mesBR = (m: string | null) => (m ? `${m.slice(5, 7)}/${m.slice(0, 4)}` : "");

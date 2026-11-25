@@ -606,8 +606,8 @@ function IndiceDialog({
                 <colgroup>
                   <col style={{ width: 40 }} />
                   <col style={{ width: 150 }} />
-                  {/* O Departamento com folga para "Receita Operacional" (21/11/2026). */}
-                  <col style={{ width: 200 }} />
+                  {/* O Departamento com 150 (25/11/2026, pedido do Adão: 25% menos); a sobra vai para a Conta, a coluna sem largura. */}
+                  <col style={{ width: 150 }} />
                   <col style={{ width: reajuste ? 230 : 260 }} />
                   <col />
                   {reajuste ? <col style={{ width: 120 }} /> : null}

@@ -24,11 +24,15 @@ export default function UnidadesPage() {
               </li>
               <li>O lápis edita o nome, a ordem e a situação. A exclusão não existe: desmarque “Ativa” para tirar uma unidade de uso.</li>
               <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os registros inativos.</li>
-              <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Nome e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
-              <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+              <li>
+                O nome muda a qualquer momento, também com movimentos: as telas, os relatórios, as exportações e as APIs do Fechamento Mensal e dos
+                Resultados mostram o nome novo. A apuração, a carga da Estrutura da DRE e as outras regras acham a unidade pelo Código, que não muda. Os
+                cenários ficam com os nomes deles.
+              </li>
+              <li>Mudar a ordem ou a situação com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais; trocar o nome, não): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
             </ul>
           }
-          descricao="As unidades de negócio da DRE. O código é dado na inclusão (o próximo) e não muda; o nome, a ordem e a situação são editáveis. O nome identifica a unidade na carga da Estrutura da DRE: ao renomear uma unidade, a carga deixa de reconhecê-la."
+          descricao="As unidades de negócio da DRE. O código é dado na inclusão (o próximo) e não muda: é por ele que a apuração, a carga da Estrutura da DRE e as outras telas acham a unidade. O nome, a ordem e a situação são editáveis a qualquer momento."
         />
       </PermissionGuard>
     </ProtectedLayout>

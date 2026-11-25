@@ -5,6 +5,7 @@ import { CHAVES_DE_RATEIO, NOME_DA_CHAVE, RegraRateioError } from "./rateiosServ
 import { REGRAS_DOS_PERCENTUAIS_FIXOS } from "./regrasRateio.js";
 import { conflitoDeVigencia, descreverVigencia, lacunasDasRegras, type RegraComVigencia } from "./vigenciasRateio.js";
 import { peloTexto } from "../../lib/ordemDoSqlite.js";
+import { nomeDoBalde } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * Os percentuais fixos das regras de rateio (14/10/2026, a tela Percentuais Fixos de Cadastros Gerais / Regras
@@ -18,7 +19,9 @@ import { peloTexto } from "../../lib/ordemDoSqlite.js";
  * regra da Alocação nas Linhas. Os conjuntos de antes ficam sem eles (as linhas seguem a Alocação) até serem editados.
  */
 
-const NOME_DO_DESTINO: Record<string, string> = { MATRIZ: "Matriz", FILIAL: "Filial", MONTAGEM: "Montagem", COMPLEMENTAR: "Complementar" };
+// Os destinos na ordem das telas; a Matriz e a Filial com o nome do cadastro (25/11/2026).
+const DESTINOS_NA_ORDEM = ["MATRIZ", "FILIAL", "MONTAGEM", "COMPLEMENTAR"];
+const nomeDoDestino = (d: string) => nomeDoBalde(d) ?? ({ MONTAGEM: "Montagem", COMPLEMENTAR: "Complementar" } as Record<string, string>)[d] ?? d;
 const nomeDaChave = (c: string) => NOME_DA_CHAVE[c] ?? c;
 const dia = (d: Date) => d.toISOString().slice(0, 10);
 const textoPct = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
@@ -39,7 +42,7 @@ async function linhasDosDestinos() {
   return (destino: string) => ls.filter((l) => l.unidadeNegocio?.codigo === unidadeDo.get(destino)).map((l) => ({ id: l.id, nome: l.nome, ativo: l.ativo }));
 }
 /** O rótulo de cada regra do conjunto: "Produção: Matriz (Fixo)", com a base escolhida no lugar do nome da chave. */
-const rotuloDaRegra = (base: string, destino: string) => `${base}: ${NOME_DO_DESTINO[destino] ?? destino} (Fixo)`;
+const rotuloDaRegra = (base: string, destino: string) => `${base}: ${nomeDoDestino(destino) ?? destino} (Fixo)`;
 // O "(Fixo)" com os parênteses escapados (21/11/2026: sem eles, o sufixo não saía e o rótulo crescia a cada gravação).
 const baseDoRotulo = (rotulo: string) => rotulo.replace(/: [^:]+ \(Fixo\)$/, "");
 
@@ -87,7 +90,7 @@ export const percentuaisFixosService = {
       chaves: CHAVES_DE_RATEIO.map((chave) => ({
         chave,
         nome: nomeDaChave(chave),
-        destinos: REGRAS_DOS_PERCENTUAIS_FIXOS.filter((r) => r.chave === chave).map((r) => ({ destino: r.destino, nome: NOME_DO_DESTINO[r.destino], linhas: linhasDo(r.destino) })),
+        destinos: REGRAS_DOS_PERCENTUAIS_FIXOS.filter((r) => r.chave === chave).map((r) => ({ destino: r.destino, nome: nomeDoDestino(r.destino), linhas: linhasDo(r.destino) })),
       })),
       conjuntos: [...conjuntos.values()],
     };
@@ -127,7 +130,7 @@ export const percentuaisFixosService = {
     type PorLinha = Array<{ linhaId: string; valor: number }>;
     const porLinha = new Map<string, PorLinha>(
       pcts.map((p): [string, PorLinha] => {
-        const nome = NOME_DO_DESTINO[p.regra.destino] ?? p.regra.destino;
+        const nome = nomeDoDestino(p.regra.destino) ?? p.regra.destino;
         if (p.valor <= 0) return [p.regra.destino, []];
         const daUnidade = linhasDo(p.regra.destino);
         const enviadas = Object.entries(dados.linhas?.[p.regra.destino] ?? {})
@@ -239,9 +242,9 @@ export const percentuaisFixosService = {
     const semLinhas = new Map<string, string[]>();
     for (const r of todas.filter((x) => x.percentualFixo !== null && Number(x.percentualFixo) > 0 && !x.linhas.length && (!x.vigenciaFim || x.vigenciaFim >= hoje))) {
       const k = `${r.chave}|${dia(r.vigenciaInicio)}`;
-      semLinhas.set(k, [...(semLinhas.get(k) ?? []), NOME_DO_DESTINO[r.destino] ?? r.destino]);
+      semLinhas.set(k, [...(semLinhas.get(k) ?? []), nomeDoDestino(r.destino) ?? r.destino]);
     }
-    const ordem = Object.values(NOME_DO_DESTINO);
+    const ordem = DESTINOS_NA_ORDEM.map(nomeDoDestino);
     for (const [k, nomes] of semLinhas) {
       const [chave, inicio] = k.split("|");
       const destinos = nomes.sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b));

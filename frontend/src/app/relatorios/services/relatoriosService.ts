@@ -78,6 +78,8 @@ export type LinhasResultados = { ano: number; ate: number; linhas: LinhaDoNegoci
 export type ResultadosDaLinha = Resultados & { linha: LinhaDoNegocio; semLinhas: string[] };
 
 export type Indicador = {
+  /** O ID do indicador no cadastro (25/11/2026: os cards dos relatórios e dos painéis o acham por ele). */
+  id?: string | null;
   grupo: string;
   numero: string;
   nome: string;
@@ -113,6 +115,8 @@ export type FormatoPainel = "MILHOES" | "MILHARES" | "M3" | "PISTAS" | "PCT" | "
 /** O item num período: realizado, orçado, o percentual sob o realizado, o desvio (fração) e o sinal (1 melhor, 0 dentro de 5%, −1 pior). */
 export type BlocoPainel = { realizado: number | null; orcado: number | null; base: number | null; vsOrcado: number | null; sinal: -1 | 0 | 1 | null };
 export type ItemPainel = {
+  /** O ID do card no cadastro (25/11/2026: os cards dos relatórios e dos painéis o acham por ele). */
+  id?: string | null;
   titulo: string;
   sigla: string;
   /** A Metodologia por extenso (21/10/2026), no lugar da abreviação no card. */

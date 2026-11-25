@@ -14,6 +14,7 @@ import { estrutura, linhasDaDRE, NIVEIS, RECUO, semPrimeiroTotalDaRol, type Nive
 import { VISOES_DA_TABELA, type Bloco, type ColunasDaTabela, type VisaoDaTabela } from "../services/relatoriosExecutivosService";
 import { comCor, ehProva, ESTILOS_NA_TABELA, listaDosCenarios } from "./cenariosDoProva";
 import { useProcesso } from "./processo";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 type BlocoTabela = Extract<Bloco, { tipo: "TABELA" }>;
 /**
@@ -58,6 +59,8 @@ export function TabelaDoBloco({
   /** A marcação do cenário de comparação, numa Tabela Padrão de um slide com blocos PROVA (31/10/2026): o orçado na cor dele. */
   comparada?: MarcacaoComparavel | null;
 }) {
+  // O nome das unidades no cadastro (25/11/2026): a tabela se desenha de novo quando os nomes chegam.
+  useNomesDasUnidades();
   const consulta = useResultados(relatorioId, b.visao);
   const fora = useRef<HTMLDivElement>(null);
   const dentro = useRef<HTMLDivElement>(null);
@@ -147,6 +150,7 @@ export function ConfigurarTabelaDialog({
   onAplicar: (o: OpcoesDaTabela) => void;
   onFechar: () => void;
 }) {
+  useNomesDasUnidades();
   const { documento } = useProcesso();
   const [visao, setVisao] = useState<VisaoDaTabela>(inicial?.visao ?? 0);
   const [nivel, setNivel] = useState<Nivel>(inicial?.nivel ?? 1);

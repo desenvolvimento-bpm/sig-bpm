@@ -55,6 +55,8 @@ export type Parte = {
 type Calculo = (m: DadosDoMes) => Parte;
 
 export type Indicador = {
+  /** O ID do cadastro (25/11/2026: os blocos dos relatórios e dos painéis acham o indicador por ele). */
+  id?: string;
   grupo: string;
   /** O número do indicador no grupo, como na planilha; vazio nos indicadores principais do grupo. */
   numero: string;

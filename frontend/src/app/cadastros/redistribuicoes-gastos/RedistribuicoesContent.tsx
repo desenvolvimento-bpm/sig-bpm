@@ -22,8 +22,10 @@ const pct = (v: number) => `${v.toLocaleString("pt-BR", { minimumFractionDigits:
 const destinosTexto = (r: Redistribuicao) => r.destinos.map((d) => `${d.centro}${d.conta ? ` (${d.conta})` : ""}: ${pct(d.percentual)}`).join("; ");
 
 const COLUNAS: Coluna<Redistribuicao>[] = [
+  { chave: "nome", rotulo: "Nome", valor: (r) => r.nome },
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
-  { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },
+  // A quantidade de contas, como nos Fornecedores (25/11/2026, pedido do Adão); o arquivo e a dica levam os nomes.
+  { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.length, texto: (r) => r.contas.map((c) => c.rotulo).join("; "), tipo: "numero", alinhamento: "direita" },
   { chave: "fornecedores", rotulo: "Fornecedores", valor: (r) => r.fornecedores.length, texto: (r) => r.fornecedores.join("; "), tipo: "numero", alinhamento: "direita" },
   { chave: "destinos", rotulo: "Redistribuir Para", valor: destinosTexto },
   { chave: "vigencia", rotulo: "Vigência", valor: (r) => r.vigenciaInicio, texto: vigenciaTexto },
@@ -57,13 +59,19 @@ export function RedistribuicoesContent() {
         <ul>
           <li>Use os filtros nos rótulos das colunas.</li>
           <li>
-            Use “Novo” para incluir e o lápis para editar (a exclusão fica dentro da edição). No modal Redistribuição de Gastos, escolha o
-            Departamento da DRE (ou Todos) e, se quiser, a Unidade (ou Todas: ela só filtra as contas oferecidas).
+            A tabela mostra o Nome de cada redistribuição e quantas Contas da DRE e quantos Fornecedores ela tem; pare o mouse sobre a quantidade
+            para ver os nomes (o Exportar também os traz).
+          </li>
+          <li>
+            Use “Novo” para incluir e o lápis para editar (a exclusão fica dentro da edição). No modal Redistribuição de Gastos, dê o Nome (o
+            primeiro campo, obrigatório; muda a qualquer momento), escolha o Departamento da DRE (ou Todos) e, se quiser, a Unidade (ou Todas:
+            ela só filtra as contas oferecidas).
           </li>
           <li>
             Em Conta da DRE, digite parte do nome ou do código da conta, ou use a lupa ao lado do campo para ver a lista das contas (com o código, o
-            grupo, a atribuição e as unidades; de início, só as do departamento e da unidade) e clicar numa. Cada conta escolhida entra na lista logo
-            abaixo do campo, e o X a tira: escolha quantas contas precisar.
+            grupo, a atribuição e as unidades; de início, só as do departamento e da unidade), marcar uma ou mais (a caixa ou a linha; a caixa do
+            rótulo marca todas as da tabela) e clicar em “Incluir Marcadas”. Cada conta escolhida entra na lista logo abaixo do campo, e o X a tira:
+            escolha quantas contas precisar.
           </li>
           <li>
             A tabela Fornecedores traz os fornecedores com movimentos em qualquer das contas escolhidas, no departamento, em competências fechadas ou
@@ -73,7 +81,8 @@ export function RedistribuicoesContent() {
           <li>
             Em Redistribuir Para, adicione os centros de custo (digite o código ou o nome, ou use a lupa para ver a lista dos centros, com o
             departamento, o grupo, a atribuição e o balde), a Conta da DRE de cada um e o percentual: a Soma mostra o total, e a gravação fica
-            bloqueada enquanto ela não der 100%. Preencha a vigência (o mês do início e, se houver, o do fim).
+            bloqueada enquanto ela não der 100%. Preencha a vigência em MM/AAAA (o mês do início e, se houver, o do fim): digite o mês ou escolha
+            no calendário do campo, com o ano nas setas e os doze meses.
           </li>
           <li>
             A Conta da DRE de cada centro é uma conta do departamento e da atribuição dele (a lista mostra só essas): o centro Direto não recebe
@@ -122,17 +131,14 @@ export function RedistribuicoesContent() {
         columns={colunas.map((c) => c.rotulo)}
         renderRow={(r) => (
           <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+              <div className="max-w-72 truncate" title={r.nome}>
+                {r.nome}
+              </div>
+            </td>
             <td className="px-4 py-3 text-sm text-gray-900">{r.departamento ?? "Todos"}</td>
-            <td className="px-4 py-3 text-sm">
-              <ul className="space-y-1">
-                {r.contas.map((c) => (
-                  <li key={c.codigo}>
-                    <div className="max-w-64 truncate text-gray-900" title={c.rotulo}>
-                      {c.rotulo}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+            <td className="px-4 py-3 text-right text-sm text-gray-700" title={r.contas.map((c) => c.rotulo).join("\n")}>
+              {r.contas.length} {plural(r.contas.length, "conta", "contas")}
             </td>
             <td className="px-4 py-3 text-right text-sm text-gray-700" title={r.fornecedores.join("\n")}>
               {r.fornecedores.length} {plural(r.fornecedores.length, "fornecedor", "fornecedores")}

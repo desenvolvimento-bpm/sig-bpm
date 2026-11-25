@@ -6,7 +6,8 @@ import { departamentoDaLinha } from "../src/services/acesso/recorteDepartamento.
 import { agruparParaLancamentos, centroForaDaContestacao, contaCabeNoCentro } from "../src/services/contestacoes/contestacoesService.js";
 
 describe("Contestações de Gastos: a conta no departamento do centro (30/10/2026)", () => {
-  const conta = (grupoSigla: string, descricao = "X") => departamentoDaLinha({ grupoSigla, descricao });
+  // A linha pelo código (25/11/2026: a DVV pela descrição de origem, a última parte do código).
+  const conta = (grupoSigla: string, descricao = "X") => departamentoDaLinha({ grupoSigla, codigo: `${grupoSigla}.GGV.${descricao.replace(/ /g, "_")}` });
 
   it("aceita as contas do departamento do centro e as do Extra-Operacional", () => {
     assert.equal(contaCabeNoCentro("PRODUCAO", conta("CPP")), true);

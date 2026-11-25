@@ -40,7 +40,7 @@ describe("prepararCadastros", () => {
     const [rob, montagem, complementar, resultado] = p.dre.linhas;
     assert.equal(rob.dados.tipo, "SUBTOTAL");
     assert.equal(rob.dados.expressao, `${montagem.codigo} + ${complementar.codigo}`);
-    assert.deepEqual(rob.unidades, ["Matriz", "Serviços"]);
+    assert.deepEqual(rob.unidades, [1, 3]);
     assert.equal(montagem.dados.tipo, "ITEM");
     assert.equal(resultado.dados.tipo, "TOTAL");
     assert.equal(resultado.dados.expressao, `${rob.codigo}*2`);

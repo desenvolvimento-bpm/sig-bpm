@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Percent } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -78,6 +79,7 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
         </button>
       ) : null}
       <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={marcados.length === 0} onClick={() => setReajuste(nome)}>
+        <Percent className="size-4" />
         Reajustar Marcados
       </Button>
     </div>

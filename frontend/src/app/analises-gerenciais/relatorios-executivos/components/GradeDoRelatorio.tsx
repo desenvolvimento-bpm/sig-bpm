@@ -1525,7 +1525,10 @@ function ConteudoDoBloco({
   const cenarios = ehProva(b) ? comCor(dados.prova.cenarios) : null;
   if (cenarios && !cenarios.length) return indisponivel("Nenhum cenário da Comparação PROVA (Configurações) está marcado (Análises Gerenciais / Cenários Sintéticos).");
   if (b.tipo === "PAINEL") {
-    const item = dados.painel.abas.find((a) => a.chave === b.aba)?.quadros.find((q) => q.titulo === b.quadro)?.itens.find((i) => i.titulo === b.titulo && i.sigla === b.sigla);
+    // Pelo ID do card (25/11/2026: o nome, o quadro e a sigla mudam no cadastro); o bloco sem ele, pela identidade.
+    const item = b.cardId
+      ? dados.painel.abas.flatMap((a) => a.quadros.flatMap((q) => q.itens)).find((i) => i.id === b.cardId)
+      : dados.painel.abas.find((a) => a.chave === b.aba)?.quadros.find((q) => q.titulo === b.quadro)?.itens.find((i) => i.titulo === b.titulo && i.sigla === b.sigla);
     if (!item) return indisponivel(`O card ${b.titulo} (${b.quadro}) não está mais no Painel de Bordo.`);
     const comparacoes = cenarios?.flatMap((c): ComparacaoDoCard[] => {
       const p = item.prova?.[c.marcacao];
@@ -1548,7 +1551,8 @@ function ConteudoDoBloco({
     // Sem o nome do grupo em cima do card (22/10/2026; antes, "PRODUÇÃO: MATRIZ"…): o card ocupa o bloco inteiro.
     return <CardComZoom zoom={b.zoom}>{card}</CardComZoom>;
   }
-  const i = dados.indicadores.indicadores.find((x) => x.nome === b.nome);
+  // Pelo ID do indicador (25/11/2026: o nome muda no cadastro); o bloco sem ele, pelo nome.
+  const i = b.indicadorId ? dados.indicadores.indicadores.find((x) => x.id === b.indicadorId) : dados.indicadores.indicadores.find((x) => x.nome === b.nome);
   if (!i) return indisponivel(`O indicador ${b.nome} não está mais no cadastro Indicadores (Cadastros Gerais / Analítico).`);
   const ate = dados.indicadores.ate;
   // O card do indicador é o card do Painel de Bordo (22/10/2026), com a formatação do indicador: "Atual" e "Acumulado" com a

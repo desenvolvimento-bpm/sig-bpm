@@ -11,6 +11,8 @@ import {
   CENTRO_CUSTO_RENOMEAR,
 } from "./ajustesCarga.js";
 import type { LinhaBrutaDRE, LinhaCentroCusto, LinhaContaResultado, PlanilhaCadastros } from "./planilhaCadastros.js";
+// O slug dos códigos das linhas da DRE, o mesmo das regras pela descrição de origem (25/11/2026).
+import { slugDaDRE as slug } from "../../dre/descricaoDeOrigem.js";
 
 /**
  * Da planilha ao que vai para o banco, sem tocar no banco: é o que permite
@@ -197,27 +199,21 @@ export type LinhaDREAlvo = {
     expressao: string | null;
     definicao: string | null;
   };
-  /** Os nomes das unidades (cadastro Unidades de Negócio) em que a linha aparece. */
-  unidades: string[];
+  /** Os códigos das unidades (cadastro Unidades de Negócio) em que a linha aparece (25/11/2026; antes, os nomes). */
+  unidades: number[];
 };
 
-function slug(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
-}
 
-/** A aba Realizado (…) de cada unidade → o nome da unidade no cadastro (pelo nome, desde que o Tipo saiu, 09/10/2026). */
-const ABA_PARA_UNIDADE: Record<string, string> = {
-  "Realizado (Matriz)": "Matriz",
-  "Realizado (Filial)": "Filial",
-  "Realizado (Serviços)": "Serviços",
-  "Realizado (Desp.+Extra)": "Despesas e Extra",
-  "Realizado (RN)": "RN",
+/**
+ * A aba Realizado (…) de cada unidade → o código da unidade no cadastro (25/11/2026: o nome da unidade muda a qualquer
+ * momento; as abas da planilha, não).
+ */
+const ABA_PARA_UNIDADE: Record<string, number> = {
+  "Realizado (Matriz)": 1,
+  "Realizado (Filial)": 2,
+  "Realizado (Serviços)": 3,
+  "Realizado (Desp.+Extra)": 4,
+  "Realizado (RN)": 5,
 };
 const REF_UNIDADE = /'(Realizado \([^)]*\))'!B(\d+)/g;
 const SOMA_INTERVALO = /^SUM\(B(\d+):B(\d+)\)(\/2)?$/;
@@ -226,7 +222,7 @@ const REF_LOCAL = /\bB(\d+)\b/g;
 type Classificada = LinhaBrutaDRE & {
   tipo: TipoLinhaDRE;
   codigo: string;
-  unidades: Set<string>;
+  unidades: Set<number>;
   intervalo: [number, number] | null;
   referencias: number[];
 };
@@ -237,7 +233,7 @@ function prepararDre(brutas: LinhaBrutaDRE[], avisos: Aviso[]) {
     .filter((l) => l.linhaPlanilha > 1 && texto(l.descricao))
     .map((l) => {
       const f = l.formula?.trim() ?? null;
-      const unidades = new Set<string>();
+      const unidades = new Set<number>();
       let tipo: TipoLinhaDRE = "SECAO";
       let intervalo: [number, number] | null = null;
       const referencias: number[] = [];
@@ -333,7 +329,7 @@ function prepararDre(brutas: LinhaBrutaDRE[], avisos: Aviso[]) {
       expressao: expressoes.get(c.linhaPlanilha) ?? null,
       definicao: texto(c.definicao),
     },
-    unidades: [...c.unidades].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    unidades: [...c.unidades].sort((a, b) => a - b),
   }));
 
   // A conta aponta para a linha pela tripla (departamento, atribuição, conta

@@ -2,6 +2,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { Composicao, LinhaEstrutura, ResultadoLinha } from "./apuracaoUnidades.js";
 import { avaliarExpressao } from "./expressao.js";
 import { plural } from "../../utils/plural.js";
+import { nomeDaUnidade } from "../cadastros/nomesDasUnidades.js";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -30,7 +31,6 @@ export type ResultadoCentro = { centroCustoId: string; linhaId: string; codigo: 
 
 export type LancamentoDoCentro = { centroCustoId: string | null; linhaDREId: string | null; valor: Decimal };
 
-const NOME_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
 
 /** Avalia os subtotais e totais da estrutura a partir dos valores dados (itens e, se houver, totais já com valor). */
 export function avaliarEstrutura(linhas: LinhaEstrutura[], valores: Map<string, Decimal>, incluir: (l: LinhaEstrutura) => boolean) {
@@ -77,7 +77,7 @@ export function consolidar(linhas: LinhaEstrutura[], porUnidade: ResultadoLinha[
         valor: itens.get(l.codigo)!,
         composicao: {
           regra: "Soma do item nas unidades",
-          unidades: ps.map((p) => ({ unidade: p.unidade, nome: NOME_UNIDADE[p.unidade] ?? String(p.unidade), valor: p.valor.toFixed(2) })),
+          unidades: ps.map((p) => ({ unidade: p.unidade, nome: nomeDaUnidade(p.unidade) ?? String(p.unidade), valor: p.valor.toFixed(2) })),
         },
       });
     } else if (totais.has(l.codigo)) {

@@ -221,10 +221,10 @@ export function CenariosContent({ tipo = "SINTETICO" }: { tipo?: TipoCenario }) 
                   </Link>
                   {/* A versão (13/10/2026), com o cadeado quando congelada. */}
                   <span
-                    className="ml-2 inline-flex items-center gap-1 rounded-sm border border-gray-300 px-1.5 py-px align-middle text-xs font-medium text-gray-700"
+                    className={`ml-2 inline-flex items-center gap-1 ${ETIQUETA}`}
                     title={c.versaoSalvaEm ? "Versão congelada: os dados não se editam" : "Versão aberta para edição"}
                   >
-                    {c.versaoSalvaEm ? <Lock className="size-3" /> : null}
+                    {c.versaoSalvaEm ? <Lock className="size-3 shrink-0" aria-label="Congelada" /> : null}
                     {rotuloVersao(c.versao)}
                   </span>
                   {/* Depois da versão, a etiqueta Vigente (14/10/2026) e a da marcação (13/10/2026; antes, embaixo da descrição). */}

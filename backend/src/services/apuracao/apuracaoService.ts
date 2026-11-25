@@ -8,7 +8,7 @@ import { rateiosService } from "../volumes/rateiosService.js";
 import { resultadosLinhaService } from "../resultadosLinha/resultadosLinhaService.js";
 import { auditar } from "../auditoriaService.js";
 import { divergenciasService } from "../divergencias/divergenciasService.js";
-import { assinaturaDosCadastros, cadastrosMudados, fraseDosCadastros } from "./assinaturaCadastros.js";
+import { assinaturaDosCadastros, assinaturaParaGravar, cadastrosMudados, fraseDosCadastros } from "./assinaturaCadastros.js";
 import { TIPOS_FORA_DA_APURACAO } from "../importacoes/indicadores/leituraIndicadores.js";
 import { SEM_REGISTROS_NO_MES } from "../importacoes/listas/processarLista.js";
 import { plural } from "../../utils/plural.js";
@@ -567,7 +567,7 @@ export const apuracaoService = {
         apuracoes: { increment: 1 },
         entradasApuradas: retrato as Prisma.InputJsonValue,
         // Os Cadastros Gerais na apuração (17/10/2026), para pedir reapurar se algum mudar antes de fechar.
-        cadastrosAssinatura: JSON.stringify(cadastros),
+        cadastrosAssinatura: assinaturaParaGravar(cadastros),
         ...(c.status === "ABERTA" ? { status: "EM_CONFERENCIA" as const } : {}),
       },
     });

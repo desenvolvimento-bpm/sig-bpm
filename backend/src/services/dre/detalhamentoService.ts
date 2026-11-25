@@ -9,6 +9,7 @@ import { CENTRO_DE_OBRA, foraDaObra, ondeOCentroVale, PREVIAS_DA_OBRA, previasDa
 import { numeroDaObra } from "../resultadosLinha/alocacaoNasLinhas.js";
 import { plural } from "../../utils/plural.js";
 import { deveriaTerCentro, ehGrupoSemCentro, grupoSemCentro, nomeDoGrupoSemCentro, veSemCentros } from "./semCentroService.js";
+import { nomeDaUnidade, nomeDoBalde } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * Detalhamento de um valor da DRE até os lançamentos de origem (Passo 20).
@@ -23,7 +24,6 @@ import { deveriaTerCentro, ehGrupoSemCentro, grupoSemCentro, nomeDoGrupoSemCentr
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
 const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${ano}`;
-const NOME_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
 const ROTULO_NATUREZA: Record<string, string> = {
   PRE_FABRICADO: "Pré-Fabricado",
   FRETE: "Frete",
@@ -38,13 +38,11 @@ const ROTULO_RATEIO: Record<string, string> = {
   METALURGIA: "Metalurgia",
   ARMADURA: "Armadura",
   ACOMPANHAMENTO: "Acompanhamento",
-  MATRIZ: "Matriz",
-  FILIAL: "Filial",
-  SERVICOS: "Serviços",
   MONTAGEM: "Montagem",
   COMPLEMENTAR: "Complementar",
 };
-const rotuloRateio = (c: string) => ROTULO_RATEIO[c] ?? c.charAt(0) + c.slice(1).toLowerCase();
+// Os baldes que são unidades (Matriz, Filial, Serviços) com o nome do cadastro (25/11/2026).
+const rotuloRateio = (c: string) => nomeDoBalde(c) ?? ROTULO_RATEIO[c] ?? c.charAt(0) + c.slice(1).toLowerCase();
 
 export type Visao = { unidade: number } | { consolidado: true } | { grupo: string } | { obra: string } | { semCentro: string };
 
@@ -489,7 +487,7 @@ export const detalhamentoService = {
       }
     } else {
       const unidadeFiltro = "unidade" in visao ? { unidadeNegocio: { codigo: visao.unidade } } : { unidadeNegocioId: null };
-      titulo = "unidade" in visao ? NOME_UNIDADE[visao.unidade] : "Consolidado";
+      titulo = "unidade" in visao ? nomeDaUnidade(visao.unidade) : "Consolidado";
       const gravado = await prisma.resultadoApurado.findFirst({
         where: { competenciaId: c.id, linhaDREId: linha.id, centroCustoId: null, ...unidadeFiltro },
         select: { valor: true, composicao: true },

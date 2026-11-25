@@ -110,7 +110,7 @@ export function IndicadoresManuais({ id, podeEditar, comReferencia = false }: { 
           edicao={editando}
           meses={dados.meses}
           onFechar={() => setEditando(null)}
-          recalculaDRE={comReferencia && editando.indicador.nome.startsWith("Liberação de Projetos")}
+          recalculaDRE={comReferencia && !!editando.indicador.recalculaDRE}
         />
       ) : null}
     </>

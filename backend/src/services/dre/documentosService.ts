@@ -20,7 +20,7 @@ async function competenciaDoBalancete(ano: number, mes: number, filtro: FiltroDo
   const prisma = getPrismaClient();
   const c = await prisma.competencia.findUnique({ where: { ano_mes: { ano, mes } }, select: { id: true } });
   if (!c) throw new RegraDREError(404, `A competência ${rotulo(ano, mes)} não existe.`);
-  const linha = await prisma.linhaDRE.findUnique({ where: { codigo: filtro.linha }, select: { descricao: true, grupoSigla: true, atribuicaoSigla: true } });
+  const linha = await prisma.linhaDRE.findUnique({ where: { codigo: filtro.linha }, select: { codigo: true, descricao: true, grupoSigla: true, atribuicaoSigla: true } });
   if (!linha) throw new RegraDREError(404, `A linha ${filtro.linha} não está na estrutura da DRE.`);
   // As informações sensíveis (27/10/2026): sem o acesso, nenhum movimento da Mão de Obra Direta e Indireta.
   if (!podeVerSensiveis(acesso, linha)) throw new RegraDREError(403, MENSAGEM_SENSIVEL(linha.descricao));

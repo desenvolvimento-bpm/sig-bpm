@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import type { Opcao, ValoresDaMetodologia } from "../services/edicaoService";
+import { nomeDaVisao } from "@/lib/nomesDasUnidades";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 /**
  * O montador da fórmula de um indicador (Estrutura dos Indicadores, 11/10/2026): a fórmula aparece por extenso, item a
@@ -41,14 +43,13 @@ const ATRIBUICOES = [
   { valor: "DIRETA", rotulo: "Direto" },
   { valor: "INDIRETA", rotulo: "Indireto" },
 ];
-const VISOES = [
-  { valor: "0", rotulo: "Consolidado" },
-  { valor: "1", rotulo: "Matriz" },
-  { valor: "2", rotulo: "Filial" },
-  { valor: "3", rotulo: "Serviços" },
-  { valor: "4", rotulo: "Despesas e Extra" },
-  { valor: "5", rotulo: "RN" },
-];
+// O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
+const VISOES = ["0", "1", "2", "3", "4", "5"].map((valor) => ({
+  valor,
+  get rotulo() {
+    return nomeDaVisao(valor);
+  },
+}));
 const PERIODOS = [
   { valor: "MES", rotulo: "No Mês" },
   { valor: "ACUM", rotulo: "Acumulado no Ano" },
@@ -87,6 +88,7 @@ export function EditorFormula({
   /** Os valores acumulados dos itens (11/11/2026: os cards do Painel de Bordo e os indicadores), ao lado de cada um na lista. */
   valores?: ValoresDaMetodologia;
 }) {
+  useNomesDasUnidades();
   // Os tipos que as opções trazem, na ordem de TIPOS.
   const tipos = useMemo(() => TIPOS.filter((t) => opcoes.some((o) => o.grupos?.includes(t.valor))), [opcoes]);
   const [tipo, setTipo] = useState(() => tipos[0]?.valor ?? "DRE");

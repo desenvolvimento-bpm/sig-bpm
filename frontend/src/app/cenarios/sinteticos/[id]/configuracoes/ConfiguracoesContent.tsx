@@ -126,12 +126,13 @@ export function ConfiguracoesContent() {
                 <li>
                   Em Departamentos, clique numa linha para editar a unidade, o nome, os Departamentos da DRE (os grupos da DRE com linhas na unidade; cada
                   grupo num departamento ativo só da unidade), a ordem e se está ativo, ou em “Novo Departamento”; o departamento usado numa redistribuição
-                  do cenário não se exclui. Em Redistribuições de Gastos, clique numa linha para abrir a redistribuição (com a permissão de editar, para
-                  alterá-la ou excluí-la) ou em “Nova Redistribuição”: o modal é o do cadastro (o Departamento da DRE, a Unidade que filtra as contas,
-                  as Contas da DRE pela busca ou pela lupa, uma ou mais, os fornecedores com movimentos em qualquer delas, os centros de Redistribuir Para
+                  do cenário não se exclui. Em Redistribuições de Gastos, a tabela mostra o Nome de cada redistribuição e quantas Contas da DRE e quantos
+                  Fornecedores ela tem (os nomes, com o mouse sobre a quantidade); clique numa linha para abrir a redistribuição (com a permissão de editar, para
+                  alterá-la ou excluí-la) ou em “Nova Redistribuição”: o modal é o do cadastro (o Nome, o primeiro campo, o Departamento da DRE, a Unidade que filtra as contas,
+                  as Contas da DRE pela busca ou pela lupa (que marca várias de uma vez), uma ou mais, os fornecedores com movimentos em qualquer delas, os centros de Redistribuir Para
                   pela busca ou pela lupa, cada um com a Conta da DRE dele — uma do departamento e da atribuição do centro (o Direto sem Mão de Obra
                   Indireta e Gastos Gerais Indiretos, o Indireto sem Mão de Obra Direta e Gastos Gerais Diretos), sugerida ao escolhê-lo — e os
-                  percentuais somando 100%, e a vigência), com os departamentos e os centros de custo do cenário. Na carga do realizado da referência (aba Referência), as redistribuições do cenário valem no lugar das dos
+                  percentuais somando 100%, e a vigência em MM/AAAA), com os departamentos e os centros de custo do cenário. Na carga do realizado da referência (aba Referência), as redistribuições do cenário valem no lugar das dos
                   Cadastros Gerais, nas contas dos centros de custo: o movimento redistribuído pelos Cadastros Gerais volta ao centro dele, e o que casa
                   com uma redistribuição do cenário (uma das contas, um fornecedor marcado, o departamento e um mês da vigência) vai dividido entre os centros
                   dela, cada parte na Conta da DRE do centro. Mudar as redistribuições não recalcula nada: carregue o realizado de novo para a mudança chegar às Médias de Referência. Um centro

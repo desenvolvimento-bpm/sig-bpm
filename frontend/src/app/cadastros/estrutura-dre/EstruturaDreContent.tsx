@@ -84,8 +84,13 @@ export function EstruturaDreContent() {
           <li>A composição das linhas de total é validada antes de gravar.</li>
           <li>“Recarregar da Planilha” mostra o que muda em relação ao arquivo enviado antes de gravar.</li>
           <li>Marque “Apenas Ativas”, ao lado dos botões, para esconder os registros inativos.</li>
-          <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Tipo, o Grupo, a Atribuição (e as siglas), a Descrição e as Unidades e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
-          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
+          <li>
+            A Descrição muda a qualquer momento, também com movimentos: as regras da apuração, os recortes e as telas acham a linha pelo
+            Código, que não muda e termina na descrição com que a linha nasceu. A Recarga dos Cadastros traz a descrição da planilha e mantém
+            o Código.
+          </li>
+          <li>Com movimentos (lançamentos, valores apurados, registros das listas), o Tipo, o Grupo, a Atribuição (e as siglas) e as Unidades e a exclusão ficam bloqueados: essas informações ligam o cadastro a outras telas. O motivo aparece na edição; os demais campos continuam editáveis.</li>
+          <li>Mudar este cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais; trocar a Descrição, não): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso. Ao gravar, a mensagem diz quais competências reapurar.</li>
         </ul>
       }
       descricao="A DRE é cadastro, não código. Editável aqui; a composição é validada antes de gravar."

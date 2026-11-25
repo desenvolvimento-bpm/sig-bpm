@@ -1,6 +1,7 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
+import { semOGrupo } from "../dre/descricaoDeOrigem.js";
 
 /**
  * Os centros de custo dos cenários analíticos (13/10/2026, etapa 3): os valores mensais de cada grupo de centros da
@@ -249,8 +250,10 @@ export function rateiosSemBase(grupos: GrupoDoCenario[], valores: Array<{ grupo:
  */
 export function alocarCentros(est: LinhaEstrutura[], grupos: GrupoDoCenario[], valores: Array<{ grupo: string; codigo: string; mes: number; valor: number }>, percentuais: Percentuais[]) {
   const porCodigo = new Map(est.map((l) => [l.codigo, l]));
-  const porTripla = new Map(est.filter((l) => l.tipo === "ITEM").map((l) => [`${l.grupoSigla}|${(l.atribuicao ?? "").toUpperCase()}|${l.descricao.toUpperCase()}`, l]));
-  const equivalente = (l: LinhaEstrutura, grupo: string) => porTripla.get(`${grupo}|${(l.atribuicao ?? "").toUpperCase()}|${l.descricao.toUpperCase()}`);
+  // A conta equivalente de outro grupo da DRE: a mesma atribuição e descrição de origem (25/11/2026: pelo código sem o grupo, e
+  // não pelos nomes, que mudam a qualquer momento).
+  const porGrupoESemGrupo = new Map(est.filter((l) => l.tipo === "ITEM").map((l) => [`${l.grupoSigla}|${semOGrupo(l.codigo)}`, l]));
+  const equivalente = (l: LinhaEstrutura, grupo: string) => porGrupoESemGrupo.get(`${grupo}|${semOGrupo(l.codigo)}`);
   const porGrupo = new Map(grupos.map((g) => [g.grupo, g]));
   const r = new Map<string, number[]>();
   const somar = (u: number, codigo: string | undefined, mes: number, v: number) => {

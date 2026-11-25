@@ -5,9 +5,11 @@ import { CODIGO_ADMINISTRADOR, type UsuarioAutenticado } from "../acesso/acesso.
 import { ABA_DA_VISAO } from "../acesso/telas.js";
 import { CenarioError, cenariosService, MARCACOES } from "../cenarios/cenariosService.js";
 import { indicadoresService } from "../relatorios/indicadoresService.js";
+import { nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
 import { painelService } from "../relatorios/painelService.js";
 import { RelatorioError, resultadosService } from "../relatorios/resultadosService.js";
 import { cardEmSvg, direcaoDo, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type Sinal, type Visual } from "./visuais.js";
+import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * O catálogo da Biblioteca de APIs (24/10/2026, pedido do Adão): as APIs que abrem a outros aplicativos os dados das
@@ -176,7 +178,7 @@ const PARAMETRO: Record<string, Parametro> = {
   visao: { nome: "visao", descricao: "0 Consolidado, 1 Matriz, 2 Filial, 3 Serviços, 4 Despesas e Extra ou 5 RN; sem ela, 0.", obrigatorio: false, exemplo: "0" },
   comparacao: { nome: "comparacao", descricao: "O cenário comparado, pela marcação: ORCAMENTO_EMPRESARIAL (o padrão), RESULTADOS_ANTERIORES, RESULTADOS_VENDIDOS ou PREVISAO.", obrigatorio: false, exemplo: "ORCAMENTO_EMPRESARIAL" },
   aba: { nome: "aba", descricao: "Só os cards de uma aba do Painel: resultados ou performance; sem ela, as que o seu perfil lê.", obrigatorio: false, exemplo: "resultados" },
-  item: { nome: "item", descricao: "Só um card: a sigla ou o nome dele (sem diferenciar maiúsculas).", obrigatorio: false, exemplo: "ROL" },
+  item: { nome: "item", descricao: "Só um card: a sigla, o nome (sem diferenciar maiúsculas) ou o id dele no cadastro, que não muda com o nome.", obrigatorio: false, exemplo: "ROL" },
   nivel: { nome: "nivel", descricao: "As linhas, como os níveis da tela: 1 Totais (o padrão), 2 Atribuições ou 3 Contas (todas).", obrigatorio: false, exemplo: "1" },
   grafico: { nome: "grafico", descricao: "No formato visual, o card com o gráfico dos meses e do acumulado (sim, o padrão) ou sem ele (nao).", obrigatorio: false, exemplo: "sim" },
   cenario: { nome: "cenario", descricao: "O id do cenário (a API cenarios lista os que você lê).", obrigatorio: true, exemplo: "a1b2c3d4-…" },
@@ -280,6 +282,8 @@ function dreEmVisual(r: Dre, titulo: string, subtitulo: string, rotuloComparado:
 
 type BlocoDoPainel = { realizado: number | null; orcado: number | null; vsOrcado: number | null; sinal: Sinal };
 type ItemDoPainel = {
+  /** O ID do card no cadastro (25/11/2026). */
+  id?: string | null;
   titulo: string;
   sigla: string;
   metodologia: string;
@@ -297,7 +301,10 @@ function cardsDoPainel(p: Painel, podeAba: (chave: string) => boolean, aba?: str
   const abas = p.abas.filter((a) => podeAba(a.chave) && (!aba || a.chave === aba));
   if (!abas.length) throw new ApiError(403, "O seu perfil não lê esta aba do Painel de Bordo.", "SEM_PERMISSAO");
   const alvo = item?.toLowerCase();
-  const cards = abas.flatMap((a) => a.quadros.flatMap((q) => q.itens.filter((i) => !alvo || i.sigla.toLowerCase() === alvo || i.titulo.toLowerCase() === alvo).map((i) => ({ aba: a, quadro: q, item: i }))));
+  // Pela sigla, pelo nome ou pelo ID do card (25/11/2026: o ID não muda com o nome).
+  const cards = abas.flatMap((a) =>
+    a.quadros.flatMap((q) => q.itens.filter((i) => !alvo || i.sigla.toLowerCase() === alvo || i.titulo.toLowerCase() === alvo || i.id?.toLowerCase() === alvo).map((i) => ({ aba: a, quadro: q, item: i }))),
+  );
   if (item && !cards.length) throw new ApiError(404, `Nenhum card com a sigla ou o nome "${item}".`, "ITEM_INEXISTENTE");
   return cards;
 }
@@ -366,7 +373,7 @@ function painelEmVisual(cards: ReturnType<typeof cardsDoPainel>, periodo: string
   });
 }
 
-type Indicador = { grupo: string; numero: string; nome: string; sentido: string; unidade: string; metodologia: string; acumulado: string; meses: Array<number | null>; total: number | null; orcado: Array<number | null>; totalOrcado: number | null };
+type Indicador = { id?: string | null; grupo: string; numero: string; nome: string; sentido: string; unidade: string; metodologia: string; acumulado: string; meses: Array<number | null>; total: number | null; orcado: Array<number | null>; totalOrcado: number | null };
 type Indicadores = { ano: number; ate: number; meses: Array<{ mes: number; rotulo: string }>; indicadores: Indicador[] };
 
 function indicadoresEmDados(r: Indicadores, rotuloComparado: string, item: string | undefined, meta: Record<string, unknown>): Resposta {
@@ -402,8 +409,9 @@ function indicadoresEmDados(r: Indicadores, rotuloComparado: string, item: strin
 
 function filtrarIndicadores(r: Indicadores, item?: string) {
   if (!item) return r.indicadores;
-  const alvo = item.toLowerCase();
-  const lista = r.indicadores.filter((i) => i.nome.toLowerCase() === alvo || `${i.numero} ${i.nome}`.trim().toLowerCase() === alvo);
+  // Pelo nome, pelo número e nome ou pelo ID (25/11/2026: o ID não muda com o nome); um nome antigo vale pelo atual.
+  const alvo = (nomesAntigos().get(item) ?? item).toLowerCase();
+  const lista = r.indicadores.filter((i) => i.nome.toLowerCase() === alvo || `${i.numero} ${i.nome}`.trim().toLowerCase() === alvo || i.id?.toLowerCase() === alvo);
   if (!lista.length) throw new ApiError(404, `Nenhum indicador com o nome "${item}".`, "ITEM_INEXISTENTE");
   return lista;
 }
@@ -440,7 +448,6 @@ function indicadoresEmVisual(r: Indicadores, periodo: string, rotuloComparado: s
   });
 }
 
-const VISOES = ["Consolidado", "Matriz", "Filial", "Serviços", "Despesas e Extra", "RN"];
 const admin = (u: UsuarioAutenticado) => u.perfil.codigo === CODIGO_ADMINISTRADOR;
 const usuarioDoCenario = (u: UsuarioAutenticado) => ({ id: u.sub, nome: u.nome, admin: admin(u) });
 const BASES = ["cenarios", "cenarios_analiticos"] as const;
@@ -467,10 +474,10 @@ export const CATALOGO: DefinicaoDaApi[] = [
       exigir(u, `relatorio_resultados.${ABA_DA_VISAO[p.visao]}:ler`);
       const tela = await daTela(() => resultadosService.unidade(p.ano, p.visao as 0 | 1 | 2 | 3 | 4 | 5, p.mes, u.acesso, true, p.comparacao));
       const r = { ...tela, linhas: noNivel(tela.linhas, p.nivel) } as unknown as Dre;
-      const meta = { ano: tela.ano, mes: tela.ate, visao: VISOES[p.visao], nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.rotuloComparado };
+      const meta = { ano: tela.ano, mes: tela.ate, visao: nomeDaVisao(p.visao), nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.rotuloComparado };
       if (formato === "dados") return dreEmDados(r, tela.rotuloComparado, meta);
       const mes = tela.meses.find((m) => m.mes === tela.ate)?.rotulo ?? "";
-      return { formato, visuais: [dreEmVisual(r, `Resultados · ${VISOES[p.visao]}`, `${mes} · comparado: ${tela.rotuloComparado}`, tela.rotuloComparado, true)], meta };
+      return { formato, visuais: [dreEmVisual(r, `Resultados · ${nomeDaVisao(p.visao)}`, `${mes} · comparado: ${tela.rotuloComparado}`, tela.rotuloComparado, true)], meta };
     },
   },
   {
@@ -499,7 +506,7 @@ export const CATALOGO: DefinicaoDaApi[] = [
     descricao: "Os indicadores da aba Indicadores do Painel de Bordo: o valor de cada mês e o acumulado, com o comparado.",
     exige: "Resultados Empresariais › Painel de Bordo › Indicadores: Ler",
     formatos: ["dados", "visual"],
-    parametros: [PARAMETRO.ano, PARAMETRO.mes, PARAMETRO.comparacao, { ...PARAMETRO.item, descricao: "Só um indicador: o nome dele (sem diferenciar maiúsculas)." }, PARAMETRO.grafico, PARAMETRO.formato],
+    parametros: [PARAMETRO.ano, PARAMETRO.mes, PARAMETRO.comparacao, { ...PARAMETRO.item, descricao: "Só um indicador: o nome (sem diferenciar maiúsculas; um nome antigo também vale) ou o id dele no cadastro, que não muda com o nome." }, PARAMETRO.grafico, PARAMETRO.formato],
     alcanca: (u) => pode(u, "relatorio_painel.indicadores:ler"),
     async executar(q, u, formato) {
       const p = validar(z.object({ ano: P.ano, mes: P.mes, comparacao: P.comparacao, item: P.item, grafico: P.grafico }), q);
@@ -564,9 +571,9 @@ export const CATALOGO: DefinicaoDaApi[] = [
       const tela = await daTela(() => cenariosService.resultados(p.cenario, p.visao as 0 | 1 | 2 | 3 | 4 | 5, usuarioDoCenario(u)));
       const r = { ...tela, linhas: noNivel(tela.linhas, p.nivel) } as unknown as Dre;
       const comparado = tela.comparado?.nome ?? "Comparado";
-      const meta = { cenario: c.nome, ano: tela.ano, visao: VISOES[p.visao], nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.comparado?.nome ?? null };
+      const meta = { cenario: c.nome, ano: tela.ano, visao: nomeDaVisao(p.visao), nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.comparado?.nome ?? null };
       if (formato === "dados") return dreEmDados(r, comparado, meta);
-      return { formato, visuais: [dreEmVisual(r, `${c.nome} · ${VISOES[p.visao]}`, `Cenário ${c.ano}${tela.comparado ? ` · comparado: ${tela.comparado.nome}` : ""}`, comparado, false)], meta };
+      return { formato, visuais: [dreEmVisual(r, `${c.nome} · ${nomeDaVisao(p.visao)}`, `Cenário ${c.ano}${tela.comparado ? ` · comparado: ${tela.comparado.nome}` : ""}`, comparado, false)], meta };
     },
   },
   {
@@ -597,7 +604,7 @@ export const CATALOGO: DefinicaoDaApi[] = [
     descricao: "Os indicadores de um cenário (a aba Indicadores do Painel de Bordo dele): os meses e o acumulado, com o comparado do cenário.",
     exige: "Cenários Sintéticos ou Analíticos › Painel de Bordo › Indicadores: Ler",
     formatos: ["dados", "visual"],
-    parametros: [PARAMETRO.cenario, { ...PARAMETRO.item, descricao: "Só um indicador: o nome dele (sem diferenciar maiúsculas)." }, PARAMETRO.grafico, PARAMETRO.formato],
+    parametros: [PARAMETRO.cenario, { ...PARAMETRO.item, descricao: "Só um indicador: o nome (sem diferenciar maiúsculas; um nome antigo também vale) ou o id dele no cadastro, que não muda com o nome." }, PARAMETRO.grafico, PARAMETRO.formato],
     alcanca: (u) => BASES.some((b) => pode(u, `${b}_painel.metas:ler`)),
     async executar(q, u, formato) {
       const p = validar(z.object({ cenario: P.cenario, item: P.item, grafico: P.grafico }), q);

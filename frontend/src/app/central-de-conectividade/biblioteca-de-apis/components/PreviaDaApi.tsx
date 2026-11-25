@@ -13,10 +13,15 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { botaoPrimario, Erro } from "@/app/cenarios/components/CenarioDialog";
 
 import { conectividadeService, copiarTexto, enderecoDaApi, type ApiDoCatalogo, type Formato, type Previa } from "../../services/conectividadeService";
+import { nomeDaVisao } from "@/lib/nomesDasUnidades";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 /** As opções dos parâmetros de valores fixos (os demais são campos de texto). */
 const OPCOES: Record<string, Array<[string, string]>> = {
-  visao: [["0", "Consolidado"], ["1", "Matriz"], ["2", "Filial"], ["3", "Serviços"], ["4", "Despesas e Extra"], ["5", "RN"]],
+  // O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
+  get visao() {
+    return ["0", "1", "2", "3", "4", "5"].map((v): [string, string] => [v, nomeDaVisao(v)]);
+  },
   nivel: [["1", "Totais"], ["2", "Atribuições"], ["3", "Contas"]],
   comparacao: [["", "Orçamento (o padrão)"], ["RESULTADOS_ANTERIORES", "Anterior"], ["RESULTADOS_VENDIDOS", "Vendido"], ["PREVISAO", "Forecast"]],
   aba: [["", "As que o perfil lê"], ["resultados", "Resultados"], ["performance", "Performance"]],
@@ -35,6 +40,7 @@ const imagem = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURICom
  * aplicativo recebe com o token), e o endereço do pedido para copiar.
  */
 export function PreviaDaApi({ api: a, onFechar }: { api: ApiDoCatalogo; onFechar: () => void }) {
+  useNomesDasUnidades();
   const [valores, setValores] = useState<Record<string, string>>(() =>
     Object.fromEntries(a.parametros.filter((p) => p.nome !== "formato").map((p) => [p.nome, INICIAL[p.nome] ?? ""])),
   );

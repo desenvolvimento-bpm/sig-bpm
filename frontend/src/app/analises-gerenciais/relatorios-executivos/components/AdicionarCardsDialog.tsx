@@ -38,11 +38,19 @@ export function AdicionarCardsDialog({ dados, prova = false, onAdicionar, onFech
       else n.add(k);
       return n;
     });
-  // As chaves: "P|aba|quadro|título|sigla" e "I|nome".
+  // As chaves: "P|aba|quadro|título|sigla" e "I|nome"; o ID do card e o do indicador (25/11/2026) vão com o bloco.
+  const cardPorChave = new Map<string, string>();
+  const indicadorPorChave = new Map<string, string>();
   const painel = dados.painel.abas.flatMap((a) =>
     a.quadros.map((q) => ({
       titulo: `${a.titulo} · ${q.titulo}`,
-      itens: q.itens.filter((i) => !b || normal(`${q.titulo} ${i.titulo} ${i.sigla}`).includes(b)).map((i) => ({ chave: ["P", a.chave, q.titulo, i.titulo, i.sigla].join("|"), rotulo: i.titulo, detalhe: i.sigla })),
+      itens: q.itens
+        .filter((i) => !b || normal(`${q.titulo} ${i.titulo} ${i.sigla}`).includes(b))
+        .map((i) => {
+          const chave = ["P", a.chave, q.titulo, i.titulo, i.sigla].join("|");
+          if (i.id) cardPorChave.set(chave, i.id);
+          return { chave, rotulo: i.titulo, detalhe: i.sigla };
+        }),
     })),
   );
   const grupos = [...new Set(dados.indicadores.indicadores.map((i) => i.grupo))];
@@ -50,7 +58,10 @@ export function AdicionarCardsDialog({ dados, prova = false, onAdicionar, onFech
     titulo: g,
     itens: dados.indicadores.indicadores
       .filter((i) => i.grupo === g && (!b || normal(`${i.grupo} ${i.nome}`).includes(b)))
-      .map((i) => ({ chave: `I|${i.nome}`, rotulo: i.nome, detalhe: i.unidade })),
+      .map((i) => {
+        if (i.id) indicadorPorChave.set(`I|${i.nome}`, i.id);
+        return { chave: `I|${i.nome}`, rotulo: i.nome, detalhe: i.unidade };
+      }),
   }));
   const lista = (origem === "painel" ? painel : indicadores).filter((g) => g.itens.length);
   const adicionar = () => {
@@ -60,8 +71,8 @@ export function AdicionarCardsDialog({ dados, prova = false, onAdicionar, onFech
       // Gráfico do card os muda.
       const comProva = prova ? { prova: true as const } : {};
       return t === "P"
-        ? { tipo: "PAINEL", aba: p[0] as "resultados" | "performance", quadro: p[1], titulo: p[2], sigla: p[3], comGrafico, comRotulos: true, tipoGrafico: "barras", ...comProva }
-        : { tipo: "INDICADOR", nome: p.join("|"), ...(comGrafico ? { grafico: "MESES" as const } : {}), comRotulos: true, tipoGrafico: "barras", ...comProva };
+        ? { tipo: "PAINEL", ...(cardPorChave.has(k) ? { cardId: cardPorChave.get(k) } : {}), aba: p[0] as "resultados" | "performance", quadro: p[1], titulo: p[2], sigla: p[3], comGrafico, comRotulos: true, tipoGrafico: "barras", ...comProva }
+        : { tipo: "INDICADOR", ...(indicadorPorChave.has(k) ? { indicadorId: indicadorPorChave.get(k) } : {}), nome: p.join("|"), ...(comGrafico ? { grafico: "MESES" as const } : {}), comRotulos: true, tipoGrafico: "barras", ...comProva };
     });
     onAdicionar(novos);
   };

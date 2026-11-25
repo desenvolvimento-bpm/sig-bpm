@@ -17,6 +17,7 @@ import { PainelDeLinhas } from "@/app/relatorios/resultados/ResultadosContent";
 import { mensagemDeErro } from "../conferencia-planilha/services/conferenciaService";
 import { dataHora, inteiro, lerAnoMes, rotuloCompetencia } from "../utils/formatacao";
 import { linhasService, type LinhasDoMes } from "./services/linhasService";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 const botaoPrimario = "bg-bpm-primary hover:bg-bpm-primary-hover rounded-sm font-bold text-black shadow-sm";
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
@@ -127,6 +128,7 @@ function DREDasLinhas({ anoMes }: { anoMes: string }) {
 }
 
 function Conferencia({ dados }: { dados: LinhasDoMes }) {
+  const { nomeDaUnidade } = useNomesDasUnidades();
   return (
     <div className="space-y-6">
       <Tabela
@@ -147,7 +149,7 @@ function Conferencia({ dados }: { dados: LinhasDoMes }) {
       {dados.niveis.length ? (
         <Tabela
           titulo="Origem dos Valores"
-          colunas={["Matriz", "Filial", "Serviços"]}
+          colunas={[1, 2, 3].map(nomeDaUnidade)}
           linhas={dados.niveis.map((n) => ({ chave: n.nivel, rotulo: n.rotulo, valores: n.porUnidade.map(valor) }))}
           rodape={
             <p className="text-xs text-gray-500">

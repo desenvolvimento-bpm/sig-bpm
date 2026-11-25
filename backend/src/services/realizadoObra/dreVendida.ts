@@ -8,6 +8,7 @@ import { caminhoDoArquivo } from "../importacoes/arquivosImportados.js";
 import { ABA_DRE_COMERCIAL, interpretarDreVendida, type LinhaVendida } from "../importacoes/dreComercial/leiauteDreComercial.js";
 import { avaliarExpressao } from "../dre/expressao.js";
 import type { LinhaDRE } from "../resultadosLinha/resultadosLinhaService.js";
+import { ehAConta } from "../dre/descricaoDeOrigem.js";
 
 /**
  * O Vendido do Realizado por Obra (03/11/2026, pedido do Adão): a aba DRE do CONTROLE DAS VENDAS importada na competência
@@ -100,7 +101,7 @@ const VOLUMES = new Set(["P", "S"]);
 const UNIDADE: Record<string, number> = { MATRIZ: 1, FILIAL: 2, OBRAS: 3 };
 
 /** Uma linha de produto ou de obra, para achar a da DRE de venda. */
-export type LinhaParaVendido = { id: string; nome: string; unidade: number };
+export type LinhaParaVendido = { id: string; nome: string; codigo?: string; unidade: number };
 /** A chave da linha do Vendido: o id da linha, ou a das linhas da DRE de venda sem linha no cadastro. */
 export const SEM_LINHA_NO_VENDIDO = "SEM_LINHA";
 
@@ -112,7 +113,10 @@ export function vendidoNaEstrutura(linhas: LinhaVendida[], est: LinhaDRE[], noEs
   const doGrupo = (g: string) => est.filter((l) => l.grupoSigla === g);
   const naoAchadas = new Set<string>();
   const linhaDoVendido = (l: LinhaVendida) => {
-    const candidatas = cadastro.filter((c) => chaveDaLinha(c.nome) === chaveDaLinha(l.linhaTexto));
+    // Pelo Código da linha e, sem nenhuma, pelo Nome (25/11/2026: o Código não muda; o Nome, sim).
+    const texto = chaveDaLinha(l.linhaTexto);
+    const peloCodigo = cadastro.filter((c) => c.codigo !== undefined && chaveDaLinha(c.codigo) === texto);
+    const candidatas = peloCodigo.length ? peloCodigo : cadastro.filter((c) => chaveDaLinha(c.nome) === texto);
     return (candidatas.find((c) => c.unidade === UNIDADE[normal(l.unidade)]) ?? candidatas[0])?.id ?? SEM_LINHA_NO_VENDIDO;
   };
   type Partes = { itens: Map<string, number>; subtotais: Map<string, number>; extras: Map<string, number> };
@@ -133,15 +137,17 @@ export function vendidoNaEstrutura(linhas: LinhaVendida[], est: LinhaDRE[], noEs
     const k = linhaDoVendido(l);
     const p = porLinha.get(k) ?? { itens: new Map(), subtotais: new Map(), extras: new Map() };
     porLinha.set(k, p);
-    const subtotalDaAtribuicao = linhasDoGrupo.find((x) => x.tipo === "SUBTOTAL" && normal(x.descricao) === atrib);
-    const itens = linhasDoGrupo.filter((x) => x.tipo === "ITEM" && normal(x.descricao) === conta);
+    // Pela Descrição atual ou pela de origem (25/11/2026: os nomes da Estrutura da DRE mudam a qualquer momento).
+    const casa = (x: { codigo: string; descricao: string }, texto: string) => normal(x.descricao) === texto || ehAConta(x, texto);
+    const subtotalDaAtribuicao = linhasDoGrupo.find((x) => x.tipo === "SUBTOTAL" && casa(x, atrib));
+    const itens = linhasDoGrupo.filter((x) => x.tipo === "ITEM" && casa(x, conta));
     const item = itens.find((x) => subtotalDaAtribuicao && x.atribuicaoSigla === subtotalDaAtribuicao.atribuicaoSigla) ?? itens[0];
     if (item) {
       somar(p.itens, item.codigo, l.valorTotal);
       continue;
     }
     if (VOLUMES.has(g)) continue;
-    const subtotal = linhasDoGrupo.find((x) => x.tipo === "SUBTOTAL" && normal(x.descricao) === conta);
+    const subtotal = linhasDoGrupo.find((x) => x.tipo === "SUBTOTAL" && casa(x, conta));
     if (subtotal) {
       somar(p.subtotais, subtotal.codigo, l.valorTotal);
       continue;

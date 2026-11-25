@@ -1,5 +1,6 @@
 import type { DepartamentoAcesso } from "../../generated/prisma/enums.js";
 import type { Acesso } from "./acesso.js";
+import { descricaoDeOrigem, slugDaDRE } from "../dre/descricaoDeOrigem.js";
 
 /**
  * Recorte do Gestor por departamento (decisão do usuário, 30/09/2026).
@@ -36,9 +37,10 @@ const POR_SIGLA: Record<string, DepartamentoAcesso> = {
   DFC: "EXTRA_OPERACIONAL",
   DFNC: "EXTRA_OPERACIONAL",
 };
+/** As DVV pela descrição de origem da linha (25/11/2026: a última parte do código, que não muda com a Descrição). */
 const DVV_POR_LINHA: Record<string, DepartamentoAcesso> = {
-  "FRETE E DESCARGA": "LOGISTICA",
-  "COMISSÕES DE REPRESENTANTES E TERCEIROS": "COMERCIAL",
+  [slugDaDRE("Frete e Descarga")]: "LOGISTICA",
+  [slugDaDRE("Comissões de Representantes e Terceiros")]: "COMERCIAL",
 };
 
 /** Departamento do centro de custo (campo DEPARTAMENTO do cadastro) → departamento do recorte. */
@@ -60,8 +62,8 @@ export function gestaoDoCentro(departamentoDoCentro: string | null): Departament
 }
 
 /** O departamento de uma linha da DRE; nulo para receitas, margens e resultados, que não são de nenhum. */
-export function departamentoDaLinha(l: { grupoSigla: string; descricao: string }): DepartamentoAcesso | null {
-  if (l.grupoSigla === "DVV") return DVV_POR_LINHA[n(l.descricao)] ?? null;
+export function departamentoDaLinha(l: { grupoSigla: string; codigo: string }): DepartamentoAcesso | null {
+  if (l.grupoSigla === "DVV") return DVV_POR_LINHA[descricaoDeOrigem(l.codigo)] ?? null;
   return POR_SIGLA[l.grupoSigla] ?? null;
 }
 
@@ -76,7 +78,7 @@ const ABERTOS_A_TODOS = new Set(["ROB", "IRB", "ROL"]);
  * O usuário pode consultar as movimentações desta linha (nas visões das unidades)? Com recorte por centro de custo
  * (Coordenador), só as abertas a todos: as demais ele consulta dentro dos seus centros (`podeVerLinhaNoCentro`).
  */
-export function podeVerMovimentos(acesso: Acesso, l: { grupoSigla: string; descricao: string }) {
+export function podeVerMovimentos(acesso: Acesso, l: { grupoSigla: string; codigo: string }) {
   if ((!acesso.recorteDepartamento && !acesso.recorteCentro) || ABERTOS_A_TODOS.has(l.grupoSigla)) return true;
   if (!acesso.recorteDepartamento) return false;
   const d = departamentoDaLinha(l);
@@ -104,7 +106,7 @@ export const veObras = (acesso: Acesso) => !acesso.recorteCentro || acesso.recor
  * Nas obras, as linhas que o usuário vê: o Coordenador com a opção, as da gestão dele e as abertas a todos (como um
  * Gestor daquele departamento); os demais, as das movimentações (`podeVerMovimentos`).
  */
-export function podeVerLinhaNaObra(acesso: Acesso, l: { grupoSigla: string; descricao: string }) {
+export function podeVerLinhaNaObra(acesso: Acesso, l: { grupoSigla: string; codigo: string }) {
   if (acesso.recorteCentro && !acesso.recorteDepartamento) {
     return acesso.veObras && (ABERTOS_A_TODOS.has(l.grupoSigla) || (acesso.gestao !== null && departamentoDaLinha(l) === acesso.gestao));
   }
@@ -134,6 +136,6 @@ export const MENSAGEM_SENSIVEL = (descricao: string) =>
  * Nas visões por centro de custo, as linhas cujas movimentações o usuário consulta: o Gestor, as dos departamentos
  * dele (como nas unidades); o Coordenador, todas as dos seus centros (o centro já recorta).
  */
-export function podeVerLinhaNoCentro(acesso: Acesso, l: { grupoSigla: string; descricao: string }) {
+export function podeVerLinhaNoCentro(acesso: Acesso, l: { grupoSigla: string; codigo: string }) {
   return acesso.recorteDepartamento ? podeVerMovimentos(acesso, l) : true;
 }

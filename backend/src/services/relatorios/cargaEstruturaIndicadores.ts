@@ -1,6 +1,7 @@
 import type { getPrismaClient } from "../../config/prisma.js";
 import { ESTRUTURA_INICIAL_INDICADORES } from "./estruturaInicialIndicadores.js";
 import { idPeloOriginal } from "./indicadoresDoSistema.js";
+import { gravarFormulasPeloId } from "./referenciasDosIndicadores.js";
 
 /**
  * Grava os indicadores da carga inicial que ainda não estão no cadastro (pelo nome ou, desde 19/11/2026, pelo ID da tabela
@@ -17,6 +18,8 @@ export async function carregarEstruturaIndicadores(prisma: ReturnType<typeof get
     await prisma.indicadorEstrutura.create({ data: { ...ind, ...(id ? { id } : {}), ordem: i + 1 } });
     criados++;
   }
+  // As fórmulas da carga citam os indicadores pelo nome: gravadas pelo ID (25/11/2026).
+  if (criados) await gravarFormulasPeloId(prisma);
   return { total: ESTRUTURA_INICIAL_INDICADORES.length, criados };
 }
 
@@ -67,6 +70,10 @@ export async function sincronizarEstruturaIndicadores(prisma: ReturnType<typeof 
     mudancas.push({ nome: i.nome, campo: "ordem", de: i.ordem, para: ordem });
     gravar.push(prisma.indicadorEstrutura.update({ where: { id: i.id }, data: { ordem } }));
   }
-  if (!simular && gravar.length) await prisma.$transaction(gravar);
+  if (!simular && gravar.length) {
+    await prisma.$transaction(gravar);
+    // As fórmulas dos indicadores criados citam os outros pelo nome: gravadas pelo ID (25/11/2026).
+    await gravarFormulasPeloId(prisma);
+  }
   return mudancas;
 }

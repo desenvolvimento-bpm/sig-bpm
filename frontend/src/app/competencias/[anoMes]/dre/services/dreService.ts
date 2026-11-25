@@ -2,6 +2,7 @@ import type { RedistribuicaoDoMovimento } from "@/components/shared/EtiquetaRedi
 import { api } from "@/lib/api";
 
 import type { StatusCompetencia } from "../../../services/competenciasService";
+import { nomeDaUnidade } from "@/lib/nomesDasUnidades";
 
 /** `competencia`: a parcela dos lançamentos manuais com os percentuais de outra competência (MM/AAAA, 30/10/2026). */
 export type ParcelaRateio = { chave: string; destino: string; base: string; percentual: string; valor: string; competencia?: string };
@@ -307,13 +308,13 @@ export const dreService = {
   },
 };
 
-export const UNIDADES = [
-  { codigo: 1, nome: "Matriz" },
-  { codigo: 2, nome: "Filial" },
-  { codigo: 3, nome: "Serviços" },
-  { codigo: 4, nome: "Despesas e Extra" },
-  { codigo: 5, nome: "RN" },
-];
+/** As unidades, com o nome do cadastro na hora de mostrar (25/11/2026: muda a qualquer momento; a tela usa useNomesDasUnidades). */
+export const UNIDADES = [1, 2, 3, 4, 5].map((codigo) => ({
+  codigo,
+  get nome() {
+    return nomeDaUnidade(codigo);
+  },
+}));
 
 export const ROTULO_CHAVE: Record<string, string> = {
   PROJETO: "Projetos",

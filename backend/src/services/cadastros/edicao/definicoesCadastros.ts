@@ -11,7 +11,9 @@ import { DEPARTAMENTOS_DO_QUADRO } from "../../relatorios/formulaIndicador.js";
 import { compilarFormula, FormulaInvalidaError, formulaPorExtenso } from "../../relatorios/formulaIndicador.js";
 import { calculoDoSistema } from "../../relatorios/indicadores.js";
 import { ACAO_RENOMEACAO, carregarNomesDoSistema, idPeloOriginal, NOMES_ORIGINAIS } from "../../relatorios/indicadoresDoSistema.js";
-import { exigirNomeLivreNosDados, propagarIdentidadeDoCard, propagarNomeDoIndicador, textoDoResumo, TrocaDeNomeError, type IdentidadeDoCard } from "../../relatorios/renomearIndicador.js";
+import { carregarNomesDasUnidades } from "../nomesDasUnidades.js";
+import { exigirNomeLivreNosDados, propagarNomeDoIndicador, textoDoResumo, TrocaDeNomeError } from "../../relatorios/renomearIndicador.js";
+import { comNomesNasFormulas, formulaComIds, indicadoresParaReferencias, mapasDosIndicadores } from "../../relatorios/referenciasDosIndicadores.js";
 import { auditar } from "../../auditoriaService.js";
 import { FORMATOS_DO_PAINEL, indicadoresDaFormula } from "../../relatorios/painelDeBordo.js";
 import { plural } from "../../../utils/plural.js";
@@ -135,11 +137,6 @@ const nomeComparavel = (s: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** O nome do usuário (quem trocou o nome, gravado nos relatórios e nos painéis que a troca mudou). */
-async function nomeDoUsuario(db: Db, id: string | undefined) {
-  return (id ? (await db.usuario.findUnique({ where: { id }, select: { nome: true } }))?.nome : null) ?? "Troca de nome no cadastro";
-}
-
 /** A troca de nome com a recusa da conferência como erro da tela. */
 async function trocarNome<T>(fazer: () => Promise<T>): Promise<T> {
   try {
@@ -250,7 +247,7 @@ async function exigirAbaQueLeia(db: Db, linhaId: string, balde: string | null) {
   const [ls, us] = await Promise.all([
     db.linhaDRE.findMany({
       orderBy: { ordem: "asc" },
-      select: { id: true, tipo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
+      select: { id: true, codigo: true, tipo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true, ativo: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
     }),
     db.unidadeNegocio.findMany({ select: { codigo: true, nome: true } }),
   ]);
@@ -669,14 +666,28 @@ const estrutura: DefinicaoCadastro = {
   criar: true,
   excluir: true,
   campos: [
-    { nome: "codigo", rotulo: "Código", tipo: "texto", obrigatorio: true, somenteNaCriacao: true, ajuda: "Referência estável nas expressões (ex.: CPP.MOD.REMUNERACOES_CLT)." },
+    {
+      nome: "codigo",
+      rotulo: "Código",
+      tipo: "texto",
+      obrigatorio: true,
+      somenteNaCriacao: true,
+      ajuda: "Referência estável nas expressões, nas regras e nos relatórios; não muda (ex.: CPP.MOD.REMUNERACOES_CLT: a sigla do grupo, a da atribuição e a descrição com que a linha nasceu).",
+    },
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", obrigatorio: true },
     { nome: "tipo", rotulo: "Tipo", tipo: "opcao", obrigatorio: true, travaComMovimento: true, opcoes: opcoesFixas([["SECAO", "Seção"], ["ITEM", "Item"], ["SUBTOTAL", "Subtotal"], ["TOTAL", "Total"]]) },
     { nome: "grupo", rotulo: "Grupo", tipo: "texto", obrigatorio: true, travaComMovimento: true },
     { nome: "grupoSigla", rotulo: "Sigla do grupo", tipo: "texto", obrigatorio: true, travaComMovimento: true },
     { nome: "atribuicao", rotulo: "Atribuição", tipo: "texto", travaComMovimento: true },
     { nome: "atribuicaoSigla", rotulo: "Sigla da atribuição", tipo: "texto", travaComMovimento: true },
-    { nome: "descricao", rotulo: "Descrição", tipo: "texto", obrigatorio: true, travaComMovimento: true },
+    {
+      nome: "descricao",
+      rotulo: "Descrição",
+      tipo: "texto",
+      obrigatorio: true,
+      // Livre desde 25/11/2026 (pedido do Adão): as regras acham a linha pela descrição de origem, no fim do Código.
+      ajuda: "O nome nas telas e nos relatórios; muda a qualquer momento. As regras da apuração acham a linha pelo Código.",
+    },
     { nome: "expressao", rotulo: "Expressão", tipo: "texto", ajuda: "Subtotal e total: códigos de outras linhas com + e −, parênteses e SUM(a, b)." },
     {
       nome: "unidades",
@@ -823,7 +834,8 @@ const unidades: DefinicaoCadastro = {
   titulo: "Unidade de negócio",
   auditoria: "unidade_negocio",
   // As cinco unidades de 1 a 5 são apuradas cada uma por uma regra própria. O Tipo saiu do cadastro (09/10/2026): a unidade é
-  // identificada pelo código e, onde a planilha a cita (as abas Realizado (…)), pelo nome. Desde 24/11/2026 (pedido do Adão), com
+  // identificada pelo código, também na carga da Estrutura da DRE (as abas Realizado (…), desde 25/11/2026), e o Nome muda a
+  // qualquer momento (25/11/2026, pedido do Adão; as telas o leem de nomesDasUnidades.ts). Desde 24/11/2026 (pedido do Adão), com
   // o Novo: a unidade nova recebe o próximo código e fica fora da DRE (a apuração, os Resultados e os cenários calculam só as de 1
   // a 5) até ganhar a regra dela — o aviso ao criar diz isso.
   criar: true,
@@ -831,11 +843,16 @@ const unidades: DefinicaoCadastro = {
   campos: [
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
     { nome: "codigo", rotulo: "Código", tipo: "inteiro", derivado: true, estreita: true },
-    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, travaComMovimento: true },
+    {
+      nome: "nome",
+      rotulo: "Nome",
+      tipo: "texto",
+      obrigatorio: true,
+      ajuda: "O nome nas telas, nos relatórios e nas exportações; muda a qualquer momento. As regras da apuração usam o Código.",
+    },
     { nome: "ativo", rotulo: "Ativa", tipo: "booleano" },
   ],
   listar: async (db) => db.unidadeNegocio.findMany({ orderBy: { codigo: "asc" } }),
-  // O nome identifica a unidade na carga da Estrutura da DRE (as abas Realizado (…)): com movimentos, não muda.
   async movimentos(db, id) {
     const u = await db.unidadeNegocio.findUnique({
       where: { id },
@@ -847,13 +864,18 @@ const unidades: DefinicaoCadastro = {
   ler: (db, id) => db.unidadeNegocio.findUnique({ where: { id } }),
   async preparar(db, v, id) {
     const nome = exigir(v.nome, "O nome");
-    // O nome identifica a unidade na carga da Estrutura da DRE: dois iguais (sem diferença de maiúsculas e acentos) se confundiriam.
+    // Dois nomes iguais (sem diferença de maiúsculas e acentos) se confundiriam nas telas e nas planilhas que citam a unidade pelo nome.
     const outra = (await db.unidadeNegocio.findMany({ select: { id: true, nome: true } })).find((u) => u.id !== id && nomeComparavel(u.nome) === nomeComparavel(nome));
     if (outra) throw new RegraCadastroError(409, `Já existe a unidade ${outra.nome}.`);
     return { nome, ordem: inteiro(v.ordem, "A ordem") ?? 0, ativo: v.ativo === undefined ? true : booleano(v.ativo) };
   },
   async gravar(db, d, id) {
-    if (id) return (await db.unidadeNegocio.update({ where: { id }, data: d as Prisma.UnidadeNegocioUpdateInput })).id;
+    if (id) {
+      const gravada = await db.unidadeNegocio.update({ where: { id }, data: d as Prisma.UnidadeNegocioUpdateInput });
+      // O nome novo já nas telas e nos relatórios (25/11/2026).
+      await carregarNomesDasUnidades();
+      return gravada.id;
+    }
     // A unidade nova (24/11/2026): o próximo código e, sem a ordem, a última posição.
     const dados = d as { nome: string; ordem: number; ativo: boolean };
     const [maiores, comRegra] = await Promise.all([
@@ -862,6 +884,7 @@ const unidades: DefinicaoCadastro = {
     ]);
     const codigo = (maiores._max.codigo ?? 0) + 1;
     const criada = await db.unidadeNegocio.create({ data: { ...dados, codigo, ordem: dados.ordem || (maiores._max.ordem ?? 0) + 1 } });
+    await carregarNomesDasUnidades();
     return {
       id: criada.id,
       aviso: `A unidade ${criada.nome} foi incluída com o código ${codigo}. A apuração, os Resultados e os cenários calculam só as unidades com regra própria (${comRegra.map((u) => u.nome).join(", ")}): a unidade nova fica fora da DRE até ganhar a regra dela. Nos cenários analíticos, ela entra pelo Trazer Novos dos Cadastros Gerais.`,
@@ -873,8 +896,8 @@ const unidades: DefinicaoCadastro = {
 /**
  * As linhas por unidade (10/10/2026): os produtos (Estrutura, Alveolares, Estacas; a Metalúrgica, inativa desde 26/10/2026) na Matriz ou na Filial
  * e as linhas de obra (Montagem, Fundação, Capeamento…) em Serviços. É o cadastro que as Listas usam: elas acham a
- * linha pelo código (o texto das planilhas, em maiúsculas), que não muda depois de criada. As linhas de faturamento
- * (das medições) ficam fora da tela.
+ * linha pelo Código ou pelo Nome (o texto das planilhas, em maiúsculas). O Código nasce do Nome na criação e não muda
+ * (25/11/2026): o Nome se edita a qualquer momento. As linhas de faturamento (das medições) ficam fora da tela.
  */
 const UNIDADES_DAS_LINHAS = [1, 2, 3];
 const tipoDaLinha = (codigoUnidade: number) => (codigoUnidade === 3 ? "OBRA" : "PRODUTO");
@@ -905,7 +928,21 @@ const linhas: DefinicaoCadastro = {
       opcoes: async (db) =>
         (await db.unidadeNegocio.findMany({ where: { codigo: { in: UNIDADES_DAS_LINHAS } }, orderBy: { codigo: "asc" } })).map((u) => ({ valor: u.id, rotulo: u.nome })),
     },
-    { nome: "nome", rotulo: "Linha", tipo: "texto", obrigatorio: true, travaComMovimento: true, ajuda: "O nome com que as planilhas das Listas citam a linha (sem diferença de maiúsculas)." },
+    {
+      nome: "nome",
+      rotulo: "Linha",
+      tipo: "texto",
+      obrigatorio: true,
+      ajuda: "O nome nas telas; muda a qualquer momento. As planilhas das Listas citam a linha pelo nome ou pelo Código (sem diferença de maiúsculas).",
+    },
+    {
+      nome: "codigo",
+      rotulo: "Código",
+      tipo: "texto",
+      derivado: true,
+      estreita: true,
+      ajuda: "Nasce do nome, em maiúsculas, e não muda: a chave das listas, do estoque, da receita prévia e das premissas dos cenários.",
+    },
     {
       nome: "unidadeMedida",
       rotulo: "Und. de Medida",
@@ -932,18 +969,24 @@ const linhas: DefinicaoCadastro = {
     if (!unidade || !UNIDADES_DAS_LINHAS.includes(unidade.codigo)) throw new RegraCadastroError(400, "A unidade precisa ser Matriz, Filial ou Serviços.");
     const nome = exigir(v.nome, "A linha");
     const tipo = tipoDaLinha(unidade.codigo);
+    const atual = id ? await db.linha.findUnique({ where: { id }, select: { tipo: true, codigo: true } }) : null;
     if (id) {
-      const atual = await db.linha.findUnique({ where: { id }, select: { tipo: true } });
       if (!atual) throw new RegraCadastroError(404, "Linha não encontrada.");
       // O tipo (produto ou obra) vem da unidade e faz parte da chave com que as telas acham a linha: não muda.
       if (atual.tipo !== tipo) {
         throw new RegraCadastroError(400, atual.tipo === "OBRA" ? "Linha de obra fica em Serviços." : "Linha de produto fica na Matriz ou na Filial.");
       }
     }
-    // As telas e as importações acham a linha pelo Nome (11/10/2026); o código interno o acompanha, em maiúsculas.
-    const codigo = chaveDaLinha(nome);
-    const mesmoNome = (await db.linha.findMany({ where: { tipo }, select: { id: true, nome: true } })).find((l) => l.id !== id && chaveDaLinha(l.nome) === codigo);
+    // O Código nasce do Nome na criação, em maiúsculas, e não muda depois (25/11/2026, pedido do Adão: os nomes dos cadastros
+    // mudam a qualquer momento): as regras, a receita prévia, o estoque e as premissas dos cenários acham a linha por ele.
+    const codigo = atual ? atual.codigo : chaveDaLinha(nome);
+    const chave = chaveDaLinha(nome);
+    const outras = (await db.linha.findMany({ where: { tipo }, select: { id: true, nome: true, codigo: true } })).filter((l) => l.id !== id);
+    const mesmoNome = outras.find((l) => chaveDaLinha(l.nome) === chave);
     if (mesmoNome) throw new RegraCadastroError(409, `Já existe a linha ${mesmoNome.nome}.`);
+    // As planilhas citam a linha pelo Código ou pelo Nome: o nome não pode ser o código de outra linha.
+    const doCodigo = outras.find((l) => chaveDaLinha(l.codigo) === chave);
+    if (doCodigo) throw new RegraCadastroError(409, `${chave} é o código da linha ${doCodigo.nome} (as planilhas citam a linha pelo código): escolha outro nome.`);
     return {
       tipo,
       codigo,
@@ -1067,7 +1110,10 @@ async function itensDaFormula(db: Db): Promise<Opcao[]> {
  * usa, direta ou indiretamente, a si mesmo. `id`: o indicador editado (o gravado dele sai da conta).
  */
 async function exigirSemCiclo(db: Db, id: string | null, nome: string, formula: string | null, peso: string | null) {
-  const outros = await db.indicadorEstrutura.findMany({ select: { id: true, nome: true, formula: true, peso: true } });
+  const gravados = await db.indicadorEstrutura.findMany({ select: { id: true, nome: true, formula: true, peso: true } });
+  // As fórmulas gravadas pelo ID (25/11/2026), com os nomes atuais.
+  const { nomePorId } = mapasDosIndicadores(gravados);
+  const outros = gravados.map((o) => comNomesNasFormulas(o, nomePorId));
   const usa = new Map(outros.filter((o) => o.id !== id).map((o) => [o.nome, [...indicadoresDaFormula(o.formula), ...indicadoresDaFormula(o.peso)]]));
   usa.set(nome, [...indicadoresDaFormula(formula), ...indicadoresDaFormula(peso)]);
   const vistos = new Set<string>();
@@ -1149,7 +1195,7 @@ const estruturaIndicadores: DefinicaoCadastro = {
       rotulo: "Nome",
       tipo: "texto",
       obrigatorio: true,
-      ajuda: "Trocar o nome atualiza os valores, as metas, os cenários, as fórmulas e os cards dos relatórios; as planilhas importadas precisam do nome novo.",
+      ajuda: "Muda a qualquer momento: as fórmulas, os cards dos relatórios, os valores e os cenários citam o indicador pelo ID. As planilhas importadas precisam do nome novo.",
     },
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS) },
     { nome: "unidade", rotulo: "Unidade de Medida", rotuloColuna: "Und.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(UNIDADES_DE_INDICADOR) },
@@ -1180,13 +1226,17 @@ const estruturaIndicadores: DefinicaoCadastro = {
     { nome: "ativo", rotulo: "Ativo", tipo: "booleano" },
   ],
   async listar(db, busca) {
-    const r = (await db.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } })).filter((i) => contem(busca, i.grupo, i.nome, i.numero));
+    const gravados = await db.indicadorEstrutura.findMany({ orderBy: { ordem: "asc" } });
+    // As fórmulas gravadas pelo ID (25/11/2026): a tela e o editor as mostram com os nomes atuais.
+    const { nomePorId } = mapasDosIndicadores(gravados);
+    const r = gravados.map((i) => comNomesNasFormulas(i, nomePorId)).filter((i) => contem(busca, i.grupo, i.nome, i.numero));
     const textos = await formulasPorExtenso(r.map((i) => i.formula));
     return r.map((i, k) => paraATela(i, textos[k]));
   },
   async ler(db, id) {
-    const i = await db.indicadorEstrutura.findUnique({ where: { id } });
-    if (!i) return null;
+    const gravado = await db.indicadorEstrutura.findUnique({ where: { id } });
+    if (!gravado) return null;
+    const i = comNomesNasFormulas(gravado, (await indicadoresParaReferencias(db)).nomePorId);
     return paraATela(i, (await formulasPorExtenso([i.formula]))[0]);
   },
   async preparar(db, v, id) {
@@ -1234,6 +1284,10 @@ const estruturaIndicadores: DefinicaoCadastro = {
         peso = null;
       }
       await exigirSemCiclo(db, id, nome, formula, peso);
+      // As fórmulas gravadas pelo ID dos indicadores (25/11/2026): trocar o nome de um indicador não as muda.
+      const idPorNome = new Map([...cadastrados.filter((i) => i.id !== id).map((i) => [i.nome, i.id] as const), ...(id ? [[nome, id] as const] : [])]);
+      formula = formulaComIds(formula, idPorNome);
+      peso = formulaComIds(peso, idPorNome);
     }
     return {
       ordem: inteiro(v.ordem, "A ordem") ?? undefined,
@@ -1251,17 +1305,24 @@ const estruturaIndicadores: DefinicaoCadastro = {
   },
   async gravar(db, d, id, quem) {
     const dados = d as Prisma.IndicadorEstruturaUncheckedCreateInput;
-    if (!id) return (await db.indicadorEstrutura.create({ data: { ...dados, ordem: dados.ordem ?? (await db.indicadorEstrutura.count()) + 1 } })).id;
+    if (!id) {
+      const criado = await db.indicadorEstrutura.create({ data: { ...dados, ordem: dados.ordem ?? (await db.indicadorEstrutura.count()) + 1 } });
+      // O próprio nome nas fórmulas (o [IND|nome] do valor registrado) também pelo ID, que só agora existe.
+      const proprio = new Map([[criado.nome, criado.id]]);
+      const [formula, peso] = [formulaComIds(criado.formula, proprio), formulaComIds(criado.peso, proprio)];
+      if (formula !== criado.formula || peso !== criado.peso) await db.indicadorEstrutura.update({ where: { id: criado.id }, data: { formula, peso } });
+      return criado.id;
+    }
     const antes = await db.indicadorEstrutura.findUnique({ where: { id }, select: { nome: true } });
     if (!antes || antes.nome === dados.nome) return (await db.indicadorEstrutura.update({ where: { id }, data: dados })).id;
-    // A troca do nome (19/11/2026): o cadastro e todos os dados ligados ao nome numa transação só, com a conferência.
-    const porQuem = await nomeDoUsuario(db, quem);
+    // A troca do nome (19/11/2026): tudo cita o indicador pelo ID (25/11/2026) e não muda; a transação só passa ao ID o que
+    // ainda estiver com o nome antigo e confere que nada ficou com ele.
     const resumo = await trocarNome(() =>
       db.$transaction(
         async (tx) => {
           await exigirNomeLivreNosDados(tx, dados.nome);
           await tx.indicadorEstrutura.update({ where: { id }, data: dados });
-          return propagarNomeDoIndicador(tx, antes.nome, dados.nome, porQuem);
+          return propagarNomeDoIndicador(tx, id, antes.nome);
         },
         { timeout: 120_000 },
       ),
@@ -1276,18 +1337,21 @@ const estruturaIndicadores: DefinicaoCadastro = {
     const i = await db.indicadorEstrutura.findUnique({ where: { id }, select: { nome: true } });
     if (!i) return null;
     const [metas, digitados, importados] = await Promise.all([
-      db.cenarioIndicador.count({ where: { nome: i.nome } }),
-      db.indicadorDigitado.count({ where: { nome: i.nome } }),
-      db.indicadorImportado.count({ where: { nome: i.nome } }),
+      // Os valores guardam o ID do indicador (25/11/2026).
+      db.cenarioIndicador.count({ where: { indicador: id } }),
+      db.indicadorDigitado.count({ where: { indicador: id } }),
+      db.indicadorImportado.count({ where: { indicador: id } }),
     ]);
+    // As fórmulas gravadas pelo ID (25/11/2026), com os nomes atuais.
+    const { nomePorId } = await indicadoresParaReferencias(db);
     // Usado na Metodologia (ou no percentual) de algum item do Painel de Bordo (17/10/2026: o cadastro).
-    const noPainel = (await db.painelItem.findMany({ select: { formula: true, percentual: true } })).some(
-      (p) => indicadoresDaFormula(p.formula).includes(i.nome) || indicadoresDaFormula(p.percentual).includes(i.nome),
-    );
+    const noPainel = (await db.painelItem.findMany({ select: { formula: true, percentual: true } }))
+      .map((p) => comNomesNasFormulas(p, nomePorId))
+      .some((p) => indicadoresDaFormula(p.formula).includes(i.nome) || indicadoresDaFormula(p.percentual).includes(i.nome));
     // Usado na Metodologia (ou no Peso da Média) de outro indicador (23/10/2026).
-    const naMetodologia = (await db.indicadorEstrutura.findMany({ where: { id: { not: id } }, select: { formula: true, peso: true } })).filter(
-      (o) => indicadoresDaFormula(o.formula).includes(i.nome) || indicadoresDaFormula(o.peso).includes(i.nome),
-    ).length;
+    const naMetodologia = (await db.indicadorEstrutura.findMany({ where: { id: { not: id } }, select: { formula: true, peso: true } }))
+      .map((o) => comNomesNasFormulas(o, nomePorId))
+      .filter((o) => indicadoresDaFormula(o.formula).includes(i.nome) || indicadoresDaFormula(o.peso).includes(i.nome)).length;
     if (!metas && !digitados && !importados && !noPainel && !naMetodologia) return null;
     const partes = [
       metas ? `${metas} ${plural(metas, "meta", "metas")} de cenários` : null,
@@ -1650,7 +1714,7 @@ const painelBordo: DefinicaoCadastro = {
     { nome: "ordem", rotulo: "Ordem", tipo: "inteiro", estreita: true },
     { nome: "grupo", rotulo: "Grupo", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(GRUPOS_DO_PAINEL), ajuda: "A aba do Painel de Bordo." },
     { nome: "quadro", rotulo: "Quadro", tipo: "texto", obrigatorio: true, ajuda: "O quadro da aba (Consolidado, Produção: Matriz…): os itens com o mesmo quadro ficam juntos." },
-    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, ajuda: "Trocar o nome (ou o grupo, o quadro e a abreviação) atualiza os cards dos Relatórios Executivos e dos Painéis de Bordo." },
+    { nome: "nome", rotulo: "Nome", tipo: "texto", obrigatorio: true, ajuda: "Muda a qualquer momento (também o grupo, o quadro e a abreviação): os cards dos Relatórios Executivos e dos Painéis de Bordo acham o item pelo ID." },
     { nome: "sigla", rotulo: "Abreviação", rotuloColuna: "Abrev.", tipo: "texto", obrigatorio: true },
     { nome: "sentido", rotulo: "Comportamento", rotuloColuna: "Comp.", tipo: "opcao", obrigatorio: true, opcoes: opcoesFixas(SENTIDOS_DO_PAINEL) },
     {
@@ -1688,12 +1752,14 @@ const painelBordo: DefinicaoCadastro = {
     { nome: "ativo", rotulo: "Ativo", tipo: "booleano" },
   ],
   async listar(db, busca) {
-    const itens = (await db.painelItem.findMany({ orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] })).map(comTextos);
+    // As fórmulas gravadas pelo ID dos indicadores (25/11/2026), com os nomes atuais.
+    const { nomePorId } = await indicadoresParaReferencias(db);
+    const itens = (await db.painelItem.findMany({ orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] })).map((i) => comTextos(comNomesNasFormulas(i, nomePorId)));
     return itens.filter((i) => contem(busca, i.grupo, i.quadro, i.nome, i.sigla, i.metodologiaTexto));
   },
   async ler(db, id) {
     const i = await db.painelItem.findUnique({ where: { id } });
-    return i ? comTextos(i) : null;
+    return i ? comTextos(comNomesNasFormulas(i, (await indicadoresParaReferencias(db)).nomePorId)) : null;
   },
   async preparar(db, v, id) {
     const grupo = exigir(v.grupo, "O grupo");
@@ -1713,16 +1779,18 @@ const painelBordo: DefinicaoCadastro = {
     if (percentual) await validarFormulaDoPainel(db, percentual, "Percentual sob o Valor");
     const casas = texto(v.casasPercentual) ?? "1";
     if (!CASAS_DO_PERCENTUAL.some(([c]) => c === casas)) throw new RegraCadastroError(400, "Casas do percentual inválidas.");
+    // As fórmulas gravadas pelo ID dos indicadores (25/11/2026): trocar o nome de um indicador não as muda.
+    const { idPorNome } = await indicadoresParaReferencias(db);
     return {
       ordem: inteiro(v.ordem, "A ordem") ?? undefined,
       grupo,
       ...identidade,
       sentido,
-      formula,
+      formula: formulaComIds(formula, idPorNome),
       formato,
       // Um formato só (21/10/2026): a coluna do acumulado fica vazia.
       formatoAcumulado: null,
-      percentual,
+      percentual: formulaComIds(percentual, idPorNome),
       casasPercentual: Number(casas),
       separar: v.separar === undefined ? false : booleano(v.separar),
       ativo: v.ativo === undefined ? true : booleano(v.ativo),
@@ -1732,23 +1800,14 @@ const painelBordo: DefinicaoCadastro = {
     const dados = d as Prisma.PainelItemUncheckedCreateInput;
     if (id) {
       const antes = await db.painelItem.findUnique({ where: { id }, select: { grupo: true, quadro: true, nome: true, sigla: true } });
-      const depois: IdentidadeDoCard = { grupo: dados.grupo, quadro: dados.quadro, nome: dados.nome, sigla: dados.sigla };
-      const mudou = antes && (["grupo", "quadro", "nome", "sigla"] as const).some((k) => antes[k] !== depois[k]);
-      if (!antes || !mudou) return (await db.painelItem.update({ where: { id }, data: dados })).id;
-      // A troca do nome (ou do grupo, do quadro e da abreviação) também nos cards dos relatórios e dos painéis (19/11/2026).
-      const porQuem = await nomeDoUsuario(db, quem);
-      const resumo = await trocarNome(() =>
-        db.$transaction(
-          async (tx) => {
-            await tx.painelItem.update({ where: { id }, data: dados });
-            return propagarIdentidadeDoCard(tx, antes, depois, porQuem);
-          },
-          { timeout: 120_000 },
-        ),
-      );
-      await auditar({ usuarioId: quem ?? null, acao: ACAO_RENOMEACAO, entidade: "painel_item", entidadeId: id, antes, depois, metadados: { nome: depois.nome, ...resumo } });
-      const texto = textoDoResumo(resumo);
-      return { id, aviso: texto ? `Também atualizados: ${texto}.` : null };
+      const depois = { grupo: dados.grupo, quadro: dados.quadro, nome: dados.nome, sigla: dados.sigla };
+      await db.painelItem.update({ where: { id }, data: dados });
+      // A troca do nome (ou do grupo, do quadro e da abreviação): os cards dos relatórios e dos painéis acham o card pelo ID
+      // (25/11/2026) e não mudam; a troca fica na Auditoria.
+      if (antes && (["grupo", "quadro", "nome", "sigla"] as const).some((k) => antes[k] !== depois[k])) {
+        await auditar({ usuarioId: quem ?? null, acao: ACAO_RENOMEACAO, entidade: "painel_item", entidadeId: id, antes, depois, metadados: { nome: depois.nome } });
+      }
+      return id;
     }
     const ultima = await db.painelItem.aggregate({ _max: { ordem: true } });
     return (await db.painelItem.create({ data: { ...dados, ordem: dados.ordem ?? (ultima._max.ordem ?? 0) + 1 } })).id;

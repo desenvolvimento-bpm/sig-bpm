@@ -42,13 +42,13 @@ export default function PainelBordoPage() {
               </li>
               <li>Use “Novo” para incluir um item; o lápis edita, e a exclusão fica dentro da edição. Inativo, o item sai do Painel de Bordo.</li>
               <li>
-                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais): até lá,
-                ela não fecha, e a tela Resultados do mês mostra o aviso.
+                Mudar o cadastro com uma competência apurada e ainda não fechada pede reapurar (vale para todos os Cadastros Gerais; trocar o
+                nome, o quadro ou a abreviação, não): até lá, ela não fecha, e a tela Resultados do mês mostra o aviso.
               </li>
               <li>
-                O Nome se edita (também o Grupo, o Quadro e a Abreviação): ao gravar, depois de confirmar, os cards dos Relatórios Executivos e
-                dos Painéis de Bordo que mostram o item mudam junto, de uma vez, e a mensagem diz quantos. Não pode haver dois itens com o mesmo
-                nome e a mesma abreviação no mesmo quadro da aba.
+                O Nome se edita a qualquer momento (também o Grupo, o Quadro e a Abreviação): os cards dos Relatórios Executivos e dos Painéis
+                de Bordo acham o item pelo ID e mostram o nome novo. Não pode haver dois itens com o mesmo nome e a mesma abreviação no mesmo
+                quadro da aba.
               </li>
             </ul>
           }

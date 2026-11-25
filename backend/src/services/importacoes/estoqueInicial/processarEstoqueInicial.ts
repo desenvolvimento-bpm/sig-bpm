@@ -8,7 +8,7 @@ import { caminhoDoArquivo } from "../arquivosImportados.js";
 import { localizarCabecalho, normalizar, numero, texto } from "../listas/leituraListas.js";
 import { garantirObras } from "../listas/obras.js";
 import { escolherAba, recusarImportacao, registrarProgresso } from "../statusImportacao.js";
-import { chaveDaLinha } from "../../../lib/linhas.js";
+import { chaveDaLinha, linhasPorChave } from "../../../lib/linhas.js";
 
 /**
  * Saldo inicial do estoque — a aba Estoque (2025) do SIG BPM 2026 - LISTAS
@@ -63,7 +63,8 @@ export async function processarEstoqueInicial(importacaoId: string): Promise<voi
     await prisma.$transaction(
       async (tx) => {
         const { porCodigo, criadas } = await garantirObras(tx, new Map([...saldos.values()].map((s) => [s.obra, s.nome])));
-        const linhas = new Map((await tx.linha.findMany({ where: { tipo: "PRODUTO" }, select: { id: true, nome: true } })).map((l) => [chaveDaLinha(l.nome), l.id]));
+        // A linha pelo Código ou pelo Nome (25/11/2026: o Código não muda; o Nome, sim).
+        const linhas = linhasPorChave(await tx.linha.findMany({ where: { tipo: "PRODUTO" }, select: { id: true, nome: true, codigo: true } }));
         // Conferido dentro da transação: o saldo inicial só entra no primeiro mês
         // da ferramenta (os outros partem do saldo do mês anterior) e não entra
         // numa competência fechada. O saldo já apurado do mês fica como está:
@@ -83,7 +84,7 @@ export async function processarEstoqueInicial(importacaoId: string): Promise<voi
             competenciaId: importacao.competenciaId,
             importacaoId,
             obraId: porCodigo.get(s.obra)!,
-            linhaId: linhas.get(chaveDaLinha(s.linha)) ?? null,
+            linhaId: linhas.get(chaveDaLinha(s.linha))?.id ?? null,
             linhaTexto: s.linha,
             saldoVolume: s.volume,
             saldoValor: s.valor,

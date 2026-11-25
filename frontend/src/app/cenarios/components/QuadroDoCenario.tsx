@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EllipsisVertical, Gift, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, EllipsisVertical, Gift, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
@@ -227,6 +227,7 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                 title={comReferencia ? "Os Colaboradores da referência de cada linha marcada vão para os meses marcados" : "O cenário não tem referência carregada (Configurações / Referência)"}
                 onClick={() => setReplicando(true)}
               >
+                <Copy className="size-4" />
                 Replicar Referências
               </Button>
               <Button type="button" className={botaoPrimario} onClick={() => setDialogo({ linha: null })}>

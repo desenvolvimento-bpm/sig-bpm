@@ -1341,7 +1341,9 @@ model IndicadorImportado {
   id            String  @id @default(uuid())
   competenciaId String  @map("competencia_id")
   importacaoId  String  @map("importacao_id")
-  nome          String
+  /// O indicador (25/11/2026, os nomes dos cadastros mudam a qualquer momento): o ID dele no cadastro Indicadores; o nome só
+  /// quando não há indicador com ele no cadastro. A coluna continua "nome". Ler e gravar por valoresDosIndicadores.ts.
+  indicador     String   @map("nome")
   /// DECIMAL: o valor do mês, na unidade do indicador (percentuais como fração: 0,05 = 5%).
   valor         Decimal
   linhaArquivo  Int     @map("linha_arquivo")
@@ -1349,7 +1351,7 @@ model IndicadorImportado {
   competencia Competencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
   importacao  Importacao  @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
 
-  @@unique([competenciaId, nome])
+  @@unique([competenciaId, indicador])
   @@index([importacaoId])
   @@map("indicadores_importados")
 }
@@ -1391,7 +1393,9 @@ model MetaImportada {
   id            String  @id @default(uuid())
   competenciaId String  @map("competencia_id")
   importacaoId  String  @map("importacao_id")
-  nome          String
+  /// O indicador (25/11/2026, os nomes dos cadastros mudam a qualquer momento): o ID dele no cadastro Indicadores; o nome só
+  /// quando não há indicador com ele no cadastro. A coluna continua "nome". Ler e gravar por valoresDosIndicadores.ts.
+  indicador     String   @map("nome")
   /// DECIMAL: o valor orçado do mês, na unidade do indicador (percentuais como fração).
   valor         Decimal
   linhaArquivo  Int     @map("linha_arquivo")
@@ -1399,7 +1403,7 @@ model MetaImportada {
   competencia Competencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
   importacao  Importacao  @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
 
-  @@unique([competenciaId, nome])
+  @@unique([competenciaId, indicador])
   @@index([importacaoId])
   @@map("metas_importadas")
 }
@@ -1411,7 +1415,9 @@ model MetaImportada {
 model IndicadorDigitado {
   id            String   @id @default(uuid())
   competenciaId String   @map("competencia_id")
-  nome          String
+  /// O indicador (25/11/2026, os nomes dos cadastros mudam a qualquer momento): o ID dele no cadastro Indicadores; o nome só
+  /// quando não há indicador com ele no cadastro. A coluna continua "nome". Ler e gravar por valoresDosIndicadores.ts.
+  indicador     String   @map("nome")
   /// DECIMAL: o valor do mês, na unidade do indicador (percentuais como fração).
   valor         Decimal
   digitadoPor   String   @map("digitado_por")
@@ -1422,7 +1428,7 @@ model IndicadorDigitado {
 
   competencia Competencia @relation(fields: [competenciaId], references: [id], onDelete: Cascade)
 
-  @@unique([competenciaId, nome])
+  @@unique([competenciaId, indicador])
   @@map("indicadores_digitados")
 }
 
@@ -2076,6 +2082,8 @@ model ReclassificacaoFornecedor {
 /// departamento e atribuição. Vale por cima das reclassificações e das contestações, e o movimento redistribuído não se contesta.
 model RedistribuicaoGasto {
   id             String    @id @default(uuid())
+  /// O nome da redistribuição (25/11/2026, pedido do Adão): o primeiro campo do modal e da tabela.
+  nome           String
   /// O departamento da DRE (do cadastro Departamentos); nulo = Todos.
   departamentoId String?   @map("departamento_id")
   /// LISTA: os fornecedores marcados (o CLI_FORN do balancete, como na lista do modal); comparados sem espaços nas pontas e
@@ -2432,7 +2440,9 @@ model CenarioResultado {
 /// lançamentos manuais: quadros de lotação, Comercial e Administrativo).
 model CenarioIndicador {
   cenarioId String  @map("cenario_id")
-  nome      String
+  /// O indicador (25/11/2026, os nomes dos cadastros mudam a qualquer momento): o ID dele no cadastro Indicadores; o nome só
+  /// quando não há indicador com ele no cadastro. A coluna continua "nome". Ler e gravar por valoresDosIndicadores.ts.
+  indicador String  @map("nome")
   mes       Int
   valor     Decimal
   /// IMPORTADO ou DIGITADO.
@@ -2440,7 +2450,7 @@ model CenarioIndicador {
 
   cenario Cenario @relation(fields: [cenarioId], references: [id], onDelete: Cascade)
 
-  @@id([cenarioId, nome, mes])
+  @@id([cenarioId, indicador, mes])
   @@map("cenarios_indicadores")
 }
 
@@ -2745,6 +2755,8 @@ model CenarioRedistribuicao {
   id             String    @id @default(uuid())
   cenarioId      String    @map("cenario_id")
   origemId       String?   @map("origem_id")
+  /// O nome (25/11/2026), como no cadastro.
+  nome           String
   departamentoId String?   @map("departamento_id")
   fornecedores   String[]  @default([])
   vigenciaInicio DateTime  @map("vigencia_inicio")

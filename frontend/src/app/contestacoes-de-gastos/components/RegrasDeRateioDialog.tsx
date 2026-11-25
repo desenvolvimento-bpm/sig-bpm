@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { plural } from "@/lib/texto";
 
 import { contestacoesService, mensagemDeErro, type DestinoDoRateio, type RegrasDeRateioDoMes } from "../services/contestacoesService";
+import { nomeDaUnidade } from "@/lib/nomesDasUnidades";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 /** O nome de cada balde, nas consultas do modal Contestar: as cinco chaves de rateio e os baldes diretos. */
 export const ROTULO_BALDE: Record<string, string> = {
@@ -16,8 +18,13 @@ export const ROTULO_BALDE: Record<string, string> = {
   ARMADURA: "Armadura",
   ACOMPANHAMENTO: "Acompanhamento",
   UNIDADE: "Unidade",
-  MATRIZ: "Matriz",
-  FILIAL: "Filial",
+  // A Matriz e a Filial com o nome do cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
+  get MATRIZ() {
+    return nomeDaUnidade(1);
+  },
+  get FILIAL() {
+    return nomeDaUnidade(2);
+  },
   OBRAS: "Obras",
   COMPLEMENTAR: "Complementar",
   DESPESAS: "Despesas",
@@ -28,19 +35,48 @@ export const ROTULO_BALDE: Record<string, string> = {
 
 /** Para onde vai cada balde direto, inteiro (a regra da apuração das unidades). */
 const VAI_PARA: Record<string, string> = {
-  MATRIZ: "Matriz",
-  FILIAL: "Filial",
-  UNIDADE: "Matriz ou Filial, pela filial do lançamento",
-  OBRAS: "Serviços: Montagem",
-  COMPLEMENTAR: "Serviços: Complementar",
-  DESPESAS: "Despesas e Extra; nas receitas e nos impostos, Matriz ou Filial, pela filial do lançamento",
-  EXTRA: "Despesas e Extra",
-  RN: "RN",
+  get MATRIZ() {
+    return nomeDaUnidade(1);
+  },
+  get FILIAL() {
+    return nomeDaUnidade(2);
+  },
+  get UNIDADE() {
+    return `${nomeDaUnidade(1)} ou ${nomeDaUnidade(2)}, pela filial do lançamento`;
+  },
+  get OBRAS() {
+    return `${nomeDaUnidade(3)}: Montagem`;
+  },
+  get COMPLEMENTAR() {
+    return `${nomeDaUnidade(3)}: Complementar`;
+  },
+  get DESPESAS() {
+    return `${nomeDaUnidade(4)}; nas receitas e nos impostos, ${nomeDaUnidade(1)} ou ${nomeDaUnidade(2)}, pela filial do lançamento`;
+  },
+  get EXTRA() {
+    return nomeDaUnidade(4);
+  },
+  get RN() {
+    return nomeDaUnidade(5);
+  },
   LEBEN: "Em desuso (construtora do grupo, encerrada)",
 };
 
 /** O nome de cada destino. */
-const DESTINO: Record<DestinoDoRateio["destino"], string> = { MATRIZ: "Matriz", FILIAL: "Filial", MONTAGEM: "Serviços: Montagem", COMPLEMENTAR: "Serviços: Complementar" };
+const DESTINO: Record<DestinoDoRateio["destino"], string> = {
+  get MATRIZ() {
+    return nomeDaUnidade(1);
+  },
+  get FILIAL() {
+    return nomeDaUnidade(2);
+  },
+  get MONTAGEM() {
+    return `${nomeDaUnidade(3)}: Montagem`;
+  },
+  get COMPLEMENTAR() {
+    return `${nomeDaUnidade(3)}: Complementar`;
+  },
+};
 const MEDIDA: Record<string, string> = { "m³": "m³", kg: "kg", und: "pistas", d: "dias" };
 const BASE: Record<string, string> = { M3: "m³", KG: "kg", PISTA: "pistas", DIA: "dias" };
 
@@ -126,6 +162,8 @@ function CartaoDaChave({ c, apurado }: { c: Chave; apurado: boolean }) {
  * unidade.
  */
 export function RegrasDeRateioDialog({ anoMes, onFechar }: { anoMes: string; onFechar: () => void }) {
+  // O nome das unidades no cadastro (25/11/2026): o modal se desenha de novo quando os nomes chegam.
+  useNomesDasUnidades();
   const consulta = useQuery({ queryKey: ["contestacoes", "rateios", anoMes], queryFn: () => contestacoesService.rateios(anoMes), staleTime: 5 * 60_000 });
   const d = consulta.data;
   const mes = d ? `${String(d.competencia.mes).padStart(2, "0")}/${d.competencia.ano}` : anoMes.split("-").reverse().join("/");

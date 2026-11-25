@@ -18,6 +18,7 @@ import { rateiosSemVolume } from "../src/services/dre/apuracaoUnidades.js";
 import { calcularInvestimentosEExtra, depreciacaoMensal, depreciacaoNosMeses } from "../src/services/cenarios/investimentosCenario.js";
 import { Prisma } from "../src/generated/prisma/client.js";
 import { ESTRUTURA_INICIAL_INDICADORES } from "../src/services/relatorios/estruturaInicialIndicadores.js";
+import { IND } from "../src/services/relatorios/indicadoresDoSistema.js";
 
 const planilha = (...linhas: ValorCelula[][]): LinhaPlanilha[] => linhas.map((celulas, i) => ({ numero: i + 1, celulas }));
 const ESTRUTURA = [
@@ -103,12 +104,13 @@ describe("leitura do cenário sintético", () => {
   });
 
   it("as bases do rateio de Projeto são a Liberação de Projetos dos meses (o mês 0, a média, não entra)", () => {
+    // Pelo ID dos indicadores (25/11/2026: os valores dos cenários guardam o ID).
     const bases = basesDosProjetos([
-      { nome: "Liberação de Projetos: Matriz", mes: 0, valor: 999 },
-      { nome: "Liberação de Projetos: Matriz", mes: 1, valor: new Prisma.Decimal("300.5") },
-      { nome: "Liberação de Projetos: Filial", mes: 1, valor: 100 },
-      { nome: "Liberação de Projetos: Filial", mes: 12, valor: 50 },
-      { nome: "Venda: Total", mes: 1, valor: 7 },
+      { indicador: IND.LIBERACAO_MATRIZ, mes: 0, valor: 999 },
+      { indicador: IND.LIBERACAO_MATRIZ, mes: 1, valor: new Prisma.Decimal("300.5") },
+      { indicador: IND.LIBERACAO_FILIAL, mes: 1, valor: 100 },
+      { indicador: IND.LIBERACAO_FILIAL, mes: 12, valor: 50 },
+      { indicador: IND.VENDA_TOTAL, mes: 1, valor: 7 },
     ]);
     assert.deepEqual(bases.get("PROJETO|MATRIZ"), [300.5, ...Array(11).fill(0)]);
     assert.deepEqual(bases.get("PROJETO|FILIAL"), [100, ...Array(10).fill(0), 50]);

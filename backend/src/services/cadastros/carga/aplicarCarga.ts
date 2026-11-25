@@ -3,6 +3,7 @@ import type { PrismaClient } from "../../../generated/prisma/client.js";
 import { BaldeAlocacao, type TipoLinhaDRE } from "../../../generated/prisma/enums.js";
 import { abasDaConta, combinacoesDaConta } from "../../dre/apuracaoUnidades.js";
 import type { CadastrosPreparados } from "./prepararCadastros.js";
+import { nomeDaUnidade } from "../nomesDasUnidades.js";
 import { plural } from "../../../utils/plural.js";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
@@ -74,7 +75,7 @@ type LinhaNoBanco = { id: string; codigo: string; tipo: string; grupo: string; o
  * nas linhas de volume ela é a própria descrição e muda junto). A linha do
  * banco fica com o código novo, e os valores apurados continuam ligados a ela.
  * A prévia da recarga mostra a renomeação como alteração, para o Contábil ver.
- * Devolve código novo → linha do banco.
+ * Devolve código novo → linha do banco. Desde 25/11/2026, a linha do banco fica com o código dela (manterOsCodigos).
  */
 export function renomeacoesDaDre(p: CadastrosPreparados, noBanco: LinhaNoBanco[]) {
   const naPlanilha = new Set(p.dre.linhas.map((l) => l.codigo));
@@ -91,7 +92,25 @@ export function renomeacoesDaDre(p: CadastrosPreparados, noBanco: LinhaNoBanco[]
   return renomeacoes;
 }
 
-export async function compararComBanco(p: CadastrosPreparados) {
+/**
+ * A planilha com os códigos do banco nas linhas renomeadas (25/11/2026, pedido do Adão: os nomes dos cadastros mudam a
+ * qualquer momento): o código de uma linha não muda — as regras da apuração, as fórmulas, os cenários e os relatórios o citam
+ * —, e ela fica só com a descrição nova. Troca o código da planilha nas linhas, nas fórmulas dos subtotais e totais e nos
+ * vínculos das contas.
+ */
+export function manterOsCodigos(p: CadastrosPreparados, noBanco: LinhaNoBanco[]): CadastrosPreparados {
+  const troca = new Map([...renomeacoesDaDre(p, noBanco)].map(([novo, antiga]) => [novo, antiga.codigo]));
+  if (!troca.size) return p;
+  const codigo = (c: string) => troca.get(c) ?? c;
+  const expressao = (e: string | null) => (e ? e.replace(/[A-Z0-9_]+(?:\.[A-Z0-9_]+)+/g, codigo) : e);
+  return {
+    ...p,
+    dre: { ...p.dre, linhas: p.dre.linhas.map((l) => ({ ...l, codigo: codigo(l.codigo), dados: { ...l.dados, expressao: expressao(l.dados.expressao) } })) },
+    vinculos: new Map([...p.vinculos].map(([reduzido, c]) => [reduzido, c === null ? null : codigo(c)])),
+  };
+}
+
+export async function compararComBanco(planilha: CadastrosPreparados) {
   const prisma = getPrismaClient();
   const [centros, contas, linhas] = await Promise.all([
     prisma.centroCusto.findMany({
@@ -102,11 +121,13 @@ export async function compararComBanco(p: CadastrosPreparados) {
     prisma.linhaDRE.findMany({
       orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }],
       include: {
-        unidades: { include: { unidadeNegocio: { select: { nome: true, codigo: true } } } },
+        unidades: { include: { unidadeNegocio: { select: { codigo: true } } } },
         _count: { select: { contas: true, lancamentosContabeis: true, lancamentosManuais: true, resultadosApurados: true } },
       },
     }),
   ]);
+  // O código das linhas renomeadas na planilha não muda (25/11/2026).
+  const p = manterOsCodigos(planilha, linhas);
 
   const chaveCentro = (codigoRM: string | null, nomeRM: string) => codigoRM ?? `sem código · ${nomeRM}`;
   const centrosDif = comparar(
@@ -132,11 +153,13 @@ export async function compararComBanco(p: CadastrosPreparados) {
 
   // A linha renomeada aparece como alterada (a descrição), não como nova e removida.
   const codigoNovo = new Map([...renomeacoesDaDre(p, linhas)].map(([novo, antiga]) => [antiga.codigo, novo]));
+  // As unidades pelo código (25/11/2026), mostradas pelo nome atual.
+  const nomesDasUnidades = (codigos: number[]) => [...codigos].sort((a, b) => a - b).map(nomeDaUnidade).join(", ");
   const dreDif = comparar(
-    new Map(p.dre.linhas.map((l) => [l.codigo, { rotulo: l.dados.descricao, valores: { ...l.dados, unidades: l.unidades.join(", ") } }])),
+    new Map(p.dre.linhas.map((l) => [l.codigo, { rotulo: l.dados.descricao, valores: { ...l.dados, unidades: nomesDasUnidades(l.unidades) } }])),
     new Map(linhas.map((l) => [codigoNovo.get(l.codigo) ?? l.codigo, {
       rotulo: l.descricao,
-      valores: { ...l, unidades: l.unidades.map((u) => u.unidadeNegocio.nome).sort((a, b) => a.localeCompare(b, "pt-BR")).join(", ") },
+      valores: { ...l, unidades: nomesDasUnidades(l.unidades.map((u) => u.unidadeNegocio.codigo)) },
     }])),
     [["descricao", "Descrição"], ["grupo", "Grupo"], ["atribuicao", "Atribuição"], ["tipo", "Tipo"], ["expressao", "Fórmula"], ["definicao", "Definição"], ["unidades", "Unidades"], ["ordem", "Posição"]],
     true,
@@ -148,13 +171,7 @@ export async function compararComBanco(p: CadastrosPreparados) {
 
   // As contas que nenhuma aba de resultado leria (24/10/2026, a regra do cadastro da conta), na estrutura da DRE da
   // planilha: a recarga é bloqueada pela conta que ficaria assim; a que já estava assim e não muda vira aviso.
-  const unidades = await prisma.unidadeNegocio.findMany({ select: { codigo: true, nome: true } });
-  const codigoDaUnidade = new Map(unidades.map((u) => [chaveNome(u.nome), u.codigo]));
-  const linhasDepois = p.dre.linhas.map((l) => ({
-    id: l.codigo,
-    ...l.dados,
-    unidades: l.unidades.map((n) => codigoDaUnidade.get(chaveNome(n))).filter((u): u is number => u !== undefined),
-  }));
+  const linhasDepois = p.dre.linhas.map((l) => ({ id: l.codigo, codigo: l.codigo, ...l.dados, unidades: l.unidades }));
   const linhasAntes = linhas
     .filter((l) => l.ativo)
     .map((l) => ({ ...l, id: codigoNovo.get(l.codigo) ?? l.codigo, unidades: l.unidades.map((u) => u.unidadeNegocio.codigo) }));
@@ -178,14 +195,12 @@ export async function compararComBanco(p: CadastrosPreparados) {
   return { centros: centrosDif, contas: contasDif, dre: dreDif, bloqueios: [...emUsoDre, ...bloqueiosContas], avisosContas };
 }
 
-/** A chave do nome da unidade: sem diferença de maiúsculas e acentos. */
-const chaveNome = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
 /** "A, B ou C". */
 const ouLista = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} ou ${xs[xs.length - 1]}` : (xs[0] ?? ""));
 const BALDES_DAS_CONTAS = Object.values(BaldeAlocacao).filter((b) => b !== "LEBEN");
 
 type ContaParaAbas = { reduzido: string; descricao: string; tipoConta: string; balde: string | null; linha: string | null };
-type LinhaParaAbas = { id: string; tipo: TipoLinhaDRE; grupo: string; grupoSigla: string; atribuicao: string | null; descricao: string; unidades: number[] };
+type LinhaParaAbas = { id: string; codigo: string; tipo: TipoLinhaDRE; grupo: string; grupoSigla: string; atribuicao: string | null; descricao: string; unidades: number[] };
 
 const semAbaPorque = (linha: LinhaParaAbas, balde: string | null) =>
   `na linha “${linha.descricao}” (${linha.grupoSigla}) com o rateio ${balde ?? "vazio"}, que nenhuma aba de resultado lê: os lançamentos de obras, de centros fora do cadastro e sem centro ficariam fora do resultado.`;
@@ -224,7 +239,12 @@ function linhasEmUso(codigos: string[], linhas: LinhaComUso[]) {
 }
 
 /** Grava a planilha preparada. Tudo numa transação: ou entra inteira, ou nada. */
-export async function gravarCadastros(tx: Tx, p: CadastrosPreparados) {
+export async function gravarCadastros(tx: Tx, planilha: CadastrosPreparados) {
+  // O código das linhas renomeadas na planilha não muda (25/11/2026): a planilha passa a usar o do banco.
+  const p = manterOsCodigos(
+    planilha,
+    await tx.linhaDRE.findMany({ select: { id: true, codigo: true, tipo: true, grupo: true, ordem: true }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] }),
+  );
   // Centros sem código no RM: a chave é o nome (como na prévia). Antes eram
   // apagados e recriados a cada carga, com id novo.
   const semCodigo = await tx.centroCusto.findMany({ where: { codigoRM: null }, select: { id: true, nomeRM: true }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] });
@@ -259,19 +279,16 @@ export async function gravarCadastros(tx: Tx, p: CadastrosPreparados) {
   }
 
   // A unidade de cada linha pelo nome (o Tipo saiu do cadastro em 09/10/2026), sem diferença de maiúsculas e acentos.
-  const unidades = await tx.unidadeNegocio.findMany({ select: { id: true, nome: true } });
-  const unidadePorNome = new Map(unidades.map((u) => [chaveNome(u.nome), u.id]));
+  // As unidades pelo código (25/11/2026; antes, pelo nome, que agora muda a qualquer momento).
+  const unidades = await tx.unidadeNegocio.findMany({ select: { id: true, codigo: true } });
+  const unidadePorCodigo = new Map(unidades.map((u) => [u.codigo, u.id]));
   const idPorCodigo = new Map<string, string>();
-  const noBanco = await tx.linhaDRE.findMany({ select: { id: true, codigo: true, tipo: true, grupo: true, ordem: true }, orderBy: [{ ordem: "asc" }, { criadoEm: "asc" }] });
-  for (const [novo, antiga] of renomeacoesDaDre(p, noBanco)) {
-    await tx.linhaDRE.update({ where: { id: antiga.id }, data: { codigo: novo } });
-  }
   for (const l of p.dre.linhas) {
     const linha = await tx.linhaDRE.upsert({ where: { codigo: l.codigo }, create: { codigo: l.codigo, ...l.dados }, update: l.dados });
     idPorCodigo.set(l.codigo, linha.id);
     await tx.linhaDREUnidade.deleteMany({ where: { linhaDREId: linha.id } });
-    for (const nome of l.unidades) {
-      const unidadeNegocioId = unidadePorNome.get(chaveNome(nome));
+    for (const codigo of l.unidades) {
+      const unidadeNegocioId = unidadePorCodigo.get(codigo);
       if (unidadeNegocioId) await tx.linhaDREUnidade.create({ data: { linhaDREId: linha.id, unidadeNegocioId } });
     }
   }

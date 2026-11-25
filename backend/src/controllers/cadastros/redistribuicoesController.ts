@@ -15,6 +15,8 @@ async function responder(response: Response, fn: () => Promise<unknown>, status 
 
 const mes = z.string().regex(/^\d{4}-\d{2}$/);
 const dadosSchema = z.object({
+  // O nome (25/11/2026): a gravação recusa o vazio com a mensagem dela.
+  nome: z.string().max(300),
   departamentoId: z.string().min(1).nullable(),
   linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
   fornecedores: z.array(z.string().max(300)).max(5000),

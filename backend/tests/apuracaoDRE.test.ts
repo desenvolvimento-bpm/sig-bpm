@@ -25,7 +25,8 @@ describe("apuração da DRE por unidade", () => {
     id: codigo, codigo, tipo, grupo, grupoSigla, atribuicao, descricao, expressao, unidades,
   });
   const linhas: LinhaEstrutura[] = [
-    linha("VOL", "PRODUÇÃO (P)", "P", "Produção do Pré-Fabricado (m³)", "Produção do Pré-Fabricado (m³)", [1, 2]),
+    // O código como os da Estrutura da DRE (25/11/2026): a regra dos volumes acha a linha pela descrição de origem, no fim dele.
+    linha("P.PRODUCAO_DO_PRE_FABRICADO_M", "PRODUÇÃO (P)", "P", "Produção do Pré-Fabricado (m³)", "Produção do Pré-Fabricado (m³)", [1, 2]),
     linha("CLT", "CUSTOS DE PRODUÇÃO (CP)", "CPP", "Mão de Obra Direta", "Remunerações CLT", [1, 2]),
     linha("DEP", "CUSTOS DE PRODUÇÃO (CP)", "CPP", "Depreciação", "Depreciação do Maquinário", [1, 2]),
     linha("D", "CUSTOS DE PRODUÇÃO (CP)", "CPP", "Depreciação", "Depreciação", [1, 2], "TOTAL", "DEP"),
@@ -58,7 +59,7 @@ describe("apuração da DRE por unidade", () => {
     assert.equal(v(1, "CLT"), "1150"); // 1.000 + 50 (MATRIZ da filial 2) + 400 × 25%
     assert.equal(v(2, "CLT"), "820"); // 500 + 20 (FILIAL da filial 1) + 400 × 75%
     assert.equal(v(2, "CPP"), "900"); // inclui a depreciação
-    assert.equal(v(1, "VOL"), "100");
+    assert.equal(v(1, "P.PRODUCAO_DO_PRE_FABRICADO_M"), "100");
     // A composição guarda a origem que o detalhamento usa: os pares de balde e filial e o rateio na linha de base.
     const c = resultados.find((r) => r.unidade === 2 && r.codigo === "CLT")?.composicao;
     assert.deepEqual(c?.origem?.contabil, { linhaId: "CLT", pares: [{ balde: "FILIAL" }, { balde: "UNIDADE", filial: 2 }] });

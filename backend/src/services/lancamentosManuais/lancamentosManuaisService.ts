@@ -4,6 +4,7 @@ import type { BaldeAlocacao } from "../../generated/prisma/enums.js";
 import type { LancamentoManualInput } from "../../schemas/lancamentosManuais/lancamentoManualSchema.js";
 import { auditar } from "../auditoriaService.js";
 import { abasQueSomam, CHAVES_DE_RATEIO } from "../dre/apuracaoUnidades.js";
+import { semOGrupo } from "../dre/descricaoDeOrigem.js";
 
 /** Erro de regra — vira 400/404/409 no controller, não 500. */
 export class RegraLancamentoManualError extends Error {
@@ -93,12 +94,13 @@ async function exigirAbaDeResultado(d: { balde: BaldeAlocacao | null; linhaDREId
   const prisma = getPrismaClient();
   const linha = await prisma.linhaDRE.findUnique({
     where: { id: d.linhaDREId },
-    select: { tipo: true, grupoSigla: true, atribuicao: true, descricao: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
+    select: { codigo: true, tipo: true, grupoSigla: true, atribuicao: true, descricao: true, unidades: { select: { unidadeNegocio: { select: { codigo: true } } } } },
   });
   if (!linha) return;
   const par =
     linha.grupoSigla === "CSM" &&
-    (await prisma.linhaDRE.count({ where: { ativo: true, tipo: "ITEM", grupoSigla: "CSC", atribuicao: linha.atribuicao, descricao: linha.descricao } })) > 0;
+    // O par nos Complementares pelo código sem o grupo (25/11/2026: a atribuição e a descrição de origem).
+    (await prisma.linhaDRE.count({ where: { ativo: true, tipo: "ITEM", grupoSigla: "CSC", codigo: { endsWith: `.${semOGrupo(linha.codigo)}` } } })) > 0;
   const rateio = ["PROJETO", "PRODUCAO", "METALURGIA", "ARMADURA", "ACOMPANHAMENTO"].includes(d.balde ?? "");
   const abas = abasQueSomam({ ...linha, unidades: linha.unidades.map((u) => u.unidadeNegocio.codigo) }, { filial, balde: d.balde, rateio, manual: true, parNaComplementar: par });
   if (!abas.length) {

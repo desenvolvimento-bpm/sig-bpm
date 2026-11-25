@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CheckCheck } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -116,6 +117,7 @@ export function VerificacoesDoCenario({ id, podeEditar, onAbrirAba }: { id: stri
             Retirar Acordo
           </Button>
           <Button type="button" className={botaoPrimario} disabled={!paraAcordo || acordar.isPending} onClick={() => acordar.mutate(true)}>
+            <CheckCheck className="size-4" />
             {acordar.isPending ? "Gravando…" : "De Acordo"}
           </Button>
         </>

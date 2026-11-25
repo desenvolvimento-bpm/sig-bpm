@@ -137,15 +137,15 @@ describe("Realizado por Obra: os Créditos de Impostos (04/11/2026)", () => {
         item(8, "Gastos Gerais Diretos", "Cimento"),
       ],
       [
-        { id: "cim", atribuicao: "Matérias Primas", descricao: "Cimento" },
-        { id: "frete", atribuicao: "Gastos Gerais Variáveis", descricao: "Frete e Descarga" },
+        { id: "cim", atribuicao: "Matérias Primas", codigo: "CPP.MP.CIMENTO", descricao: "Cimento" },
+        { id: "frete", atribuicao: "Gastos Gerais Variáveis", codigo: "DVV.GGV.FRETE_E_DESCARGA", descricao: "Frete e Descarga" },
       ],
       [
-        { atribuicao: "Matérias Primas", descricao: "Cimento" },
-        { atribuicao: "Matérias Primas", descricao: "Concreto e Graute" },
-        { atribuicao: "Gastos Gerais Variáveis", descricao: "Frete e Descarga" },
-        { atribuicao: "Gastos Gerais Diretos", descricao: "Outros Custos/Despesas" },
-        { atribuicao: "Gastos Gerais Indiretos", descricao: "Outros Custos/Despesas" },
+        { atribuicao: "Matérias Primas", codigo: "CPP.MP.CIMENTO", descricao: "Cimento" },
+        { atribuicao: "Matérias Primas", codigo: "CPP.MP.CONCRETO_E_GRAUTE", descricao: "Concreto e Graute" },
+        { atribuicao: "Gastos Gerais Variáveis", codigo: "DVV.GGV.FRETE_E_DESCARGA", descricao: "Frete e Descarga" },
+        { atribuicao: "Gastos Gerais Diretos", codigo: "CPP.GGD.OUTROS_CUSTOS_DESPESAS", descricao: "Outros Custos/Despesas" },
+        { atribuicao: "Gastos Gerais Indiretos", codigo: "CPP.GGI.OUTROS_CUSTOS_DESPESAS", descricao: "Outros Custos/Despesas" },
       ],
     );
     assert.deepEqual(

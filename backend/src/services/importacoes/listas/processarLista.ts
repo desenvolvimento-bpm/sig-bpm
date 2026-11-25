@@ -26,7 +26,7 @@ export function ehListaOperacional(tipo: TipoImportacao): tipo is TipoListaOpera
 }
 import type { RegistroLista } from "./leituraListas.js";
 import { garantirObras } from "./obras.js";
-import { chaveDaLinha } from "../../../lib/linhas.js";
+import { chaveDaLinha, linhasPorChave } from "../../../lib/linhas.js";
 
 export type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -103,13 +103,14 @@ export async function prepararGravacao(
 ): Promise<{ dados: LinhaGravada[]; obrasCriadas: number; linhasInativas: Array<{ nome: string; registros: number }> }> {
   const [unidades, linhas, movimentos] = await Promise.all([
     tx.unidadeNegocio.findMany({ select: { id: true, codigo: true } }),
-    tx.linha.findMany({ select: { id: true, tipo: true, nome: true, ativo: true } }),
+    tx.linha.findMany({ select: { id: true, tipo: true, nome: true, codigo: true, ativo: true } }),
     COM_MOVIMENTO.has(tipo) ? tx.tipoMovimento.findMany({ select: { id: true, codigo: true } }) : [],
   ]);
   const movimentoPorCodigo = new Map(movimentos.map((m) => [m.codigo, m.id]));
   const unidadePorCodigo = new Map(unidades.map((u) => [u.codigo, u.id]));
-  // A linha pelo Nome do cadastro (11/10/2026), na mesma forma do texto da planilha (chaveDaLinha).
-  const linhaPorChave = new Map(linhas.map((l) => [`${l.tipo}|${chaveDaLinha(l.nome)}`, l.id]));
+  // A linha pelo Código ou pelo Nome do cadastro (25/11/2026: o Código não muda; o Nome, sim), na mesma forma do texto da
+  // planilha (chaveDaLinha).
+  const linhaPorChave = linhasPorChave(linhas, (l) => `${l.tipo}|`);
   // Todas as listas têm a linha (a metalurgia desde 09/10/2026).
   const temLinha = true;
 
@@ -126,7 +127,7 @@ export async function prepararGravacao(
     unidadeNegocioId: r.unidade ? (unidadePorCodigo.get(r.unidade) ?? null) : null,
     obraId: r.obra ? (porCodigo.get(r.obra.codigo) ?? null) : null,
     ...(temLinha
-      ? { linhaId: r.linha ? (linhaPorChave.get(`${r.linha.tipo}|${chaveDaLinha(r.linha.codigo)}`) ?? null) : null }
+      ? { linhaId: r.linha ? (linhaPorChave.get(`${r.linha.tipo}|${chaveDaLinha(r.linha.codigo)}`)?.id ?? null) : null }
       : {}),
     quantidade: r.quantidade,
     criadoPor: contexto.criadoPor,

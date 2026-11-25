@@ -18,6 +18,7 @@ import {
   type RegistroLista,
 } from "./leituraListas.js";
 import { devolucoesDoResumo, saidasDoResumo } from "./leituraResumos.js";
+import { nomeDaUnidade } from "../../cadastros/nomesDasUnidades.js";
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -86,10 +87,9 @@ function totalPorUnidade(
 ): TotalLista[] {
   const porUnidade = new Map<CodigoUnidade | null, Decimal>();
   for (const r of registros) porUnidade.set(r.unidade, (porUnidade.get(r.unidade) ?? new Decimal(0)).plus(campo(r) ?? 0));
-  const nome = { 1: "Matriz", 2: "Filial", 3: "Serviços" } as const;
   return [...porUnidade]
     .sort(([a], [b]) => (a ?? 9) - (b ?? 9))
-    .map(([u, v]) => ({ codigo: `${rotulo}|${u}`, rotulo: `${rotulo} — ${u ? nome[u] : "sem unidade"}`, medida, quantidade: v.toFixed(2) }));
+    .map(([u, v]) => ({ codigo: `${rotulo}|${u}`, rotulo: `${rotulo} — ${u ? nomeDaUnidade(u) : "sem unidade"}`, medida, quantidade: v.toFixed(2) }));
 }
 
 const valor = (r: RegistroLista) => r.campos.valor as Decimal | null;

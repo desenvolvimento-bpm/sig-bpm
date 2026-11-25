@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useRef, useState } from "react";
+import { Copy, Percent } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -434,11 +435,13 @@ export function TabelaEditavel({
   const reajustar = (
     <>
       <Button type="button" className={`${botaoPrimario} ${tituloNoDestaque ? "" : "ml-auto"}`} disabled={marcados.length === 0} onClick={() => setReajuste(true)}>
+        <Percent className="size-4" />
         Reajustar Marcados
       </Button>
       {/* Logo depois do Reajustar Marcados, nas tabelas com a Média de Referência (13/11/2026, pedido do Adão). */}
       {comReferencia ? (
         <Button type="button" className={botaoPrimario} disabled={dasReferencias.length === 0} onClick={() => setReplicandoReferencias(true)}>
+          <Copy className="size-4" />
           Replicar Referências
         </Button>
       ) : null}

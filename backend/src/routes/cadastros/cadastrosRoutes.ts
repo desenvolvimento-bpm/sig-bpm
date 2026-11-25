@@ -8,9 +8,15 @@ import { cenariosController } from "../../controllers/cenarios/cenariosControlle
 import { percentuaisFixosController } from "../../controllers/cadastros/percentuaisFixosController.js";
 import { redistribuicoesController } from "../../controllers/cadastros/redistribuicoesController.js";
 import { autenticacao } from "../../middlewares/autenticacao.js";
+import { nomesDasUnidades } from "../../services/cadastros/nomesDasUnidades.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 
 export const cadastrosRoutes = Router();
+
+// Os nomes das unidades (25/11/2026: mudam a qualquer momento), para as abas e os títulos das telas: qualquer usuário.
+cadastrosRoutes.get("/unidades/nomes", autenticacao, (_req, res) => {
+  res.json(nomesDasUnidades());
+});
 
 // Consulta, e a recarga a partir da planilha durante o paralelo. A edição
 // registro a registro entra no Passo 25.

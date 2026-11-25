@@ -1,6 +1,7 @@
 import { api } from "@/lib/api";
 
 import type { StatusCompetencia } from "../../../services/competenciasService";
+import { nomeDaUnidade } from "@/lib/nomesDasUnidades";
 
 export type Natureza = "PRE_FABRICADO" | "FRETE" | "DEVOLUCOES_INVENTARIOS" | "MONTAGEM" | "COMPLEMENTAR";
 export type Componente = "BRUTA" | "LIQUIDA" | "VARIACAO_ESTOQUE";
@@ -130,7 +131,18 @@ export const ROTULO_VENDA: Record<Venda, string> = { GLOBAL: "Global", MERCANTIL
 /** Matriz e Filial separam as receitas em venda global e mercantil; Obras e a variação do estoque, não. */
 export const pedeVenda = (unidade: number, componente: Componente) => (unidade === 1 || unidade === 2) && componente !== "VARIACAO_ESTOQUE";
 
-export const ROTULO_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços" };
+/** O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento; a tela usa useNomesDasUnidades). */
+export const ROTULO_UNIDADE: Record<number, string> = {
+  get 1() {
+    return nomeDaUnidade(1);
+  },
+  get 2() {
+    return nomeDaUnidade(2);
+  },
+  get 3() {
+    return nomeDaUnidade(3);
+  },
+};
 
 export const ROTULO_NATUREZA: Record<Natureza, string> = {
   PRE_FABRICADO: "Pré-fabricado",

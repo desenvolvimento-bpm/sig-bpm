@@ -17,6 +17,7 @@ import { CopiarComoImagem } from "../components/CopiarComoImagem";
 import { Quadradinho } from "../components/GraficoRealizadoOrcado";
 import { BotaoRecolherGrupo, useGrupoRecolhido } from "./GrupoRecolhivel";
 import { formato, mensagemDeErro, relatoriosService, type Celula, type LinhaResultado, type MarcacaoComparavel, type MesRelatorio, type Resultados } from "../services/relatoriosService";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 
 /**
  * A aba Variações do Painel de Bordo de Resultados Empresariais (18/11/2026, pedido do Adão; criada em Resultados e levada
@@ -50,7 +51,9 @@ const UNIDADES: Array<UnidadeDasVariacoes & { aba: string }> = [
 /** As unidades que o perfil lê em Resultados (as abas delas). */
 function useUnidadesDasVariacoes(): UnidadeDasVariacoes[] {
   const { hasPermission } = usePermissions();
-  return UNIDADES.filter((u) => hasPermission(`relatorio_resultados.${u.aba}:ler`)).map(({ visao, nome }) => ({ visao, nome }));
+  // O nome das unidades no cadastro (25/11/2026: muda a qualquer momento).
+  const { nomeDaUnidade } = useNomesDasUnidades();
+  return UNIDADES.filter((u) => hasPermission(`relatorio_resultados.${u.aba}:ler`)).map(({ visao }) => ({ visao, nome: nomeDaUnidade(visao) }));
 }
 
 /** Os grupos da DRE que ficam de fora: as receitas, os impostos sobre elas e as Despesas Variáveis de Venda (DVV). */

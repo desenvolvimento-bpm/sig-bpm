@@ -1002,6 +1002,7 @@ export const cenariosController = {
     const redistribuicao = request.params.redistribuicaoId === undefined ? null : idSchema.safeParse(request.params.redistribuicaoId);
     const corpo = z
       .object({
+        nome: z.string().max(300),
         departamentoId: z.string().min(1).nullable(),
         linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
         fornecedores: z.array(z.string().max(300)).max(2000),

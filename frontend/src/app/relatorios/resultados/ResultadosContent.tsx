@@ -37,9 +37,11 @@ import {
   type ResultadosDaLinha,
   type MarcacaoComparavel,
 } from "../services/relatoriosService";
+import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
+import { ehAConta } from "@/lib/contasDaDRE";
 
 /** As visões da DRE, como as abas Resultados (…) da planilha, e os centros de custo. */
-const VISOES: Array<{ chave: string; aba: string; nome: string; foraDaTela?: boolean }> = [
+const TODAS_AS_VISOES: Array<{ chave: string; aba: string; nome: string; foraDaTela?: boolean }> = [
   { chave: "0", aba: "consolidado", nome: "Consolidado" },
   { chave: "1", aba: "matriz", nome: "Matriz" },
   { chave: "2", aba: "filial", nome: "Filial" },
@@ -82,7 +84,8 @@ const unitario = (l: LinhaResultado, v: number | null) => (l.tipo === "SECAO" ||
  * lançamentos de origem (se o usuário alcança as movimentações da linha); as
  * linhas de volume, as listas somadas por obra (fora dos centros de custo).
  */
-const detalhavel = (l: LinhaResultado) => !l.volume && (l.tipo === "ITEM" || l.descricao === "Impostos Operacionais") && l.podeDetalhar !== false;
+// Os Impostos Operacionais pela descrição de origem (25/11/2026), que não muda com a Descrição.
+const detalhavel = (l: LinhaResultado) => !l.volume && (l.tipo === "ITEM" || ehAConta(l, "Impostos Operacionais")) && l.podeDetalhar !== false;
 const listavel = (l: LinhaResultado, visao: VisaoDetalhe) => l.volume && l.tipo === "ITEM" && !("grupo" in visao);
 
 /**
@@ -877,6 +880,9 @@ function VisaoDepartamentos({ ano, ate, comparaCom }: { ano: number; ate: number
 }
 
 export function ResultadosContent() {
+  // O nome das unidades no cadastro (25/11/2026: muda a qualquer momento).
+  const { nomeDaVisao } = useNomesDasUnidades();
+  const VISOES = TODAS_AS_VISOES.map((v) => (/^[0-5]$/.test(v.chave) ? { ...v, nome: nomeDaVisao(v.chave) } : v));
   useRegistrarAcessoTela("/relatorios/resultados");
   const exercicios = useExercicios();
   // O Coordenador (recorte por centro de custo) vê a aba Obras só com a opção marcada no cadastro dele.

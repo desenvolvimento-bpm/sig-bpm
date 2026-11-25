@@ -16,7 +16,7 @@ import {
   type PrecoLido,
 } from "./leiauteDreComercial.js";
 import { detectarPrecos, type SubstituicaoPreco } from "../../divergencias/divergenciasService.js";
-import { chaveDaLinha } from "../../../lib/linhas.js";
+import { chaveDaLinha, linhasPorChave } from "../../../lib/linhas.js";
 
 /**
  * Importação da DRE do Comercial, com o preço historiado, não sobrescrito
@@ -64,11 +64,10 @@ export async function processarDreComercial(importacaoId: string): Promise<void>
         const obras = new Map(leitura.precos.map((p) => [p.obra, nomes.get(p.obra) ?? null]));
         const { porCodigo, criadas, nomeadas } = await garantirObras(tx, obras);
 
-        const linhas = await tx.linha.findMany({ where: { tipo: { in: ["PRODUTO", "OBRA"] } }, select: { id: true, tipo: true, nome: true } });
-        // A LINHA da DRE mistura linhas de produto e de obra; produto tem precedência.
-        const linhaPorCodigo = new Map<string, string>();
-        // Pelo Nome da linha (11/10/2026), na forma do texto da planilha.
-        for (const tipo of ["OBRA", "PRODUTO"]) for (const l of linhas) if (l.tipo === tipo) linhaPorCodigo.set(chaveDaLinha(l.nome), l.id);
+        const linhas = await tx.linha.findMany({ where: { tipo: { in: ["PRODUTO", "OBRA"] } }, select: { id: true, tipo: true, nome: true, codigo: true } });
+        // A LINHA da DRE mistura linhas de produto e de obra; produto tem precedência. Pelo Código ou pelo Nome da linha
+        // (25/11/2026: o Código não muda; o Nome, sim), na forma do texto da planilha.
+        const linhaPorCodigo = linhasPorChave([...linhas.filter((l) => l.tipo === "OBRA"), ...linhas.filter((l) => l.tipo === "PRODUTO")]);
 
         const vigentes = await tx.precoContrato.findMany({
           where: { substituidoEm: null },
@@ -99,7 +98,7 @@ export async function processarDreComercial(importacaoId: string): Promise<void>
           chave: p.chave,
           etapa: p.etapa,
           linhaTexto: p.linhaTexto,
-          linhaId: linhaPorCodigo.get(chaveDaLinha(p.linhaTexto)) ?? null,
+          linhaId: linhaPorCodigo.get(chaveDaLinha(p.linhaTexto))?.id ?? null,
           contaResultado: p.contaResultado,
           departamento: p.departamento,
           atribuicao: p.atribuicao,

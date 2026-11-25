@@ -8,6 +8,7 @@ import type { Composicao, OrigemValor, ParcelaRateio } from "../dre/apuracaoUnid
 import { grupoDoCentro } from "../dre/dreService.js";
 import { foraDaObra, sinalDaLinha } from "../dre/obrasService.js";
 import { deveriaTerCentro, grupoSemCentro, type GrupoSemCentro } from "../dre/semCentroService.js";
+import { nomeDaUnidade, nomeDoBalde } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * A aba Detalhes da exportação dos Resultados em Excel (27/10/2026, pedido do Adão: a caixa “Incluir a Aba Detalhes” do
@@ -28,15 +29,12 @@ export type AlvoDosDetalhes =
 /** Uma aba exportada: o nome (a coluna Aba), as linhas da DRE dela (os códigos, na ordem) e o que detalhar (sem: as linhas). */
 export type AbaDetalhada = { nome: string; codigos: string[]; alvo: AlvoDosDetalhes | null };
 
-const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
 const ROTULO_DO_RATEIO: Record<string, string> = {
   PROJETO: "Projetos Liberados",
   PRODUCAO: "Produção",
   METALURGIA: "Metalurgia",
   ARMADURA: "Armadura",
   ACOMPANHAMENTO: "Acompanhamento de Obra",
-  MATRIZ: "Matriz",
-  FILIAL: "Filial",
   MONTAGEM: "Montagem",
   COMPLEMENTAR: "Complementar",
 };
@@ -186,7 +184,7 @@ export async function detalhesDosResultados(ano: number, ate: number, acesso: Ac
             const comp = g.composicao as Composicao | null;
             if (!naAba(linha) || !comp || !podeVerMovimentos(acesso, linha)) continue;
             const unidade = g.unidadeNegocio!.codigo;
-            const prefixo = alvo.unidades.length > 1 ? `${NOME_DA_UNIDADE[unidade] ?? unidade} · ` : "";
+            const prefixo = alvo.unidades.length > 1 ? `${nomeDaUnidade(unidade) ?? unidade} · ` : "";
             const o = comp.origem ?? {};
             if (o.contabil) {
               const f = o.contabil;
@@ -202,7 +200,7 @@ export async function detalhesDosResultados(ano: number, ate: number, acesso: Ac
               if (!r.linhaId || r.competenciaId) continue;
               const p = new Prisma.Decimal(r.percentual);
               const ms = (porLinha.get(r.linhaId) ?? []).filter((m) => m.alocacao === "RATEIO" && m.balde === r.chave);
-              partes.push({ linha, bloco: `${prefixo}Rateio: ${ROTULO_DO_RATEIO[r.chave] ?? r.chave} → ${ROTULO_DO_RATEIO[r.destino] ?? r.destino}`, ms, fator: () => p });
+              partes.push({ linha, bloco: `${prefixo}Rateio: ${ROTULO_DO_RATEIO[r.chave] ?? r.chave} → ${nomeDoBalde(r.destino) ?? ROTULO_DO_RATEIO[r.destino] ?? r.destino}`, ms, fator: () => p });
             }
           }
         } else if (alvo.tipo === "centro") {

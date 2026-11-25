@@ -154,7 +154,7 @@ export async function dadosDasVerificacoes(c: { id: string; ano: number }): Prom
     prisma.cenarioPremissa.findMany({ where: { cenarioId: c.id }, select: { unidade: true, venda: true, chave: true, mes: true, valor: true } }),
     gruposDoCenario(c.id),
     prisma.cenarioCentro.findMany({ where: { cenarioId: c.id, mes: { gte: 1, lte: 12 } }, select: { grupo: true, mes: true, valor: true, linhaDRE: { select: { codigo: true } } } }),
-    prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(c.id), select: { nome: true, mes: true, valor: true } }),
+    prisma.cenarioIndicador.findMany({ where: ondeEstaoOsProjetos(c.id), select: { indicador: true, mes: true, valor: true } }),
     regrasDoCenario(prisma, c.id),
     prisma.cenarioLotacao.findMany({
       where: { cenarioId: c.id },

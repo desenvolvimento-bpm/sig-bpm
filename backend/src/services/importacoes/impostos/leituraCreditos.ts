@@ -1,5 +1,6 @@
 import type { LinhaPlanilha, ValorCelula } from "../../../lib/xlsx.js";
 import { data, localizarCabecalho, mesmoMes, normalizar, numero, texto } from "../listas/leituraListas.js";
+import { nomeDaUnidade } from "../../cadastros/nomesDasUnidades.js";
 
 /**
  * A leitura da aba Impostos (Lista) do SIG BPM 2026 - LISTAS REALIZADO (RESULTADOS) (04/11/2026, pedido do Adão): de cada mês
@@ -91,7 +92,7 @@ export function lerCreditos(linhas: LinhaPlanilha[], ano: number, mes: number): 
     }
     const chave = `${unidade}|${chaveDaConta(atribuicao, conta)}`;
     if (vistas.has(chave)) {
-      rejeicoes.push({ linha: l.numero, codigo: "REPETIDA", mensagem: `${atribuicao} › ${conta} aparece mais de uma vez na ${unidade === 1 ? "Matriz" : "Filial"} no mês.` });
+      rejeicoes.push({ linha: l.numero, codigo: "REPETIDA", mensagem: `${atribuicao} › ${conta} aparece mais de uma vez na ${nomeDaUnidade(unidade)} no mês.` });
       continue;
     }
     vistas.add(chave);
