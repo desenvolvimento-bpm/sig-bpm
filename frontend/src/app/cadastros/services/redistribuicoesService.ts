@@ -11,8 +11,11 @@ export type Redistribuicao = {
   linhasDREIds: string[];
   contas: Array<{ codigo: string; rotulo: string }>;
   fornecedores: string[];
-  /** O percentual de 0 a 100. */
-  destinos: Array<{ centroCustoId: string; centro: string; percentual: number }>;
+  /**
+   * O centro, a Conta da DRE dele (23/11/2026: uma conta do departamento do centro; nula num destino anterior sem conta equivalente)
+   * e o percentual de 0 a 100.
+   */
+  destinos: Array<{ centroCustoId: string; centro: string; linhaDREId: string | null; conta: string | null; percentual: number }>;
   /** "AAAA-MM". */
   vigenciaInicio: string;
   vigenciaFim: string | null;
@@ -33,7 +36,7 @@ export type OpcoesDaRedistribuicao = {
 };
 export type FornecedorDaCombinacao = { fornecedor: string; movimentos: number; valor: number; competencias: string };
 export type DadosDaRedistribuicao = Omit<Redistribuicao, "id" | "departamento" | "contas" | "competencias" | "destinos"> & {
-  destinos: Array<{ centroCustoId: string; percentual: number }>;
+  destinos: Array<{ centroCustoId: string; linhaDREId: string; percentual: number }>;
 };
 /** O efeito de gravar: as competências reclassificadas e as apuradas que pedem reapurar. */
 export type EfeitoDaRedistribuicao = { reclassificadas: string[]; apuradasPorReapurar: string[] };
@@ -48,6 +51,22 @@ export const redistribuicoesService = {
     (id ? await api.put<{ data: EfeitoDaRedistribuicao }>(`${base}/${id}`, d) : await api.post<{ data: EfeitoDaRedistribuicao }>(base, d)).data.data,
   excluir: async (id: string) => (await api.delete<{ data: EfeitoDaRedistribuicao }>(`${base}/${id}`)).data.data,
 };
+
+/** A Conta da DRE é do departamento do centro (23/11/2026): o grupo da linha é o departamento dele, pelos nomes (como no SIG). */
+export const contaDoDepartamento = (l: { grupo: string }, c: { departamento: string | null }) => !!c.departamento && l.grupo.trim().toUpperCase() === c.departamento.trim().toUpperCase();
+/**
+ * A atribuição da conta cabe na do centro (23/11/2026, como a verificação da classificação): o centro direto não leva Mão de Obra
+ * Indireta nem Gastos Gerais Indiretos, o indireto não leva Mão de Obra Direta nem Gastos Gerais Diretos; as outras valem nos dois.
+ */
+export const atribuicaoCabeNoCentro = (atribuicaoDoCentro: "DIRETA" | "INDIRETA" | null, atribuicaoDaConta: string | null) => {
+  const a = atribuicaoDaConta ?? "";
+  if (atribuicaoDoCentro === "DIRETA") return a !== "Mão de Obra Indireta" && a !== "Gastos Gerais Indiretos";
+  if (atribuicaoDoCentro === "INDIRETA") return a !== "Mão de Obra Direta" && a !== "Gastos Gerais Diretos";
+  return true;
+};
+/** A Conta da DRE é do centro: do departamento e da atribuição dele. */
+export const contaDoCentro = (l: { grupo: string; atribuicao: string | null }, c: { departamento: string | null; atribuicao: "DIRETA" | "INDIRETA" | null }) =>
+  contaDoDepartamento(l, c) && atribuicaoCabeNoCentro(c.atribuicao, l.atribuicao);
 
 /** As contas de uma redistribuição num texto curto: a primeira e quantas mais. */
 export const nomeDasContas = (contas: Array<{ rotulo: string }>) =>

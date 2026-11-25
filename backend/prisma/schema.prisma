@@ -617,6 +617,9 @@ model LinhaDRE {
   redistribuicoes      RedistribuicaoConta[]
   partesRedistribuidas LancamentoRedistribuido[]
   redistribuicoesDosCenarios CenarioRedistribuicaoConta[]
+  /// Os destinos das redistribuições (23/11/2026: a conta de cada centro de Redistribuir Para), nos Cadastros Gerais e nos cenários.
+  destinosDasRedistribuicoes           RedistribuicaoDestino[]
+  destinosDasRedistribuicoesDosCenarios CenarioRedistribuicaoDestino[]
 }
 
 /// LISTA-DE: LinhaDRE.unidadesAplicaveis (seria `String[]` no PostgreSQL)
@@ -2068,9 +2071,9 @@ model ReclassificacaoFornecedor {
 
 /// Redistribuição de gastos (13/11/2026, pedido do Adão; Cadastros da Controladoria / Controladoria / Redistribuições de
 /// Gastos): os movimentos dos fornecedores marcados, numa conta da DRE (e num departamento, ou em todos), valem divididos
-/// entre os centros de custo dos destinos, pelos percentuais (somam 100%), nas competências da vigência. Mantêm a conta da
-/// DRE; as partes não passam pela verificação de departamento e atribuição (o plano de contas resumido de 2027 vale para
-/// qualquer centro). Vale por cima das reclassificações e das contestações, e o movimento redistribuído não se contesta.
+/// entre os centros de custo dos destinos, pelos percentuais (somam 100%), nas competências da vigência. Cada destino vai na
+/// conta da DRE dele (23/11/2026, pedido do Adão: uma conta do departamento do centro); as partes não passam pela verificação de
+/// departamento e atribuição. Vale por cima das reclassificações e das contestações, e o movimento redistribuído não se contesta.
 model RedistribuicaoGasto {
   id             String    @id @default(uuid())
   /// O departamento da DRE (do cadastro Departamentos); nulo = Todos.
@@ -2113,19 +2116,25 @@ model RedistribuicaoConta {
   @@map("redistribuicoes_gastos_contas")
 }
 
-/// Um destino de uma redistribuição de gastos (13/11/2026): o centro de custo e o percentual dele (0 a 1).
+/// Um destino de uma redistribuição de gastos (13/11/2026): o centro de custo, a conta da DRE e o percentual dele (0 a 1).
 model RedistribuicaoDestino {
   id               String  @id @default(uuid())
   redistribuicaoId String  @map("redistribuicao_id")
   centroCustoId    String  @map("centro_custo_id")
+  /// A Conta da DRE do destino (23/11/2026, pedido do Adão): a parte do movimento vai para o centro nesta conta, uma linha de item
+  /// do departamento do centro. Nula só num destino anterior sem conta equivalente no departamento do centro: a parte fica na conta
+  /// do movimento, e o modal pede a conta na próxima gravação.
+  linhaDREId       String? @map("linha_dre_id")
   /// DECIMAL: 0 a 1; os destinos de uma redistribuição somam 1 (100%).
   percentual       Decimal
   ordem            Int     @default(0)
 
   redistribuicao RedistribuicaoGasto @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
   centroCusto    CentroCusto         @relation(fields: [centroCustoId], references: [id], onDelete: Restrict)
+  linhaDRE       LinhaDRE?           @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
 
   @@unique([redistribuicaoId, centroCustoId])
+  @@index([linhaDREId])
   @@map("redistribuicoes_gastos_destinos")
 }
 
@@ -2773,19 +2782,24 @@ model CenarioRedistribuicaoConta {
   @@map("cenarios_redistribuicoes_contas")
 }
 
-/// Um destino de uma redistribuição do cenário (20/11/2026): o centro da cópia do cenário e o percentual (0 a 1).
+/// Um destino de uma redistribuição do cenário (20/11/2026): o centro da cópia do cenário, a conta da DRE e o percentual (0 a 1).
 model CenarioRedistribuicaoDestino {
   id               String  @id @default(uuid())
   redistribuicaoId String  @map("redistribuicao_id")
   centroCustoId    String  @map("centro_custo_id")
+  /// A Conta da DRE do destino (23/11/2026, como no cadastro): uma linha de item do departamento do centro da cópia. Nula só num
+  /// destino anterior sem conta equivalente: a parte fica na conta do movimento.
+  linhaDREId       String? @map("linha_dre_id")
   /// DECIMAL: 0 a 1; os destinos de uma redistribuição somam 1 (100%).
   percentual       Decimal
   ordem            Int     @default(0)
 
   redistribuicao CenarioRedistribuicao @relation(fields: [redistribuicaoId], references: [id], onDelete: Cascade)
   centroCusto    CenarioCentroCusto    @relation(fields: [centroCustoId], references: [id], onDelete: Cascade)
+  linhaDRE       LinhaDRE?             @relation(fields: [linhaDREId], references: [id], onDelete: Restrict)
 
   @@unique([redistribuicaoId, centroCustoId])
+  @@index([linhaDREId])
   @@map("cenarios_redistribuicoes_destinos")
 }
 

@@ -19,7 +19,7 @@ import { RedistribuicaoDialog } from "./RedistribuicaoDialog";
 
 const POR_PAGINA_INICIAL = 50;
 const pct = (v: number) => `${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
-const destinosTexto = (r: Redistribuicao) => r.destinos.map((d) => `${d.centro}: ${pct(d.percentual)}`).join("; ");
+const destinosTexto = (r: Redistribuicao) => r.destinos.map((d) => `${d.centro}${d.conta ? ` (${d.conta})` : ""}: ${pct(d.percentual)}`).join("; ");
 
 const COLUNAS: Coluna<Redistribuicao>[] = [
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
@@ -52,7 +52,7 @@ export function RedistribuicoesContent() {
     <CadastroShell
       titulo="Redistribuições de Gastos"
       exportar={<ExportarTabela titulo="Cadastros · Controladoria · Redistribuições de Gastos" colunas={colunas} linhas={tabela.filtradas} />}
-      descricao="Os movimentos dos fornecedores marcados, nas contas da DRE escolhidas (e num departamento, ou em todos), valem divididos entre centros de custo, pelos percentuais, nas competências da vigência."
+      descricao="Os movimentos dos fornecedores marcados, nas contas da DRE escolhidas (e num departamento, ou em todos), valem divididos entre centros de custo, cada um numa conta do departamento e da atribuição dele, pelos percentuais, nas competências da vigência."
       comoUsar={
         <ul>
           <li>Use os filtros nos rótulos das colunas.</li>
@@ -72,15 +72,22 @@ export function RedistribuicoesContent() {
           </li>
           <li>
             Em Redistribuir Para, adicione os centros de custo (digite o código ou o nome, ou use a lupa para ver a lista dos centros, com o
-            departamento, o grupo, a atribuição e o balde) e o percentual de cada um: a Soma mostra o total, e a gravação fica bloqueada enquanto ela
-            não der 100%. Preencha a vigência (o mês do início e, se houver, o do fim).
+            departamento, o grupo, a atribuição e o balde), a Conta da DRE de cada um e o percentual: a Soma mostra o total, e a gravação fica
+            bloqueada enquanto ela não der 100%. Preencha a vigência (o mês do início e, se houver, o do fim).
+          </li>
+          <li>
+            A Conta da DRE de cada centro é uma conta do departamento e da atribuição dele (a lista mostra só essas): o centro Direto não recebe
+            Mão de Obra Indireta nem Gastos Gerais Indiretos, e o Indireto não recebe Mão de Obra Direta nem Gastos Gerais Diretos, como na
+            verificação da Classificação. Ao escolher o centro, o SIG sugere a conta: a Conta da DRE da regra, se for do departamento e da
+            atribuição do centro, ou a equivalente (a mesma descrição) no departamento dele; troque-a se precisar. Um centro sem departamento
+            da DRE (estoque, investimento…) não recebe redistribuições.
           </li>
           <li>
             Na classificação de cada competência da vigência, os movimentos dos fornecedores marcados, nas contas e no departamento, valem divididos
-            entre os centros, pelos percentuais: cada parte vai à unidade e ao rateio do centro dela, e a conta da DRE não muda. As partes não passam
+            entre os centros, pelos percentuais: cada parte vai à Conta da DRE do centro dela, à unidade e ao rateio dele. As partes não passam
             pela verificação de departamento e atribuição. A redistribuição vale por cima das reclassificações e das contestações.
           </li>
-          <li>Movimentos redistribuídos não podem ser contestados: no balancete e na Pesquisa, a coluna Ações mostra a etiqueta Redistribuição, com os destinos.</li>
+          <li>Movimentos redistribuídos não podem ser contestados: no balancete e na Pesquisa, a coluna Ações mostra a etiqueta Redistribuição, com os destinos (o centro, a conta e o percentual de cada parte).</li>
           <li>
             Ao gravar, as competências ainda não apuradas da vigência são reclassificadas; as apuradas só mudam se forem reapuradas, e as fechadas
             ficam como foram fechadas. Numa mesma conta, duas redistribuições ativas não podem ter um fornecedor em comum no mesmo período.
@@ -123,7 +130,6 @@ export function RedistribuicoesContent() {
                     <div className="max-w-64 truncate text-gray-900" title={c.rotulo}>
                       {c.rotulo}
                     </div>
-                    <span className="text-xs text-gray-500">{c.codigo}</span>
                   </li>
                 ))}
               </ul>
@@ -135,9 +141,14 @@ export function RedistribuicoesContent() {
               <ul className="space-y-0.5">
                 {r.destinos.map((d) => (
                   <li key={d.centroCustoId} className="flex max-w-80 items-baseline justify-between gap-3">
-                    <span className="truncate" title={d.centro}>
-                      {d.centro}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate" title={d.centro}>
+                        {d.centro}
+                      </div>
+                      <div className="truncate text-xs text-gray-500" title={d.conta ?? "Sem Conta da DRE: a parte fica na conta do movimento"}>
+                        {d.conta ?? "Sem Conta da DRE"}
+                      </div>
+                    </div>
                     <span className="font-medium whitespace-nowrap text-gray-900">{pct(d.percentual)}</span>
                   </li>
                 ))}

@@ -89,7 +89,7 @@ export const documentosService = {
           contestacaoId: true,
           linhaDRE: { select: { codigo: true, descricao: true, grupo: true } },
           redistribuicaoId: true,
-          partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
+          partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } }, linhaDRE: { select: { codigo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true } } } },
         },
         // Sem emissão primeiro, como no SQLite (23/10/2026).
         orderBy: [{ emissao: { sort: "asc", nulls: "first" } }, { linhaArquivo: "asc" }],
@@ -116,6 +116,9 @@ export const documentosService = {
       linhas: lancamentos.map((l) => {
         // A parte do centro pedido, num movimento redistribuído (13/11/2026): o valor e o centro dela.
         const parte = filtro.centro && l.redistribuicaoId ? (l.partesRedistribuidas.find((p) => p.centroCusto.codigoRM === filtro.centro) ?? null) : null;
+        // A linha da DRE em que o movimento está (23/11/2026: a parte vai na conta do destino): a da parte do centro pedido, ou a de
+        // uma parte na linha aberta, ou a do movimento.
+        const linhaDoMovimento = parte?.linhaDRE ?? (l.redistribuicaoId ? l.partesRedistribuidas.find((p) => p.linhaDRE.codigo === filtro.linha)?.linhaDRE : undefined) ?? l.linhaDRE;
         return {
         id: l.id,
         filial: l.filial,
@@ -139,11 +142,11 @@ export const documentosService = {
         contestacao: situacoes.get(l.id) ?? null,
         // O reflexo de um rateio (30/10/2026): o movimento é de outra linha da DRE e chega a esta pelo rateio (os da
         // Metalurgia e da Armadura nas linhas de Serviços, por exemplo). Contesta-se na linha de origem, não no reflexo.
-        rateioDe: l.linhaDRE && l.linhaDRE.codigo !== filtro.linha ? { linha: l.linhaDRE.descricao, grupo: l.linhaDRE.grupo } : null,
-        // A redistribuição de gastos (13/11/2026): os destinos (o centro, o percentual e o valor de cada parte). Não se contesta.
+        rateioDe: linhaDoMovimento && linhaDoMovimento.codigo !== filtro.linha ? { linha: linhaDoMovimento.descricao, grupo: linhaDoMovimento.grupo } : null,
+        // A redistribuição de gastos (13/11/2026): os destinos (o centro, a conta da DRE, o percentual e o valor de cada parte). Não se contesta.
         redistribuicao: l.redistribuicaoId
           ? {
-              destinos: l.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })),
+              destinos: l.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, conta: [p.linhaDRE.grupoSigla, p.linhaDRE.atribuicao, p.linhaDRE.descricao].filter(Boolean).join(" · "), percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })),
               parte: !!parte,
             }
           : null,

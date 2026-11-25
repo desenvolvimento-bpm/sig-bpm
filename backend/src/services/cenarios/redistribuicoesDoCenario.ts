@@ -3,15 +3,16 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { gruposDaDRE } from "../cadastros/edicao/definicoesCadastros.js";
 import { chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento, partesDoValor, type DepartamentoDaRedistribuicao } from "../classificacao/regrasClassificacao.js";
 import { plural } from "../../utils/plural.js";
-import { contaEmComum, contasDaRegra, mesDe, nomeDasContas, RegraRedistribuicaoError, rotuloDaVigencia, textoDoMes } from "../redistribuicoes/redistribuicoesService.js";
+import { contaEmComum, contasDaRegra, mesDe, nomeDasContas, RegraRedistribuicaoError, rotuloDaVigencia, textoDoMes, validarContasDosDestinos } from "../redistribuicoes/redistribuicoesService.js";
 
 /**
  * Os Departamentos e as Redistribuições de Gastos de cada cenário analítico (20/11/2026, pedido do Adão: Cadastros por cenário,
  * etapa 2): as cópias dos cadastros de mesmo nome, nas abas Departamentos e Redistribuições de Gastos das Configurações. A carga
  * do realizado da referência do cenário redistribui os gastos pelas regras da cópia, no lugar das dos Cadastros Gerais
  * (`redistribuirMovimentos`, em referenciaDoRealizado): as partes que a classificação gravou saem dos centros dos destinos, o
- * movimento volta ao centro dele, e as regras do cenário o dividem entre os centros da cópia dele. Os meses do cenário (digitados)
- * não mudam. Aqui: a regra das cópias, a divisão dos movimentos e a validação do que vem das abas.
+ * movimento volta ao centro dele, e as regras do cenário o dividem entre os centros da cópia dele, cada parte na conta do destino
+ * (23/11/2026). Os meses do cenário (digitados) não mudam. Aqui: a regra das cópias, a divisão dos movimentos e a validação do que
+ * vem das abas.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -25,7 +26,8 @@ export type RegraDoCenario = {
   fornecedores: Set<string>;
   inicio: Date;
   fim: Date | null;
-  destinos: Array<{ centro: { id: string; codigoRM: string | null; nomeRM: string }; percentual: number }>;
+  /** O centro da cópia, o percentual e a Conta da DRE de cada destino (23/11/2026; nula: a conta do movimento). */
+  destinos: Array<{ centro: { id: string; codigoRM: string | null; nomeRM: string }; percentual: number; linha: { codigo: string; tipo: string } | null }>;
 };
 
 /** As redistribuições ativas do cenário, na ordem (a primeira que casa vale, como na classificação). */
@@ -40,7 +42,7 @@ export async function regrasDoCenario(cenarioId: string, db: Pick<Tx, "cenarioRe
       vigenciaInicio: true,
       vigenciaFim: true,
       departamento: { select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } },
-      destinos: { orderBy: { ordem: "asc" }, select: { percentual: true, centroCusto: { select: { id: true, codigoRM: true, nomeRM: true } } } },
+      destinos: { orderBy: { ordem: "asc" }, select: { percentual: true, centroCusto: { select: { id: true, codigoRM: true, nomeRM: true } }, linhaDRE: { select: { codigo: true, tipo: true } } } },
     },
   });
   return rs.map((r) => ({
@@ -50,7 +52,7 @@ export async function regrasDoCenario(cenarioId: string, db: Pick<Tx, "cenarioRe
     fornecedores: new Set(r.fornecedores.map(chaveDoFornecedor)),
     inicio: r.vigenciaInicio,
     fim: r.vigenciaFim,
-    destinos: r.destinos.map((d) => ({ centro: d.centroCusto, percentual: Number(d.percentual) })),
+    destinos: r.destinos.map((d) => ({ centro: d.centroCusto, percentual: Number(d.percentual), linha: d.linhaDRE })),
   }));
 }
 
@@ -60,11 +62,13 @@ export type MovimentoDaRedistribuicao = { linhaDREId: string | null; grupoSigla:
 /**
  * Divide os movimentos pelas redistribuições do cenário (puro): o movimento de uma das contas, de um fornecedor marcado e do departamento
  * da regra (ou de todos), num mês da vigência, vai para os centros dos destinos pelos percentuais (as partes somam o valor dele,
- * em centavos, como na classificação). `mes`: o dia 1º do mês do movimento (UTC).
+ * em centavos, como na classificação), cada parte na conta do destino (`linha`; nula: a do movimento). `mes`: o dia 1º do mês do
+ * movimento (UTC).
  */
 export function redistribuirMovimentos<M extends MovimentoDaRedistribuicao>(movimentos: M[], regras: RegraDoCenario[], mes: (m: M) => Date) {
+  type Destino = RegraDoCenario["destinos"][number];
   const mantidos: M[] = [];
-  const redistribuidos: Array<{ movimento: M; regra: RegraDoCenario; partes: Array<{ centro: RegraDoCenario["destinos"][number]["centro"]; valor: number }> }> = [];
+  const redistribuidos: Array<{ movimento: M; regra: RegraDoCenario; partes: Array<{ centro: Destino["centro"]; linha: Destino["linha"]; valor: number }> }> = [];
   for (const m of movimentos) {
     const regra = regraDoMovimento(m, regras, mes(m));
     if (!regra) {
@@ -72,7 +76,7 @@ export function redistribuirMovimentos<M extends MovimentoDaRedistribuicao>(movi
       continue;
     }
     const valores = partesDoValor(Number(m.valorMovimento), regra.destinos.map((d) => d.percentual));
-    redistribuidos.push({ movimento: m, regra, partes: regra.destinos.map((d, i) => ({ centro: d.centro, valor: valores[i] })) });
+    redistribuidos.push({ movimento: m, regra, partes: regra.destinos.map((d, i) => ({ centro: d.centro, linha: d.linha, valor: valores[i] })) });
   }
   return { mantidos, redistribuidos };
 }
@@ -101,7 +105,8 @@ export type DadosDaRedistribuicaoDoCenario = {
   departamentoId: string | null;
   linhasDREIds: string[];
   fornecedores: string[];
-  destinos: Array<{ centroCustoId: string; percentual: number }>;
+  /** O centro da cópia, a Conta da DRE dele (23/11/2026) e o percentual de 0 a 100. */
+  destinos: Array<{ centroCustoId: string; linhaDREId: string; percentual: number }>;
   vigenciaInicio: string;
   vigenciaFim: string | null;
   descricao: string | null;
@@ -129,10 +134,12 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
   if (!d.destinos.length) throw new RegraRedistribuicaoError(400, "Inclua ao menos um centro de custo em Redistribuir Para.");
   const ids = d.destinos.map((x) => x.centroCustoId);
   if (new Set(ids).size !== ids.length) throw new RegraRedistribuicaoError(400, "Um centro de custo aparece mais de uma vez em Redistribuir Para.");
-  const centros = await tx.cenarioCentroCusto.findMany({ where: { cenarioId, id: { in: ids } }, select: { id: true, ativo: true, codigoRM: true, nomeRM: true } });
+  const centros = await tx.cenarioCentroCusto.findMany({ where: { cenarioId, id: { in: ids } }, select: { id: true, ativo: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } });
   if (centros.length !== ids.length) throw new RegraRedistribuicaoError(400, "Um centro de Redistribuir Para não é dos Centros de Custo do cenário.");
   const inativo = centros.find((c) => !c.ativo);
   if (inativo) throw new RegraRedistribuicaoError(400, `O centro ${inativo.codigoRM ?? ""} ${inativo.nomeRM} está inativo no cenário.`.replace(/\s+/g, " "));
+  // A conta de cada centro (23/11/2026): uma Conta da DRE do departamento e da atribuição dele na cópia do cenário.
+  await validarContasDosDestinos(d.destinos, new Map(centros.map((c) => [c.id, c])));
   if (d.destinos.some((x) => !Number.isFinite(x.percentual) || x.percentual <= 0 || x.percentual > 100)) throw new RegraRedistribuicaoError(400, "Cada percentual precisa ser maior que 0% e no máximo 100%.");
   const soma = d.destinos.reduce((s, x) => s + x.percentual, 0);
   if (Math.abs(soma - 100) > 0.005) throw new RegraRedistribuicaoError(400, `Os percentuais somam ${soma.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%: precisam somar 100%.`);
@@ -166,7 +173,7 @@ export async function prepararRedistribuicao(tx: Tx, cenarioId: string, d: Dados
     linhasDREIds: idsDasContas,
     nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
-    destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
+    destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, linhaDREId: x.linhaDREId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
     vigenciaFim: fim,
     descricao: d.descricao?.trim() || null,
@@ -183,12 +190,12 @@ export const redistribuicaoParaAuditoria = (r: {
   vigenciaFim: Date | null;
   descricao: string | null;
   ativo: boolean;
-  destinos: Array<{ centroCustoId: string; percentual: Prisma.Decimal | number }>;
+  destinos: Array<{ centroCustoId: string; linhaDREId: string | null; percentual: Prisma.Decimal | number }>;
 }) => ({
   departamentoId: r.departamentoId,
   linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,
-  destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: Number(d.percentual) })),
+  destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, linhaDREId: d.linhaDREId, percentual: Number(d.percentual) })),
   vigenciaInicio: textoDoMes(r.vigenciaInicio),
   vigenciaFim: textoDoMes(r.vigenciaFim),
   descricao: r.descricao,

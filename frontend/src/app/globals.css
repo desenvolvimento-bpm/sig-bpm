@@ -359,6 +359,30 @@ html[data-zoom="125"] {
 }
 
 /*
+ * Os cards do painel (PainelContent: CardIndicador; 24/11/2026). No Painel de Bordo, as colunas do card e o tamanho dos
+ * valores seguem a largura da janela, como o lg: e o 2xl:. No slide dos Relatórios Executivos e dos Painéis
+ * (CardDoPainel, com data-card-do-slide), valem sempre: o slide é montado em 1920 × 1080 e só se reduz ou se amplia
+ * (TelaPadrao), e a janela de quem abre — um notebook, o zoom do Windows ou do navegador — não muda o card, nem no PDF.
+ * Sem isso, numa janela com menos de 1024 px, o card empilhava o Atual e o Acumulado e o gráfico caía para fora dele.
+ */
+@custom-variant card-lg {
+  @media (width >= 64rem) {
+    @slot;
+  }
+  &:where([data-card-do-slide], [data-card-do-slide] *) {
+    @slot;
+  }
+}
+@custom-variant card-2xl {
+  @media (width >= 96rem) {
+    @slot;
+  }
+  &:where([data-card-do-slide], [data-card-do-slide] *) {
+    @slot;
+  }
+}
+
+/*
  * A imagem do grupo do Painel de Bordo sem os gráficos (14/10/2026; CopiarComoImagem semGraficos): a cópia do grupo,
  * fora da tela, na largura dos valores; os cards sem a coluna do gráfico, com a borda de cada um.
  */

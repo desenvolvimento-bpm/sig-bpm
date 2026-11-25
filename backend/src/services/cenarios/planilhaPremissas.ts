@@ -895,7 +895,7 @@ export function nadaAImportar(a: {
 
 /**
  * Lê um .xlsx do Exportar Premissas: as abas no padrão (as tabelas, pelos rótulos — 11/11/2026: sem a coluna Código; os
- * arquivos de antes, com ela —, a Investimentos e a Quadro de Lotação); as outras são ignoradas, com um aviso.
+ * arquivos de antes, com ela —, a Investimentos e a Quadro de Lotação); as outras são ignoradas (sem aviso desde 24/11/2026).
  */
 function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
   const r: ArquivoLido = { arquivo, linhas: [], investimentos: [], quadro: [], substituiQuadro: null, comInvestimentos: false, abas: [], erros: [], avisos: [] };
@@ -925,7 +925,9 @@ function lerXlsx(arquivo: string, buffer: Uint8Array): ArquivoLido {
             faltam.length ? `: ${faltam.length === 1 ? "falta a coluna" : "faltam as colunas"} ${faltam.map((c) => `“${c}”`).join(", ")}` : ""
           }. Não apague nem mude as colunas da aba: ${faltam.length === 1 ? "devolva a coluna" : faltam.length ? "devolva as colunas" : "devolva os rótulos"} ou exporte as premissas de novo.`,
         );
-      } else r.avisos.push(`A aba ${nome} não está no padrão do Exportar Premissas (sem os rótulos dele) e foi ignorada.`);
+      }
+      // As outras abas (fora do padrão, sem o título nem os rótulos) ficam de fora sem aviso (24/11/2026, pedido do Adão: o modal lista
+      // só as abas que serão usadas).
       continue;
     }
     const rotulos = linhas[i].celulas.map((c) => String(c ?? "").trim());

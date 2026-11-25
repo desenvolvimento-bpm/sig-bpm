@@ -12,7 +12,7 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type ContasDoCentro, type LinhaDaPremissa, type RateiosDoCenario as Rateios, type SerieDoCentro } from "../services/cenariosService";
 import { Erro } from "./CenarioDialog";
-import { TabelaEditavel } from "./TabelaPremissas";
+import { TabelaEditavel, type NiveisDaTabela } from "./TabelaPremissas";
 import { BotaoContasDoBalancete } from "./ContasDoBalancete";
 import { plural } from "@/lib/texto";
 
@@ -47,6 +47,7 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
   const t = busca.trim().toLowerCase();
   const filtrados = grupos.filter((g) => !t || `${g.grupo} ${g.centros.map((c) => `${c.codigo ?? ""} ${c.nome}`).join(" ")}`.toLowerCase().includes(t));
   const doGrupo = contas.data;
+  const linhasDoGrupo = doGrupo ? linhasDoCentro(doGrupo) : [];
   const listaDosCentros = (
     <div className="rounded-sm border border-gray-200 bg-white">
       <div className="border-b border-gray-200 p-2">
@@ -112,7 +113,7 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
             </div>
           )}
           meses={dados.meses}
-          linhas={linhasDoCentro(doGrupo)}
+          linhas={linhasDoGrupo}
           editavel={editavel && dados.editavel}
           item={["linha", "linhas"]}
           cabecalho="PREMISSAS"
@@ -120,6 +121,8 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
           mensagem={(n) => `${n} ${plural(n, "valor", "valores")} do centro ${plural(n, "gravado", "gravados")}; os encargos do centro foram recalculados, e a DRE fica pendente de recálculo (Resultados / Recalcular).`}
           // As Contas do Balancete de cada conta (13/11/2026; não nas linhas do quadro de lotação, dos encargos e do total).
           acaoDaLinha={(l) => (doGrupo.contas.some((c) => c.codigo === l.chave) ? <BotaoContasDoBalancete id={id} linha={l.chave} descricao={l.rotulo} /> : null)}
+          // Recolher e expandir as seções, e os níveis Totais, Atribuições e Contas (24/11/2026, pedido do Adão), como na DRE de Resultados.
+          niveis={niveisDoCentro(doGrupo, linhasDoGrupo)}
         />
       )}
     </div>
@@ -131,7 +134,7 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
  * PJ e o Total de Colaboradores, a soma — desde 12/11/2026, sempre calculados pela aba Quadro de Lotação, alimentada pela
  * Gestão de Colaboradores), os Encargos e Benefícios e as contas por atribuição (a Encargos e Benefícios, calculada), com o
  * total do centro no fim. Desde 17/11/2026 (pedido do Adão), a conta Encargos e Benefícios vem sem os Benefícios Adicionais
- * (a soma das duas linhas é o total da conta na DRE), e o Total do Centro os soma.
+ * (a soma das duas linhas é o total da conta na DRE), e o Total das Premissas os soma.
  */
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const { aprendizes, estagiarios, clt, pj } = dados.lotacao;
@@ -205,13 +208,75 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     valores: c.valores,
     gravados: c.gravados,
   }));
-  // Os Benefícios Adicionais (17/11/2026) e os Benefícios Padrão (21/11/2026): fora da conta Encargos e Benefícios, entram no Total do
-  // Centro (como na DRE).
+  // Os Benefícios Adicionais (17/11/2026) e os Benefícios Padrão (21/11/2026): fora da conta Encargos e Benefícios, entram no Total das
+  // Premissas (como na DRE).
   const beneficios = contas.some((c) => c.comBeneficios) ? dados.encargos.find((e) => e.item === "BENEFICIOS") : undefined;
   const padrao = contas.some((c) => c.comBeneficios) ? dados.encargos.find((e) => e.item === "BENEFICIOS_PADRAO") : undefined;
   const total = Array.from({ length: 12 }, (_, k) => contas.reduce((s, c) => s + (c.valores[k] ?? 0), 0) + (beneficios?.valores[k] ?? 0) + (padrao?.valores[k] ?? 0));
   const totalReferencia = contas.some((c) => c.referencia !== null) ? contas.reduce((s, c) => s + (c.referencia ?? 0), 0) + (beneficios?.referencia ?? 0) : null;
-  return [...lotacao, ...encargos, ...linhas, { chave: "TOTAL", secao: "TOTAL DO CENTRO", grupo: null, rotulo: "Total do Centro", und: "R$", tipo: "CALCULO", casas: 2, referencia: totalReferencia, valores: total, gravados: total.map(() => false) }];
+  // O Total das Premissas (24/11/2026, pedido do Adão; antes, a seção Total do Centro com a linha de mesmo nome): os valores ficam na
+  // linha do título da seção (niveisDoCentro), sem a linha.
+  return [...lotacao, ...encargos, ...linhas, { chave: "TOTAL", secao: TOTAL_DAS_PREMISSAS, grupo: null, rotulo: "Total das Premissas", und: "R$", tipo: "CALCULO", casas: 2, referencia: totalReferencia, valores: total, gravados: total.map(() => false) }];
+}
+
+const QUADRO = "QUADRO DE LOTAÇÃO";
+const ENCARGOS = "ENCARGOS E BENEFÍCIOS";
+const TOTAL_DAS_PREMISSAS = "TOTAL DAS PREMISSAS";
+
+/**
+ * Os níveis da tabela Premissas do grupo (24/11/2026, pedido do Adão): em Totais, só o Quadro de Lotação e o Total das Premissas; em
+ * Atribuições, também os Encargos e Benefícios e as atribuições das contas; em Contas, tudo. Os valores nas linhas dos títulos: no
+ * Quadro de Lotação, os do Total de Colaboradores; nos Encargos e Benefícios, os Benefícios Adicionais + os Padrão (em R$); em cada
+ * atribuição, a soma das contas dela (na da conta Encargos e Benefícios, com os dois benefícios, como na DRE — as atribuições somam o
+ * total); no Total das Premissas, o total (a seção é só o título).
+ */
+function niveisDoCentro(dados: ContasDoCentro, linhas: LinhaDaPremissa[]): NiveisDaTabela {
+  const beneficios = dados.encargos.find((e) => e.item === "BENEFICIOS");
+  const padrao = dados.encargos.find((e) => e.item === "BENEFICIOS_PADRAO");
+  const meses = dados.lotacao.clt.valores.length;
+  const soma = (series: Array<{ valores: Array<number | null> }>, extra?: (k: number) => number) => {
+    const valores = Array.from({ length: meses }, (_, k) => series.reduce((s, x) => s + (x.valores[k] ?? 0), 0) + (extra ? extra(k) : 0));
+    return { valores, gravados: valores.map(() => false) };
+  };
+  const titulo = (secao: string, rotulo: string, referencia: number | null, x: { valores: number[]; gravados: boolean[] }): LinhaDaPremissa => ({
+    chave: `TITULO|${secao}`,
+    secao,
+    grupo: null,
+    rotulo,
+    und: "R$",
+    tipo: "CALCULO",
+    negrito: true,
+    casas: 2,
+    referencia,
+    ...x,
+  });
+  const titulos = new Map<string, LinhaDaPremissa>();
+  // O Quadro de Lotação: os valores do Total de Colaboradores.
+  const colaboradores = linhas.find((l) => l.chave === "LOTACAO|TOTAL");
+  if (colaboradores) titulos.set(QUADRO, { ...colaboradores, negrito: true });
+  // Os Encargos e Benefícios: os Benefícios Adicionais + os Benefícios Padrão.
+  const doisBeneficios = [beneficios, padrao].filter((x): x is NonNullable<typeof x> => !!x);
+  if (doisBeneficios.length) {
+    const referencia = doisBeneficios.some((e) => e.referencia !== null) ? doisBeneficios.reduce((s, e) => s + (e.referencia ?? 0), 0) : null;
+    titulos.set(ENCARGOS, titulo(ENCARGOS, "Benefícios Adicionais + Padrão", referencia, soma(doisBeneficios)));
+  }
+  // As atribuições: a soma das contas (e os dois benefícios na da conta Encargos e Benefícios), como o Total das Premissas.
+  const porAtribuicao = new Map<string, ContasDoCentro["contas"]>();
+  for (const c of dados.contas) porAtribuicao.set(c.atribuicao.toUpperCase(), [...(porAtribuicao.get(c.atribuicao.toUpperCase()) ?? []), c]);
+  for (const [secao, contas] of porAtribuicao) {
+    const comBeneficios = contas.some((c) => c.comBeneficios);
+    const referencia = contas.some((c) => c.referencia !== null) ? contas.reduce((s, c) => s + (c.referencia ?? 0), 0) + (comBeneficios ? (beneficios?.referencia ?? 0) : 0) : null;
+    titulos.set(secao, titulo(secao, contas[0].atribuicao, referencia, soma(contas, (k) => (comBeneficios ? (beneficios?.valores[k] ?? 0) + (padrao?.valores[k] ?? 0) : 0))));
+  }
+  // O Total das Premissas: os valores e a unidade da linha do total.
+  const total = linhas.find((l) => l.chave === "TOTAL");
+  if (total) titulos.set(TOTAL_DAS_PREMISSAS, { ...total, negrito: true });
+  return {
+    chave: "sig.cenarios.premissas.centros.nivel",
+    nivelDaSecao: (secao) => (secao === QUADRO || secao === TOTAL_DAS_PREMISSAS ? "TOTAL" : "ATRIBUICAO"),
+    titulo: (secao) => titulos.get(secao) ?? null,
+    soTitulo: (secao) => secao === TOTAL_DAS_PREMISSAS,
+  };
 }
 
 /**

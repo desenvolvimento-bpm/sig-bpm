@@ -18,7 +18,8 @@ const dadosSchema = z.object({
   departamentoId: z.string().min(1).nullable(),
   linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
   fornecedores: z.array(z.string().max(300)).max(5000),
-  destinos: z.array(z.object({ centroCustoId: z.string().min(1), percentual: z.number() })).max(500),
+  // A Conta da DRE de cada centro (23/11/2026): vazia, a gravação pede a conta.
+  destinos: z.array(z.object({ centroCustoId: z.string().min(1), linhaDREId: z.string().max(100), percentual: z.number() })).max(500),
   vigenciaInicio: mes,
   vigenciaFim: mes.nullable(),
   descricao: z.string().max(500).nullable(),

@@ -73,6 +73,18 @@ export const DEPARTAMENTOS_VERIFICADOS = new Set([
 const PROIBIDAS_EM_DIRETA = new Set(["Mão de Obra Indireta", "Gastos Gerais Indiretos"]);
 const PROIBIDAS_EM_INDIRETA = new Set(["Mão de Obra Direta", "Gastos Gerais Diretos"]);
 
+/**
+ * A atribuição da conta cabe na do centro (a <ATR.!> da verificação; desde 23/11/2026, também a conta de cada destino das
+ * Redistribuições de Gastos): o centro direto não leva Mão de Obra Indireta nem Gastos Gerais Indiretos, o indireto não leva Mão de
+ * Obra Direta nem Gastos Gerais Diretos; as outras atribuições (e o centro sem atribuição) aceitam qualquer uma.
+ */
+export function atribuicaoCabeNoCentro(atribuicaoDoCentro: AtribuicaoCusto | null, atribuicaoDaConta: string | null) {
+  const atr = atribuicaoDaConta ?? "";
+  if (atribuicaoDoCentro === "DIRETA") return !PROIBIDAS_EM_DIRETA.has(atr);
+  if (atribuicaoDoCentro === "INDIRETA") return !PROIBIDAS_EM_INDIRETA.has(atr);
+  return true;
+}
+
 /** Baldes que são chave de rateio; os demais são alocação direta. */
 const CHAVES_RATEIO = new Set<BaldeAlocacao>([
   "PROJETO",
@@ -105,9 +117,7 @@ export function verificarLancamento(
   if (centro.departamento && centro.departamento !== conta.departamento) {
     return "ERRO_DEPARTAMENTO";
   }
-  const atr = conta.atribuicao ?? "";
-  if (centro.atribuicao === "DIRETA" && PROIBIDAS_EM_DIRETA.has(atr)) return "ERRO_ATRIBUICAO";
-  if (centro.atribuicao === "INDIRETA" && PROIBIDAS_EM_INDIRETA.has(atr)) return "ERRO_ATRIBUICAO";
+  if (!atribuicaoCabeNoCentro(centro.atribuicao, conta.atribuicao)) return "ERRO_ATRIBUICAO";
   return "OK";
 }
 
@@ -227,7 +237,8 @@ export type RegraDeRedistribuicao<C> = {
   departamento: DepartamentoDaRedistribuicao | null;
   /** As chaves dos fornecedores marcados (chaveDoFornecedor). */
   fornecedores: Set<string>;
-  destinos: Array<{ centro: C; percentual: number }>;
+  /** O centro, o percentual e a conta da DRE de cada destino (23/11/2026; nula: a conta do movimento). */
+  destinos: Array<{ centro: C; percentual: number; linhaDREId: string | null }>;
 };
 
 /** A filial de um departamento na redistribuição: a da unidade, na Produção (1 Matriz, 2 Filial); nas demais unidades, todas. */

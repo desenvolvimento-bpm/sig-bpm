@@ -1005,7 +1005,7 @@ export const cenariosController = {
         departamentoId: z.string().min(1).nullable(),
         linhasDREIds: z.array(z.string().min(1)).min(1).max(200),
         fornecedores: z.array(z.string().max(300)).max(2000),
-        destinos: z.array(z.object({ centroCustoId: z.string().min(1), percentual: z.number() })).max(200),
+        destinos: z.array(z.object({ centroCustoId: z.string().min(1), linhaDREId: z.string().max(100), percentual: z.number() })).max(200),
         vigenciaInicio: z.string().min(1),
         vigenciaFim: z.string().min(1).nullable(),
         descricao: z.string().max(500).nullable(),

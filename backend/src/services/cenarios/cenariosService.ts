@@ -5490,7 +5490,10 @@ export const cenariosService = {
         include: {
           departamento: { select: { nome: true, unidadeNegocioId: true } },
           contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } } } },
-          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true, ativo: true } } } },
+          destinos: {
+            orderBy: { ordem: "asc" },
+            select: { centroCustoId: true, linhaDREId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true, ativo: true } }, linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } },
+          },
         },
       }),
       prisma.cenarioDepartamento.findMany({ where: { cenarioId: id, ativo: true }, orderBy: [{ ordem: "asc" }, { nome: "asc" }], include: { unidadeNegocio: { select: { codigo: true } } } }),
@@ -5511,6 +5514,9 @@ export const cenariosService = {
         destinos: r.destinos.map((d) => ({
           centroCustoId: d.centroCustoId,
           centro: `${d.centroCusto.codigoRM ?? "sem código"} · ${d.centroCusto.nomeRM}${d.centroCusto.ativo ? "" : " (inativo)"}`,
+          // A Conta da DRE do centro (23/11/2026); nula num destino anterior sem conta equivalente.
+          linhaDREId: d.linhaDREId,
+          conta: d.linhaDRE ? rotuloDaLinha(d.linhaDRE) : null,
           percentual: Number(d.percentual) * 100,
         })),
         vigenciaInicio: textoDoMes(r.vigenciaInicio)!,

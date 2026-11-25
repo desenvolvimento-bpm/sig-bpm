@@ -521,9 +521,12 @@ export async function referenciaDoRealizado(
       if (contaDeCentro(l)) noGrupo(grupoDoCentro(l.centroCustoId), l.linhaDRE!.codigo, l.competenciaId, -Number(l.valorMovimento));
       for (const p of partes) {
         const grupo = grupoDaCopia.get(p.centro.id) ?? null;
-        if (contaDeCentro(l)) noGrupo(grupo, l.linhaDRE!.codigo, l.competenciaId, p.valor);
+        // Cada parte na conta do destino (23/11/2026: uma conta do departamento do centro); sem ela, na do movimento.
+        const linhaDRE = p.linha ?? l.linhaDRE;
+        if (contaDeCentro({ linhaDRE })) noGrupo(grupo, linhaDRE!.codigo, l.competenciaId, p.valor);
         lancamentosDeCentros.push({
           ...l,
+          linhaDRE,
           valorMovimento: p.valor,
           codigoCentroCusto: p.centro.codigoRM,
           nomeCentroCusto: p.centro.nomeRM,

@@ -763,7 +763,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
       },
       aoConcluir: (queryClient) => queryClient.invalidateQueries({ queryKey: ["cenarios", id, "cadastros"] }),
       descricao:
-        "Na carga do realizado da referência deste cenário, os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), vão divididos entre os centros de custo de Redistribuir Para (os do cenário), pelos percentuais, nos meses da vigência. Vale só aqui: o resto do SIG segue as redistribuições dos Cadastros Gerais.",
+        "Na carga do realizado da referência deste cenário, os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), vão divididos entre os centros de custo de Redistribuir Para (os do cenário), cada um na Conta da DRE escolhida para ele (uma do departamento e da atribuição do centro), pelos percentuais, nos meses da vigência. Vale só aqui: o resto do SIG segue as redistribuições dos Cadastros Gerais.",
       descricaoDaExclusao: (conta) => `A redistribuição de ${conta} sai deste cenário (nos Cadastros Gerais, as redistribuições continuam); a próxima carga do realizado da referência fica sem ela.`,
     }),
     [id],
@@ -829,7 +829,6 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
                         <div className="truncate" title={c.rotulo}>
                           {c.rotulo}
                         </div>
-                        <span className="text-xs text-gray-500">{c.codigo}</span>
                       </li>
                     ))}
                   </ul>
@@ -841,9 +840,14 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
                   <ul className="space-y-0.5">
                     {r.destinos.map((d) => (
                       <li key={d.centroCustoId} className="flex items-baseline justify-between gap-3">
-                        <span className="truncate" title={d.centro}>
-                          {d.centro}
-                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate" title={d.centro}>
+                            {d.centro}
+                          </div>
+                          <div className="truncate text-xs text-gray-500" title={d.conta ?? "Sem Conta da DRE: a parte fica na conta do movimento"}>
+                            {d.conta ?? "Sem Conta da DRE"}
+                          </div>
+                        </div>
                         <span className="font-medium whitespace-nowrap">{pctTexto(d.percentual)}</span>
                       </li>
                     ))}
@@ -863,7 +867,7 @@ export function RedistribuicoesDoCenarioAba({ id, podeEditar }: { id: string; po
   );
 }
 
-const destinosTexto = (r: RedistribuicaoDoCenario) => r.destinos.map((d) => `${d.centro}: ${pctTexto(d.percentual)}`).join("; ");
+const destinosTexto = (r: RedistribuicaoDoCenario) => r.destinos.map((d) => `${d.centro}${d.conta ? ` (${d.conta})` : ""}: ${pctTexto(d.percentual)}`).join("; ");
 const COLUNAS_DAS_REDISTRIBUICOES: Coluna<RedistribuicaoDoCenario>[] = [
   { chave: "departamento", rotulo: "Departamento da DRE", valor: (r) => r.departamento ?? "Todos" },
   { chave: "contas", rotulo: "Contas da DRE", valor: (r) => r.contas.map((c) => c.rotulo).join("; ") },

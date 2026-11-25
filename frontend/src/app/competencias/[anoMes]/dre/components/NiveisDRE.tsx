@@ -27,7 +27,7 @@ export const NIVEIS: Array<{ nivel: Nivel; rotulo: string; dica: string }> = [
   { nivel: 3, rotulo: "Contas", dica: "Todas as contas" },
 ];
 
-const nivelGuardado = (chave: string): Nivel => {
+export const nivelGuardado = (chave: string): Nivel => {
   try {
     const v = Number(window.localStorage.getItem(chave));
     return v === 1 || v === 2 || v === 3 ? v : 3;
@@ -35,7 +35,7 @@ const nivelGuardado = (chave: string): Nivel => {
     return 3;
   }
 };
-const guardarNivel = (chave: string, n: Nivel) => {
+export const guardarNivel = (chave: string, n: Nivel) => {
   try {
     window.localStorage.setItem(chave, String(n));
   } catch {
@@ -213,8 +213,11 @@ export function useNiveisDRE<L extends Linha>(todas: L[], chave: string, fixo?: 
   };
 }
 
-/** O botão de níveis (só a seta), na faixa amarela do título. */
-export function SeletorNivel({ nivel, onEscolher }: { nivel: Nivel; onEscolher: (n: Nivel) => void }) {
+/**
+ * O botão de níveis (só a seta), na faixa amarela do título. `nome` e `legenda` (24/11/2026: a tabela Premissas da aba Centros de
+ * Custo dos analíticos): o nome dos níveis na dica ("Níveis da DRE") e o texto acima deles no menu ("Mostrar a DRE até").
+ */
+export function SeletorNivel({ nivel, onEscolher, nome = "Níveis da DRE", legenda = "Mostrar a DRE até" }: { nivel: Nivel; onEscolher: (n: Nivel) => void; nome?: string; legenda?: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -222,8 +225,8 @@ export function SeletorNivel({ nivel, onEscolher }: { nivel: Nivel; onEscolher: 
           <Button
             type="button"
             variant="outline"
-            aria-label="Níveis da DRE"
-            title={`Níveis da DRE: ${NIVEIS.find((n) => n.nivel === nivel)?.rotulo}`}
+            aria-label={nome}
+            title={`${nome}: ${NIVEIS.find((n) => n.nivel === nivel)?.rotulo}`}
             className="size-8 shrink-0 rounded-sm border-black/30 bg-white p-0"
           >
             <ChevronDown className="size-4" />
@@ -232,7 +235,7 @@ export function SeletorNivel({ nivel, onEscolher }: { nivel: Nivel; onEscolher: 
       />
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs text-gray-500">Mostrar a DRE até</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-xs text-gray-500">{legenda}</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={String(nivel)} onValueChange={(v) => onEscolher(Number(v) as Nivel)}>
             {NIVEIS.map((n) => (
               <DropdownMenuRadioItem key={n.nivel} value={String(n.nivel)} closeOnClick>

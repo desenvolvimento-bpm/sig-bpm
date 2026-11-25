@@ -28,6 +28,54 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 25/11/2026: a Conta da DRE de cada destino das redistribuições, os níveis das Premissas dos Centros de Custo, os cards nos slides e o Importar Valores sem os avisos das abas fora do padrão.
+  {
+    publicada: "2026-11-25T08:40",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/redistribuicoes-gastos",
+    itens: [
+      "Nas Redistribuições de Gastos, cada centro de custo de Redistribuir Para tem a sua Conta da DRE, que precisa ser do departamento e da atribuição do centro (o Direto sem Mão de Obra Indireta e Gastos Gerais Indiretos, o Indireto sem Mão de Obra Direta e Gastos Gerais Diretos). Ao escolher o centro, o SIG sugere a conta; a gravação pede a conta de cada centro.",
+      "Na apuração, cada parte redistribuída vai na conta do seu centro. A lista mostra a conta embaixo de cada centro, a coluna Contas da DRE mostra só o nome das contas, e a etiqueta Redistribuição do balancete e do Pesquisar mostra a conta de cada parte.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T08:40",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Nas Redistribuições de Gastos, cada centro de custo de Redistribuir Para tem a sua Conta da DRE, do departamento e da atribuição do centro (sugerida ao escolhê-lo). Na carga do realizado da referência, cada parte vai no grupo do centro, na conta dele. Como toda mudança nas redistribuições, vale a partir da próxima carga do realizado.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T08:40",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Centros de Custo, o botão de níveis antes do rótulo PREMISSAS mostra a tabela até os Totais (Quadro de Lotação e Total das Premissas), até as Atribuições ou com todas as Contas. A seta de cada seção recolhe e expande só as linhas dela, e o título de cada seção traz os valores dela. A seção Total do Centro passou a se chamar Total das Premissas.",
+      "No Importar Valores, as abas do arquivo que não são do Exportar Premissas ficam de fora sem aviso: o modal lista só as abas que serão usadas.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T08:40",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: [
+      "Os cards dos painéis nos slides têm sempre o leiaute da tela padrão (1920 × 1080), qualquer que seja a largura da janela ou o zoom: o Atual e o Acumulado lado a lado e o gráfico dentro do card, também no PDF.",
+    ],
+  },
+  {
+    publicada: "2026-11-25T08:40",
+    processo: "Painéis e Apresentações",
+    tela: "Painel de Bordo",
+    rota: "/analises-gerenciais/paineis-de-bordo",
+    itens: [
+      "Os cards dos painéis nos slides têm sempre o leiaute da tela padrão (1920 × 1080), qualquer que seja a largura da janela ou o zoom: o Atual e o Acumulado lado a lado e o gráfico dentro do card, também no PDF.",
+    ],
+  },
   // 24/11/2026: os Departamentos só com os centros, o Código RM, a fonte 20, a Receita Complementar, o Contestar à direita, as Contestações somente leitura, o Nome Controladoria e o Novo das Unidades.
   {
     publicada: "2026-11-24T09:13",

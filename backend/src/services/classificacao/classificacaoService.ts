@@ -161,7 +161,7 @@ export const classificacaoService = {
           contas: { select: { linhaDREId: true } },
           fornecedores: true,
           departamento: { select: { gruposDRE: true, unidadeNegocio: { select: { codigo: true } } } },
-          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } },
+          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, linhaDREId: true } },
         },
       })
     ).map((r) => ({
@@ -169,8 +169,14 @@ export const classificacaoService = {
       linhasDRE: new Set(r.contas.map((c) => c.linhaDREId)),
       departamento: r.departamento ? { grupos: new Set(r.departamento.gruposDRE), filial: filialDoDepartamento(r.departamento.unidadeNegocio.codigo) } : null,
       fornecedores: new Set(r.fornecedores.map(chaveDoFornecedor)),
-      destinos: r.destinos.flatMap((d) => (centroPorId.has(d.centroCustoId) ? [{ centro: centroPorId.get(d.centroCustoId)!, percentual: Number(d.percentual) }] : [])),
+      destinos: r.destinos.flatMap((d) => (centroPorId.has(d.centroCustoId) ? [{ centro: centroPorId.get(d.centroCustoId)!, percentual: Number(d.percentual), linhaDREId: d.linhaDREId }] : [])),
     }));
+    // A conta de uma parte (23/11/2026, pedido do Adão): a Conta da DRE do destino (uma do departamento do centro), com o departamento,
+    // a atribuição e a descrição dela na etiqueta; sem ela (um destino anterior sem conta equivalente), a conta do movimento.
+    const contaDaParte = (contaDoMovimento: ContaParaClassificar, linhaDREId: string | null): ContaParaClassificar => {
+      const linha = linhaDREId ? linhaPorId.get(linhaDREId) : undefined;
+      return linha ? { ...contaDoMovimento, departamento: linha.grupo, atribuicao: linha.atribuicao, linhaDREId: linha.id, linhaDREDescricao: linha.descricao } : contaDoMovimento;
+    };
     const partes: Prisma.LancamentoRedistribuidoCreateManyInput[] = [];
 
     const agora = new Date();
@@ -188,9 +194,9 @@ export const classificacaoService = {
 
     const atualizacoes = lancamentos.map((l) => {
       // A redistribuição de gastos (13/11/2026) vale por cima de tudo, inclusive da contestação (pedido do Adão): a conta da
-      // DRE é a das reclassificações (sem a contestação); o movimento se divide entre os centros dos destinos, e as partes
-      // não passam pela verificação de departamento e atribuição (o plano de contas resumido de 2027 vale para qualquer
-      // centro), só pela de aba.
+      // DRE que casa com a regra é a das reclassificações (sem a contestação); o movimento se divide entre os centros dos destinos,
+      // cada parte na conta do destino (23/11/2026), e as partes não passam pela verificação de departamento e atribuição, só pela
+      // de aba.
       const semContestacao = corrigirCentroEConta(l, regras, null);
       const contaSem = contaPorId.get(semContestacao.contaId)!;
       const rd = redistribuicoes.length
@@ -204,14 +210,15 @@ export const classificacaoService = {
         const c = { ...classificarLancamento(semContestacao.codigoCentroCusto, centroDoMovimento, contaSem), validacao: "OK" as ValidacaoLancamento, contestacaoId: null, redistribuicaoId: rd.id };
         const valores = partesDoValor(Number(l.valorMovimento), rd.destinos.map((d) => d.percentual));
         rd.destinos.forEach((d, i) => {
-          const p = classificarLancamento(d.centro.codigoRM, d.centro, contaSem);
-          if (semAba(contaSem.linhaDREId, l.filial, p.balde, p.alocacao)) c.validacao = "SEM_ABA";
+          const conta = contaDaParte(contaSem, d.linhaDREId);
+          const p = classificarLancamento(d.centro.codigoRM, d.centro, conta);
+          if (semAba(conta.linhaDREId, l.filial, p.balde, p.alocacao)) c.validacao = "SEM_ABA";
           partes.push({
             competenciaId,
             lancamentoContabilId: l.id,
             redistribuicaoId: rd.id,
             filial: l.filial,
-            linhaDREId: contaSem.linhaDREId!,
+            linhaDREId: conta.linhaDREId!,
             centroCustoId: d.centro.id,
             // Em texto (13/11/2026): o número do JavaScript gravava 9796.799999999999 no lugar de 9796.80.
             percentual: String(d.percentual),

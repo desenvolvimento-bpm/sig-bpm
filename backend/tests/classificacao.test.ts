@@ -8,6 +8,7 @@ import {
   partesDoValor,
   redistribuicaoDoMovimento,
   verificarLancamento,
+  atribuicaoCabeNoCentro,
   type CentroParaClassificar,
   type ContaParaClassificar,
 } from "../src/services/classificacao/regrasClassificacao.js";
@@ -161,7 +162,7 @@ describe("Redistribuições de Gastos (13/11/2026)", () => {
     linhasDRE: new Set(["linha-pj"]),
     departamento: null,
     fornecedores: new Set(["MK ENGENHARIA E CONSULTORIA"]),
-    destinos: [{ centro: { id: "a" }, percentual: 0.6 }, { centro: { id: "b" }, percentual: 0.4 }],
+    destinos: [{ centro: { id: "a" }, percentual: 0.6, linhaDREId: null }, { centro: { id: "b" }, percentual: 0.4, linhaDREId: null }],
     ...over,
   });
   const mov = (over: Partial<Parameters<typeof redistribuicaoDoMovimento>[0]> = {}) => ({ linhaDREId: "linha-pj", grupoSigla: "CPP", filial: 1, cliForn: " mk engenharia e consultoria ", ...over });
@@ -194,5 +195,18 @@ describe("Redistribuições de Gastos (13/11/2026)", () => {
     assert.deepEqual(partesDoValor(100, [1 / 3, 1 / 3, 1 / 3]), [33.33, 33.33, 33.34]);
     const partes = partesDoValor(-1234.57, [0.25, 0.25, 0.5]);
     assert.equal(Math.round(partes.reduce((s, x) => s + x, 0) * 100), -123457);
+  });
+});
+
+describe("atribuicaoCabeNoCentro (a conta de cada destino das redistribuições, 23/11/2026)", () => {
+  it("o centro direto não leva MOI nem GGI; o indireto não leva MOD nem GGD; as outras atribuições valem nos dois", () => {
+    assert.equal(atribuicaoCabeNoCentro("DIRETA", "Mão de Obra Direta"), true);
+    assert.equal(atribuicaoCabeNoCentro("DIRETA", "Gastos Gerais Indiretos"), false);
+    assert.equal(atribuicaoCabeNoCentro("DIRETA", "Mão de Obra Indireta"), false);
+    assert.equal(atribuicaoCabeNoCentro("INDIRETA", "Gastos Gerais Diretos"), false);
+    assert.equal(atribuicaoCabeNoCentro("INDIRETA", "Mão de Obra Indireta"), true);
+    assert.equal(atribuicaoCabeNoCentro("INDIRETA", "Depreciação"), true);
+    assert.equal(atribuicaoCabeNoCentro("DIRETA", "Gastos Gerais Variáveis"), true);
+    assert.equal(atribuicaoCabeNoCentro(null, "Mão de Obra Indireta"), true);
   });
 });

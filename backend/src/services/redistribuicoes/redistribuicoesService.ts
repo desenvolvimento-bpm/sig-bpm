@@ -4,14 +4,15 @@ import { plural } from "../../utils/plural.js";
 import { gestaoDoCentro } from "../acesso/recorteDepartamento.js";
 import { auditar } from "../auditoriaService.js";
 import { classificacaoService } from "../classificacao/classificacaoService.js";
-import { chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento } from "../classificacao/regrasClassificacao.js";
+import type { AtribuicaoCusto } from "../../generated/prisma/enums.js";
+import { atribuicaoCabeNoCentro, chaveDoFornecedor, filialDoDepartamento, movimentoNoDepartamento } from "../classificacao/regrasClassificacao.js";
 
 /**
  * As Redistribuições de Gastos (13/11/2026, pedido do Adão; Cadastros Gerais / Controladoria): os movimentos dos
  * fornecedores marcados, nas contas da DRE (uma ou mais) e num departamento (ou em todos), valem divididos entre os centros de custo
- * dos destinos, pelos percentuais (somam 100%), nas competências da vigência. A classificação aplica (classificacaoService);
- * aqui, o cadastro: as listas do modal, a validação, a gravação (com a reclassificação das competências ainda não apuradas
- * da vigência) e a exclusão.
+ * dos destinos, pelos percentuais (somam 100%), nas competências da vigência — cada centro numa Conta da DRE do departamento e da
+ * atribuição dele (23/11/2026). A classificação aplica (classificacaoService); aqui, o cadastro: as listas do modal, a validação, a gravação (com a
+ * reclassificação das competências ainda não apuradas da vigência) e a exclusão.
  */
 
 export class RegraRedistribuicaoError extends Error {
@@ -28,8 +29,8 @@ export type DadosDaRedistribuicao = {
   /** As contas da DRE (uma ou mais), na ordem do modal. */
   linhasDREIds: string[];
   fornecedores: string[];
-  /** O percentual de 0 a 100, como digitado. */
-  destinos: Array<{ centroCustoId: string; percentual: number }>;
+  /** O centro, a Conta da DRE dele (23/11/2026) e o percentual de 0 a 100, como digitado. */
+  destinos: Array<{ centroCustoId: string; linhaDREId: string; percentual: number }>;
   /** "AAAA-MM". */
   vigenciaInicio: string;
   vigenciaFim: string | null;
@@ -83,6 +84,54 @@ export const contaEmComum = (linhas: LinhaDaRegra[], outras: Array<{ linhaDREId:
 /** As contas da DRE para gravar, na ordem do modal. */
 export const contasParaGravar = (ids: string[]) => ids.map((linhaDREId, i) => ({ linhaDREId, ordem: i + 1 }));
 
+/**
+ * Um centro de Redistribuir Para, para a conta dele: o código, o nome, o departamento e a atribuição (os dos Cadastros Gerais ou os da
+ * cópia do cenário).
+ */
+export type CentroDoDestino = { codigoRM: string | null; nomeRM: string; departamento: string | null; atribuicao: AtribuicaoCusto | null };
+const nomeDoCentro = (c: CentroDoDestino) => `${c.codigoRM ?? ""} ${c.nomeRM}`.trim().replace(/\s+/g, " ");
+const ROTULO_DA_ATRIBUICAO: Record<AtribuicaoCusto, string> = { DIRETA: "Direta", INDIRETA: "Indireta" };
+
+/** A conta da DRE é do departamento do centro (23/11/2026): o grupo da linha é o departamento dele, pelos nomes (como na classificação). */
+export const contaDoDepartamento = (l: { grupo: string }, c: { departamento: string | null }) => !!c.departamento && l.grupo.trim().toUpperCase() === c.departamento.trim().toUpperCase();
+/** A conta da DRE é do centro (23/11/2026): do departamento dele e de uma atribuição que cabe na dele (atribuicaoCabeNoCentro). */
+export const contaDoCentro = (l: { grupo: string; atribuicao: string | null }, c: { departamento: string | null; atribuicao: AtribuicaoCusto | null }) =>
+  contaDoDepartamento(l, c) && atribuicaoCabeNoCentro(c.atribuicao, l.atribuicao);
+
+/**
+ * As contas dos destinos (23/11/2026, pedido do Adão): cada centro de Redistribuir Para numa Conta da DRE, uma linha de item ativa
+ * do departamento do centro e da atribuição dele (o centro direto não leva Mão de Obra Indireta nem Gastos Gerais Indiretos, o
+ * indireto não leva Mão de Obra Direta nem Gastos Gerais Diretos, como a verificação da classificação). `centros`: o centro de cada
+ * destino, pelo id. Serve ao cadastro e às cópias dos cenários.
+ */
+export async function validarContasDosDestinos(destinos: Array<{ centroCustoId: string; linhaDREId: string | null | undefined }>, centros: Map<string, CentroDoDestino>) {
+  const prisma = getPrismaClient();
+  const ids = [...new Set(destinos.flatMap((d) => (d.linhaDREId ? [d.linhaDREId] : [])))];
+  const [linhas, ativas] = await Promise.all([
+    prisma.linhaDRE.findMany({ where: { id: { in: ids } }, select: { id: true, tipo: true, ativo: true, grupo: true, grupoSigla: true, atribuicao: true, descricao: true } }),
+    prisma.linhaDRE.findMany({ where: { tipo: "ITEM", ativo: true }, select: { grupo: true, atribuicao: true }, distinct: ["grupo", "atribuicao"] }),
+  ]);
+  const porId = new Map(linhas.map((l) => [l.id, l]));
+  for (const d of destinos) {
+    const c = centros.get(d.centroCustoId);
+    if (!c) continue;
+    const nome = nomeDoCentro(c);
+    if (!ativas.some((l) => contaDoDepartamento(l, c))) {
+      throw new RegraRedistribuicaoError(400, `O centro ${nome} não tem um departamento da DRE${c.departamento ? ` (${c.departamento})` : ""}: escolha outro centro em Redistribuir Para.`);
+    }
+    if (!ativas.some((l) => contaDoCentro(l, c))) {
+      throw new RegraRedistribuicaoError(400, `O departamento do centro ${nome} (${c.departamento}) não tem contas da atribuição dele (${ROTULO_DA_ATRIBUICAO[c.atribuicao!]}): escolha outro centro em Redistribuir Para.`);
+    }
+    if (!d.linhaDREId) throw new RegraRedistribuicaoError(400, `Escolha a Conta da DRE do centro ${nome} em Redistribuir Para.`);
+    const l = porId.get(d.linhaDREId);
+    if (!l || l.tipo !== "ITEM" || !l.ativo) throw new RegraRedistribuicaoError(400, `A Conta da DRE do centro ${nome} não é uma linha de item ativa da Estrutura da DRE.`);
+    if (!contaDoDepartamento(l, c)) throw new RegraRedistribuicaoError(400, `A conta ${rotuloDaLinha(l)} não é do departamento do centro ${nome} (${c.departamento}): escolha uma conta dele.`);
+    if (!contaDoCentro(l, c)) {
+      throw new RegraRedistribuicaoError(400, `A conta ${rotuloDaLinha(l)} não é da atribuição do centro ${nome} (${ROTULO_DA_ATRIBUICAO[c.atribuicao!]}): escolha uma conta dela.`);
+    }
+  }
+}
+
 /** As opções das Contas da DRE do modal: com o grupo, a atribuição e as unidades (a lupa e o filtro da Unidade). */
 export const opcaoDaLinha = (l: LinhaDaRegra) => ({
   id: l.id,
@@ -132,7 +181,7 @@ async function ler(id: string) {
     where: { id },
     include: {
       contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } } },
-      destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true } },
+      destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, linhaDREId: true, percentual: true } },
     },
   });
   if (!r) throw new RegraRedistribuicaoError(404, "Redistribuição não encontrada.");
@@ -143,7 +192,7 @@ const paraAuditoria = (r: Awaited<ReturnType<typeof ler>>) => ({
   departamentoId: r.departamentoId,
   linhasDREIds: r.contas.map((c) => c.linhaDREId),
   fornecedores: r.fornecedores,
-  destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: Number(d.percentual) })),
+  destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, linhaDREId: d.linhaDREId, percentual: Number(d.percentual) })),
   vigenciaInicio: textoDoMes(r.vigenciaInicio),
   vigenciaFim: textoDoMes(r.vigenciaFim),
   descricao: r.descricao,
@@ -171,10 +220,12 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
   if (!d.destinos.length) throw new RegraRedistribuicaoError(400, "Inclua ao menos um centro de custo em Redistribuir Para.");
   const ids = d.destinos.map((x) => x.centroCustoId);
   if (new Set(ids).size !== ids.length) throw new RegraRedistribuicaoError(400, "Um centro de custo aparece mais de uma vez em Redistribuir Para.");
-  const centros = await prisma.centroCusto.findMany({ where: { id: { in: ids } }, select: { id: true, ativo: true, codigoRM: true, nomeRM: true } });
+  const centros = await prisma.centroCusto.findMany({ where: { id: { in: ids } }, select: { id: true, ativo: true, codigoRM: true, nomeRM: true, departamento: true, atribuicao: true } });
   if (centros.length !== ids.length) throw new RegraRedistribuicaoError(400, "Centro de custo inexistente em Redistribuir Para.");
   const inativo = centros.find((c) => !c.ativo);
   if (inativo) throw new RegraRedistribuicaoError(400, `O centro ${inativo.codigoRM ?? ""} ${inativo.nomeRM} está inativo.`.replace(/\s+/g, " "));
+  // A conta de cada centro (23/11/2026): uma Conta da DRE do departamento e da atribuição dele.
+  await validarContasDosDestinos(d.destinos, new Map(centros.map((c) => [c.id, c])));
   if (d.destinos.some((x) => !Number.isFinite(x.percentual) || x.percentual <= 0 || x.percentual > 100)) throw new RegraRedistribuicaoError(400, "Cada percentual precisa ser maior que 0% e no máximo 100%.");
   const soma = d.destinos.reduce((s, x) => s + x.percentual, 0);
   if (Math.abs(soma - 100) > 0.005) throw new RegraRedistribuicaoError(400, `Os percentuais somam ${soma.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%: precisam somar 100%.`);
@@ -207,7 +258,7 @@ async function preparar(d: DadosDaRedistribuicao, id: string | null) {
     linhasDREIds: idsDasContas,
     nomeDasContas: nomeDasContas(linhas),
     fornecedores: [...porChave.values()].sort((a, b) => a.localeCompare(b, "pt-BR")),
-    destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
+    destinos: d.destinos.map((x, i) => ({ centroCustoId: x.centroCustoId, linhaDREId: x.linhaDREId, percentual: new Prisma.Decimal(x.percentual).div(100), ordem: i + 1 })),
     vigenciaInicio: inicio,
     vigenciaFim: fim,
     descricao: d.descricao?.trim() || null,
@@ -229,7 +280,10 @@ export const redistribuicoesService = {
         include: {
           departamento: { select: { nome: true, unidadeNegocio: { select: { nome: true } } } },
           contas: { orderBy: { ordem: "asc" }, select: { linhaDREId: true, linhaDRE: { select: { codigo: true, descricao: true, grupoSigla: true, atribuicao: true } } } },
-          destinos: { orderBy: { ordem: "asc" }, select: { centroCustoId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
+          destinos: {
+            orderBy: { ordem: "asc" },
+            select: { centroCustoId: true, linhaDREId: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } }, linhaDRE: { select: { descricao: true, grupoSigla: true, atribuicao: true } } },
+          },
         },
       }),
       prisma.lancamentoRedistribuido.groupBy({ by: ["redistribuicaoId", "competenciaId"], _count: { _all: true } }),
@@ -247,7 +301,14 @@ export const redistribuicoesService = {
       linhasDREIds: r.contas.map((c) => c.linhaDREId),
       contas: r.contas.map((c) => ({ codigo: c.linhaDRE.codigo, rotulo: rotuloDaLinha(c.linhaDRE) })),
       fornecedores: r.fornecedores,
-      destinos: r.destinos.map((d) => ({ centroCustoId: d.centroCustoId, centro: `${d.centroCusto.codigoRM ?? "sem código"} · ${d.centroCusto.nomeRM}`, percentual: Number(d.percentual) * 100 })),
+      destinos: r.destinos.map((d) => ({
+        centroCustoId: d.centroCustoId,
+        centro: `${d.centroCusto.codigoRM ?? "sem código"} · ${d.centroCusto.nomeRM}`,
+        linhaDREId: d.linhaDREId,
+        /** A Conta da DRE do centro (23/11/2026); nula num destino anterior sem conta equivalente (a parte fica na conta do movimento). */
+        conta: d.linhaDRE ? rotuloDaLinha(d.linhaDRE) : null,
+        percentual: Number(d.percentual) * 100,
+      })),
       vigenciaInicio: textoDoMes(r.vigenciaInicio)!,
       vigenciaFim: textoDoMes(r.vigenciaFim),
       descricao: r.descricao,

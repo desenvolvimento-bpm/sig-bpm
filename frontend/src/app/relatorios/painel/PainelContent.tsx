@@ -309,7 +309,7 @@ function GrupoPeriodo({
           {periodo}
           {f.unidade ? ` (${f.unidade})` : ""}
         </p>
-        <p className="text-[27.5px] leading-tight font-extrabold whitespace-nowrap text-gray-900 2xl:text-[32.5px]">{f.formatarCurto(b.realizado)}</p>
+        <p className="text-[27.5px] leading-tight font-extrabold whitespace-nowrap text-gray-900 card-2xl:text-[32.5px]">{f.formatarCurto(b.realizado)}</p>
         <p className="h-4 text-xs whitespace-nowrap text-gray-500">{base}</p>
         <div className="mt-1.5 flex flex-col gap-0.5">
           {comparacoes.map((c) => (
@@ -328,7 +328,7 @@ function GrupoPeriodo({
           {f.unidade ? ` (${f.unidade})` : ""}
         </p>
         {/* 25% maior (21/10/2026; antes, 22 px até 1536 px e 26 px acima). */}
-        <p className="text-[27.5px] leading-tight font-extrabold whitespace-nowrap text-gray-900 2xl:text-[32.5px]">{f.formatarCurto(b.realizado)}</p>
+        <p className="text-[27.5px] leading-tight font-extrabold whitespace-nowrap text-gray-900 card-2xl:text-[32.5px]">{f.formatarCurto(b.realizado)}</p>
         <p className="h-4 text-xs whitespace-nowrap text-gray-500">{base}</p>
       </div>
       <DestaqueDoDesvio b={b} formatarOrcado={f.formatarCurto} />
@@ -339,7 +339,8 @@ function GrupoPeriodo({
 /**
  * Um indicador num card da largura da tela (09/10/2026; a versão com os cards lado a lado está na etiqueta
  * painel-cards-lado-a-lado do git): o título e a Metodologia em cima do Atual e do Acumulado (2/5 do card, 1/5 cada) e o
- * gráfico dos meses do exercício, com o do acumulado ao lado (3/5). Em telas estreitas, um embaixo do outro.
+ * gráfico dos meses do exercício, com o do acumulado ao lado (3/5). Em telas estreitas, um embaixo do outro (só no Painel
+ * de Bordo: no slide, o CardDoPainel fica sempre lado a lado; as variantes card-lg: e card-2xl:, globals.css).
  */
 function CardIndicador({
   i,
@@ -377,20 +378,20 @@ function CardIndicador({
   );
   const acumulado = rotuloDoAcumulado ?? (rotuloMes.startsWith("JAN") ? rotuloMes : `JAN–${rotuloMes}`);
   // O espaço entre os blocos menor (12 px), para o rótulo, a tag e os valores caberem em 1/5 do card.
-  const coluna = "lg:border-l lg:border-gray-100 lg:pl-3";
+  const coluna = "card-lg:border-l card-lg:border-gray-100 card-lg:pl-3";
   return (
     // O leiaute de 13/10/2026: o título e a legenda, maiores, em cima dos dois blocos (o Atual e o Acumulado); o gráfico
     // na terceira coluna, na altura do card. Em telas estreitas, um embaixo do outro.
     // data-card-indicador e data-grafico-do-card: a imagem sem os gráficos (globals.css, 14/10/2026).
     <article
       data-card-indicador
-      className="grid gap-4 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,3fr)] lg:grid-rows-[auto_1fr] lg:gap-x-0 lg:gap-y-2"
+      className="grid gap-4 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-3 card-lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,3fr)] card-lg:grid-rows-[auto_1fr] card-lg:gap-x-0 card-lg:gap-y-2"
     >
       {/*
         O nome e, à direita dele, a Metodologia e o comportamento entre parênteses, no texto do Atual e do Acumulado
         (21/10/2026; antes, a abreviação e a seta); o mês fica no nome do grupo (13/10/2026).
       */}
-      <header data-cabecalho-do-card className="flex min-w-0 items-baseline justify-between gap-3 lg:col-span-2 lg:pr-3">
+      <header data-cabecalho-do-card className="flex min-w-0 items-baseline justify-between gap-3 card-lg:col-span-2 card-lg:pr-3">
         <h3 className="shrink-0 text-xl leading-snug font-bold text-gray-900" title={i.titulo}>
           {i.titulo}
         </h3>
@@ -400,18 +401,18 @@ function CardIndicador({
           {i.metodologia ? `${i.metodologia} ` : ""}({sentido})
         </p>
       </header>
-      <div data-valor-atual className="self-end lg:col-start-1 lg:row-start-2 lg:pr-3">
+      <div data-valor-atual className="self-end card-lg:col-start-1 card-lg:row-start-2 card-lg:pr-3">
         <GrupoPeriodo periodo="Atual" b={i.mes} f={fm} base={percentualDaBase(i, i.mes)} dica={`Atual: ${rotuloMes}`} comparacoes={doPeriodo("mes")} />
       </div>
-      <div data-valor-acumulado className={`self-end lg:col-start-2 lg:row-start-2 lg:pr-3 ${coluna}`}>
+      <div data-valor-acumulado className={`self-end card-lg:col-start-2 card-lg:row-start-2 card-lg:pr-3 ${coluna}`}>
         <GrupoPeriodo periodo="Acumulado" b={i.acumulado} f={fa} base={percentualDaBase(i, i.acumulado)} dica={`Acumulado: ${acumulado}`} comparacoes={doPeriodo("acumulado")} />
       </div>
       {/*
         O gráfico dos meses e, ao lado, o do acumulado (realizado × orçado), como na planilha, na altura do card: os meses e
         o ACUM. perto do pé dele. O gráfico fica preso à célula (absolute), para a altura do card vir dos valores.
       */}
-      <div data-grafico-do-card className="relative min-h-32 min-w-0 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-gray-100">
-        <div className="absolute inset-0 flex gap-3 lg:left-5">
+      <div data-grafico-do-card className="relative min-h-32 min-w-0 card-lg:col-start-3 card-lg:row-span-2 card-lg:row-start-1 card-lg:border-l card-lg:border-gray-100">
+        <div className="absolute inset-0 flex gap-3 card-lg:left-5">
           {/*
             O acumulado na largura de um mês (23/10/2026; antes, 96 px com os rótulos e 144 px com a escala): os dois gráficos
             crescem na proporção dos períodos (os meses e 1), a partir da mesma base (a escala, quando há, e, no acumulado, o
@@ -467,6 +468,7 @@ function CardIndicador({
 /**
  * Um card do painel fora dele (15/10/2026: os Relatórios Executivos), com as cores escolhidas, na altura e na largura do
  * bloco; sem o gráfico, os valores em duas colunas, como no Copiar como Imagem (sem gráficos), mas sem estreitar o card.
+ * O leiaute é sempre o da tela padrão de 1920 px (24/11/2026), em qualquer janela e no PDF: o slide só se reduz ou se amplia.
  */
 export function CardDoPainel({
   i,
@@ -505,27 +507,28 @@ export function CardDoPainel({
   const umPeriodo = periodos === "ATUAL" || periodos === "ACUMULADO";
   const doGrafico = !comGrafico
     ? umPeriodo
-      ? "[&_[data-grafico-do-card]]:hidden lg:[&_[data-card-indicador]]:grid-cols-1"
-      : "[&_[data-grafico-do-card]]:hidden lg:[&_[data-card-indicador]]:grid-cols-2"
+      ? "[&_[data-grafico-do-card]]:hidden card-lg:[&_[data-card-indicador]]:grid-cols-1"
+      : "[&_[data-grafico-do-card]]:hidden card-lg:[&_[data-card-indicador]]:grid-cols-2"
     : soAcumulado
       ? umPeriodo
-        ? "[&_[data-grafico-dos-meses]]:hidden lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
-        : "[&_[data-grafico-dos-meses]]:hidden lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
+        ? "[&_[data-grafico-dos-meses]]:hidden card-lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
+        : "[&_[data-grafico-dos-meses]]:hidden card-lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] [&_[data-grafico-acumulado]]:w-full"
       : umPeriodo
-        ? "lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]"
+        ? "card-lg:[&_[data-card-indicador]]:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]"
         : "";
   // Um período só: o outro some, o que fica vai à primeira coluna (o Acumulado sem a linha da esquerda), o gráfico à segunda
   // e o cabeçalho, na largura dos valores, com a Metodologia embaixo do nome.
   const doPeriodo = !umPeriodo
     ? ""
-    : `lg:[&_[data-cabecalho-do-card]]:col-span-1 lg:[&_[data-grafico-do-card]]:col-start-2 [&_[data-cabecalho-do-card]]:flex-col [&_[data-cabecalho-do-card]]:items-start [&_[data-cabecalho-do-card]]:gap-0.5 [&_[data-metodologia]]:text-left [&_[data-metodologia]]:max-w-none! ${
+    : `card-lg:[&_[data-cabecalho-do-card]]:col-span-1 card-lg:[&_[data-grafico-do-card]]:col-start-2 [&_[data-cabecalho-do-card]]:flex-col [&_[data-cabecalho-do-card]]:items-start [&_[data-cabecalho-do-card]]:gap-0.5 [&_[data-metodologia]]:text-left [&_[data-metodologia]]:max-w-none! ${
         periodos === "ATUAL"
           ? "[&_[data-valor-acumulado]]:hidden"
-          : "[&_[data-valor-atual]]:hidden lg:[&_[data-valor-acumulado]]:col-start-1 lg:[&_[data-valor-acumulado]]:border-l-0 lg:[&_[data-valor-acumulado]]:pl-0"
+          : "[&_[data-valor-atual]]:hidden card-lg:[&_[data-valor-acumulado]]:col-start-1 card-lg:[&_[data-valor-acumulado]]:border-l-0 card-lg:[&_[data-valor-acumulado]]:pl-0"
       }`;
   return (
     <CoresDoPainel.Provider value={cores}>
-      <div className={`h-full [&>article]:h-full ${doGrafico} ${doPeriodo}`}>
+      {/* data-card-do-slide: as colunas do card (card-lg:, card-2xl:, globals.css) valem sempre, como na tela padrão do slide. */}
+      <div data-card-do-slide className={`h-full [&>article]:h-full ${doGrafico} ${doPeriodo}`}>
         <CardIndicador i={i} rotuloMes={rotuloMes} tipo={tipo} comRotulos={comRotulos} formatacao={formatacao} comparacoes={comparacoes} corDoOrcado={corDoOrcado} />
       </div>
     </CoresDoPainel.Provider>

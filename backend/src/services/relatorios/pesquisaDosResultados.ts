@@ -45,7 +45,7 @@ const selecao = {
   linhaDRE: { select: { codigo: true, descricao: true, grupo: true, grupoSigla: true, atribuicaoSigla: true } },
   // A redistribuição de gastos (13/11/2026): os destinos, para a etiqueta no lugar do Contestar.
   redistribuicaoId: true,
-  partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } } } },
+  partesRedistribuidas: { select: { valorMovimento: true, percentual: true, centroCusto: { select: { codigoRM: true, nomeRM: true } }, linhaDRE: { select: { grupoSigla: true, atribuicao: true, descricao: true } } } },
 } satisfies Prisma.LancamentoContabilSelect;
 type Movimento = Prisma.LancamentoContabilGetPayload<{ select: typeof selecao }>;
 
@@ -185,7 +185,7 @@ export const pesquisaDosResultados = {
           contestacaoAplicada: aplicada ? { numero: aplicada.numero, centro: !!aplicada.centroNovoId, conta: !!aplicada.contaNovaId } : null,
           contestacao: situacoes.get(m.id) ?? null,
           redistribuicao: m.redistribuicaoId
-            ? { destinos: m.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })) }
+            ? { destinos: m.partesRedistribuidas.map((p) => ({ centro: `${p.centroCusto.codigoRM ?? "sem código"} · ${p.centroCusto.nomeRM}`, conta: [p.linhaDRE.grupoSigla, p.linhaDRE.atribuicao, p.linhaDRE.descricao].filter(Boolean).join(" · "), percentual: Number(p.percentual), valor: p.valorMovimento.toFixed(2) })) }
             : null,
         };
       }),

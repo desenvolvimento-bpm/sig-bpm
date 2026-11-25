@@ -3,7 +3,10 @@ import { describe, it } from "node:test";
 
 import { redistribuirMovimentos, type RegraDoCenario } from "../src/services/cenarios/redistribuicoesDoCenario.js";
 
-/** Uma regra do cenário: a conta L1, o fornecedor ACME, de 03/2026 em diante, 60% no centro k1 e 40% no k2 (os da cópia). */
+/**
+ * Uma regra do cenário: a conta L1, o fornecedor ACME, de 03/2026 em diante, 60% no centro k1 (na conta CPP.GGD.X) e 40% no k2 (na
+ * DA.GGI.X), os da cópia.
+ */
 const regra = (extra: Partial<RegraDoCenario> = {}): RegraDoCenario => ({
   id: "r1",
   linhasDRE: new Set(["L1"]),
@@ -12,8 +15,8 @@ const regra = (extra: Partial<RegraDoCenario> = {}): RegraDoCenario => ({
   inicio: new Date(Date.UTC(2026, 2, 1)),
   fim: null,
   destinos: [
-    { centro: { id: "k1", codigoRM: "1.01", nomeRM: "Um" }, percentual: 0.6 },
-    { centro: { id: "k2", codigoRM: "1.02", nomeRM: "Dois" }, percentual: 0.4 },
+    { centro: { id: "k1", codigoRM: "1.01", nomeRM: "Um" }, percentual: 0.6, linha: { codigo: "CPP.GGD.X", tipo: "ITEM" } },
+    { centro: { id: "k2", codigoRM: "1.02", nomeRM: "Dois" }, percentual: 0.4, linha: { codigo: "DA.GGI.X", tipo: "ITEM" } },
   ],
   ...extra,
 });
@@ -39,6 +42,19 @@ describe("as Redistribuições de Gastos do cenário na referência (20/11/2026,
         ["k2", 40],
       ],
     );
+  });
+
+  it("cada parte leva a conta da DRE do destino (23/11/2026); sem ela, a parte fica na conta do movimento", () => {
+    const { redistribuidos } = redistribuirMovimentos([mov()], [regra()], doMes);
+    assert.deepEqual(
+      redistribuidos[0].partes.map((p) => [p.centro.id, p.linha?.codigo]),
+      [
+        ["k1", "CPP.GGD.X"],
+        ["k2", "DA.GGI.X"],
+      ],
+    );
+    const semConta = regra({ destinos: [{ centro: { id: "k1", codigoRM: "1.01", nomeRM: "Um" }, percentual: 1, linha: null }] });
+    assert.equal(redistribuirMovimentos([mov()], [semConta], doMes).redistribuidos[0].partes[0].linha, null);
   });
 
   it("mantém o que não casa: outra conta, outro fornecedor, sem fornecedor ou fora da vigência", () => {

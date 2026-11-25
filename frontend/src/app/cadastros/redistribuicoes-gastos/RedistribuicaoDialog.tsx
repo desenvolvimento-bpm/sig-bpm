@@ -22,6 +22,9 @@ import { lerNumero } from "@/app/cenarios/components/EdicaoDialogs";
 import { mensagemDeErro } from "../services/edicaoService";
 import {
   redistribuicoesService as servico,
+  contaDoCentro,
+  contaDoDepartamento,
+  type ContaDaRedistribuicao,
   type DadosDaRedistribuicao,
   type EfeitoDaRedistribuicao,
   type FornecedorDaCombinacao,
@@ -74,7 +77,7 @@ const DO_CADASTRO: ServicoDaRedistribuicao = {
     atualizarCompetencia(queryClient);
   },
   descricao:
-    "Os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência. Movimentos redistribuídos não podem ser contestados.",
+    "Os movimentos dos fornecedores marcados, nas Contas da DRE (e no departamento), valem divididos entre os centros de custo de Redistribuir Para, pelos percentuais, nas competências da vigência — cada centro na Conta da DRE escolhida para ele, uma do departamento e da atribuição do centro. Movimentos redistribuídos não podem ser contestados.",
   descricaoDaExclusao: (conta) =>
     `A redistribuição de ${conta} sai do cadastro, e as competências ainda não apuradas da vigência voltam a ser classificadas sem ela. Já usada numa competência apurada ou fechada, ela não se exclui: encerre a vigência.`,
 };
@@ -85,6 +88,37 @@ const COLUNAS: Coluna<LinhaDoFornecedor>[] = [
   { chave: "valor", rotulo: "Valor", valor: (f) => f.valor, texto: (f) => moeda(f.valor), tipo: "numero", alinhamento: "direita" },
   { chave: "competencias", rotulo: "Competências", valor: (f) => f.competencias },
 ];
+
+/** A atribuição da conta combina com a do centro: Direta com os Diretos, Indireta com os Indiretos. */
+const atribuicaoCombina = (atribuicaoDaConta: string | null, atribuicaoDoCentro: string | null) => {
+  const a = atribuicaoDaConta ?? "";
+  if (atribuicaoDoCentro === "DIRETA") return /diret/i.test(a) && !/indiret/i.test(a);
+  if (atribuicaoDoCentro === "INDIRETA") return /indiret/i.test(a);
+  return false;
+};
+
+/**
+ * A conta sugerida para um centro de Redistribuir Para (23/11/2026): a atual, se for do departamento dele; senão, a primeira Conta da
+ * DRE da redistribuição que for do departamento; senão, a equivalente no departamento (a mesma descrição — a da mesma atribuição ou a
+ * que combina com a do centro). Sem nenhuma, vazia (o usuário escolhe).
+ */
+function contaSugerida(doCentro: ContaDaRedistribuicao[], atribuicaoDoCentro: string | null, origens: ContaDaRedistribuicao[], atual: string) {
+  if (doCentro.some((l) => l.id === atual)) return atual;
+  const propria = origens.find((o) => doCentro.some((l) => l.id === o.id));
+  if (propria) return propria.id;
+  for (const o of origens) {
+    const mesmas = doCentro.filter((l) => l.descricao.trim().toUpperCase() === o.descricao.trim().toUpperCase());
+    const escolhida = mesmas.find((l) => l.atribuicao === o.atribuicao) ?? mesmas.find((l) => atribuicaoCombina(l.atribuicao, atribuicaoDoCentro)) ?? mesmas[0];
+    if (escolhida) return escolhida.id;
+  }
+  return "";
+}
+
+/** O percentual ao sair do campo: com duas casas (até quatro, se digitadas). */
+const percentualNoCampo = (texto: string) => {
+  const v = lerNumero(texto);
+  return typeof v === "number" ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : texto;
+};
 
 /** O mês gravado ("AAAA-MM") no calendário do Início: o primeiro dia dele. */
 const diaDoInicio = (mes: string) => (/^\d{4}-\d{2}$/.test(mes) ? `${mes}-01` : mes);
@@ -99,8 +133,9 @@ const diaDoFim = (mes: string) => {
  * O modal Redistribuição de Gastos (13/11/2026, pedido do Adão): o Departamento da DRE (ou Todos), a Unidade (ou Todas; só
  * filtra as contas) e as Contas da DRE (20/11/2026: uma ou mais, pela busca ou pela lupa, listadas abaixo do campo), os
  * fornecedores com movimentos em qualquer das contas (de competências fechadas ou abertas; a tabela com os filtros nos rótulos
- * e a caixa de cada um e a de todos), os centros de Redistribuir Para (pela busca ou pela lupa, como no modal Contestar) com o
- * percentual de cada um (somando 100%) e a vigência.
+ * e a caixa de cada um e a de todos), os centros de Redistribuir Para (pela busca ou pela lupa, como no modal Contestar) com a Conta
+ * da DRE de cada um (23/11/2026, pedido do Adão: uma conta do departamento e da atribuição do centro, sugerida ao escolher o centro) e o percentual
+ * (somando 100%), e a vigência.
  */
 export function RedistribuicaoDialog({
   registro,
@@ -123,8 +158,10 @@ export function RedistribuicaoDialog({
   const [buscaDaConta, setBuscaDaConta] = useState(0);
   const [consulta, setConsulta] = useState<{ tipo: "contas" } | { tipo: "centros"; linha: number } | null>(null);
   const [marcados, setMarcados] = useState<Set<string>>(() => new Set((registro?.fornecedores ?? []).map(chave)));
-  const [destinos, setDestinos] = useState<Array<{ centroCustoId: string; texto: string }>>(() =>
-    registro ? registro.destinos.map((d) => ({ centroCustoId: d.centroCustoId, texto: d.percentual.toLocaleString("pt-BR", { maximumFractionDigits: 4 }) })) : [{ centroCustoId: "", texto: "" }],
+  const [destinos, setDestinos] = useState<Array<{ centroCustoId: string; linhaDREId: string; texto: string }>>(() =>
+    registro
+      ? registro.destinos.map((d) => ({ centroCustoId: d.centroCustoId, linhaDREId: d.linhaDREId ?? "", texto: d.percentual.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }))
+      : [{ centroCustoId: "", linhaDREId: "", texto: "" }],
   );
   // A vigência no calendário (21/11/2026, pedido do Adão: como nas Regras de Rateio): o dia escolhido vale o mês dele.
   const [inicio, setInicio] = useState(diaDoInicio(registro?.vigenciaInicio ?? ""));
@@ -157,7 +194,18 @@ export function RedistribuicaoDialog({
     setBuscaDaConta((n) => n + 1);
   };
   const centros = useMemo(() => opcoes.centros.map((c): OpcaoDaBusca => ({ id: c.id, codigo: c.codigo, nome: c.nome, detalhe: c.detalhe })), [opcoes]);
-  const escolherCentro = (i: number, id: string) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, centroCustoId: id } : x)));
+  // As Contas da DRE de cada centro (23/11/2026): as do departamento dele.
+  const contasDoCentro = useMemo(() => {
+    const porCentro = new Map<string, ContaDaRedistribuicao[]>();
+    for (const c of opcoes.centros) porCentro.set(c.id, opcoes.linhas.filter((l) => contaDoCentro(l, c)));
+    return (centroCustoId: string) => porCentro.get(centroCustoId) ?? [];
+  }, [opcoes]);
+  // Ao escolher o centro, a conta sugerida (a de origem do departamento dele, ou a equivalente).
+  const escolherCentro = (i: number, id: string) => {
+    const centro = opcoes.centros.find((c) => c.id === id);
+    const origens = linhasDREIds.flatMap((x) => opcoes.linhas.filter((l) => l.id === x));
+    setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, centroCustoId: id, linhaDREId: centro ? contaSugerida(contasDoCentro(id), centro.atribuicao, origens, x.linhaDREId) : "" } : x)));
+  };
 
   // Os fornecedores com movimentos em qualquer das contas; numa edição, também os marcados que hoje não têm movimentos.
   const fornecedores = useQuery({
@@ -201,7 +249,12 @@ export function RedistribuicaoDialog({
   const somaCerta = Math.abs(soma - 100) <= 0.005;
   const percentualInvalido = lidos.some((d) => d.valor === undefined || (typeof d.valor === "number" && (d.valor <= 0 || d.valor > 100)));
   const centrosRepetidos = new Set(lidos.filter((d) => d.centroCustoId).map((d) => d.centroCustoId)).size !== lidos.filter((d) => d.centroCustoId).length;
-  const destinosCompletos = lidos.length > 0 && lidos.every((d) => d.centroCustoId && typeof d.valor === "number");
+  // A conta de cada centro (23/11/2026): uma do departamento e da atribuição dele; o centro sem departamento da DRE não recebe
+  // redistribuições.
+  const contaCerta = (d: { centroCustoId: string; linhaDREId: string }) => contasDoCentro(d.centroCustoId).some((l) => l.id === d.linhaDREId);
+  const centroSemDepartamento = lidos.some((d) => d.centroCustoId && contasDoCentro(d.centroCustoId).length === 0);
+  const semConta = lidos.some((d) => d.centroCustoId && contasDoCentro(d.centroCustoId).length > 0 && !contaCerta(d));
+  const destinosCompletos = lidos.length > 0 && lidos.every((d) => d.centroCustoId && contaCerta(d) && typeof d.valor === "number");
   const vigenciaCerta = !!mesDoInicio && (!mesDoFim || mesDoFim >= mesDoInicio);
   const pronto = pode && linhasDREIds.length > 0 && marcadosNaLista.length > 0 && destinosCompletos && !percentualInvalido && !centrosRepetidos && somaCerta && vigenciaCerta;
 
@@ -216,7 +269,7 @@ export function RedistribuicaoDialog({
         departamentoId: departamentoId || null,
         linhasDREIds,
         fornecedores: marcadosNaLista.map((f) => nomes.get(chave(f.fornecedor)) ?? f.fornecedor),
-        destinos: lidos.map((d) => ({ centroCustoId: d.centroCustoId, percentual: d.valor as number })),
+        destinos: lidos.map((d) => ({ centroCustoId: d.centroCustoId, linhaDREId: d.linhaDREId, percentual: d.valor as number })),
         vigenciaInicio: mesDoInicio,
         vigenciaFim: mesDoFim || null,
         descricao: descricao.trim() || null,
@@ -229,7 +282,7 @@ export function RedistribuicaoDialog({
 
   return (
     <Dialog open onOpenChange={(o) => (!o ? onFechar() : undefined)}>
-      <DialogContent avisoAoSair className="rounded-sm sm:max-w-4xl">
+      <DialogContent avisoAoSair className="rounded-sm sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Redistribuição de Gastos</DialogTitle>
           <DialogDescription>{fonte.descricao}</DialogDescription>
@@ -384,70 +437,101 @@ export function RedistribuicaoDialog({
           )}
         </section>
 
-        {/* Redistribuir Para: os centros e os percentuais. */}
+        {/* Redistribuir Para: os centros, a conta da DRE de cada um e os percentuais. */}
         <section className="space-y-2">
           <h3 className="text-sm font-bold text-gray-900">Redistribuir Para</h3>
           <div className="space-y-2">
-            {destinos.map((d, i) => (
-              <div key={i} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
-                {pode ? (
-                  <div className="flex gap-2">
-                    <div className="min-w-0 flex-1">
-                      <BuscaNaLista
-                        id={`rd-centro-${i}`}
-                        opcoes={centros}
-                        valor={centros.find((c) => c.id === d.centroCustoId) ?? null}
-                        onEscolher={(o) => escolherCentro(i, o?.id ?? "")}
-                        placeholder="Código ou nome do centro de custo"
-                      />
+            <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_7rem_2rem] gap-2 text-xs font-medium text-gray-600 sm:grid">
+              <span>Centro de Custo</span>
+              <span>Conta da DRE (do departamento e da atribuição do centro)</span>
+              <span>Percentual</span>
+              <span />
+            </div>
+            {destinos.map((d, i) => {
+              const doCentro = contasDoCentro(d.centroCustoId);
+              const contaGravada = registro?.destinos.find((x) => x.centroCustoId === d.centroCustoId && x.linhaDREId === d.linhaDREId)?.conta ?? null;
+              const contaInvalida = !!d.centroCustoId && !doCentro.some((l) => l.id === d.linhaDREId);
+              return (
+                <div key={i} className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_7rem_2rem]">
+                  {pode ? (
+                    <div className="flex gap-2">
+                      <div className="min-w-0 flex-1">
+                        <BuscaNaLista
+                          id={`rd-centro-${i}`}
+                          opcoes={centros}
+                          valor={centros.find((c) => c.id === d.centroCustoId) ?? null}
+                          onEscolher={(o) => escolherCentro(i, o?.id ?? "")}
+                          placeholder="Código ou nome do centro de custo"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0 rounded-sm"
+                        onClick={() => setConsulta({ tipo: "centros", linha: i })}
+                        aria-label="Ver todos os centros de custo e escolher um"
+                        title="Ver todos os centros de custo e escolher um"
+                      >
+                        <Search className="size-4" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="shrink-0 rounded-sm"
-                      onClick={() => setConsulta({ tipo: "centros", linha: i })}
-                      aria-label="Ver todos os centros de custo e escolher um"
-                      title="Ver todos os centros de custo e escolher um"
+                  ) : (
+                    <Input value={(() => { const c = centros.find((x) => x.id === d.centroCustoId); return c ? `${c.codigo} — ${c.nome}` : ""; })()} disabled className="rounded-sm" />
+                  )}
+                  {pode ? (
+                    <select
+                      aria-label={`Conta da DRE do centro ${i + 1}`}
+                      title={doCentro.find((l) => l.id === d.linhaDREId)?.rotulo ?? "A Conta da DRE do centro: uma do departamento dele"}
+                      value={doCentro.some((l) => l.id === d.linhaDREId) ? d.linhaDREId : ""}
+                      disabled={!d.centroCustoId || doCentro.length === 0}
+                      onChange={(e) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, linhaDREId: e.target.value } : x)))}
+                      className={`${classeSelect} ${contaInvalida ? "border-red-400" : ""}`}
                     >
-                      <Search className="size-4" />
-                    </Button>
+                      <option value="">{!d.centroCustoId ? "Escolha o centro" : doCentro.length === 0 ? (opcoes.centros.some((c) => c.id === d.centroCustoId && opcoes.linhas.some((l) => contaDoDepartamento(l, c))) ? "Sem contas da atribuição do centro" : "Centro sem departamento da DRE") : "Escolha a conta"}</option>
+                      {doCentro.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.rotulo}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input value={doCentro.find((l) => l.id === d.linhaDREId)?.rotulo ?? contaGravada ?? ""} title={doCentro.find((l) => l.id === d.linhaDREId)?.rotulo ?? contaGravada ?? ""} disabled className="rounded-sm" />
+                  )}
+                  <div className="relative">
+                    <Input
+                      aria-label={`Percentual do centro ${i + 1}`}
+                      value={d.texto}
+                      inputMode="decimal"
+                      disabled={!pode}
+                      onChange={(e) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, texto: e.target.value } : x)))}
+                      onBlur={() => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, texto: percentualNoCampo(x.texto) } : x)))}
+                      className={`rounded-sm pr-7 ${lidos[i].valor === undefined || (typeof lidos[i].valor === "number" && (lidos[i].valor! <= 0 || lidos[i].valor! > 100)) ? "border-red-400" : ""}`}
+                    />
+                    <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-sm text-gray-500">%</span>
                   </div>
-                ) : (
-                  <Input value={(() => { const c = centros.find((x) => x.id === d.centroCustoId); return c ? `${c.codigo} — ${c.nome}` : ""; })()} disabled className="rounded-sm" />
-                )}
-                <div className="relative">
-                  <Input
-                    aria-label={`Percentual do centro ${i + 1}`}
-                    value={d.texto}
-                    inputMode="decimal"
-                    disabled={!pode}
-                    onChange={(e) => setDestinos((xs) => xs.map((x, j) => (j === i ? { ...x, texto: e.target.value } : x)))}
-                    className={`rounded-sm pr-7 text-right ${lidos[i].valor === undefined || (typeof lidos[i].valor === "number" && (lidos[i].valor! <= 0 || lidos[i].valor! > 100)) ? "border-red-400" : ""}`}
-                  />
-                  <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-sm text-gray-500">%</span>
+                  {pode ? (
+                    <button
+                      type="button"
+                      data-altera
+                      aria-label="Tirar o centro"
+                      title="Tirar o centro"
+                      disabled={destinos.length === 1}
+                      onClick={() => setDestinos((xs) => xs.filter((_, j) => j !== i))}
+                      className="rounded-sm p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                 </div>
-                {pode ? (
-                  <button
-                    type="button"
-                    data-altera
-                    aria-label="Tirar o centro"
-                    title="Tirar o centro"
-                    disabled={destinos.length === 1}
-                    onClick={() => setDestinos((xs) => xs.filter((_, j) => j !== i))}
-                    className="rounded-sm p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30"
-                  >
-                    <X className="size-4" />
-                  </button>
-                ) : (
-                  <span />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             {pode ? (
-              <Button type="button" variant="outline" size="sm" data-altera className="rounded-sm" onClick={() => setDestinos((xs) => [...xs, { centroCustoId: "", texto: "" }])}>
+              <Button type="button" variant="outline" size="sm" data-altera className="rounded-sm" onClick={() => setDestinos((xs) => [...xs, { centroCustoId: "", linhaDREId: "", texto: "" }])}>
                 <Plus className="size-4" />
                 Adicionar Centro
               </Button>
@@ -458,6 +542,8 @@ export function RedistribuicaoDialog({
           </div>
           {percentualInvalido ? <p className="text-xs text-red-700">Cada percentual precisa ser maior que 0% e no máximo 100%.</p> : null}
           {centrosRepetidos ? <p className="text-xs text-red-700">Um centro de custo aparece mais de uma vez.</p> : null}
+          {centroSemDepartamento ? <p className="text-xs text-red-700">Um centro sem contas do seu departamento e da sua atribuição (estoque, investimento…) não recebe redistribuições: escolha outro.</p> : null}
+          {semConta && pode ? <p className="text-xs text-red-700">Escolha a Conta da DRE de cada centro: uma conta do departamento e da atribuição dele.</p> : null}
         </section>
 
         <div className="grid gap-4 sm:grid-cols-2">

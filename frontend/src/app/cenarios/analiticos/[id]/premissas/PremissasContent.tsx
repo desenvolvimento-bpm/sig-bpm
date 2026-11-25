@@ -189,10 +189,18 @@ export function PremissasContent() {
               Décimo Terceiro)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + Décimo Terceiro) (os Salários dos
               Aprendizes e dos Estagiários, só na mão de obra da atribuição do grupo) — o FGTS de cada um sobre os seus salários; as Remunerações PJ
               e os estagiários não têm encargos. Os Benefícios Adicionais e os Benefícios Padrão ficam fora da conta: somados a ela (a da mão de obra da atribuição do
-              grupo), dão o total de encargos e benefícios, que é o que vai para a DRE — também na Média de Referência —, e o Total do Centro os soma. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
+              grupo), dão o total de encargos e benefícios, que é o que vai para a DRE — também na Média de Referência —, e o Total das Premissas os soma. No destaque acima da lista e da tabela, o grupo, os centros dele, o balde e para onde vai o valor e, à direita, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”; o grupo com centros de
               baldes diferentes tem um asterisco na lista e o aviso (o valor vai pelo balde mais comum; o balde vem da aba Centros de Custo das
               Configurações, a cópia do cadastro com que o cenário calcula). Para baixar os centros em Excel, use “Exportar Premissas”, ao lado do título (um centro de custo por aba
               ou um arquivo por centro).
+            </li>
+            <li>
+              Na tabela Premissas dos Centros de Custo, a linha do título de cada seção traz os valores dela: no Quadro de Lotação, os do Total
+              de Colaboradores; nos Encargos e Benefícios, os Benefícios Adicionais + os Padrão; em cada atribuição das contas, a soma das contas
+              dela (na da conta Encargos e Benefícios, com os dois benefícios); e no Total das Premissas, o total do grupo — as atribuições somam
+              o Total das Premissas. A seta de cada seção recolhe e expande as linhas dela. O botão de seta antes do rótulo PREMISSAS mostra a
+              tabela até os Totais (só o Quadro de Lotação e o Total das Premissas), as Atribuições (também os Encargos e Benefícios e as
+              atribuições, cada um recolhido) ou as Contas (tudo aberto); o navegador guarda o nível escolhido.
             </li>
             <li>
               Na aba Investimentos, em cima, a Depreciação Base de cada unidade mês a mês (digitada: o maquinário de produção na Matriz e na Filial, o de

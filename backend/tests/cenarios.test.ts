@@ -201,9 +201,10 @@ describe("comparativo entre cenários", () => {
     const [lido] = lerArquivoDePremissas("e.xlsx", gerarXlsx([aba, abaDaPlanilha("Centros de Custo", "centros", [centro], meses, "teste")]));
     assert.equal(lido.erros.length, 1);
     assert.match(lido.erros[0], /A aba Extra-Operacional é do Exportar Premissas .* falta a coluna “Und\.”/);
-    // Uma aba de fora do Exportar (sem o título "Premissas · …") segue ignorada, com aviso.
+    // Uma aba de fora do Exportar (sem o título "Premissas · …") segue ignorada, sem aviso desde 24/11/2026 (o modal lista só as
+    // abas usadas).
     const [outra] = lerArquivoDePremissas("o.xlsx", gerarXlsx([{ nome: "Notas", larguras: [10], linhas: [[{ valor: "Minhas contas" }]] }, abaDaPlanilha("Centros de Custo", "centros", [centro], meses, "teste")]));
-    assert.deepEqual([outra.erros, outra.avisos.length], [[], 1]);
+    assert.deepEqual([outra.erros, outra.avisos.length, outra.abas.length], [[], 0, 1]);
     const vazio = { alteracoes: 0, justificativas: 0, investimentos: { novos: 0, alterados: 0, excluidos: 0 }, quadro: { novas: 0, alteradas: 0, excluidas: 0 } };
     assert.equal(nadaAImportar(vazio), true);
     assert.equal(nadaAImportar({ ...vazio, alteracoes: 3 }), false);

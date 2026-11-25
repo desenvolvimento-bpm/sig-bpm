@@ -9,6 +9,7 @@ import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { DestaqueFlutuante, useDestaqueFlutuante } from "@/components/shared/DestaqueFlutuante";
 import { Button } from "@/components/ui/button";
 
+import { Agrupador, guardarNivel, nivelGuardado, SeletorNivel, type Nivel } from "@/app/competencias/[anoMes]/dre/components/NiveisDRE";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type LinhaDaPremissa, type OrigemDaGravacao, type PremissasDaUnidade, type TabelaDePremissas } from "../services/cenariosService";
@@ -62,10 +63,13 @@ const totalEhMedia = (und: string) => ehTaxa(und) || und === "colab.";
 /** A linha em negrito: a marcada (19/10/2026) ou, sem a marca, os cálculos em R$ (os totais). */
 const negrito = (l: LinhaDaPremissa) => l.negrito ?? (l.tipo === "CALCULO" && l.und === "R$");
 
-/** O Total e a Média da linha, depois dos meses (19/11/2026), no estilo dela; a Média com uma casa ao menos (fora dos R$). */
-function CelulasDoTotal({ l }: { l: LinhaDaPremissa }) {
+/**
+ * O Total e a Média da linha, depois dos meses (19/11/2026), no estilo dela; a Média com uma casa ao menos (fora dos R$). `fundo`:
+ * o da célula (os valores na linha amarela do título de uma seção).
+ */
+function CelulasDoTotal({ l, fundo = "bg-gray-50" }: { l: LinhaDaPremissa; fundo?: string }) {
   const { total, media } = totalEMedia(l.valores, l.und, (i) => l.tipo === "PREMISSA" && !l.gravados[i] && !l.valores[i]);
-  const classe = `px-3 py-1.5 text-right text-sm whitespace-nowrap bg-gray-50 ${negrito(l) ? "font-bold text-gray-900" : "text-gray-700"}`;
+  const classe = `px-3 py-1.5 text-right text-sm whitespace-nowrap ${fundo} ${negrito(l) ? "font-bold text-gray-900" : "text-gray-700"}`;
   const casasDaMedia = { ...l, casas: l.und === "R$" ? l.casas : Math.max(l.casas, 1) };
   return (
     <>
@@ -74,6 +78,23 @@ function CelulasDoTotal({ l }: { l: LinhaDaPremissa }) {
     </>
   );
 }
+
+/**
+ * Os níveis da tabela (24/11/2026, pedido do Adão: a tabela Premissas da aba Centros de Custo), como os da DRE de Resultados: o
+ * botão de níveis, no rótulo da primeira coluna, mostra a tabela até os Totais (só os títulos das seções de total, com os valores),
+ * as Atribuições (também os títulos das outras seções, com os valores) ou as Contas (tudo aberto); a seta de cada seção recolhe e
+ * expande só as linhas dela.
+ */
+export type NiveisDaTabela = {
+  /** Onde o navegador guarda o nível escolhido. */
+  chave: string;
+  /** O nível da seção: "TOTAL" aparece em todos os níveis; "ATRIBUICAO", a partir de Atribuições. */
+  nivelDaSecao: (secao: string) => "TOTAL" | "ATRIBUICAO";
+  /** Os valores na linha do título da seção; sem eles, a linha só com o nome. */
+  titulo?: (secao: string) => LinhaDaPremissa | null;
+  /** A seção que é só o título (os valores dela estão nele): as linhas dela não aparecem, nem a seta. */
+  soTitulo?: (secao: string) => boolean;
+};
 
 /** A caixa de marcar, com o estado "alguns" (indeterminado) dos subtítulos. */
 function Caixa({ marcada, alguns, rotulo, onMudar }: { marcada: boolean; alguns?: boolean; rotulo: string; onMudar: (marcar: boolean) => void }) {
@@ -152,6 +173,7 @@ export function TabelaEditavel({
   envolver,
   chave,
   comTotais = true,
+  niveis,
 }: {
   titulo: string;
   subtitulo?: React.ReactNode;
@@ -180,6 +202,8 @@ export function TabelaEditavel({
   chave?: string;
   /** As colunas Total e Média depois dos meses (19/11/2026; sem elas, a aba Rateios). */
   comTotais?: boolean;
+  /** Os níveis e as setas das seções (24/11/2026: a aba Centros de Custo); sem eles, as seções sempre abertas. */
+  niveis?: NiveisDaTabela;
 }) {
   const queryClient = useQueryClient();
   const [linhas, setLinhas] = useState<Set<string>>(new Set());
@@ -187,6 +211,9 @@ export function TabelaEditavel({
   const [reajuste, setReajuste] = useState(false);
   const [replicandoReferencias, setReplicandoReferencias] = useState(false);
   const [valor, setValor] = useState<{ l: LinhaDaPremissa; i: number } | null>(null);
+  // O nível (guardado no navegador) e as seções que a seta abriu ou fechou ao contrário dele (o nível escolhido recomeça).
+  const [nivelGeral, setNivelGeral] = useState<Nivel>(() => (niveis ? nivelGuardado(niveis.chave) : 3));
+  const [alternadas, setAlternadas] = useState<Set<string>>(new Set());
   const [chaveAtual, setChaveAtual] = useState(chave);
   if (chave !== chaveAtual) {
     setChaveAtual(chave);
@@ -195,7 +222,22 @@ export function TabelaEditavel({
     setReajuste(false);
     setReplicandoReferencias(false);
     setValor(null);
+    setAlternadas(new Set());
   }
+  /** A seção recolhida: pelo nível (em Contas, nenhuma; em Totais e em Atribuições, todas) ou ao contrário dele, pela seta. */
+  const fechada = (s: string) => !!niveis && (nivelGeral !== 3) !== alternadas.has(s);
+  const alternar = (s: string) =>
+    setAlternadas((a) => {
+      const n = new Set(a);
+      if (n.has(s)) n.delete(s);
+      else n.add(s);
+      return n;
+    });
+  const escolherNivel = (n: Nivel) => {
+    setNivelGeral(n);
+    if (niveis) guardarNivel(niveis.chave, n);
+    setAlternadas(new Set());
+  };
   const gravar = useMutation({
     mutationFn: ({ alteracoes, origem }: { alteracoes: Array<{ linha: string; mes: number; valor: number }>; origem: OrigemDaGravacao }) => aoGravar!(alteracoes, origem),
     onSuccess: (r) => {
@@ -256,41 +298,75 @@ export function TabelaEditavel({
   let secao = "";
   let grupo: string | null = null;
   for (const l of linhasDaTabela) {
+    // Com os níveis (24/11/2026): a seção de nível ATRIBUICAO some em Totais; as linhas somem com a seção recolhida e nas seções que
+    // são só o título.
+    const soTitulo = !!niveis?.soTitulo?.(l.secao);
+    const secaoVisivel = !niveis || niveis.nivelDaSecao(l.secao) === "TOTAL" || nivelGeral !== 1;
+    const linhaVisivel = secaoVisivel && !fechada(l.secao) && !soTitulo;
     if (l.secao !== secao) {
       secao = l.secao;
       grupo = null;
-      const daSecao = premissas.filter((p) => p.secao === secao).map((p) => p.chave);
+      const s = secao;
+      const daSecao = premissas.filter((p) => p.secao === s).map((p) => p.chave);
       const marcadas = daSecao.filter((c) => linhas.has(c)).length;
-      corpo.push(
-        <tr key={`s-${secao}`} className="border-y border-gray-300">
-          <td colSpan={colunas} className="bg-yellow-100 px-3 py-2 text-sm font-bold tracking-wide text-gray-900 uppercase">
-            <span className="sticky left-3 inline-flex items-center gap-2">
-              {editavel && daSecao.length ? (
-                <Caixa marcada={marcadas === daSecao.length} alguns={marcadas > 0} rotulo={`Marcar ${secao}`} onMudar={(m) => marcarLinhas(daSecao, m)} />
-              ) : null}
-              {secao}
-            </span>
-          </td>
-        </tr>,
+      // A seta da seção (sem ela, o lugar dela, na seção que é só o título).
+      const seta = niveis ? <Agrupador grupo={!soTitulo} fechado={fechada(s)} onAlternar={() => alternar(s)} /> : null;
+      const nome = (
+        <span className="inline-flex items-center gap-2">
+          {editavel && daSecao.length ? <Caixa marcada={marcadas === daSecao.length} alguns={marcadas > 0} rotulo={`Marcar ${s}`} onMudar={(m) => marcarLinhas(daSecao, m)} /> : null}
+          {seta}
+          {s}
+        </span>
       );
+      // Os valores na linha do título (o total da seção, como os totais e as atribuições da DRE).
+      const sub = niveis?.titulo?.(s) ?? null;
+      if (!secaoVisivel) {
+        // A seção de nível ATRIBUICAO, em Totais.
+      } else if (sub) {
+        const celula = "px-3 py-2 text-right text-sm font-bold whitespace-nowrap text-gray-900";
+        corpo.push(
+          <tr key={`s-${s}`} className="border-y border-gray-300 bg-yellow-100">
+            <td className="sticky left-0 z-10 bg-yellow-100 py-2 pr-3 pl-3 text-sm font-bold tracking-wide text-gray-900 uppercase">{nome}</td>
+            <td className="px-3 py-2 text-xs whitespace-nowrap text-gray-600">{sub.und}</td>
+            {comReferencia ? <td className={`${celula} border-r border-gray-300`}>{formatar(sub.referencia, sub)}</td> : null}
+            {sub.valores.map((v, i) => (
+              <td key={i} className={celula}>
+                {formatar(v, sub)}
+              </td>
+            ))}
+            {comTotais ? <CelulasDoTotal l={{ ...sub, negrito: true }} fundo="bg-yellow-100" /> : null}
+          </tr>,
+        );
+      } else {
+        corpo.push(
+          <tr key={`s-${s}`} className="border-y border-gray-300">
+            <td colSpan={colunas} className="bg-yellow-100 px-3 py-2 text-sm font-bold tracking-wide text-gray-900 uppercase">
+              <span className="sticky left-3 inline-flex items-center gap-2">{nome}</span>
+            </td>
+          </tr>,
+        );
+      }
     }
     if (l.grupo && l.grupo !== grupo) {
       grupo = l.grupo;
       const g = grupo;
       const doGrupo = premissas.filter((p) => p.secao === secao && p.grupo === g).map((p) => p.chave);
       const marcadas = doGrupo.filter((c) => linhas.has(c)).length;
-      corpo.push(
-        <tr key={`g-${secao}-${g}`} className="border-t border-gray-200 bg-gray-50">
-          <td className="sticky left-0 z-10 bg-gray-50 py-1.5 pr-3 pl-4 text-sm font-bold text-gray-900">
-            <span className="inline-flex items-center gap-2">
-              {editavel && doGrupo.length ? <Caixa marcada={marcadas === doGrupo.length} alguns={marcadas > 0} rotulo={`Marcar ${g}`} onMudar={(m) => marcarLinhas(doGrupo, m)} /> : null}
-              {g}
-            </span>
-          </td>
-          <td colSpan={colunas - 1} />
-        </tr>,
-      );
+      if (linhaVisivel) {
+        corpo.push(
+          <tr key={`g-${secao}-${g}`} className="border-t border-gray-200 bg-gray-50">
+            <td className="sticky left-0 z-10 bg-gray-50 py-1.5 pr-3 pl-4 text-sm font-bold text-gray-900">
+              <span className="inline-flex items-center gap-2">
+                {editavel && doGrupo.length ? <Caixa marcada={marcadas === doGrupo.length} alguns={marcadas > 0} rotulo={`Marcar ${g}`} onMudar={(m) => marcarLinhas(doGrupo, m)} /> : null}
+                {g}
+              </span>
+            </td>
+            <td colSpan={colunas - 1} />
+          </tr>,
+        );
+      }
     }
+    if (!linhaVisivel) continue;
     const ePremissa = l.tipo === "PREMISSA";
     const marcada = linhas.has(l.chave);
     corpo.push(
@@ -399,7 +475,17 @@ export function TabelaEditavel({
           <thead>
             <tr className="border-b border-gray-300">
               {/* !z-20: a regra .tabela-sig th (z-index 1) venceria o z-20, e os meses passariam por cima do rótulo fixo ao correr a tabela. */}
-              <th className="sticky left-0 !z-20 px-4 py-2 text-left text-xs font-bold">{cabecalho}</th>
+              <th className={`sticky left-0 !z-20 py-2 text-left text-xs font-bold ${niveis ? "px-3" : "px-4"}`}>
+                {/* O botão dos níveis (24/11/2026), antes do rótulo, como na DRE de Resultados. */}
+                {niveis ? (
+                  <span className="flex items-center gap-2">
+                    <SeletorNivel nivel={nivelGeral} onEscolher={escolherNivel} nome="Níveis das Premissas" legenda="Mostrar as premissas até" />
+                    {cabecalho}
+                  </span>
+                ) : (
+                  cabecalho
+                )}
+              </th>
               <th className="px-3 py-2 text-left text-xs font-bold">Und.</th>
               {comReferencia ? (
                 <th className="border-r border-gray-300 px-3 py-2 text-right text-xs font-bold whitespace-nowrap" title="As médias do realizado da referência do cenário">

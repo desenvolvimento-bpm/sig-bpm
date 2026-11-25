@@ -108,7 +108,8 @@ export async function copiarCadastros(tx: Tx, cenarioId: string, de: string | nu
 }
 
 type RedistribuicaoParaCopiar = Omit<Prisma.CenarioRedistribuicaoCreateManyInput, "id" | "cenarioId"> & {
-  destinos: Array<{ centroCustoId: string; percentual: Prisma.Decimal; ordem: number }>;
+  /** O centro, a Conta da DRE dele (23/11/2026), o percentual e a ordem de cada destino. */
+  destinos: Array<{ centroCustoId: string; linhaDREId: string | null; percentual: Prisma.Decimal; ordem: number }>;
   /** As contas da DRE (uma ou mais), na ordem. */
   contas: Array<{ linhaDREId: string; ordem: number }>;
 };
@@ -146,7 +147,7 @@ async function criarRedistribuicoes(tx: Tx, cenarioId: string, rs: Redistribuica
         ...r,
         cenarioId,
         contas: { create: contas },
-        destinos: { create: ds.map((d) => ({ centroCustoId: d.centroCustoId!, percentual: d.percentual, ordem: d.ordem })) },
+        destinos: { create: ds.map((d) => ({ centroCustoId: d.centroCustoId!, linhaDREId: d.linhaDREId, percentual: d.percentual, ordem: d.ordem })) },
       },
     });
   }
