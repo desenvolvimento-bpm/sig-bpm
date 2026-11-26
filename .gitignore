@@ -3,6 +3,8 @@ node_modules/
 
 # Environment
 .env
+# Produção no srv-docker (/root/dados/sig-bpm): uploads, back-ups e o sinal de publicação ficam só no servidor.
+/dados/
 .env.local
 .env.*.local
 # Os ambientes do backend (15/10/2026): .env.development e .env.production, como o .env, ficam fora do git.

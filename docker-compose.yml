@@ -1,26 +1,36 @@
-# SIG BPM no srv-docker (192.168.0.16). Quem escolhe o ambiente é o workflow de deploy, pelas variáveis:
-#   SIG_HOME      pasta do ambiente no servidor (tem o .env e a pasta dados/)   ex.: /root/dados/sig-bpm
-#   SIG_AMBIENTE  nome do ambiente (vira a etiqueta da imagem)                  ex.: producao
-#   SIG_PORTA     porta das telas na rede                                       ex.: 3020
-#   COMPOSE_PROJECT_NAME  nome do projeto e prefixo dos contêineres             ex.: sig-bpm → sig-bpm-backend e sig-bpm-frontend
-# O banco é externo (PostgreSQL 192.168.0.40): nada de banco sobe aqui. O DATABASE_URL e os segredos ficam no
-# $SIG_HOME/.env do servidor, nunca no git. Passo a passo: DEPLOY-DOCKER.md.
+# SIG BPM — produção no srv-docker (192.168.0.16). Banco externo: PostgreSQL 192.168.0.40 (sig_bpm).
+#
+# Fica na pasta do repositório no servidor, /root/dados/sig-bpm, junto com:
+#   .env    segredos (DATABASE_URL, JWT_SECRET, CORS_ORIGIN, API_EXTERNA, TOTVS...) — só no servidor, nunca no git
+#   dados/  uploads, back-ups e o sinal de publicação — só no servidor, nunca no git
+# Quem atualiza e sobe é o workflow .github/workflows/deploy-producao.yml (runner srv-docker-sig-bpm).
+# Na mão, de dentro da pasta: docker compose ps | docker compose logs --tail 100 backend | docker compose exec backend sh
+
+name: sig-bpm
+
+x-logs: &logs
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   backend:
     build: .
-    image: sig-bpm:${SIG_AMBIENTE:?defina SIG_AMBIENTE}
-    container_name: ${COMPOSE_PROJECT_NAME:?defina COMPOSE_PROJECT_NAME}-backend
+    image: sig-bpm:producao
+    container_name: sig-bpm-backend
     working_dir: /app/backend
     command: ["node", "dist/server.js"]
-    env_file: ${SIG_HOME:?defina SIG_HOME}/.env
+    env_file: ./.env
     environment:
       NODE_ENV: production
       PORT: "3001"
       UPLOAD_DIR: /dados/uploads
     volumes:
-      - ${SIG_HOME}/dados:/dados
+      - ./dados:/dados
     restart: unless-stopped
+    <<: *logs
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -29,19 +39,20 @@ services:
       start_period: 20s
 
   frontend:
-    image: sig-bpm:${SIG_AMBIENTE}
-    container_name: ${COMPOSE_PROJECT_NAME}-frontend
+    image: sig-bpm:producao
+    container_name: sig-bpm-frontend
     working_dir: /app/frontend
     command: ["npx", "next", "start", "-p", "3000"]
     environment:
       NODE_ENV: production
       BACKEND_URL: http://backend:3001
     ports:
-      - "${SIG_PORTA:?defina SIG_PORTA}:3000"
+      - "3020:3000"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    <<: *logs
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/',{redirect:'manual'}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -51,10 +62,10 @@ services:
 
   # Só para o deploy: aplica as migrações com a imagem nova, antes de trocar os contêineres.
   migrate:
-    image: sig-bpm:${SIG_AMBIENTE}
+    image: sig-bpm:producao
     profiles: ["ferramentas"]
     working_dir: /app/backend
     command: ["npx", "prisma", "migrate", "deploy"]
-    env_file: ${SIG_HOME}/.env
+    env_file: ./.env
     environment:
       NODE_ENV: production
