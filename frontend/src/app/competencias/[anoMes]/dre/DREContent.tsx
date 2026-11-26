@@ -646,6 +646,11 @@ export function DREContent() {
               Consolidado; em cada obra, a receita (a ROB nas receitas e nos impostos, a ROL no resto) e os volumes da própria obra.
             </p>
             <p>
+              O RN soma os lançamentos manuais do balde RN: as Assessorias e Consultorias das Despesas Administrativas (DA), o imposto de renda e a
+              contribuição social (DML) e as receitas e despesas financeiras. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela; no mês
+              apurado, a linha sem valor apurado aparece com zero.
+            </p>
+            <p>
               Em Impostos, os créditos de impostos do mês em cada unidade (Matriz e Filial): o Creditado e o Estornado das contas de Matérias Primas, de
               Gastos Gerais Variáveis da Produção e do Frete e Descarga (da aba Impostos (Lista) do LISTAS REALIZADO (RESULTADOS), com cada conta pela
               atribuição e pelo nome, como na Estrutura da DRE; as linhas das demais contas ficam de fora), em R$ e em % sobre o valor da conta na unidade. O Realizado por Obra usa esses percentuais nos custos dessas contas: nas vendas mercantis, tira o Estornado (custo

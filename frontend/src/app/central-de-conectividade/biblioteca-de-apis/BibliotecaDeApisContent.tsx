@@ -227,18 +227,23 @@ function CartaoDaApi({ a, podeEditar, onPrevia }: { a: ApiDoCatalogo; podeEditar
   );
 }
 
-/** As abas da tela (24/10/2026): como conectar e as APIs de cada origem (os acessos ficam na tela Acessos, 13/11/2026). */
+/**
+ * As abas da tela (24/10/2026): como conectar e as APIs de cada origem (os acessos ficam na tela Acessos, 13/11/2026); o
+ * Realizado por Obra logo antes dos Cenários (26/11/2026, pedido do Adão).
+ */
 const ABAS = [
   { chave: "conectar", rotulo: "Como Conectar" },
   { chave: "resultados", rotulo: "Resultados Empresariais" },
+  { chave: "obras", rotulo: "Realizado por Obra" },
   { chave: "cenarios", rotulo: "Cenários" },
 ] as const;
 type ChaveDaAba = (typeof ABAS)[number]["chave"];
-const ORIGEM_DA_ABA = { resultados: "Resultados Empresariais", cenarios: "Cenários" } as const;
+const ORIGEM_DA_ABA = { resultados: "Resultados Empresariais", obras: "Realizado por Obra", cenarios: "Cenários" } as const;
 
 /**
  * A tela APIs (24/10/2026, pedido do Adão; até 30/10/2026, o processo Biblioteca de APIs), na Central de Conectividade: o catálogo das APIs que abrem a outros
- * aplicativos os dados das DREs, dos cards e dos indicadores dos Resultados Empresariais e dos Cenários — com o código, os
+ * aplicativos os dados das DREs, dos cards e dos indicadores dos Resultados Empresariais e dos Cenários e a DRE das vendas do
+ * Realizado por Obra (26/11/2026) — com o código, os
  * parâmetros, os formatos (dados e visual) e a pré-visualização — e como conectar, com o controle deslizante de quem edita a
  * tela para bloquear uma API. Em abas, com os blocos um abaixo do outro (24/10/2026, pedido do Adão). Os acessos (quem e de
  * onde) ficam na tela Acessos (13/11/2026).
@@ -256,14 +261,17 @@ export function BibliotecaDeApisContent() {
         sobre={
           <p>
             Na Central de Conectividade, da Controladoria, as APIs que abrem os dados do SIG a outros aplicativos (planilhas, o Power BI, sistemas da empresa): as DREs, os cards e os indicadores do Painel de
-            Bordo dos Resultados Empresariais e dos Cenários, em tabela (os valores) ou em visual (os cards e as tabelas em SVG). O aplicativo entra com o código
+            Bordo dos Resultados Empresariais e dos Cenários e a DRE das vendas do Realizado por Obra, em tabela (os valores) ou em visual (os cards e as tabelas em SVG). O aplicativo entra com o código
             da API e o login e a senha do SIG, e lê só o que esse login lê no SIG. Segue as regras do TI da BPM para API: ligada só pelo TI, só por HTTPS, o
             token no cabeçalho, o limite de tentativas e o registro de cada pedido na Auditoria.
           </p>
         }
         comoUsar={
           <ul>
-            <li>A tela tem três abas: Como Conectar, Resultados Empresariais e Cenários. Quem acessa as APIs, e de onde, fica na tela Acessos, logo abaixo desta no menu.</li>
+            <li>
+              A tela tem quatro abas: Como Conectar, Resultados Empresariais, Realizado por Obra e Cenários. Quem acessa as APIs, e de onde, fica na tela Acessos, logo
+              abaixo desta no menu.
+            </li>
             <li>
               Como Conectar: no alto, em destaque, a situação — na produção, as APIs ficam desligadas até o TI pôr o SIG atrás do endereço com HTTPS e ligá-las
               (regra do TI); até lá, os aplicativos recebem a recusa “API desligada”, sem a senha ser conferida; ligadas, funcionam só por HTTPS. Abaixo, os dois
@@ -271,15 +279,23 @@ export function BibliotecaDeApisContent() {
               no endereço — e os exemplos em curl e, logo abaixo, no Power Query (Excel e Power BI), com o botão de copiar.
             </li>
             <li>
-              Resultados Empresariais e Cenários: as APIs de cada origem, uma abaixo da outra — nos Resultados Empresariais, a DRE, os Cards e os Indicadores do
-              Painel de Bordo; nos Cenários, a Lista de Cenários (o id que as outras pedem), a DRE, os Cards e os Indicadores de um cenário. Em cada uma: o nome,
-              o código (copie com o botão), o que ela traz, a permissão que exige no perfil, os formatos (Dados: a tabela, com as colunas e as linhas; Visual: os
-              cards e as tabelas em SVG, como nas telas) e os parâmetros (o asterisco marca os obrigatórios).
+              Resultados Empresariais, Realizado por Obra e Cenários: as APIs de cada origem, uma abaixo da outra — nos Resultados Empresariais, a DRE, os Cards e
+              os Indicadores do Painel de Bordo; no Realizado por Obra, a Lista de Vendas (o código e as versões vendidas que a outra pede) e a DRE de uma Obra;
+              nos Cenários, a Lista de Cenários (o id que as outras pedem), a DRE, os Cards e os Indicadores de um cenário. Em cada uma: o nome, o código (copie
+              com o botão), o que ela traz, a permissão que exige no perfil, os formatos (Dados: a tabela, com as colunas e as linhas; Visual: os cards e as
+              tabelas em SVG, como nas telas) e os parâmetros (o asterisco marca os obrigatórios).
+            </li>
+            <li>
+              A DRE de uma Obra traz a tabela da tela Resultados do Realizado por Obra, para a venda pedida em obra (o código, como G887305), sem depender da venda
+              escolhida na lista Venda da tela: a versão vendida em versao (0 ou VER00; sem ela, a mais recente), o Consolidado, uma linha da obra ou todas em
+              linha e o nível em nivel. Em Dados, os meses, o Realizado, o Vendido, a Diferença, o Atingimento e a Eficiência, e, em meta, os avisos da tela; em
+              Visual, a tabela com os meses recolhidos, uma por aba.
             </li>
             <li>
               Pré-visualizar abre o que um aplicativo receberia com o seu login: escolha os parâmetros e o formato e clique em Ver; o endereço do pedido, logo acima
               do resultado, se copia para o aplicativo. Nas APIs de um cenário, o cenário já vem escolhido (o marcado, como o Orçamento, ou o primeiro da lista);
-              sem um parâmetro obrigatório, o Ver fica desabilitado. Sem a leitura dos dados no seu perfil, o botão Pré-visualizar fica desabilitado.
+              na DRE de uma Obra, a obra (a escolhida na lista Venda do Realizado por Obra ou a primeira com o realizado), e a versão lista as vendidas dela. Sem
+              um parâmetro obrigatório, o Ver fica desabilitado. Sem a leitura dos dados no seu perfil, o botão Pré-visualizar fica desabilitado.
             </li>
             <li>
               Quem edita a tela (o perfil com Editar em APIs, na Central de Conectividade) bloqueia ou libera uma API no controle deslizante do cartão dela, nas abas

@@ -215,8 +215,9 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Extra-Operacional, como nos Lançamentos Manuais do fechamento, os valores mensais do imposto de renda e da contribuição social e das
-              receitas e despesas financeiras, em Despesas e Extra e no RN, cada uma com o título num card de destaque e, à direita dele, os valores
-              marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e “Replicar Referências”.
+              receitas e despesas financeiras, em Despesas e Extra e no RN (no RN, também as Assessorias e Consultorias das Despesas Administrativas),
+              cada uma com o título num card de destaque e, à direita dele, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e
+              “Replicar Referências”.
             </li>
             <li>
               Na aba Indicadores Manuais, os indicadores do Comercial e do Administrativo, que não saem da DRE, e a Liberação de Projetos: Matriz e a
@@ -403,7 +404,7 @@ export function PremissasContent() {
               demanda e os valores dos meses na mesma unidade. A demanda diária é o volume do período ÷ os dias úteis dele, e a Expedição Diária, o m³
               expedido (a lista de expedições) ÷ os mesmos dias úteis; os doze meses começam iguais às médias.
               A mão de obra direta e indireta, os gastos gerais diretos e indiretos e as despesas vêm dos centros de custo; a depreciação, dos investimentos; o imposto de
-              renda, a contribuição social e o resultado financeiro, do extra-operacional.
+              renda, a contribuição social e o resultado financeiro, do extra-operacional, como as Assessorias e Consultorias do RN.
             </p>
             <p>
               Os valores dos grupos de centros de custo vão para as unidades como no fechamento mensal, pelo balde do grupo: nos custos de produção, Matriz e
@@ -417,7 +418,9 @@ export function PremissasContent() {
               linhas e as vendas pelos itens da receita prévia, e os impostos são os dos itens, ajustados aos da DRE da unidade. Os custos (Mão de Obra
               Terceirizada, Matérias Primas, Gastos Gerais Variáveis e Estoque) e as despesas variáveis de venda de cada conta e mês são os da DRE da unidade, divididos entre as
               linhas na proporção das requisições e das notas fiscais com a tarefa de cada linha (a Correspondência Tarefa × Linha, nos Cadastros Gerais / Linhas);
-              o que não tem tarefa vai pelo m³ das linhas (pela receita, nas despesas variáveis de venda e em Serviços). A Variação do Estoque vai só para as
+              o que não tem tarefa vai pelo m³ das linhas (pela receita, nas despesas variáveis de venda). Em Serviços, como nos Resultados por Linha (a Alocação nas
+              Linhas): cada linha fica com a tarefa dela, só na parte que o valor da conta explica, e o resto vai pelos dias de acompanhamento das linhas que têm a
+              conta (pela receita, nas despesas variáveis de venda); a linha sem acompanhamentos, como a Vedação, fica só com a tarefa. A Variação do Estoque vai só para as
               Estacas, as únicas que movimentam o estoque, e o custo unitário dela é a variação do período ÷ o Volume de Estoque dele (o m³ produzido menos o
               expedido). Como o estoque das Estacas caiu no realizado e a variação foi custo, o unitário fica negativo: no cenário, o mês que expede mais do
               que produz (Volume de Estoque negativo) tem custo, e o que produz mais do que expede reduz o custo. A armadura e a metalurgia por

@@ -40,7 +40,8 @@ export function BotaoCorrespondencia() {
 /**
  * A correspondência tarefa × linha (14/10/2026): a tarefa das requisições e das notas fiscais (o nome dela), numa filial
  * ou em qualquer uma, e a linha dos custos dela. A referência realizada dos cenários analíticos divide os custos de
- * cada conta entre as linhas por ela; o que não tem tarefa, ou tem uma tarefa fora da lista, vai pelo volume.
+ * cada conta entre as linhas por ela; o que não tem tarefa, ou tem uma tarefa fora da lista, vai pelo volume (em
+ * Serviços, pelos dias de acompanhamento — 26/11/2026, como nos Resultados por Linha).
  */
 export function CorrespondenciaDialog({ onFechar }: { onFechar: () => void }) {
   const consulta = useQuery({ queryKey: ["cenarios", "correspondencias"], queryFn: () => cenariosService.correspondencias() });

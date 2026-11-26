@@ -456,7 +456,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
 /**
  * A aba Extra-Operacional das premissas de um cenário analítico (13/10/2026), como os Lançamentos Manuais do
  * fechamento: o imposto de renda e a contribuição social e as receitas e despesas financeiras, mês a mês, em Despesas e
- * Extra e no RN, com a replicação e o reajuste das premissas.
+ * Extra e no RN (no RN, também as Assessorias e Consultorias da DA, 26/11/2026), com a replicação e o reajuste das premissas.
  */
 export function ExtraDoCenario({ id, editavel }: { id: string; editavel: boolean }) {
   const consulta = useQuery({ queryKey: ["cenarios", id, "extra"], queryFn: () => cenariosService.extraOperacional(id) });

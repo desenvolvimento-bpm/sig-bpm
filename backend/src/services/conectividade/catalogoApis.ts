@@ -8,12 +8,14 @@ import { indicadoresService } from "../relatorios/indicadoresService.js";
 import { nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
 import { painelService } from "../relatorios/painelService.js";
 import { RelatorioError, resultadosService } from "../relatorios/resultadosService.js";
-import { cardEmSvg, direcaoDo, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type Sinal, type Visual } from "./visuais.js";
+import { RegraRealizadoObraError, realizadoObraService, rotuloDaVersao } from "../realizadoObra/realizadoObraService.js";
+import { cardEmSvg, direcaoDo, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type LinhaVisual, type Sinal, type Visual } from "./visuais.js";
 import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
 
 /**
  * O catálogo da Biblioteca de APIs (24/10/2026, pedido do Adão): as APIs que abrem a outros aplicativos os dados das
- * DREs, dos cards e dos indicadores do Painel de Bordo dos Resultados Empresariais e dos Cenários. Cada API tem o código
+ * DREs, dos cards e dos indicadores do Painel de Bordo dos Resultados Empresariais e dos Cenários e, desde 26/11/2026, a DRE
+ * das vendas do Realizado por Obra. Cada API tem o código
  * (o que o aplicativo pede), os parâmetros e os dois formatos: os dados (a tabela, valores para usar) e o visual (os cards
  * e as tabelas em SVG, como nas telas). Cada uma lê pelos mesmos serviços das telas e exige a mesma permissão de leitura
  * da tela no perfil do usuário (o login e a senha do token): quem não lê a tela no SIG não lê pela API.
@@ -39,7 +41,7 @@ export type Parametro = { nome: string; descricao: string; obrigatorio: boolean;
 export type DefinicaoDaApi = {
   codigo: string;
   nome: string;
-  origem: "Resultados Empresariais" | "Cenários";
+  origem: "Resultados Empresariais" | "Realizado por Obra" | "Cenários";
   descricao: string;
   /** A permissão de leitura que a API exige (o texto do catálogo). */
   exige: string;
@@ -119,6 +121,9 @@ const MENSAGENS: Record<string, string> = {
   cenario: "cenario: o id do cenário (a API cenarios lista os que você lê)",
   item: "item: a sigla ou o nome do card",
   nivel: "nivel: 1 (Totais), 2 (Atribuições) ou 3 (Contas)",
+  obra: "obra: o código da venda, como G887305 (a API obras lista as que você lê)",
+  versao: "versao: a versão vendida, como 0 ou VER00",
+  linha: "linha: consolidado, todas ou o nome de uma linha da obra",
 };
 function validar<T extends z.ZodType>(esquema: T, q: Record<string, unknown>): z.infer<T> {
   const r = esquema.safeParse(q);
@@ -137,6 +142,10 @@ const P = {
   cenario: z.string().uuid(),
   item: z.preprocess(vazioComoAusente, z.string().trim().min(1).max(200).optional()),
   nivel: z.preprocess(vazioComoAusente, z.coerce.number().int().min(1).max(3).default(1)),
+  obra: z.string().trim().min(1).max(60),
+  // A versão vendida: o número (0, 1…) ou o rótulo da lista Venda (VER00, VER01…).
+  versao: z.preprocess((v) => (typeof v === "string" ? vazioComoAusente(v.trim().replace(/^ver/i, "")) : v), z.coerce.number().int().min(0).max(99).optional()),
+  linha: z.preprocess(vazioComoAusente, z.string().trim().min(1).max(120).optional()),
 };
 
 /**
@@ -183,6 +192,9 @@ const PARAMETRO: Record<string, Parametro> = {
   grafico: { nome: "grafico", descricao: "No formato visual, o card com o gráfico dos meses e do acumulado (sim, o padrão) ou sem ele (nao).", obrigatorio: false, exemplo: "sim" },
   cenario: { nome: "cenario", descricao: "O id do cenário (a API cenarios lista os que você lê).", obrigatorio: true, exemplo: "a1b2c3d4-…" },
   formato: { nome: "formato", descricao: "dados (a tabela, o padrão) ou visual (os cards e as tabelas em SVG).", obrigatorio: false, exemplo: "dados" },
+  obra: { nome: "obra", descricao: "O código da venda, o do CONTROLE DAS VENDAS (a API obras lista as que você lê).", obrigatorio: true, exemplo: "G887305" },
+  versao: { nome: "versao", descricao: "A versão vendida: o número ou o rótulo da lista Venda (0 ou VER00); sem ela, a mais recente da DRE de venda.", obrigatorio: false, exemplo: "VER00" },
+  linha: { nome: "linha", descricao: "consolidado (o padrão), todas (cada linha da obra, uma depois da outra) ou o nome de uma linha da obra, como nas abas da tela.", obrigatorio: false, exemplo: "Estrutura" },
 };
 
 /** Os erros dos serviços das telas viram os da API (o mesmo status e a mesma mensagem). */
@@ -190,7 +202,7 @@ async function daTela<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof RelatorioError || e instanceof CenarioError) {
+    if (e instanceof RelatorioError || e instanceof CenarioError || e instanceof RegraRealizadoObraError) {
       const status = [403, 404, 422].includes(e.status) ? (e.status as 403 | 404 | 422) : 422;
       throw new ApiError(status, e.message);
     }
@@ -448,6 +460,125 @@ function indicadoresEmVisual(r: Indicadores, periodo: string, rotuloComparado: s
   });
 }
 
+// O Realizado por Obra (26/11/2026, pedido do Adão): a DRE da venda, como na tela Resultados dele.
+type CelulaDaObra = { valor: number | null; pct: number | null };
+type LinhaDaObra = { codigo: string; tipo: string; grupo: string | null; descricao: string; volume: boolean; meses: CelulaDaObra[]; total: CelulaDaObra; orcado?: { total: CelulaDaObra } };
+export type AbaDaObraNaApi = { chave: string; nome: string; nomeUnidade: string | null; dados: { meses: Array<{ mes: number; rotulo: string }>; linhas: LinhaDaObra[] } };
+
+/** O nome da aba de uma linha da obra, como na tela: com a unidade entre parênteses só quando duas abas têm o mesmo nome. */
+export const nomeDaAbaDaObra = (a: AbaDaObraNaApi, abas: AbaDaObraNaApi[]) =>
+  a.nomeUnidade && abas.some((b) => b !== a && b.nome === a.nome) ? `${a.nome} (${a.nomeUnidade})` : a.nome;
+
+/**
+ * As abas do parâmetro linha: sem ele, o Consolidado; "todas", todas (o Consolidado e as linhas da obra); senão, a aba pelo
+ * nome dela na tela (sem diferenciar maiúsculas; com a unidade entre parênteses quando duas linhas têm o mesmo nome) ou pelo
+ * id da linha, e, sem nenhuma, as linhas desse nome.
+ */
+export function abasDaObra<T extends AbaDaObraNaApi>(abas: T[], linha?: string): T[] {
+  const alvo = (linha ?? "consolidado").trim().toLowerCase();
+  if (alvo === "todas") return abas;
+  const pelaAba = abas.filter((a) => a.chave.toLowerCase() === alvo || nomeDaAbaDaObra(a, abas).toLowerCase() === alvo);
+  const achadas = pelaAba.length ? pelaAba : abas.filter((a) => a.nome.toLowerCase() === alvo);
+  if (!achadas.length) {
+    throw new ApiError(404, `A venda não tem a linha "${linha}". As abas dela: ${abas.map((a) => nomeDaAbaDaObra(a, abas)).join(", ")}.`, "LINHA_INEXISTENTE");
+  }
+  return achadas;
+}
+
+const arredondado = (x: number, casas = 4) => Math.round(x * 10 ** casas) / 10 ** casas;
+/** A diferença (o realizado menos o vendido), o atingimento (realizado ÷ vendido − 100%) e a eficiência (o % realizado menos o % vendido). */
+function variacoesDaObra(l: LinhaDaObra) {
+  const r = l.total.valor;
+  const v = l.orcado?.total.valor ?? null;
+  const pr = l.total.pct;
+  const pv = l.orcado?.total.pct ?? null;
+  return {
+    diferenca: r === null || v === null ? null : arredondado(r - v),
+    atingimento: r === null || !v ? null : arredondado(r / v - 1, 8),
+    eficiencia: l.volume || pr === null || pv === null ? null : arredondado(pr - pv, 8),
+  };
+}
+
+/** A DRE da venda em tabela: as abas pedidas, uma depois da outra, com os meses, o realizado, o vendido e as variações. */
+function obraEmDados(abas: AbaDaObraNaApi[], todas: AbaDaObraNaApi[], nivel: number, rotuloVendido: string, meta: Record<string, unknown>): Resposta {
+  const meses = abas[0]?.dados.meses ?? [];
+  const colunas: Coluna[] = [
+    { chave: "linha", titulo: "Linha da Obra", tipo: "texto" },
+    { chave: "codigo", titulo: "Código", tipo: "texto" },
+    { chave: "descricao", titulo: "Descrição", tipo: "texto" },
+    { chave: "tipo", titulo: "Tipo", tipo: "texto" },
+    { chave: "nivel", titulo: "Nível", tipo: "texto" },
+    { chave: "grupo", titulo: "Grupo", tipo: "texto" },
+    // Os meses pelo ano e o mês (mes_202609): os da venda podem passar de um exercício.
+    ...meses.map((m): Coluna => ({ chave: `mes_${m.mes}`, titulo: m.rotulo, tipo: "numero" })),
+    { chave: "realizado", titulo: "Realizado", tipo: "numero" },
+    { chave: "realizado_pct", titulo: "% Realizado", tipo: "percentual" },
+    { chave: "vendido", titulo: rotuloVendido, tipo: "numero" },
+    { chave: "vendido_pct", titulo: "% Vendido", tipo: "percentual" },
+    { chave: "diferenca", titulo: "Diferença", tipo: "numero" },
+    { chave: "atingimento", titulo: "Atingimento", tipo: "percentual" },
+    { chave: "eficiencia", titulo: "Eficiência (p.p.)", tipo: "percentual" },
+  ];
+  const linhas = abas.flatMap((a) =>
+    noNivel(a.dados.linhas, nivel).map((l): Linha => {
+      const secao = l.tipo === "SECAO";
+      return {
+        linha: nomeDaAbaDaObra(a, todas),
+        codigo: l.codigo,
+        descricao: l.descricao,
+        tipo: l.tipo,
+        nivel: NOME_DO_NIVEL[l.nivel] ?? null,
+        grupo: l.grupo,
+        ...Object.fromEntries(meses.map((m, k) => [`mes_${m.mes}`, l.meses[k]?.valor ?? null])),
+        realizado: l.total.valor,
+        realizado_pct: l.total.pct,
+        // As seções (os títulos dos grupos) sem valores, como na tela.
+        vendido: secao ? null : (l.orcado?.total.valor ?? null),
+        vendido_pct: secao ? null : (l.orcado?.total.pct ?? null),
+        ...(secao ? { diferenca: null, atingimento: null, eficiencia: null } : variacoesDaObra(l)),
+      };
+    }),
+  );
+  return { formato: "dados", colunas, linhas, meta: { ...meta, linhas: linhas.length } };
+}
+
+/** A DRE de uma aba da venda em SVG, como a tabela da tela com os meses recolhidos: o realizado, o vendido e as variações. */
+function obraEmVisual(a: AbaDaObraNaApi, nivel: number, titulo: string, subtitulo: string, rotuloVendido: string): Visual {
+  const colunas: ColunaVisual[] = [
+    { titulo: "Descrição", largura: 340, alinhar: "start" },
+    { titulo: "Realizado", largura: 128, alinhar: "end" },
+    { titulo: "%", largura: 64, alinhar: "end" },
+    { titulo: rotuloVendido, largura: 136, alinhar: "end" },
+    { titulo: "%", largura: 64, alinhar: "end" },
+    { titulo: "Diferença", largura: 120, alinhar: "end" },
+    { titulo: "Atingimento", largura: 96, alinhar: "end" },
+    { titulo: "Eficiência", largura: 96, alinhar: "end" },
+  ];
+  const comSinal = (x: number, texto: string) => `${x > 0 ? "+" : ""}${texto}`;
+  const linhas = noNivel(a.dados.linhas, nivel).map((l): LinhaVisual => {
+    if (l.tipo === "SECAO") return { estilo: "SECAO", recuo: l.nivel, celulas: [l.descricao, "", "", "", "", "", "", ""] };
+    const v = (x: number | null) => ou(x, (y) => (l.volume ? n2 : n0).format(y));
+    const p = (x: number | null) => (x === null ? "" : `${n1.format(x * 100)}%`);
+    const d = variacoesDaObra(l);
+    const comVendido = !!l.orcado;
+    return {
+      estilo: ESTILO_DA_LINHA[l.tipo] ?? "ITEM",
+      recuo: l.nivel,
+      celulas: [
+        l.descricao,
+        v(l.total.valor),
+        p(l.total.pct),
+        comVendido ? v(l.orcado!.total.valor) : "",
+        comVendido ? p(l.orcado!.total.pct) : "",
+        !comVendido ? "" : d.diferenca === null ? "—" : comSinal(d.diferenca, v(d.diferenca)),
+        !comVendido ? "" : desvio(d.atingimento),
+        d.eficiencia === null ? "" : `${comSinal(d.eficiencia, n1.format(d.eficiencia * 100))} p.p.`,
+      ],
+    };
+  });
+  return tabelaEmSvg(titulo, subtitulo, colunas, linhas);
+}
+
 const admin = (u: UsuarioAutenticado) => u.perfil.codigo === CODIGO_ADMINISTRADOR;
 const usuarioDoCenario = (u: UsuarioAutenticado) => ({ id: u.sub, nome: u.nome, admin: admin(u) });
 const BASES = ["cenarios", "cenarios_analiticos"] as const;
@@ -516,6 +647,84 @@ export const CATALOGO: DefinicaoDaApi[] = [
       const meta = { ano: r.ano, mes: r.ate, comparado: r.rotuloComparado };
       if (formato === "dados") return indicadoresEmDados(r, r.rotuloComparado, p.item, meta);
       return { formato, visuais: indicadoresEmVisual(r, periodo, r.rotuloComparado, p.item, p.grafico === "sim"), meta };
+    },
+  },
+  {
+    codigo: "obras",
+    nome: "Lista de Vendas",
+    origem: "Realizado por Obra",
+    descricao:
+      "As vendas da lista Venda do Realizado por Obra: uma linha por versão vendida de cada venda (e uma, sem a versão, para a venda só com o realizado), com o código e a versão que a API obra-dre pede.",
+    exige: "Realizado por Obra › Resultados: Ler",
+    formatos: ["dados"],
+    parametros: [],
+    alcanca: (u) => pode(u, "realizado_obra_resultados:ler"),
+    async executar(_q, u, formato) {
+      if (formato === "visual") throw new ApiError(422, "A Lista de Vendas só tem o formato dados.", "FORMATO_INDISPONIVEL");
+      exigir(u, "realizado_obra_resultados:ler");
+      const r = await daTela(() => realizadoObraService.vendas(u.sub));
+      const colunas: Coluna[] = [
+        { chave: "obra", titulo: "Obra", tipo: "texto" },
+        { chave: "nome", titulo: "Nome", tipo: "texto" },
+        { chave: "versao", titulo: "Versão", tipo: "texto" },
+        { chave: "tipo_venda", titulo: "Tipo de Venda", tipo: "texto" },
+        { chave: "generica", titulo: "Genérica", tipo: "texto" },
+        { chave: "realizado", titulo: "Com Realizado", tipo: "texto" },
+      ];
+      const linhas = r.vendas.map((v): Linha => ({
+        obra: v.codigo,
+        nome: v.nome,
+        versao: v.versao === null ? null : rotuloDaVersao(v.versao),
+        tipo_venda: v.tipoVenda === "GLOBAL" ? "Global" : v.tipoVenda === "MERCANTIL" ? "Mercantil" : null,
+        generica: v.generica ? "Sim" : "Não",
+        realizado: v.comRealizado ? "Sim" : "Não",
+      }));
+      return { formato: "dados", colunas, linhas, meta: { linhas: linhas.length, vendido: r.fonte, ...(r.indisponivel ? { avisos: [`Sem o vendido: ${r.indisponivel}`] } : {}) } };
+    },
+  },
+  {
+    codigo: "obra-dre",
+    nome: "DRE de uma Obra",
+    origem: "Realizado por Obra",
+    descricao:
+      "Os Resultados de uma venda: a DRE da receita à Margem de Contribuição, mês a mês nas competências fechadas, com o realizado, o vendido da versão, a diferença, o atingimento e a eficiência; no Consolidado, numa linha da obra ou em todas.",
+    exige: "Realizado por Obra › Resultados: Ler",
+    formatos: ["dados", "visual"],
+    parametros: [PARAMETRO.obra, PARAMETRO.versao, PARAMETRO.linha, PARAMETRO.nivel, PARAMETRO.formato],
+    alcanca: (u) => pode(u, "realizado_obra_resultados:ler"),
+    async executar(q, u, formato) {
+      const p = validar(z.object({ obra: P.obra, versao: P.versao, linha: P.linha, nivel: P.nivel }), q);
+      exigir(u, "realizado_obra_resultados:ler");
+      const r = await daTela(() => realizadoObraService.resultadosDaApi(p.obra, p.versao ?? null, u.acesso));
+      if (!r) throw new ApiError(404, `Nenhuma venda com o código "${p.obra}" (a API obras lista as que você lê).`, "OBRA_INEXISTENTE");
+      if (p.versao !== undefined && r.versoes.length && !r.versoes.includes(p.versao)) {
+        throw new ApiError(404, `A venda ${r.obra.codigo} não tem a ${rotuloDaVersao(p.versao)} na DRE de venda. As versões dela: ${r.versoes.map(rotuloDaVersao).join(", ")}.`, "VERSAO_INEXISTENTE");
+      }
+      const todas = r.abas as AbaDaObraNaApi[];
+      const abas = abasDaObra(todas, p.linha);
+      const comVendido = todas.some((a) => a.dados.linhas.some((l) => l.orcado));
+      const rotuloVendido = comVendido ? `Vendido ${rotuloDaVersao(r.versao)}` : "Vendido";
+      const meses = todas[0]?.dados.meses ?? [];
+      const periodo = meses.length ? `${meses[0].rotulo} a ${meses[meses.length - 1].rotulo}` : "sem o realizado";
+      const avisos = [...(r.semObras.length ? [`Competências fechadas sem as obras gravadas: ${r.semObras.join(", ")}.`] : []), ...r.avisos];
+      const meta = {
+        obra: r.obra.codigo,
+        nome: r.obra.nome,
+        tipoVenda: r.obra.tipoVenda,
+        versao: comVendido ? rotuloDaVersao(r.versao) : null,
+        versoes: r.versoes.map(rotuloDaVersao),
+        linha: p.linha?.trim().toLowerCase() === "todas" ? "Todas" : abas.map((a) => nomeDaAbaDaObra(a, todas)).join(", "),
+        nivel: NOME_DO_MODO[p.nivel - 1],
+        periodo,
+        vendido: r.fonte,
+        avisos,
+      };
+      if (formato === "dados") return obraEmDados(abas, todas, p.nivel, rotuloVendido, meta);
+      return {
+        formato,
+        visuais: abas.map((a) => obraEmVisual(a, p.nivel, `${r.obra.codigo} · ${nomeDaAbaDaObra(a, todas)}`, `${r.obra.nome} · ${periodo}${comVendido ? ` · vendido: ${rotuloDaVersao(r.versao)}` : ""}`, rotuloVendido)),
+        meta,
+      };
     },
   },
   {

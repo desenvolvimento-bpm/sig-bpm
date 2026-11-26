@@ -6,7 +6,8 @@ import type { Request } from "express";
 import { enderecoDe, httpsDe } from "../src/controllers/conectividade/conectividadeController.js";
 import { signToken, signTokenDaApi, verifyToken } from "../src/lib/jwt.js";
 import { autenticacao } from "../src/middlewares/autenticacao.js";
-import { ApiError, curtoDoIndicador, curtoDoPainel, niveisDaDre, sinalDo, variacao } from "../src/services/conectividade/catalogoApis.js";
+import { abasDaObra, ApiError, apiDoCodigo, curtoDoIndicador, curtoDoPainel, nomeDaAbaDaObra, niveisDaDre, sinalDo, variacao, type AbaDaObraNaApi } from "../src/services/conectividade/catalogoApis.js";
+import type { UsuarioAutenticado } from "../src/services/acesso/acesso.js";
 import { exigirLigada } from "../src/services/conectividade/conectividadeService.js";
 import { cardEmSvg, cortar, direcaoDo, esc, tabelaEmSvg } from "../src/services/conectividade/visuais.js";
 
@@ -99,5 +100,41 @@ describe("Biblioteca de APIs (24/10/2026)", () => {
     assert.equal(direcaoDo(null, 2), 0);
     const tabela = tabelaEmSvg("T", "S", [{ titulo: "Linha", largura: 200, alinhar: "start" }], [{ celulas: ["A & B"], estilo: "TOTAL" }]);
     assert.ok(tabela.svg.includes("A &amp; B"));
+  });
+});
+
+describe("APIs do Realizado por Obra (26/11/2026)", () => {
+  const aba = (chave: string, nome: string, nomeUnidade: string | null = null): AbaDaObraNaApi => ({ chave, nome, nomeUnidade, dados: { meses: [], linhas: [] } });
+  const abas = [aba("consolidado", "Consolidado"), aba("l1", "Estrutura", "Matriz"), aba("l2", "Estrutura", "Filial"), aba("l3", "Montagem", "Serviços")];
+
+  it("o nome da aba leva a unidade só quando duas linhas têm o mesmo nome, como na tela", () => {
+    assert.deepEqual(
+      abas.map((a) => nomeDaAbaDaObra(a, abas)),
+      ["Consolidado", "Estrutura (Matriz)", "Estrutura (Filial)", "Montagem"],
+    );
+  });
+
+  it("a linha: sem ela, o Consolidado; todas; pelo nome da aba, pelo nome da linha ou pelo id", () => {
+    assert.deepEqual(abasDaObra(abas).map((a) => a.chave), ["consolidado"]);
+    assert.deepEqual(abasDaObra(abas, "TODAS").map((a) => a.chave), ["consolidado", "l1", "l2", "l3"]);
+    assert.deepEqual(abasDaObra(abas, "montagem").map((a) => a.chave), ["l3"]);
+    assert.deepEqual(abasDaObra(abas, "Estrutura (Filial)").map((a) => a.chave), ["l2"]);
+    assert.deepEqual(abasDaObra(abas, "estrutura").map((a) => a.chave), ["l1", "l2"]);
+    assert.deepEqual(abasDaObra(abas, "l1").map((a) => a.chave), ["l1"]);
+    assert.throws(
+      () => abasDaObra(abas, "Alveolares"),
+      (e: unknown) => e instanceof ApiError && e.status === 404 && e.codigo === "LINHA_INEXISTENTE" && e.message.includes("Estrutura (Matriz)"),
+    );
+  });
+
+  it("os parâmetros errados voltam 422 antes de ler a venda", async () => {
+    const u = { sub: "u1", nome: "Teste", permissions: ["realizado_obra_resultados:ler"], perfil: { codigo: "X" } } as unknown as UsuarioAutenticado;
+    const dre = apiDoCodigo("obra-dre")!;
+    assert.equal(apiDoCodigo("obras")?.origem, "Realizado por Obra");
+    assert.equal(dre.alcanca(u), true);
+    for (const q of [{}, { obra: "G887305", versao: "VERX" }, { obra: "G887305", versao: "100" }, { obra: "G887305", nivel: "4" }]) {
+      await assert.rejects(() => dre.executar(q, u, "dados"), (e: unknown) => e instanceof ApiError && e.status === 422);
+    }
+    await assert.rejects(() => apiDoCodigo("obras")!.executar({}, u, "visual"), (e: unknown) => e instanceof ApiError && e.codigo === "FORMATO_INDISPONIVEL");
   });
 });

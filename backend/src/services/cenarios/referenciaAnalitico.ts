@@ -29,7 +29,10 @@ import { C, contasDaLinha, LINHAS_COM_ARMADURA, LINHAS_COM_ESTOQUE, LINHAS_COM_M
  * custos (Matérias Primas, Gastos Gerais Variáveis e Estoque) e as despesas variáveis de venda de cada conta e mês são
  * os da DRE realizada da unidade, divididos entre as linhas na proporção das requisições e das notas fiscais com a
  * tarefa de cada linha (a correspondência tarefa × linha); a parte sem tarefa (ou com uma tarefa sem correspondência)
- * vai pelo volume das linhas (o m³; nas despesas variáveis de venda e em Serviços, pela receita). A Variação do Estoque
+ * vai pelo volume das linhas (o m³; nas despesas variáveis de venda, pela receita). Em Serviços (26/11/2026), pela Alocação
+ * nas Linhas, como nos Resultados por Linha: cada linha fica com a tarefa dela (só a parte que o valor da conta explica) e o
+ * resto vai pelos dias de acompanhamento das linhas da conta (nas despesas variáveis de venda, pela receita) — a Vedação,
+ * sem acompanhamentos, fica só com a tarefa. A Variação do Estoque
  * (20/11/2026, pedido do Adão) vai só para as linhas que movimentam o estoque (as Estacas), e o custo unitário dela é a
  * variação ÷ o Volume de Estoque do período (a produção menos a expedição).
  */
@@ -65,6 +68,34 @@ export function dividirPorLinhas(total: number, tarefados: Map<string, number>, 
   const doc = (l: string) => tarefados.get(l) ?? 0;
   const documentos = linhas.reduce((s, l) => s + doc(l), 0) + semTarefa;
   for (const l of linhas) r.set(l, total * (documentos ? (doc(l) + semTarefa * peso(l)) / documentos : peso(l)));
+  return r;
+}
+
+/**
+ * Divide o valor de uma conta de Serviços entre as linhas (as chaves de `pesos`) pela Alocação nas Linhas (26/11/2026, pedido
+ * do Adão: a Vedação só com a tarefa dela), como nos Resultados por Linha: cada linha fica com os documentos da tarefa dela,
+ * só a parte que o valor explica (sobre o maior entre o valor e os documentos, com tarefa — de todas as linhas — e sem
+ * tarefa); o resto vai pelos `pesos` (a base da regra), sem eles pela `reserva` e, sem ela, em partes iguais. Valor negativo
+ * (ou sem documentos com tarefa): tudo pela base.
+ */
+export function dividirPelaAlocacao(total: number, tarefados: Map<string, number>, semTarefa: number, pesos: Map<string, number>, reserva: Map<string, number> = new Map()) {
+  const linhas = [...pesos.keys()];
+  const r = new Map<string, number>();
+  if (!linhas.length) return r;
+  const comTarefa = [...tarefados].filter(([, v]) => v > 0).reduce((s, [, v]) => s + v, 0);
+  const explicado = Math.max(total, comTarefa + Math.max(semTarefa, 0));
+  let resto = total;
+  if (total > 0 && comTarefa > 0)
+    for (const l of linhas) {
+      const v = tarefados.get(l) ?? 0;
+      if (v <= 0) continue;
+      r.set(l, (total * v) / explicado);
+      resto -= (total * v) / explicado;
+    }
+  const positivo = (m: Map<string, number>) => linhas.some((l) => (m.get(l) ?? 0) > 0);
+  const base = positivo(pesos) ? pesos : positivo(reserva) ? reserva : new Map(linhas.map((l) => [l, 1]));
+  const soma = linhas.reduce((s, l) => s + Math.max(base.get(l) ?? 0, 0), 0);
+  for (const l of linhas) r.set(l, (r.get(l) ?? 0) + (resto * Math.max(base.get(l) ?? 0, 0)) / soma);
   return r;
 }
 
@@ -177,7 +208,7 @@ export async function referenciaDoRealizado(
     prisma.producaoMetalurgia.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel, unidadeNegocio: unidadeSel } }),
     prisma.producaoArmadura.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel, obra, unidadeNegocio: unidadeSel } }),
     prisma.montagem.findMany({ where: naComp, select: { quantidade: true } }),
-    prisma.acompanhamento.findMany({ where: naComp, select: { quantidade: true, linha: linhaSel } }),
+    prisma.acompanhamento.findMany({ where: naComp, select: { competenciaId: true, quantidade: true, linha: linhaSel } }),
     // A expedição (20/11/2026): a Expedição Diária e o Volume de Estoque (a produção menos a expedição) das linhas de m³.
     prisma.expedicao.findMany({ where: { ...naComp, unidadeMedida: "M3" }, select: { quantidade: true, linha: linhaSel, obra, unidadeNegocio: unidadeSel } }),
     prisma.receitaPreviaItem.findMany({
@@ -236,9 +267,13 @@ export async function referenciaDoRealizado(
     const l = linha(p.unidadeNegocio?.codigo, p.linha?.codigo);
     if (l) somar(armadura, `${chave(l)}|${l.unidade === 3 ? "GLOBAL" : (vendaDaObra(p.obra) ?? "?")}`, Number(p.quantidade));
   }
+  // Os dias de acompanhamento também mês a mês (26/11/2026): a base dos custos de Serviços sem tarefa.
+  const acompNoMes = new Map<string, number>();
   for (const p of acompanhamentos) {
     const l = linha(3, p.linha?.codigo);
-    if (l) somar(acomp, chave(l), Number(p.quantidade));
+    if (!l) continue;
+    somar(acomp, chave(l), Number(p.quantidade));
+    somar(acompNoMes, `${mesDe.get(p.competenciaId)}|${chave(l)}`, Number(p.quantidade));
   }
   // A expedição em m³ (20/11/2026), por linha e venda, como a produção ("?": sem obra, dividida pela receita); sem a unidade
   // no registro, a linha de mesmo código da Matriz ou da Filial.
@@ -342,9 +377,25 @@ export async function referenciaDoRealizado(
         if (Math.abs(fora) >= 1) avisos.push(`Variação do Estoque (${NOME_DA_UNIDADE[u]}): ${reais(fora)} sem linha que movimente o estoque (só as Estacas), fora das premissas.`);
         continue;
       }
-      // Os pesos da parte sem tarefa: o m³ das linhas (sem ele, o volume delas); nas despesas variáveis de venda e em
-      // Serviços, a receita.
-      const pelaReceita = u === 3 || codigo.startsWith("DVV.");
+      // Serviços (26/11/2026, pedido do Adão: a Vedação só com a tarefa dela), pela Alocação nas Linhas, como nos Resultados
+      // por Linha: a tarefa primeiro; o resto pelos dias de acompanhamento das linhas da conta no mês (sem eles, no período),
+      // como as regras de rateio de Serviços; nas despesas variáveis de venda, pela receita (a regra Despesas). Sem base, pela
+      // receita das linhas.
+      if (u === 3) {
+        const receitas = new Map(ls.map((l) => [chave(l), receitaDaLinha(l)]));
+        const noPeriodo = new Map(ls.map((l) => [chave(l), acomp.get(chave(l)) ?? 0]));
+        for (const mes of meses) {
+          const total = real.get(`${u}|${codigo}`)?.[mes - 1] ?? 0;
+          if (!total) continue;
+          const noMes = new Map(ls.map((l) => [chave(l), acompNoMes.get(`${mes}|${chave(l)}`) ?? 0]));
+          const base = codigo.startsWith("DVV.") ? receitas : [...noMes.values()].some((v) => v > 0) ? noMes : noPeriodo;
+          const partes = dividirPelaAlocacao(total, tarefados.get(`${mes}|${codigo}`) ?? new Map(), semTarefa.get(`${mes}|${codigo}|${u}`) ?? 0, base, receitas);
+          for (const [l, v] of partes) somar(custos, `${l}|${codigo}`, v);
+        }
+        continue;
+      }
+      // Os pesos da parte sem tarefa: o m³ das linhas (sem ele, o volume delas); nas despesas variáveis de venda, a receita.
+      const pelaReceita = codigo.startsWith("DVV.");
       let pesos = new Map(ls.map((l) => [chave(l), pelaReceita ? receitaDaLinha(l) : emM3(l) ? volumeTotal(l) : 0]));
       if (![...pesos.values()].some(Boolean)) pesos = new Map(ls.map((l) => [chave(l), baseTotal(l)]));
       for (const mes of meses) {

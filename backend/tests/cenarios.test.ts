@@ -10,12 +10,12 @@ import { acharAba, lerAbaDRE, lerAbaMetas } from "../src/services/cenarios/leitu
 import { diasUteis, pascoa } from "../src/services/cenarios/calendario.js";
 import { calcularTabela, linhasDaTabela } from "../src/services/cenarios/premissasCenario.js";
 import { alocarCentros, contasDoGrupo, percentuaisDasBases, rateiosSemBase } from "../src/services/cenarios/centrosCenario.js";
-import { dividirPorLinhas, linhaDaTarefa, mediaDoPeriodo, mediaNoPeriodo, vendaDaObra } from "../src/services/cenarios/referenciaAnalitico.js";
+import { dividirPelaAlocacao, dividirPorLinhas, linhaDaTarefa, mediaDoPeriodo, mediaNoPeriodo, vendaDaObra } from "../src/services/cenarios/referenciaAnalitico.js";
 import { quadroDoGrupo, quadrosDeLotacao } from "../src/services/cenarios/lotacaoCenario.js";
 import { basesDosProjetos } from "../src/services/cenarios/projetosCenario.js";
 import { grupoDaLotacao } from "../src/services/listas/lotacaoDosCentros.js";
-import { rateiosSemVolume } from "../src/services/dre/apuracaoUnidades.js";
-import { calcularInvestimentosEExtra, depreciacaoMensal, depreciacaoNosMeses } from "../src/services/cenarios/investimentosCenario.js";
+import { rateiosSemVolume, type LinhaEstrutura } from "../src/services/dre/apuracaoUnidades.js";
+import { calcularInvestimentosEExtra, contasExtra, depreciacaoMensal, depreciacaoNosMeses } from "../src/services/cenarios/investimentosCenario.js";
 import { Prisma } from "../src/generated/prisma/client.js";
 import { ESTRUTURA_INICIAL_INDICADORES } from "../src/services/relatorios/estruturaInicialIndicadores.js";
 import { IND } from "../src/services/relatorios/indicadoresDoSistema.js";
@@ -661,6 +661,27 @@ describe("referência realizada dos cenários analíticos (14/10/2026)", () => {
     assert.equal(dividirPorLinhas(800, new Map(), 0, new Map([["a", 0], ["b", 0]])).get("b"), 400);
   });
 
+  it("Serviços pela Alocação nas Linhas (26/11/2026): a tarefa primeiro e o resto pelos dias de acompanhamento", () => {
+    const dias = new Map([["3|MONTAGEM", 20], ["3|VEDAÇÃO", 0]]);
+    // 1.000 na DRE; 300 da tarefa da Vedação, 50 de uma linha sem a conta e 100 sem tarefa: a Vedação fica só com a tarefa.
+    const r = dividirPelaAlocacao(1000, new Map([["3|VEDAÇÃO", 300], ["3|FUNDAÇÃO", 50]]), 100, dias);
+    assert.equal(r.get("3|VEDAÇÃO"), 300);
+    assert.equal(r.get("3|MONTAGEM"), 700);
+    assert.equal(r.has("3|FUNDAÇÃO"), false);
+    // Os documentos passam do valor: a tarefa só na parte que o valor explica (400 × 300 ÷ 500).
+    const a = dividirPelaAlocacao(400, new Map([["3|VEDAÇÃO", 300]]), 200, dias);
+    assert.equal(a.get("3|VEDAÇÃO"), 240);
+    assert.equal(a.get("3|MONTAGEM"), 160);
+    // Valor negativo: tudo pela base.
+    const n = dividirPelaAlocacao(-100, new Map([["3|VEDAÇÃO", 300]]), 0, dias);
+    assert.equal(n.get("3|VEDAÇÃO"), 0);
+    assert.equal(n.get("3|MONTAGEM"), -100);
+    // Sem dias, pela reserva (a receita); sem ela, em partes iguais.
+    const semDias = new Map([["a", 0], ["b", 0]]);
+    assert.equal(dividirPelaAlocacao(800, new Map(), 0, semDias, new Map([["a", 3], ["b", 1]])).get("a"), 600);
+    assert.equal(dividirPelaAlocacao(800, new Map(), 0, semDias).get("b"), 400);
+  });
+
   it("a venda da obra: o tipo dela; sem ele, G… é Global e o resto Mercantil", () => {
     assert.equal(vendaDaObra({ codigo: "L123", tipoVenda: "GLOBAL" }), "GLOBAL");
     assert.equal(vendaDaObra({ codigo: "G045", tipoVenda: null }), "GLOBAL");
@@ -736,5 +757,22 @@ describe("o rótulo do cenário comparado nos Resultados (23/11/2026)", () => {
     assert.equal(rotuloDoComparado({ marcacao: "RESULTADOS_ANTERIORES", ano: 2025 }), "ANTERIOR TOTAL/25");
     assert.equal(rotuloDoComparado({ marcacao: "RESULTADOS_VENDIDOS", ano: 2026 }), "VENDIDO TOTAL/26");
     assert.equal(rotuloDoComparado({ marcacao: null, ano: 2026 }), "COMPARADO TOTAL/26");
+  });
+});
+
+describe("as contas do extra-operacional dos cenários analíticos (26/11/2026)", () => {
+  const linha = (codigo: string, grupoSigla: string, unidades: number[]): LinhaEstrutura => ({
+    id: codigo, codigo, tipo: "ITEM", grupo: grupoSigla, grupoSigla, atribuicao: null, descricao: codigo, expressao: null, unidades,
+  });
+  const est = [
+    linha("DA.GGI.ASSESSORIAS_E_CONSULTORIAS", "DA", [4, 5]),
+    linha("DA.GGI.SEGURO_PATRIMONIAL", "DA", [4]),
+    linha("DML.IRCS.IMPOSTO_DE_RENDA_E_CONTRIBUICAO_SOCIAL", "DML", [4, 5]),
+    linha("DFC.DFC.DESPESAS_BANCARIAS", "DFC", [4, 5]),
+  ];
+
+  it("no RN, todas as contas dele (também as Assessorias e Consultorias da DA); em Despesas e Extra, só as do extra-operacional", () => {
+    assert.deepEqual(contasExtra(est, 5).map((l) => l.codigo), ["DA.GGI.ASSESSORIAS_E_CONSULTORIAS", "DML.IRCS.IMPOSTO_DE_RENDA_E_CONTRIBUICAO_SOCIAL", "DFC.DFC.DESPESAS_BANCARIAS"]);
+    assert.deepEqual(contasExtra(est, 4).map((l) => l.codigo), ["DML.IRCS.IMPOSTO_DE_RENDA_E_CONTRIBUICAO_SOCIAL", "DFC.DFC.DESPESAS_BANCARIAS"]);
   });
 });
