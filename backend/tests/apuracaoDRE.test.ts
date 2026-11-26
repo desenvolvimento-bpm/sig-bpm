@@ -320,3 +320,44 @@ describe("o frete dos complementares em Serviços (24/10/2026)", () => {
     assert.equal(baseDoPercentual(1, frete), "ROL.RLF.RECEITA_LIQUIDA_DE_FRETE");
   });
 });
+
+describe("as Assessorias e Consultorias da DA no RN (26/11/2026)", () => {
+  const linha = (codigo: string, tipo: LinhaEstrutura["tipo"], unidades: number[], expressao: string | null = null): LinhaEstrutura => ({
+    id: codigo, codigo, tipo, grupo: "DESPESAS ADMINISTRATIVAS (DA)", grupoSigla: "DA", atribuicao: "Gastos Gerais Indiretos", descricao: codigo, expressao, unidades,
+  });
+  const DA = "DA.DESPESAS_ADMINISTRATIVAS_DA";
+  const GGI = "DA.GGI.GASTOS_GERAIS_INDIRETOS";
+  const ASSESSORIAS = "DA.GGI.ASSESSORIAS_E_CONSULTORIAS";
+  const SEGURO = "DA.GGI.SEGURO_PATRIMONIAL";
+  const linhas = [linha(DA, "SUBTOTAL", [4, 5], GGI), linha(GGI, "SUBTOTAL", [4, 5], `${ASSESSORIAS} + ${SEGURO}`), linha(ASSESSORIAS, "ITEM", [4, 5]), linha(SEGURO, "ITEM", [4])];
+  const porCodigo = new Map(linhas.map((l) => [l.codigo, l]));
+
+  it("o RN soma só os manuais do balde RN na conta; o balancete da DA continua em Despesas e Extra", () => {
+    assert.deepEqual(abasQueSomam(porCodigo.get(ASSESSORIAS)!, { filial: 1, balde: "DESPESAS", rateio: false }), [4]);
+    assert.deepEqual(abasQueSomam(porCodigo.get(ASSESSORIAS)!, { filial: 1, balde: "RN", rateio: false, manual: true }), [5]);
+    // As outras contas da DA não estão no RN: o manual do balde RN nelas fica fora do resultado.
+    assert.deepEqual(abasQueSomam(porCodigo.get(SEGURO)!, { filial: 1, balde: "RN", rateio: false, manual: true }), []);
+    const { resultados } = apurarUnidades({
+      linhas,
+      receitas: [],
+      totais: new Map(),
+      percentuais: new Map(),
+      lancamentos: [
+        { filial: 1, linhaDREId: ASSESSORIAS, balde: "DESPESAS", alocacao: "DIRETO", valor: D(5000) },
+        { filial: 1, linhaDREId: SEGURO, balde: "DESPESAS", alocacao: "DIRETO", valor: D(300) },
+      ],
+      manuais: [{ linhaDREId: ASSESSORIAS, balde: "RN", valor: D(900), filial: 1 }],
+    });
+    const v = (u: number, c: string) => resultados.find((r) => r.unidade === u && r.codigo === c)?.valor.toString();
+    // No RN, o subtotal e o total da DA somam só a conta dele.
+    assert.equal(v(5, ASSESSORIAS), "900");
+    assert.equal(v(5, GGI), "900");
+    assert.equal(v(5, DA), "900");
+    assert.equal(v(4, ASSESSORIAS), "5000");
+    assert.equal(v(4, DA), "5300");
+    // O Consolidado soma as duas unidades.
+    const c = new Map(consolidar(linhas, resultados).map((r) => [r.codigo, r.valor.toString()]));
+    assert.equal(c.get(ASSESSORIAS), "5900");
+    assert.equal(c.get(DA), "6200");
+  });
+});

@@ -8,7 +8,7 @@ export type Formato = "dados" | "visual";
 export type ApiDoCatalogo = {
   codigo: string;
   nome: string;
-  origem: "Resultados Empresariais" | "Cenários";
+  origem: "Resultados Empresariais" | "Realizado por Obra" | "Cenários";
   descricao: string;
   exige: string;
   formatos: Formato[];

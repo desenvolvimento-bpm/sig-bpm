@@ -279,6 +279,195 @@ async function escolhaDo(usuarioId: string, cadastro: Awaited<ReturnType<typeof 
 /** A versão que vale: a gravada, se está na DRE de venda; senão, a primeira dela (sem versões, nula). */
 const versaoQueVale = (versoes: number[], gravada: number) => (versoes.length ? (versoes.includes(gravada) ? gravada : versoes[0]) : null);
 
+/**
+ * A venda pelo código dela (o do CONTROLE DAS VENDAS, como G887305), pelo código de uma obra dela no cadastro (as numeradas)
+ * ou pelo id de uma obra dela; sem diferenciar maiúsculas. Nula se nenhuma.
+ */
+function vendaPedida(cadastro: Awaited<ReturnType<typeof vendasDoCadastro>>, pedido: string) {
+  const alvo = pedido.trim().toUpperCase();
+  return (
+    cadastro.porCodigo.get(alvo) ??
+    cadastro.daObra.get(pedido.trim().toLowerCase()) ??
+    [...cadastro.porCodigo.values()].find((v) => v.codigos.some((c) => c.trim().toUpperCase() === alvo)) ??
+    null
+  );
+}
+
+/** Os Resultados de nenhuma venda (sem a escolha na lista Venda). */
+const SEM_VENDA = { obra: null, versao: 0, versoes: [] as number[], fonte: null, abas: [], semObras: [] as string[], avisos: [] as string[], centros: [] as Array<string | null>, obras: [] as string[] };
+
+/**
+ * Os Resultados de uma venda na versão vendida `pedida` (a gravada na lista Venda; na API, a pedida, e nula, a mais recente):
+ * o cálculo de `realizadoObraService.resultados`.
+ */
+async function resultadosDaVenda(venda: Venda, pedida: number | null, acesso: Acesso) {
+  const prisma = getPrismaClient();
+  const obra = descricaoDaVenda(venda);
+  const tipoVenda = obra.tipoVenda ?? "MERCANTIL";
+  const numero = numeroDaObra(venda.codigo);
+  const [cs, est, linhasDoCadastro, vendido] = await Promise.all([fechadas(), estruturaDaDRE(), linhasDoNegocio(), dreDasVendas()]);
+  const comObras = cs.filter((c) => c.comObras).map((c) => c.id);
+  const [gravadas, receitas, previas] = await Promise.all([
+    prisma.resultadoObra.groupBy({ by: ["competenciaId"], where: { obraId: { in: venda.ids }, competenciaId: { in: comObras } } }),
+    numero ? receitasDaObra(comObras, numero) : Promise.resolve(new Map<string, { receitas: Map<string, number>; centros: Map<string, number> }>()),
+    previasDaVenda(comObras, venda, linhasDoCadastro),
+  ]);
+  // Os meses com valor: o gravado das obras da venda, as receitas e os impostos dos centros dela ou a receita prévia de frete e complementar.
+  const comValor = new Set(gravadas.map((g) => g.competenciaId));
+  for (const id of comObras) {
+    if ([...(receitas.get(id)?.receitas.values() ?? [])].some((v) => Math.abs(v) >= 0.005)) comValor.add(id);
+    if ((previas.get(id) ?? []).some((p) => PREVIAS_DA_OBRA.some((x) => x.natureza === p.natureza))) comValor.add(id);
+  }
+  const { meses, semObras } = mesesDaVenda(cs, comValor);
+  const daVenda = vendido.dre.get(venda.codigo) ?? [];
+  const s = escopo(est, DO_RESULTADO);
+  const estDaTabela = est.filter((l) => s.has(l.codigo));
+  const ids = meses.flatMap((m) => (m.competenciaId ? [m.competenciaId] : []));
+  const [rows, percentuais] = await Promise.all([
+    prisma.resultadoObra.findMany({
+      where: { obraId: { in: venda.ids }, competenciaId: { in: ids } },
+      select: { competenciaId: true, unidade: true, linhaId: true, valor: true, direto: true, linhaDRE: { select: { codigo: true } } },
+    }),
+    percentuaisDasCompetencias(ids),
+  ]);
+  const avisos: string[] = [];
+  if (!obra.tipoVenda) avisos.push("A obra está sem o tipo de venda no cadastro: os créditos de impostos seguem a regra da venda mercantil.");
+  const semCreditos = meses.filter((m) => m.competenciaId && !percentuais.get(m.competenciaId)?.size).map((m) => m.rotulo);
+  if (semCreditos.length) avisos.push(`Sem os Créditos de Impostos em ${semCreditos.join(", ")}: Matérias Primas, Gastos Gerais Variáveis da Produção e Frete e Descarga sem o ajuste nesses meses.`);
+
+  // O vendido na versão escolhida (ou na primeira, se ela não existe mais); sem a escolha (a API), na mais recente.
+  const versoes = versoesDaObra(daVenda);
+  const versao = pedida === null ? (versoes[versoes.length - 1] ?? 0) : (versaoQueVale(versoes, pedida) ?? pedida);
+  if (pedida !== null && versoes.length && versao !== pedida) avisos.push(`A ${rotuloDaVersao(pedida)} não está na DRE de venda da obra: vale a ${rotuloDaVersao(versao)}.`);
+  if (vendido.indisponivel) avisos.push(`Sem o vendido: ${vendido.indisponivel}`);
+  else if (!versoes.length) avisos.push(`A obra não está na DRE do Comercial importada em ${vendido.fonte ? rotulo(vendido.fonte.ano, vendido.fonte.mes) : "—"}: sem o vendido.`);
+  const doVendido = vendidoNaEstrutura(
+    daVenda.filter((l) => l.versao === versao),
+    est,
+    s,
+    linhasDoCadastro.map((l) => ({ id: l.id, nome: l.nome, codigo: l.codigo, unidade: l.unidade })),
+  );
+  if (doVendido.naoAchadas.length) avisos.push(`Contas da DRE de venda fora da Estrutura da DRE: ${doVendido.naoAchadas.join("; ")}.`);
+
+  // O realizado de cada mês por aba (o Consolidado e cada linha) e a composição de cada item (para as consultas).
+  const realizado = new Map<string, Array<Map<string, number>>>();
+  const composicao = new Map<string, Map<string, Array<Composicao | null>>>();
+  const somar = (aba: string, i: number, codigo: string, v: number, c: Composicao) => {
+    const m = realizado.get(aba) ?? meses.map(() => new Map<string, number>());
+    m[i].set(codigo, (m[i].get(codigo) ?? 0) + v);
+    realizado.set(aba, m);
+    const daAba = composicao.get(aba) ?? new Map<string, Array<Composicao | null>>();
+    const doItem = daAba.get(codigo) ?? meses.map(() => null);
+    const x = doItem[i] ?? { direto: 0, rateio: 0, creditos: 0 };
+    doItem[i] = { direto: x.direto + c.direto, rateio: x.rateio + c.rateio, creditos: x.creditos + c.creditos };
+    daAba.set(codigo, doItem);
+    composicao.set(aba, daAba);
+  };
+  const nasAbas = (linhaId: string | null, i: number, codigo: string, v: number, c: Composicao) => {
+    somar("consolidado", i, codigo, v, c);
+    if (linhaId) somar(linhaId, i, codigo, v, c);
+  };
+  const indiceDa = new Map(meses.flatMap((m, i) => (m.competenciaId ? [[m.competenciaId, i] as const] : [])));
+  // Os custos e os volumes gravados; a receita gravada (pela Receita Prévia) dá lugar à do modelo da aba Obras. A conta com
+  // um percentual dos créditos de 100% ou mais (o crédito maior que o custo da conta na unidade) fica sem o ajuste, sem
+  // aviso (05/11/2026, pedido do Adão).
+  for (const r of rows) {
+    const codigo = r.linhaDRE.codigo;
+    if (codigo.startsWith("ROB.") || codigo.startsWith("ROL.")) continue;
+    const i = indiceDa.get(r.competenciaId)!;
+    const valor = Number(r.valor);
+    const p = ehContaDosCreditos(codigo) ? percentuais.get(r.competenciaId)?.get(`${r.unidade}|${codigo}`) : undefined;
+    const v = (p ? comOsCreditos(valor, tipoVenda, p) : valor) ?? valor;
+    nasAbas(r.linhaId, i, codigo, v, { direto: Number(r.direto), rateio: valor - Number(r.direto), creditos: v - valor });
+  }
+  // As receitas e os impostos (o modelo da aba Obras), por linha. Os impostos não são item da DRE (o total deles é a ROB
+  // menos a ROL): ficam só na composição e na ROL de cada aba, a ROB menos os impostos.
+  const linhasDaVenda = new Set(linhasDoCadastro.map((l) => l.id));
+  const doPeriodo = ids.flatMap((id) => previas.get(id) ?? []);
+  const impostos = new Map<string, number[]>();
+  for (const [id, i] of indiceDa) {
+    for (const [linha, itens] of receitasPorLinha(receitas.get(id)?.receitas ?? new Map(), previas.get(id) ?? [], doPeriodo)) {
+      const linhaId = linha && linhasDaVenda.has(linha) ? linha : null;
+      for (const [codigo, v] of itens) {
+        nasAbas(linhaId, i, codigo, v, { direto: v, rateio: 0, creditos: 0 });
+        if (codigo !== IMPOSTOS) continue;
+        for (const aba of ["consolidado", ...(linhaId ? [linhaId] : [])]) {
+          realizado.get(aba)![i].delete(IMPOSTOS);
+          const xs = impostos.get(aba) ?? meses.map(() => 0);
+          xs[i] += v;
+          impostos.set(aba, xs);
+        }
+      }
+    }
+  }
+  for (const [aba, porMes] of realizado) {
+    porMes.forEach((itens, i) => {
+      const daRob = [...itens].filter(([c]) => c.startsWith("ROB."));
+      const irb = impostos.get(aba)?.[i] ?? 0;
+      if (daRob.length || Math.abs(irb) >= 0.005) itens.set(ROL, daRob.reduce((soma, [, v]) => soma + v, 0) - irb);
+    });
+  }
+  const vendidoDaAba = (aba: string) => {
+    if (aba !== "consolidado") return doVendido.valores.get(aba) ?? null;
+    if (!doVendido.valores.size) return null;
+    const soma = new Map<string, number>();
+    for (const m of doVendido.valores.values()) for (const [k, v] of m) soma.set(k, (soma.get(k) ?? 0) + v);
+    return soma;
+  };
+  const comVendido = versoes.length > 0 && !vendido.indisponivel;
+  const linhasDasAbas = linhasDoCadastro.filter((l) => realizado.has(l.id) || doVendido.valores.has(l.id));
+  const abas = [{ chave: "consolidado", nome: "Consolidado", unidade: null as number | null }, ...linhasDasAbas.map((l) => ({ chave: l.id, nome: l.nome, unidade: l.unidade as number | null }))];
+  const apurado = meses.map((m) => m.competenciaId !== null);
+  const ultimo = meses[meses.length - 1];
+  // O centro de obra de cada mês (o de mais lançamentos) e, sem lançamento no mês, o do período.
+  const maisLancado = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const centrosDoPeriodo = new Map<string, number>();
+  for (const id of ids) for (const [c, n] of receitas.get(id)?.centros ?? []) centrosDoPeriodo.set(c, (centrosDoPeriodo.get(c) ?? 0) + n);
+  const centroDoPeriodo = maisLancado(centrosDoPeriodo);
+  return {
+    obra,
+    versao,
+    versoes,
+    fonte: descricaoDaFonte(vendido.fonte),
+    semObras,
+    avisos,
+    centros: meses.map((m) => (m.competenciaId ? (maisLancado(receitas.get(m.competenciaId)?.centros ?? new Map()) ?? centroDoPeriodo) : null)),
+    obras: venda.codigos,
+    abas: abas.map((a) => {
+      const porMes = (realizado.get(a.chave) ?? meses.map(() => new Map<string, number>())).map((itens) => comTotais(itens, estDaTabela, s));
+      const v = vendidoDaAba(a.chave);
+      const celulaVendida = (l: LinhaDRE) => {
+        const x = arredonda(v?.get(l.codigo) ?? 0);
+        const bp = baseDoPercentual("obras", l);
+        const bu = baseDoUnitario(l);
+        return { valor: x, pct: bp ? divide(x, v?.get(bp)) : null, unitario: bu ? divide(x, v?.get(bu)) : null };
+      };
+      const linhas = montar(estDaTabela.filter(naTabela), "obras", apurado, porMes, porMes, acesso, new Set(v ? v.keys() : [])).map((x) => {
+        const l = estDaTabela.find((e) => e.codigo === x.codigo)!;
+        return { ...x, ...(comVendido ? { orcado: { total: celulaVendida(l) } } : {}) };
+      });
+      const daAba = composicao.get(a.chave) ?? new Map<string, Array<Composicao | null>>();
+      return {
+        chave: a.chave,
+        nome: a.nome,
+        unidade: a.unidade,
+        nomeUnidade: a.unidade ? nomeDaUnidade(a.unidade) : null,
+        composicao: Object.fromEntries(
+          [...daAba].map(([codigo, xs]) => [codigo, xs.map((x) => (x ? { direto: arredonda(x.direto, 2), rateio: arredonda(x.rateio, 2), creditos: arredonda(x.creditos, 2) } : null))]),
+        ),
+        dados: {
+          ano: ultimo?.ano ?? new Date().getFullYear(),
+          ate: ultimo?.mes ?? 0,
+          meses: meses.map((m) => ({ mes: m.ano * 100 + m.mes, rotulo: m.rotulo, apurado: m.competenciaId !== null })),
+          rotuloComparado: "Vendido",
+          ...(comVendido ? { comparado: { nome: rotuloDaVersao(versao), ano: ultimo?.ano ?? new Date().getFullYear() } } : {}),
+          linhas,
+        },
+      };
+    }),
+  };
+}
+
 export const realizadoObraService = {
   /**
    * A lista Venda: uma opção por versão de cada venda da DRE do Comercial e uma, sem a versão, por venda só com o realizado
@@ -333,174 +522,17 @@ export const realizadoObraService = {
    *   da venda (os volumes das listas).
    */
   async resultados(usuarioId: string, acesso: Acesso = ACESSO_TOTAL) {
-    const prisma = getPrismaClient();
     const escolha = await escolhaDo(usuarioId, await vendasDoCadastro());
-    if (!escolha) return { obra: null, versao: 0, versoes: [] as number[], fonte: null, abas: [], semObras: [] as string[], avisos: [] as string[], centros: [] as Array<string | null>, obras: [] as string[] };
-    const { venda } = escolha;
-    const obra = descricaoDaVenda(venda);
-    const tipoVenda = obra.tipoVenda ?? "MERCANTIL";
-    const numero = numeroDaObra(venda.codigo);
-    const [cs, est, linhasDoCadastro, vendido] = await Promise.all([fechadas(), estruturaDaDRE(), linhasDoNegocio(), dreDasVendas()]);
-    const comObras = cs.filter((c) => c.comObras).map((c) => c.id);
-    const [gravadas, receitas, previas] = await Promise.all([
-      prisma.resultadoObra.groupBy({ by: ["competenciaId"], where: { obraId: { in: venda.ids }, competenciaId: { in: comObras } } }),
-      numero ? receitasDaObra(comObras, numero) : Promise.resolve(new Map<string, { receitas: Map<string, number>; centros: Map<string, number> }>()),
-      previasDaVenda(comObras, venda, linhasDoCadastro),
-    ]);
-    // Os meses com valor: o gravado das obras da venda, as receitas e os impostos dos centros dela ou a receita prévia de frete e complementar.
-    const comValor = new Set(gravadas.map((g) => g.competenciaId));
-    for (const id of comObras) {
-      if ([...(receitas.get(id)?.receitas.values() ?? [])].some((v) => Math.abs(v) >= 0.005)) comValor.add(id);
-      if ((previas.get(id) ?? []).some((p) => PREVIAS_DA_OBRA.some((x) => x.natureza === p.natureza))) comValor.add(id);
-    }
-    const { meses, semObras } = mesesDaVenda(cs, comValor);
-    const daVenda = vendido.dre.get(venda.codigo) ?? [];
-    const s = escopo(est, DO_RESULTADO);
-    const estDaTabela = est.filter((l) => s.has(l.codigo));
-    const ids = meses.flatMap((m) => (m.competenciaId ? [m.competenciaId] : []));
-    const [rows, percentuais] = await Promise.all([
-      prisma.resultadoObra.findMany({
-        where: { obraId: { in: venda.ids }, competenciaId: { in: ids } },
-        select: { competenciaId: true, unidade: true, linhaId: true, valor: true, direto: true, linhaDRE: { select: { codigo: true } } },
-      }),
-      percentuaisDasCompetencias(ids),
-    ]);
-    const avisos: string[] = [];
-    if (!obra.tipoVenda) avisos.push("A obra está sem o tipo de venda no cadastro: os créditos de impostos seguem a regra da venda mercantil.");
-    const semCreditos = meses.filter((m) => m.competenciaId && !percentuais.get(m.competenciaId)?.size).map((m) => m.rotulo);
-    if (semCreditos.length) avisos.push(`Sem os Créditos de Impostos em ${semCreditos.join(", ")}: Matérias Primas, Gastos Gerais Variáveis da Produção e Frete e Descarga sem o ajuste nesses meses.`);
+    return escolha ? resultadosDaVenda(escolha.venda, escolha.versao, acesso) : SEM_VENDA;
+  },
 
-    // O vendido na versão escolhida (ou na primeira, se ela não existe mais).
-    const versoes = versoesDaObra(daVenda);
-    const versao = versaoQueVale(versoes, escolha.versao) ?? escolha.versao;
-    if (versoes.length && versao !== escolha.versao) avisos.push(`A ${rotuloDaVersao(escolha.versao)} não está na DRE de venda da obra: vale a ${rotuloDaVersao(versao)}.`);
-    if (vendido.indisponivel) avisos.push(`Sem o vendido: ${vendido.indisponivel}`);
-    else if (!versoes.length) avisos.push(`A obra não está na DRE do Comercial importada em ${vendido.fonte ? rotulo(vendido.fonte.ano, vendido.fonte.mes) : "—"}: sem o vendido.`);
-    const doVendido = vendidoNaEstrutura(
-      daVenda.filter((l) => l.versao === versao),
-      est,
-      s,
-      linhasDoCadastro.map((l) => ({ id: l.id, nome: l.nome, codigo: l.codigo, unidade: l.unidade })),
-    );
-    if (doVendido.naoAchadas.length) avisos.push(`Contas da DRE de venda fora da Estrutura da DRE: ${doVendido.naoAchadas.join("; ")}.`);
-
-    // O realizado de cada mês por aba (o Consolidado e cada linha) e a composição de cada item (para as consultas).
-    const realizado = new Map<string, Array<Map<string, number>>>();
-    const composicao = new Map<string, Map<string, Array<Composicao | null>>>();
-    const somar = (aba: string, i: number, codigo: string, v: number, c: Composicao) => {
-      const m = realizado.get(aba) ?? meses.map(() => new Map<string, number>());
-      m[i].set(codigo, (m[i].get(codigo) ?? 0) + v);
-      realizado.set(aba, m);
-      const daAba = composicao.get(aba) ?? new Map<string, Array<Composicao | null>>();
-      const doItem = daAba.get(codigo) ?? meses.map(() => null);
-      const x = doItem[i] ?? { direto: 0, rateio: 0, creditos: 0 };
-      doItem[i] = { direto: x.direto + c.direto, rateio: x.rateio + c.rateio, creditos: x.creditos + c.creditos };
-      daAba.set(codigo, doItem);
-      composicao.set(aba, daAba);
-    };
-    const nasAbas = (linhaId: string | null, i: number, codigo: string, v: number, c: Composicao) => {
-      somar("consolidado", i, codigo, v, c);
-      if (linhaId) somar(linhaId, i, codigo, v, c);
-    };
-    const indiceDa = new Map(meses.flatMap((m, i) => (m.competenciaId ? [[m.competenciaId, i] as const] : [])));
-    // Os custos e os volumes gravados; a receita gravada (pela Receita Prévia) dá lugar à do modelo da aba Obras. A conta com
-    // um percentual dos créditos de 100% ou mais (o crédito maior que o custo da conta na unidade) fica sem o ajuste, sem
-    // aviso (05/11/2026, pedido do Adão).
-    for (const r of rows) {
-      const codigo = r.linhaDRE.codigo;
-      if (codigo.startsWith("ROB.") || codigo.startsWith("ROL.")) continue;
-      const i = indiceDa.get(r.competenciaId)!;
-      const valor = Number(r.valor);
-      const p = ehContaDosCreditos(codigo) ? percentuais.get(r.competenciaId)?.get(`${r.unidade}|${codigo}`) : undefined;
-      const v = (p ? comOsCreditos(valor, tipoVenda, p) : valor) ?? valor;
-      nasAbas(r.linhaId, i, codigo, v, { direto: Number(r.direto), rateio: valor - Number(r.direto), creditos: v - valor });
-    }
-    // As receitas e os impostos (o modelo da aba Obras), por linha. Os impostos não são item da DRE (o total deles é a ROB
-    // menos a ROL): ficam só na composição e na ROL de cada aba, a ROB menos os impostos.
-    const linhasDaVenda = new Set(linhasDoCadastro.map((l) => l.id));
-    const doPeriodo = ids.flatMap((id) => previas.get(id) ?? []);
-    const impostos = new Map<string, number[]>();
-    for (const [id, i] of indiceDa) {
-      for (const [linha, itens] of receitasPorLinha(receitas.get(id)?.receitas ?? new Map(), previas.get(id) ?? [], doPeriodo)) {
-        const linhaId = linha && linhasDaVenda.has(linha) ? linha : null;
-        for (const [codigo, v] of itens) {
-          nasAbas(linhaId, i, codigo, v, { direto: v, rateio: 0, creditos: 0 });
-          if (codigo !== IMPOSTOS) continue;
-          for (const aba of ["consolidado", ...(linhaId ? [linhaId] : [])]) {
-            realizado.get(aba)![i].delete(IMPOSTOS);
-            const xs = impostos.get(aba) ?? meses.map(() => 0);
-            xs[i] += v;
-            impostos.set(aba, xs);
-          }
-        }
-      }
-    }
-    for (const [aba, porMes] of realizado) {
-      porMes.forEach((itens, i) => {
-        const daRob = [...itens].filter(([c]) => c.startsWith("ROB."));
-        const irb = impostos.get(aba)?.[i] ?? 0;
-        if (daRob.length || Math.abs(irb) >= 0.005) itens.set(ROL, daRob.reduce((soma, [, v]) => soma + v, 0) - irb);
-      });
-    }
-    const vendidoDaAba = (aba: string) => {
-      if (aba !== "consolidado") return doVendido.valores.get(aba) ?? null;
-      if (!doVendido.valores.size) return null;
-      const soma = new Map<string, number>();
-      for (const m of doVendido.valores.values()) for (const [k, v] of m) soma.set(k, (soma.get(k) ?? 0) + v);
-      return soma;
-    };
-    const comVendido = versoes.length > 0 && !vendido.indisponivel;
-    const linhasDasAbas = linhasDoCadastro.filter((l) => realizado.has(l.id) || doVendido.valores.has(l.id));
-    const abas = [{ chave: "consolidado", nome: "Consolidado", unidade: null as number | null }, ...linhasDasAbas.map((l) => ({ chave: l.id, nome: l.nome, unidade: l.unidade as number | null }))];
-    const apurado = meses.map((m) => m.competenciaId !== null);
-    const ultimo = meses[meses.length - 1];
-    // O centro de obra de cada mês (o de mais lançamentos) e, sem lançamento no mês, o do período.
-    const maisLancado = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    const centrosDoPeriodo = new Map<string, number>();
-    for (const id of ids) for (const [c, n] of receitas.get(id)?.centros ?? []) centrosDoPeriodo.set(c, (centrosDoPeriodo.get(c) ?? 0) + n);
-    const centroDoPeriodo = maisLancado(centrosDoPeriodo);
-    return {
-      obra,
-      versao,
-      versoes,
-      fonte: descricaoDaFonte(vendido.fonte),
-      semObras,
-      avisos,
-      centros: meses.map((m) => (m.competenciaId ? (maisLancado(receitas.get(m.competenciaId)?.centros ?? new Map()) ?? centroDoPeriodo) : null)),
-      obras: venda.codigos,
-      abas: abas.map((a) => {
-        const porMes = (realizado.get(a.chave) ?? meses.map(() => new Map<string, number>())).map((itens) => comTotais(itens, estDaTabela, s));
-        const v = vendidoDaAba(a.chave);
-        const celulaVendida = (l: LinhaDRE) => {
-          const x = arredonda(v?.get(l.codigo) ?? 0);
-          const bp = baseDoPercentual("obras", l);
-          const bu = baseDoUnitario(l);
-          return { valor: x, pct: bp ? divide(x, v?.get(bp)) : null, unitario: bu ? divide(x, v?.get(bu)) : null };
-        };
-        const linhas = montar(estDaTabela.filter(naTabela), "obras", apurado, porMes, porMes, acesso, new Set(v ? v.keys() : [])).map((x) => {
-          const l = estDaTabela.find((e) => e.codigo === x.codigo)!;
-          return { ...x, ...(comVendido ? { orcado: { total: celulaVendida(l) } } : {}) };
-        });
-        const daAba = composicao.get(a.chave) ?? new Map<string, Array<Composicao | null>>();
-        return {
-          chave: a.chave,
-          nome: a.nome,
-          unidade: a.unidade,
-          nomeUnidade: a.unidade ? nomeDaUnidade(a.unidade) : null,
-          composicao: Object.fromEntries(
-            [...daAba].map(([codigo, xs]) => [codigo, xs.map((x) => (x ? { direto: arredonda(x.direto, 2), rateio: arredonda(x.rateio, 2), creditos: arredonda(x.creditos, 2) } : null))]),
-          ),
-          dados: {
-            ano: ultimo?.ano ?? new Date().getFullYear(),
-            ate: ultimo?.mes ?? 0,
-            meses: meses.map((m) => ({ mes: m.ano * 100 + m.mes, rotulo: m.rotulo, apurado: m.competenciaId !== null })),
-            rotuloComparado: "Vendido",
-            ...(comVendido ? { comparado: { nome: rotuloDaVersao(versao), ano: ultimo?.ano ?? new Date().getFullYear() } } : {}),
-            linhas,
-          },
-        };
-      }),
-    };
+  /**
+   * Os Resultados de uma venda pedida pela API obra-dre (26/11/2026, pedido do Adão), sem a escolha da lista Venda: a venda pelo
+   * código (`vendaPedida`) e a versão vendida pedida (sem ela, a mais recente da DRE de venda). Nulo sem a venda.
+   */
+  async resultadosDaApi(obra: string, versao: number | null, acesso: Acesso = ACESSO_TOTAL) {
+    const venda = vendaPedida(await vendasDoCadastro(), obra);
+    return venda ? resultadosDaVenda(venda, versao, acesso) : null;
   },
 
   /**

@@ -284,7 +284,7 @@ export const openApiSpec = {
         tags: ["Central de Conectividade"],
         summary: "Os dados de uma API",
         description:
-          "Códigos: resultados-dre, resultados-painel, resultados-indicadores, cenarios, cenario-dre, cenario-painel e cenario-indicadores. " +
+          "Códigos: resultados-dre, resultados-painel, resultados-indicadores, obras, obra-dre, cenarios, cenario-dre, cenario-painel e cenario-indicadores. " +
           "?formato=dados (o padrão: { colunas, linhas }) ou visual ({ visuais: [{ titulo, largura, altura, svg }] }); os demais parâmetros, conforme a API (GET /v1/apis).",
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -295,7 +295,7 @@ export const openApiSpec = {
           "200": { description: "{ data: { api, formato, colunas, linhas } | { api, formato, visuais }, meta }" },
           "401": { description: "Sem o token, ou o token inválido ou vencido" },
           "403": { description: "Sem HTTPS, sem a permissão de leitura dos dados, ou a API, o usuário ou o endereço bloqueados" },
-          "404": { description: "API, cenário ou card inexistente" },
+          "404": { description: "API, cenário, obra, versão, linha ou card inexistente" },
           "422": { description: "Parâmetro inválido" },
           "429": { description: "Mais de 120 pedidos por minuto" },
           "503": { description: "A API ainda não foi ligada pelo TI (API_DESLIGADA)" },

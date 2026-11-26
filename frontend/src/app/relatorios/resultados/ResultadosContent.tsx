@@ -1117,6 +1117,11 @@ export function ResultadosContent() {
               Complementar); e sobre a ROL no resto. O valor unitário divide a receita e os custos do pré-fabricado pela produção (m³) e os
               de montagem pela montagem (m³). Em Despesas e Extra, no RN e nos centros de custo, as bases são as do Consolidado.
             </p>
+            <p>
+              O RN traz os lançamentos manuais do balde RN: as Assessorias e Consultorias das Despesas Administrativas (DA), o imposto de renda e a
+              contribuição social (DML) e as receitas e despesas financeiras. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela, com zero
+              nos meses em que a linha não tem valor apurado.
+            </p>
             <p>Nos centros de custo, cada mês mostra o mesmo recorte da DRE: os custos e despesas de mão de obra, gastos gerais e depreciação.</p>
             <p>
               Em Departamentos, o Consolidado com cada departamento de custos e despesas aberto só pelos centros de custo: o valor de cada centro no

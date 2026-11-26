@@ -432,6 +432,12 @@ export function CenarioResultadosContent() {
               Pré-Fabricado nos custos de produção; a de Montagem e a Complementar nos custos de serviços; a de Frete no Frete e Descarga; a ROL no
               resto. Em Despesas e Extra e no RN, as bases são as do Consolidado.
             </p>
+            {analitico ? (
+              <p>
+                O RN vem da tabela RN da aba Extra-Operacional das Premissas: as Assessorias e Consultorias das Despesas Administrativas (DA), o
+                imposto de renda e a contribuição social (DML) e as receitas e despesas financeiras. As linhas aparecem quando têm valor.
+              </p>
+            ) : null}
             {analitico ? null : (
               <p>
                 A aba Indicadores Manuais traz os indicadores do cenário que não saem da DRE (os quadros de lotação e os do Comercial e do

@@ -28,6 +28,66 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 26/11/2026: a aba Realizado por Obra nas APIs, as Assessorias e Consultorias da DA no RN (Fechamento Mensal, Resultados Empresariais e Cenários Analíticos) e os custos de Serviços da referência dos analíticos pela Alocação nas Linhas.
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Central de Conectividade",
+    tela: "APIs",
+    rota: "/central-de-conectividade/biblioteca-de-apis",
+    itens: [
+      "A aba Realizado por Obra, antes da Cenários, traz duas APIs: Lista de Vendas (obras: as vendas da lista Venda, com o código e a versão vendida) e DRE de uma Obra (obra-dre: os Resultados de uma venda, mês a mês, com o realizado, o vendido, a diferença, o atingimento e a eficiência; no Consolidado, numa linha da obra ou em todas), em dados ou no visual. Sem a versão, vale a mais recente. Elas exigem a leitura da tela Resultados do Realizado por Obra.",
+      "No Pré-visualizar da DRE de uma Obra, escolha a venda na lista das que você lê.",
+    ],
+  },
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Fechamento Mensal",
+    tela: "Resultados",
+    rota: DRE,
+    itens: [
+      "No RN, a DRE ganha DESPESAS ADMINISTRATIVAS (DA) › Gastos Gerais Indiretos › Assessorias e Consultorias, logo antes das DEDUÇÕES DA MARGEM LÍQUIDA (DML), com os Lançamentos Manuais do RN nessa conta.",
+      "Nas visões das unidades, os meses apurados mostram todas as linhas da Estrutura da DRE da unidade, com zero onde não houve valor.",
+      "A competência aberta que já foi apurada pede Reapurar, porque a Estrutura da DRE mudou.",
+    ],
+  },
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "No RN, a DRE ganha DESPESAS ADMINISTRATIVAS (DA) › Gastos Gerais Indiretos › Assessorias e Consultorias, logo antes das DEDUÇÕES DA MARGEM LÍQUIDA (DML).",
+      "Nas visões das unidades, os meses apurados mostram todas as linhas da Estrutura da DRE da unidade, com zero onde não houve valor.",
+    ],
+  },
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Extra-Operacional, a tabela do RN traz também as Assessorias e Consultorias das Despesas Administrativas (DA). O valor dela vai para a DRE do RN, antes da DML.",
+      "Na referência realizada, os custos de Serviços se dividem entre as linhas como nos Resultados por Linha (a Alocação nas Linhas): cada linha fica com a tarefa dela, só na parte que o valor da conta explica, e o resto vai pelos dias de acompanhamento das linhas que têm a conta. A linha sem acompanhamentos, como a Vedação, fica só com a tarefa. A nova divisão vale para a Referência carregada a partir de agora (Configurações / Referência).",
+    ],
+  },
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "No RN, as Assessorias e Consultorias das Despesas Administrativas (DA), lançadas na aba Extra-Operacional das Premissas, aparecem logo antes das DEDUÇÕES DA MARGEM LÍQUIDA (DML).",
+    ],
+  },
+  {
+    publicada: "2026-11-26T15:35",
+    processo: "Cadastros Gerais",
+    tela: "Controladoria",
+    rota: "/cadastros/linhas",
+    itens: [
+      "Na referência realizada dos Cenários Analíticos, a parte dos custos de Serviços sem tarefa (ou com uma tarefa fora da Correspondência Tarefa × Linha) vai pelos dias de acompanhamento das linhas, como nos Resultados por Linha; a linha sem acompanhamentos, como a Vedação, fica só com a tarefa.",
+    ],
+  },
   // 25/11/2026 (noite): os nomes dos cadastros a qualquer momento (Unidades, Linhas, Indicadores, cards e a Descrição das contas da DRE), o Nome das Redistribuições de Gastos, as contas marcadas e a vigência MM/AAAA, os ícones dos Cenários Analíticos, a Conta mais larga nos índices e a etiqueta da versão.
   {
     publicada: "2026-11-25T20:15",

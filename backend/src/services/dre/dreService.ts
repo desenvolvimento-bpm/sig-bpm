@@ -54,24 +54,30 @@ type ValorGravado = { linhaDREId: string; valor: Prisma.Decimal; composicao: Pri
  * As linhas da estrutura com valor gravado (e as seções), na ordem da DRE.
  * `podeDetalhar` diz se o usuário alcança as movimentações da linha (o recorte
  * por departamento do Gestor, Passo 22): a DRE é inteira para todos.
+ *
+ * `unidade` (26/11/2026): no mês apurado, também as linhas que a Estrutura da DRE dá à unidade e que a apuração do mês não
+ * gravou (incluídas na unidade depois dela, como as Assessorias e Consultorias da DA no RN), com zero — a apuração grava
+ * todas as linhas da unidade, zeradas também.
  */
-function montarLinhas(linhas: LinhaEstrutura[], valores: ValorGravado[], acesso: Acesso) {
+function montarLinhas(linhas: LinhaEstrutura[], valores: ValorGravado[], acesso: Acesso, unidade?: number) {
   const porLinha = new Map(valores.map((v) => [v.linhaDREId, v]));
+  const daUnidade = (l: LinhaEstrutura) => unidade !== undefined && valores.length > 0 && l.unidades.includes(unidade);
   return {
     apuradoEm: valores[0]?.apuradoEm ?? null,
     congelado: valores.some((v) => v.congelado),
     linhas: linhas
-      .filter((l) => l.tipo === "SECAO" || porLinha.has(l.id))
+      .filter((l) => l.tipo === "SECAO" || porLinha.has(l.id) || daUnidade(l))
       .map((l) => ({
         codigo: l.codigo,
         tipo: l.tipo,
         grupo: l.grupo,
         grupoSigla: l.grupoSigla,
         descricao: l.descricao,
-        valor: porLinha.get(l.id)?.valor.toFixed(2) ?? null,
+        valor: porLinha.get(l.id)?.valor.toFixed(2) ?? (l.tipo !== "SECAO" && daUnidade(l) ? "0.00" : null),
         composicao: porLinha.get(l.id)?.composicao ?? null,
-        // Sem o Acesso a Informações Sensíveis (27/10/2026), as linhas de Mão de Obra Direta e Indireta sem a lupa.
-        podeDetalhar: podeVerMovimentos(acesso, l) && podeVerSensiveis(acesso, l),
+        // Sem o Acesso a Informações Sensíveis (27/10/2026), as linhas de Mão de Obra Direta e Indireta sem a lupa; a linha que a
+        // apuração não gravou também (não há o que detalhar).
+        podeDetalhar: (porLinha.has(l.id) || !daUnidade(l)) && podeVerMovimentos(acesso, l) && podeVerSensiveis(acesso, l),
       })),
   };
 }
@@ -220,7 +226,7 @@ export const dreService = {
         select: { linhaDREId: true, valor: true, composicao: true, apuradoEm: true, congelado: true },
       }),
     ]);
-    const m = montarLinhas(linhas, valores, acesso);
+    const m = montarLinhas(linhas, valores, acesso, unidade);
     // O % e o R$/m³ (13/11/2026): em Despesas e Extra e no RN, sobre as bases do Consolidado; nas outras, os valores gravados
     // da unidade (os volumes com todas as casas, como nos Resultados Empresariais).
     const gravados = basesGravadas(linhas, valores);

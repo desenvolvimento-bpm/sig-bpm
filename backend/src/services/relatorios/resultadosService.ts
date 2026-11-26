@@ -69,6 +69,15 @@ export async function estrutura(): Promise<LinhaEstrutura[]> {
   });
 }
 
+/** Os códigos das linhas que a Estrutura da DRE dá a uma unidade (26/11/2026), sem as seções. */
+async function codigosDaUnidade(unidade: number) {
+  const ls = await getPrismaClient().linhaDRE.findMany({
+    where: { ativo: true, tipo: { not: "SECAO" }, unidades: { some: { unidadeNegocio: { codigo: unidade } } } },
+    select: { codigo: true },
+  });
+  return ls.map((l) => l.codigo);
+}
+
 /**
  * O orçado de uma visão (o cenário Orçamento Empresarial do exercício, 11/10/2026): por linha, o valor do mês de
  * referência e o acumulado de janeiro até ele, da visão e do Consolidado (as bases do % e do R$/m³ em Despesas e
@@ -174,7 +183,7 @@ export const resultadosService = {
   async unidade(ano: number, visao: 0 | 1 | 2 | 3 | 4 | 5, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false, comparaCom: Comparacao = "ORCAMENTO_EMPRESARIAL", prova: MarcacaoCenario[] = []) {
     const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
     const competencias = meses.map((m) => m.competenciaId);
-    const [linhas, valores] = await Promise.all([estrutura(), valoresDaVisao(competencias, visao)]);
+    const [linhas, valores, daUnidade] = await Promise.all([estrutura(), valoresDaVisao(competencias, visao), visao === 0 ? [] : codigosDaUnidade(visao)]);
     const consolidado = basesDoConsolidado(visao) ? await valoresDaVisao(competencias, 0) : valores;
     // Em Despesas e Extra e no RN, a ROL do Consolidado abre a tabela, como nas abas da planilha.
     if (visao === 4 || visao === 5) valores.forEach((m, i) => consolidado[i].has(COD.RO) && m.set(COD.RO, consolidado[i].get(COD.RO)!));
@@ -197,8 +206,11 @@ export const resultadosService = {
     // e elas apareciam zeradas na tabela e nos arquivos do Exportar).
     const temOrcado = (o: typeof orcado) =>
       [...o.daVisao.total, ...o.daVisao.mes].filter(([, v]) => arredonda(v, 4) !== 0).map(([codigo]) => codigo);
-    const comOrcado = new Set([orcado, ...doProva.map((c) => c.orcado)].flatMap(temOrcado));
-    const montadas = montar(linhas, visao, apurado, valores, consolidado, acesso, comOrcado);
+    const semValor = new Set([orcado, ...doProva.map((c) => c.orcado)].flatMap(temOrcado));
+    // E, com algum mês apurado, as linhas que a Estrutura da DRE dá à unidade (26/11/2026): as incluídas nela depois da apuração
+    // dos meses (como as Assessorias e Consultorias da DA no RN) entram com zero, como a apuração as grava.
+    if (apurado.some(Boolean)) for (const codigo of daUnidade) semValor.add(codigo);
+    const montadas = montar(linhas, visao, apurado, valores, consolidado, acesso, semValor);
     // A base do % de cada linha e o valor dela em cada mês apurado (18/11/2026: a aba Variações, cujo % da média dos meses
     // anteriores é a soma dos valores sobre a soma das bases, como o % do total).
     const basePercentual = new Map(montadas.map((l) => [l.codigo, l.tipo === "SECAO" ? null : baseDoPercentual(visao, porCodigo.get(l.codigo)!)]));

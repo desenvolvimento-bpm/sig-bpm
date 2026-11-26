@@ -11,6 +11,7 @@ import { plural } from "@/lib/texto";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { botaoPrimario, Erro } from "@/app/cenarios/components/CenarioDialog";
+import { realizadoObraService } from "@/app/realizado-por-obra/services/realizadoObraService";
 
 import { conectividadeService, copiarTexto, enderecoDaApi, type ApiDoCatalogo, type Formato, type Previa } from "../../services/conectividadeService";
 import { nomeDaVisao } from "@/lib/nomesDasUnidades";
@@ -35,6 +36,20 @@ const celula = (v: string | number | null, tipo: string) =>
 /** O SVG da API como imagem (num <img>, nada dele roda na página). */
 const imagem = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
+/** As vendas da API obras (uma linha por versão) juntas por código, com as versões vendidas e se têm o realizado. */
+function vendasDaLista(linhas: Array<Record<string, string | number | null>>) {
+  const porCodigo = new Map<string, { codigo: string; nome: string; versoes: string[]; realizado: boolean }>();
+  for (const l of linhas) {
+    const codigo = String(l.obra ?? "");
+    if (!codigo) continue;
+    const v = porCodigo.get(codigo) ?? { codigo, nome: String(l.nome ?? ""), versoes: [], realizado: false };
+    if (l.versao) v.versoes.push(String(l.versao));
+    v.realizado ||= l.realizado === "Sim";
+    porCodigo.set(codigo, v);
+  }
+  return [...porCodigo.values()];
+}
+
 /**
  * A prévia de uma API (24/10/2026): os parâmetros, o formato e o resultado, com a sessão do SIG (o mesmo que o
  * aplicativo recebe com o token), e o endereço do pedido para copiar.
@@ -54,7 +69,20 @@ export function PreviaDaApi({ api: a, onFechar }: { api: ApiDoCatalogo; onFechar
   const listaDeCenarios = cenarios.data?.data.formato === "dados" ? cenarios.data.data.linhas : [];
   // Sem o cenário escolhido, o marcado (o Orçamento, o Forecast…) ou o primeiro da lista: a prévia já abre pronta para Ver.
   const sugerido = listaDeCenarios.find((c) => c.marcacao) ?? listaDeCenarios[0];
-  const efetivos = precisaCenario && !valores.cenario && sugerido ? { ...valores, cenario: String(sugerido.id) } : valores;
+  // A DRE de uma Obra (26/11/2026): as vendas da API obras (uma por código, com as versões vendidas) e a escolhida na lista
+  // Venda do Realizado por Obra, a sugerida (sem ela, a primeira com o realizado).
+  const precisaObra = a.parametros.some((p) => p.nome === "obra");
+  const obras = useQuery({ queryKey: ["conectividade", "obras"], queryFn: () => conectividadeService.previa("obras", {}), enabled: precisaObra });
+  const daTela = useQuery({ queryKey: ["realizado-obra", "vendas"], queryFn: realizadoObraService.vendas, enabled: precisaObra });
+  const listaDeObras = vendasDaLista(obras.data?.data.formato === "dados" ? obras.data.data.linhas : []);
+  const daEscolha = daTela.data?.vendas.find((v) => v.obraId === daTela.data?.escolhida?.obraId)?.codigo;
+  const obraSugerida = listaDeObras.find((o) => o.codigo === daEscolha) ?? listaDeObras.find((o) => o.realizado) ?? listaDeObras[0];
+  const efetivos: Record<string, string> = {
+    ...valores,
+    ...(precisaCenario && !valores.cenario && sugerido ? { cenario: String(sugerido.id) } : {}),
+    ...(precisaObra && !valores.obra && obraSugerida ? { obra: obraSugerida.codigo } : {}),
+  };
+  const versoesDaObra = listaDeObras.find((o) => o.codigo === efetivos.obra)?.versoes ?? [];
   const faltando = a.parametros.filter((p) => p.obrigatorio && p.nome !== "formato" && !(efetivos[p.nome] ?? "").trim()).map((p) => p.nome);
   const params = { ...Object.fromEntries(Object.entries(efetivos).filter(([, v]) => v.trim() !== "")), ...(formato === "visual" ? { formato } : {}) };
   const endereco = `${enderecoDaApi()}/apis/${a.codigo}${Object.keys(params).length ? `?${new URLSearchParams(params)}` : ""}`;
@@ -89,6 +117,24 @@ export function PreviaDaApi({ api: a, onFechar }: { api: ApiDoCatalogo; onFechar
                     {listaDeCenarios.map((c) => (
                       <option key={String(c.id)} value={String(c.id)}>
                         {`${c.nome} (${c.ano}, ${c.tipo}${c.marcacao ? `, ${c.marcacao}` : ""})`}
+                      </option>
+                    ))}
+                  </select>
+                ) : p.nome === "obra" ? (
+                  <select className={campo} value={efetivos.obra} onChange={(e) => setValores((v) => ({ ...v, obra: e.target.value, versao: "" }))}>
+                    {listaDeObras.length ? null : (
+                      <option value="">{obras.isLoading ? "Carregando…" : obras.isError ? "Não foi possível carregar as vendas" : "Nenhuma venda"}</option>
+                    )}
+                    {listaDeObras.map((o) => (
+                      <option key={o.codigo} value={o.codigo}>{`${o.codigo} · ${o.nome}`}</option>
+                    ))}
+                  </select>
+                ) : p.nome === "versao" && precisaObra ? (
+                  <select className={campo} value={valores.versao} onChange={(e) => setValores((v) => ({ ...v, versao: e.target.value }))}>
+                    <option value="">{versoesDaObra.length ? "A mais recente" : "Sem o vendido"}</option>
+                    {versoesDaObra.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
                       </option>
                     ))}
                   </select>
