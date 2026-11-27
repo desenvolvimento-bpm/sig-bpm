@@ -61,8 +61,8 @@ function Destaque({ ligada = false, children }: { ligada?: boolean; children: Re
 }
 
 /**
- * A situação da API (o modo que o TI ligou) e o endereço desta página: desligada (o padrão da produção, até o HTTPS do
- * TI), só por HTTPS ou também por HTTP (o desenvolvimento, ou a decisão do TI).
+ * A situação da API (o modo que o TI ligou) e o endereço desta página: desligada (o padrão sem a API_EXTERNA), só por
+ * HTTPS ou também por HTTP (o desenvolvimento, ou a decisão do TI: a produção, só na rede interna, desde 16/11/2026).
  */
 function Situacao({ c }: { c: Catalogo }) {
   const http = typeof window !== "undefined" && window.location.protocol === "http:";
@@ -70,9 +70,8 @@ function Situacao({ c }: { c: Catalogo }) {
   if (c.modo === "desligada") {
     return (
       <Destaque>
-        <strong>As APIs estão desligadas neste endereço.</strong> O TI da BPM as liga depois de pôr o SIG atrás do endereço com HTTPS (regra de segurança do
-        TI: o login e o token não podem passar pela rede sem criptografia). Até lá, os aplicativos recebem a recusa “API desligada”, sem a senha ser conferida.
-        O catálogo, a pré-visualização e os bloqueios já funcionam aqui.
+        <strong>As APIs estão desligadas neste endereço.</strong> Só o TI da BPM as liga. Até lá, os aplicativos recebem a recusa “API desligada”, sem a senha
+        ser conferida. O catálogo, a pré-visualização e os bloqueios já funcionam aqui.
       </Destaque>
     );
   }
@@ -87,9 +86,8 @@ function Situacao({ c }: { c: Catalogo }) {
   if (c.modo === "http") {
     return (
       <Destaque>
-        <strong>As APIs aceitam HTTP neste ambiente</strong> (o desenvolvimento ou a decisão do TI): <span className="font-mono">{enderecoDaApi()}</span>. {token} Sem
-        o HTTPS, a senha e o token passam pela rede sem criptografia, e o endereço de quem chama é o que o aplicativo informa: o bloqueio por endereço não é
-        garantido (o por usuário, sim).
+        <strong>As APIs aceitam HTTP neste ambiente</strong> (o desenvolvimento ou a decisão do TI, só na rede interna): <span className="font-mono">{enderecoDaApi()}</span>.{" "}
+        {token} Sem o HTTPS, a senha e o token passam pela rede sem criptografia.
       </Destaque>
     );
   }
@@ -273,10 +271,11 @@ export function BibliotecaDeApisContent() {
               abaixo desta no menu.
             </li>
             <li>
-              Como Conectar: no alto, em destaque, a situação — na produção, as APIs ficam desligadas até o TI pôr o SIG atrás do endereço com HTTPS e ligá-las
-              (regra do TI); até lá, os aplicativos recebem a recusa “API desligada”, sem a senha ser conferida; ligadas, funcionam só por HTTPS. Abaixo, os dois
-              passos — o token, pedido com o e-mail e a senha do SIG (vale uma hora), e os dados, com o token no cabeçalho Authorization: Bearer e o código da API
-              no endereço — e os exemplos em curl e, logo abaixo, no Power Query (Excel e Power BI), com o botão de copiar.
+              Como Conectar: no alto, em destaque, a situação, que só o TI muda — desligadas (os aplicativos recebem a recusa “API desligada”, sem a senha ser
+              conferida), só por HTTPS ou também por HTTP (na produção, por decisão do TI, só na rede interna) — e o endereço das APIs, o do SIG aberto no navegador
+              (na produção, http://sig.bpm.interno/api/v1). Abaixo, os dois passos — o token, pedido com o e-mail e a senha do SIG (vale uma hora), e os dados, com
+              o token no cabeçalho Authorization: Bearer e o código da API no endereço — e os exemplos em curl e, logo abaixo, no Power Query (Excel e Power BI), com
+              o botão de copiar.
             </li>
             <li>
               Resultados Empresariais, Realizado por Obra e Cenários: as APIs de cada origem, uma abaixo da outra — nos Resultados Empresariais, a DRE, os Custos
@@ -310,7 +309,8 @@ export function BibliotecaDeApisContent() {
             </li>
             <li>
               Para um usuário usar as APIs, o perfil dele precisa da tela APIs (Ler, na Central de Conectividade) e da leitura das telas dos dados, na tela Perfis. Na Auditoria, os
-              pedidos às APIs entram com “Incluir Acessos”, como os acessos às telas.
+              pedidos às APIs entram com “Incluir Acessos”, como os acessos às telas, com o endereço do computador que chamou: o da conexão ou, pelo
+              http://sig.bpm.interno, o que o servidor de entrada do TI informa — nunca o que o aplicativo diz.
             </li>
           </ul>
         }

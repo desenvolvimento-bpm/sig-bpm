@@ -24,8 +24,9 @@ export const openApiSpec = {
     {
       name: "Central de Conectividade",
       description:
-        "Os dados das DREs, dos cards e dos indicadores dos Resultados Empresariais e dos Cenários para outros aplicativos (24/10/2026). " +
-        "Fora do SIG, o endereço é o do SIG com o prefixo /api (http(s)://servidor/api/v1/…). Na produção, só depois que o TI liga a API (a API_EXTERNA; antes, 503) e só por HTTPS (regra do TI);" +
+        "Os dados das DREs, dos cards e dos indicadores dos Resultados Empresariais, do Realizado por Obra e dos Cenários para outros aplicativos (24/10/2026). " +
+        "Fora do SIG, o endereço é o do SIG com o prefixo /api (http(s)://servidor/api/v1/…); na produção, http://sig.bpm.interno/api/v1, só na rede interna (decisão do TI). " +
+        "A API só responde ligada pelo TI (a API_EXTERNA; desligada, 503); " +
         "o token vale uma hora; cada pedido exige a tela APIs da Central de Conectividade (Ler) e a leitura da tela dos dados no perfil, e fica na Auditoria.",
     },
   ],
