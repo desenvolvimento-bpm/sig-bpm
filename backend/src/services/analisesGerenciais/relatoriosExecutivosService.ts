@@ -245,7 +245,7 @@ export const relatoriosExecutivosService = {
   },
 
   /** A tabela de Resultados de uma visão (22/10/2026), para os blocos de tabela (veja resultadosDaTabela, nos slides). */
-  async resultados(id: string, visao: 0 | 1 | 2 | 3 | 4 | 5) {
+  async resultados(id: string, visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7) {
     return resultadosDaTabela(await doRelatorio(id), visao);
   },
 

@@ -109,7 +109,7 @@ function fechadosAte(n: Nivel, nivel: Map<string, number>, comFilhos: Set<string
 /**
  * Os dois totais da ROL da estrutura: o primeiro (no topo) sai das tabelas quando o segundo (depois da receita bruta e
  * dos impostos) está nelas — em Resultados e nos cenários desde 21/10/2026, na DRE do Fechamento Mensal desde
- * 22/10/2026. Nas visões com um só (Despesas e Extra e RN), ele fica.
+ * 22/10/2026. Nas visões com um só (Despesas, Extra-Operacional, RN e Leben), ele fica.
  */
 const PRIMEIRO_TOTAL_DA_ROL = "RO.RECEITA_OPERACIONAL_LIQUIDA_ROL";
 const TOTAL_DA_ROL = "ROL.RECEITA_OPERACIONAL_LIQUIDA_ROL";

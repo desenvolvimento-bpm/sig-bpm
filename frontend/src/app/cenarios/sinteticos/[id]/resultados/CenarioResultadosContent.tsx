@@ -10,7 +10,6 @@ import { useAbaLembrada } from "@/hooks/useAbaLembrada";
 import { Abas } from "@/components/shared/Abas";
 import { ExportarRelatorio, type OpcaoExportar } from "@/app/relatorios/components/ExportarRelatorio";
 import { CabecalhoDaTela } from "@/components/shared/CabecalhoDaTela";
-import { ConfirmacaoDialog } from "@/components/shared/ConfirmacaoDialog";
 import { FaixaIndicadores } from "@/components/shared/FaixaIndicadores";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/context/PermissionContext";
@@ -18,6 +17,7 @@ import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 import { plural } from "@/lib/texto";
 
 import { TabelaResultados } from "@/app/relatorios/resultados/ResultadosContent";
+import { ExportarCustosOperacionais, TabelaCustosOperacionais } from "@/app/relatorios/resultados/CustosOperacionais";
 import { InfoAgrupamento } from "@/app/competencias/[anoMes]/dre/components/InfoAgrupamento";
 import { CampoBusca } from "@/components/shared/Filtros";
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
@@ -27,7 +27,6 @@ import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
 import { EdicaoDRE } from "../../../components/EdicaoDRE";
 import { AvisoRateiosSemBase } from "../../../components/CentrosDoCenario";
 import { BotaoContasDoBalancete } from "../../../components/ContasDoBalancete";
-import { BotoesDeVersao } from "../../../components/VersaoCenario";
 import { cenariosService, type Cenario } from "../../../services/cenariosService";
 import { botaoPrimario } from "../../../components/CenarioDialog";
 import { useTipoDoCenario } from "../../../components/tipoDoCenario";
@@ -40,8 +39,12 @@ const VISOES = [
   { chave: "1", aba: "matriz", nome: "Matriz" },
   { chave: "2", aba: "filial", nome: "Filial" },
   { chave: "3", aba: "servicos", nome: "Serviços" },
-  { chave: "4", aba: "despesas", nome: "Despesas e Extra" },
+  { chave: "4", aba: "despesas", nome: "Despesas" },
+  // O Extra-Operacional (27/11/2026, o teste da separação; a unidade 6), depois de Despesas.
+  { chave: "6", aba: "extra_operacional", nome: "Extra-Operacional" },
   { chave: "5", aba: "rn", nome: "RN" },
+  // A Leben (27/11/2026, pedido do Adão), depois do RN.
+  { chave: "7", aba: "leben", nome: "Leben" },
 ];
 
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
@@ -74,6 +77,8 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
       nomeVisao={nome}
       consultas={false}
       doCenario
+      // O Consolidado sem as colunas R$/m³ (27/11/2026, pedido do Adão), como os Centros de Custo.
+      semUnitario={visao === 0}
       // Nos analíticos (13/11/2026), as Contas do Balancete de cada conta (as linhas de item e os Impostos Operacionais, sem os volumes).
       acaoDaLinha={
         analitico
@@ -83,6 +88,42 @@ function Visao({ id, visao, nome, analitico }: { id: string; visao: number; nome
       }
     />
   );
+}
+
+/** Os Custos Operacionais do cenário (26/11/2026): a tabela e o Exportar da aba. */
+const useCustosOperacionais = (id: string) => useQuery({ queryKey: ["cenarios", id, "resultados", "custos_operacionais"], queryFn: () => cenariosService.custosOperacionais(id) });
+
+/**
+ * A aba Custos Operacionais dos Resultados de um cenário (26/11/2026, pedido do Adão; sintéticos e analíticos), como a de Resultados
+ * Empresariais: os custos de produção (Matriz e Filial) e de serviços em R$/dia (÷ 20 dias por mês) e em R$/m³ (÷ a Demanda do
+ * cenário), com a média de cada trimestre e a Média Mensal e, com um cenário comparado, a Diferença e o Atingimento contra a dele.
+ */
+function VisaoCustosOperacionais({ id, analitico }: { id: string; analitico: boolean }) {
+  const consulta = useCustosOperacionais(id);
+  if (consulta.isError) {
+    return (
+      <div className="rounded-sm border border-red-200 bg-red-50 p-4">
+        <p className="text-sm text-red-700">{mensagemDeErro(consulta.error, "Erro ao carregar os custos operacionais do cenário.")}</p>
+      </div>
+    );
+  }
+  if (consulta.isPending) return <Carregando />;
+  if (!consulta.data.mesesDaMedia.length) {
+    return (
+      <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">
+        {analitico
+          ? "O cenário ainda não tem a DRE de Matriz, Filial e Serviços: ela é calculada a partir das premissas do cenário."
+          : "O cenário não tem a DRE de Matriz, Filial e Serviços. Importe um arquivo com as abas delas em Configurações / Referência."}
+      </p>
+    );
+  }
+  return <TabelaCustosOperacionais dados={consulta.data} titulo="Resultados · Custos Operacionais" />;
+}
+
+/** O Exportar da aba Custos Operacionais, com os dados da tela. */
+function ExportarCustosDoCenario({ id, nome }: { id: string; nome: string }) {
+  const { data } = useCustosOperacionais(id);
+  return <ExportarCustosOperacionais dados={data} titulo={`${nome} · Custos Operacionais`} />;
 }
 
 /**
@@ -150,7 +191,7 @@ function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: st
             {/* Com a DRE calculada com os reajustes (22/11/2026, pedido do Adão), os valores do centro com eles, como o Consolidado. */}
             {centro.data.reajustado ? (
               <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-                Valores com os reajustes da DRE (Aplicar Reajustes), como o Consolidado. A aba Centros de Custo das Premissas mostra os valores sem eles.
+                Valores com os reajustes da DRE (Aplicar ao Recalcular), como o Consolidado. A aba Centros de Custo das Premissas mostra os valores sem eles.
               </p>
             ) : null}
             <TabelaResultados
@@ -161,6 +202,8 @@ function VisaoCentros({ id, escolhido, onEscolher }: { id: string; escolhido: st
               nomeVisao={grupo ?? ""}
               consultas={false}
               doCenario
+              // Sem as colunas R$/m³ (27/11/2026, pedido do Adão), como o Consolidado.
+              semUnitario
               aoLadoDoTitulo={<InfoAgrupamento grupo={grupo ?? ""} centros={centro.data.centros} periodo="no cenário" />}
               acaoDaLinha={(l) => (!l.volume && l.tipo === "ITEM" ? <BotaoContasDoBalancete id={id} linha={l.codigo} descricao={l.descricao} /> : null)}
             />
@@ -199,7 +242,7 @@ function VisaoDepartamentos({ id }: { id: string }) {
       ) : null}
       {consulta.data.reajustado ? (
         <p className="rounded-sm border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-          Valores dos centros com os reajustes da DRE (Aplicar Reajustes), como o Consolidado.
+          Valores dos centros com os reajustes da DRE (Aplicar ao Recalcular), como o Consolidado.
         </p>
       ) : null}
       <TabelaResultados
@@ -245,8 +288,11 @@ export function CenarioResultadosContent() {
   const leCentrosDosResultados = analitico && hasPermission(t.perm("resultados", "ler", "centros"));
   // A aba Departamentos dos analíticos (23/11/2026, pedido do Adão), antes de Centros de Custo, com a permissão dela.
   const leDepartamentos = analitico && hasPermission(t.perm("resultados", "ler", "departamentos"));
+  // A aba Custos Operacionais (26/11/2026, pedido do Adão), logo depois das unidades, nos sintéticos e nos analíticos.
+  const leCustos = hasPermission(t.perm("resultados", "ler", "custos_operacionais"));
   const abas = [
     ...visoes.map((v) => ({ chave: v.chave, rotulo: v.nome })),
+    ...(leCustos ? [{ chave: "custos_operacionais", rotulo: "Custos Operacionais" }] : []),
     ...(leDepartamentos ? [{ chave: "departamentos", rotulo: "Departamentos" }] : []),
     ...(leCentrosDosResultados ? [{ chave: "centros", rotulo: "Centros de Custo" }] : []),
     ...(leManuais ? [{ chave: "manuais", rotulo: "Indicadores Manuais" }] : []),
@@ -255,6 +301,7 @@ export function CenarioResultadosContent() {
   const naManuais = visao === "manuais";
   const nosCentros = visao === "centros";
   const nosDepartamentos = visao === "departamentos";
+  const nosCustos = visao === "custos_operacionais";
   const daVisao = VISOES.find((v) => v.chave === visao);
   const podeEditar = !analitico && !!daVisao && hasPermission(t.perm("resultados", "editar", daVisao.aba)) && !!cenario.data && !travado;
   const nome = daVisao?.nome ?? "";
@@ -265,7 +312,7 @@ export function CenarioResultadosContent() {
   // centros de custo (em Excel).
   const leTodas = VISOES.every((v) => hasPermission(t.perm("resultados", "ler", v.aba)));
   const leCentros = analitico && hasPermission(t.perm("premissas", "ler", "centros"));
-  // O Recalcular (14/10/2026; 21/11/2026: com a caixa Aplicar Reajustes antes dele): nos analíticos em aberto, refaz a DRE com as
+  // O Recalcular (14/10/2026; 27/11/2026: com os reajustes da caixa Aplicar ao Recalcular): nos analíticos em aberto, refaz a DRE com as
   // alterações ainda não recalculadas.
   const podeRecalcular = analitico && !!cenario.data && !travado && hasPermission(t.perm("resultados", "editar"));
   const opcoesExportar: OpcaoExportar[] = [
@@ -289,8 +336,10 @@ export function CenarioResultadosContent() {
         acoes={
           <div className="flex flex-wrap items-center gap-2">
             {podeRecalcular && cenario.data ? <ControlesDoRecalculo cenario={cenario.data} /> : null}
-            {hasPermission(t.perm("resultados", "editar")) && cenario.data ? <BotoesDeVersao cenario={cenario.data} /> : null}
-            {opcoesExportar.length ? <ExportarRelatorio
+            {/* Na aba Custos Operacionais (26/11/2026), o Exportar leva a tabela dela. */}
+            {nosCustos ? (
+              <ExportarCustosDoCenario id={id} nome={cenario.data?.nome ?? "Cenário"} />
+            ) : opcoesExportar.length ? <ExportarRelatorio
                 endereco={`/proxy/cenarios/${id}/exportar`}
                 opcoes={opcoesExportar}
                 padrao={`${cenario.data?.nome ?? "Cenário"} - Resultados`}
@@ -310,7 +359,18 @@ export function CenarioResultadosContent() {
               </li>
             ) : null}
             <li>
-              Escolha a visão nas abas: Consolidado ou cada unidade{analitico ? " e, depois delas, Departamentos e Centros de Custo" : " e, depois delas, Indicadores Manuais"} (as que o seu perfil lê).
+              Escolha a visão nas abas: Consolidado ou cada unidade e, depois delas, Custos Operacionais{analitico ? ", Departamentos e Centros de Custo" : " e Indicadores Manuais"} (as que o seu perfil lê).
+            </li>
+            <li>
+              Na aba Custos Operacionais, como em Resultados Empresariais: os custos de produção (Matriz e Filial) e de serviços do cenário, um por
+              linha — em R$/dia, a soma do custo nos meses ÷ 20 dias por mês (o trimestre, ÷ 60); em R$/m³, a soma do custo ÷ a soma da Produção do
+              Pré-Fabricado (nos de produção) ou da Montagem do Pré-Fabricado (nos de montagem) dos mesmos meses, a Demanda do cenário. As colunas
+              trazem a média de cada trimestre e a Média Mensal dos 12 meses (passe o mouse no rótulo para ver os meses). Com um cenário comparado,
+              a Diferença (a Média Mensal menos a do comparado) e o Atingimento (a Média Mensal ÷ a do comparado − 100%, com o sinal), contra a
+              Média Mensal dos 12 meses dele; passe o mouse nelas para ver a Média Mensal do comparado. Os Outros Gastos Gerais Variáveis são os
+              Gastos Gerais Variáveis sem as Madeiras e Madeirites, que têm linha própria na Matriz e na Montagem. Em Serviços, a mão de obra e os
+              gastos gerais diretos e indiretos somam a Montagem e a Complementar; os materiais aplicados, as madeiras, os outros gastos gerais
+              variáveis e a depreciação são só os da Montagem. Nesta aba, o “Exportar” baixa a tabela em Excel ou PDF.
             </li>
             {analitico ? (
               <li>
@@ -322,7 +382,7 @@ export function CenarioResultadosContent() {
                 Premissas das unidades, a Depreciação dos Investimentos e, no seu recorte, os grupos que você não vê). O valor de cada grupo segue o
                 rateio do cenário (Configurações / Regras de Rateio: a parte da produção que vai para Serviços, a Montagem dos grupos complementares
                 nos Complementares…), por isso um grupo pode aparecer em mais de um departamento; com a DRE calculada com os reajustes (Aplicar
-                Reajustes), com eles. As Despesas Variáveis de Venda, sem centros, e do Lucro Operacional em diante, as linhas são as do Consolidado.
+                ao Recalcular), com eles. As Despesas Variáveis de Venda, sem centros, e do Lucro Operacional em diante, as linhas são as do Consolidado.
                 Com um cenário comparado analítico, o comparativo abre do mesmo jeito, cada grupo dele no grupo deste com os mesmos centros de custo
                 (pelo Código RM, mesmo com outro nome); um sintético não tem centros de custo, e as linhas dos grupos ficam sem o comparativo, com o
                 aviso.
@@ -332,15 +392,15 @@ export function CenarioResultadosContent() {
               <li>
                 Na aba Centros de Custo, como em Resultados Empresariais: a lista dos grupos de centros com valor no cenário à esquerda (busque pelo nome)
                 e, ao lado, a DRE do escolhido, mês a mês — as contas do grupo com valor (as da aba Centros de Custo das Premissas, com os Benefícios
-                Adicionais na conta Encargos e Benefícios, como na DRE; com a DRE calculada com os reajustes, a caixa Aplicar Reajustes, com eles, e os
-                totais batem com o Consolidado), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % e o R$/m³
-                sobre as bases do Consolidado do cenário. O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
+                Adicionais na conta Encargos e Benefícios, como na DRE; com a DRE calculada com os reajustes, a caixa Aplicar ao Recalcular, com eles, e os
+                totais batem com o Consolidado), o subtotal de cada atribuição e o total de cada grupo da DRE, com o % sobre
+                as bases do Consolidado do cenário (sem o R$/m³). O ícone ao lado do nome do grupo mostra os centros dele. São os valores antes da parte dos rateios
                 que vai para Serviços (na DRE, nas contas da CSM ou da CSC). A lista traz só os grupos do recorte do seu perfil: todos, os dos seus
                 departamentos ou os que têm algum centro de custo seu, qualquer que seja o Acesso às Informações do cenário. Com um cenário comparado
                 analítico, o grupo traz também o comparativo, como nas unidades: o total do grupo com os mesmos centros de custo no comparado (pelo
-                Código RM, mesmo com outro nome; o % e o R$/m³ sobre o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
+                Código RM, mesmo com outro nome; o % sobre o Consolidado dele), a Diferença, o Atingimento e a Eficiência. Um comparado sintético não tem centros de custo: no lugar dele, a
                 coluna do comparado (com o rótulo da marcação dele, ou Comparado Total, e o exercício dele) traz a Média de Referência de cada conta do grupo (a média do realizado
-                carregada em Configurações / Referência) × 12 — parado sobre o rótulo, a dica diz isso —, sem o % e o R$/m³ (a referência não tem as bases do Consolidado; a Eficiência fica com o traço). Sem a Média de
+                carregada em Configurações / Referência) × 12 — parado sobre o rótulo, a dica diz isso —, sem o % (a referência não tem as bases do Consolidado; a Eficiência fica com o traço). Sem a Média de
                 Referência no cenário, a aba fica sem o comparativo, com o aviso.
               </li>
             ) : null}
@@ -360,7 +420,7 @@ export function CenarioResultadosContent() {
                 Nos analíticos, os rateios dos centros de custo seguem as regras de rateio do cenário (Configurações / Regras de Rateio) de cada
                 mês (o percentual fixo, ou as bases das premissas entre os destinos das regras por volume). Os avisos em
                 vermelho listam os meses do exercício com rateios sem regra vigente: sem regra, o cenário não se abre nem se fecha (Congelar e
-                Reabrir Versão, Criar Revisão).
+                Reabrir Versão, Criar Revisão, em Configurações / Cenário).
               </li>
             ) : null}
             {analitico ? (
@@ -373,11 +433,11 @@ export function CenarioResultadosContent() {
                 versão e marcar o cenário pedem o Recalcular antes.
               </li>
               <li>
-                A caixa “Aplicar Reajustes”, antes do “Recalcular”, marca os Reajustes das Premissas (os Índices de Reajuste de Configurações /
-                Comparativo e Reajustes): marcá-la confirma num modal e conta como um Reajuste pendente; o Recalcular os aplica na DRE (e,
-                desmarcada, os tira). Marcada, a etiqueta Reajustes Aplicados aparece na barra do cenário, e as Configurações e as Premissas (menos
-                Indicadores Manuais) ficam bloqueadas para edição. Ela segue a Edição das Configurações: com ela Particular, só quem criou o
-                cenário (ou o Administrador) a muda.
+                Os reajustes seguem a caixa “Aplicar ao Recalcular”, em Configurações / Comparativo e Reajustes (antes do “Novo Índice” dos
+                Índices de Reajuste): marcada, todo “Recalcular” aplica os Índices de Reajuste sobre as premissas na DRE, e a etiqueta Reajustes
+                Aplicados aparece na barra do cenário; desmarcada, o “Recalcular” leva as premissas sem os reajustes. Mudar a caixa conta como um
+                Reajuste pendente. As Configurações e as Premissas continuam editáveis, marcada ou não; parado sobre o “Recalcular”, a dica diz se
+                ele aplica os reajustes.
               </li>
               <li>
                 Nas abas das unidades (no Consolidado, não), a coluna Índice de Reajuste, antes de Janeiro, traz o índice de cada linha (as
@@ -393,14 +453,12 @@ export function CenarioResultadosContent() {
               página; nos analíticos, também a aba Departamentos); em Imagem, a Tabela Atual baixa a tabela da tela num PNG, do jeito que está (recolhida ou expandida), inteira.{analitico ? " Nos analíticos, também os centros de custo em Excel (os valores das premissas, sem os reajustes): na aba Centros de Custo, o centro escolhido; todos numa planilha (um por aba) ou um arquivo por centro (num ZIP, com o departamento e o centro no nome de cada arquivo)." : ""}
             </li>
             <li>
-              Versões (para quem edita a tela Resultados): “Congelar Versão” trava o cenário na versão atual (VER00, VER01…), como o fechamento de uma
-              competência — a DRE, os Indicadores Manuais e a referência não se editam mais{analitico ? "; no cenário analítico, só com as Verificações das Premissas (a última aba delas) todas corrigidas ou com o De Acordo" : ""}; “Reabrir Versão” a destrava, como a reabertura de uma
-              competência. “Criar Revisão” (só numa versão congelada) cria uma cópia na próxima versão, aberta para edição: um cenário novo na lista, com a DRE, os indicadores, o comparativo e as justificativas. A marcação
-              fica na versão de origem: remarque a revisão à mão em Configurações / Cenário.
+              As versões (Congelar Versão, Reabrir Versão e Criar Revisão) ficam em Configurações / Cenário, logo depois de “Gravar Configurações”,
+              para quem edita a tela Resultados.
             </li>
             <li>
               Com um cenário comparado (Configurações / {analitico ? "Comparativo e Reajustes" : "Comparativo"}), depois do total do exercício vêm, em preto e cinza, o total do cenário comparado (valor, % e
-              R$/m³) e, no amarelo, a Diferença (o cenário menos o comparado), o Atingimento (o cenário sobre o comparado menos 100%, com o sinal: 106,5% aparece como +6,5%, e 92,5%,
+              R$/m³; no Consolidado e nos Centros de Custo, sem o R$/m³) e, no amarelo, a Diferença (o cenário menos o comparado), o Atingimento (o cenário sobre o comparado menos 100%, com o sinal: 106,5% aparece como +6,5%, e 92,5%,
               como -7,5%) e a Eficiência (a diferença dos %, em pontos percentuais), como o orçado em Resultados Empresariais — sem o mês vigente, porque o cenário se olha nos 12 meses. O
               rótulo da coluna do comparado é o da marcação dele, com o exercício dele (ORÇADO TOTAL/26, FORECAST TOTAL/26, ANTERIOR TOTAL/25,
               VENDIDO TOTAL/26); sem marcação, COMPARADO TOTAL/26. O “Exportar” (Excel e PDF) leva o comparado e as três variações: no Excel, nas
@@ -408,10 +466,10 @@ export function CenarioResultadosContent() {
             </li>
             <li>No menu de níveis (a seta antes do título da tabela), escolha Totais, Atribuições ou Contas (Produção e Serviços, os volumes, aparece em todos: recolhido em Totais e Atribuições, aberto em Contas); a seta de cada total ou atribuição (e a de Produção e Serviços) abre e fecha só aquele grupo.</li>
             <li>O botão de seta ao lado do menu de níveis recolhe (seta para a esquerda) ou expande (seta para a direita) os meses — todos, dezembro também, deixando a descrição e os totais, que se esticam e enchem a tela; a escolha fica guardada neste navegador.</li>
-            <li>A tabela rola para os lados: a descrição e os rótulos ficam presos, e a barra de rolagem fica no pé da janela, sempre à vista. O total do exercício traz também o valor por m³ (os meses, não).</li>
+            <li>A tabela rola para os lados: a descrição e os rótulos ficam presos, e a barra de rolagem fica no pé da janela, sempre à vista. Nas unidades, o total do exercício traz também o valor por m³ (os meses, não); no Consolidado e na aba Centros de Custo, não há o R$/m³.</li>
             {podeEditar ? (
               <>
-                <li>Edição (para quem edita a aba): nas abas Matriz, Filial, Serviços, Despesas e Extra e RN, só os valores mensais das contas se editam; os totais, os percentuais e os valores por m³ são calculados. O Consolidado soma as unidades e não se edita.</li>
+                <li>Edição (para quem edita a aba): nas abas Matriz, Filial, Serviços, Despesas, Extra-Operacional, RN e Leben, só os valores mensais das contas se editam; os totais, os percentuais e os valores por m³ são calculados. O Consolidado soma as unidades e não se edita.</li>
                 <li>Para reajustar vários valores: marque as contas (a caixa de um total ou de uma atribuição marca as contas dele) e os meses (a caixa no rótulo de cada mês, ou “Marcar Todos os Meses”). Os valores marcados ficam contornados. Clique numa linha (ou em “Reajustar Marcados”) e informe o reajuste, percentual ou absoluto: ele vale para todos os marcados. Ao rolar a tela, o destaque com os valores marcados e os botões continua à vista, flutuando sobre a tabela, um pouco abaixo dos rótulos presos.</li>
                 <li>Para editar um valor: clique nele. O modal mostra o valor atual, o reajuste (percentual ou absoluto) e o valor recalculado, que também se digita direto. A chave “Replicar aos meses posteriores” copia o valor recalculado aos meses seguintes. Essa edição não olha as caixas marcadas.</li>
                 <li>Cada gravação recalcula os totais da unidade e o Consolidado e fica no histórico (tela Reajustes, na barra do topo). “Limpar Seleção” desmarca as contas e os meses. Com os meses anteriores recolhidos, os meses marcados e escondidos continuam marcados (a barra mostra quantos). Nome, descrição, visualização e a referência (arquivo ou resultado realizado) ficam na tela Configurações, na barra do topo.</li>
@@ -423,19 +481,21 @@ export function CenarioResultadosContent() {
           <>
             <p>
               A DRE do cenário mês a mês no exercício, como as abas de Resultados Empresariais{analitico ? " (nos analíticos, também a dos grupos de centros de custo)" : " (sem os centros de custo)"}: o valor e a participação (%)
-              de cada mês e o total do exercício, com o valor unitário (R$/m³) em dezembro e no total. Os valores são os digitados na ferramenta ou os da
+              de cada mês e o total do exercício, com o valor unitário (R$/m³) no total das unidades (no Consolidado e nos centros de custo, sem ele); na aba Custos Operacionais, os custos de
+              produção e de serviços por dia de trabalho (20 dias por mês) ou por m³, por trimestre e na Média Mensal. Os valores são os digitados na ferramenta ou os da
               referência do cenário (um arquivo importado, ligado às linhas da Estrutura da DRE pela descrição, ou o resultado realizado); os totais são
               calculados pela Estrutura da DRE, e o Consolidado soma as unidades.
             </p>
             <p>
               A participação e o valor unitário seguem as bases de Resultados Empresariais: a ROB nas receitas e nos impostos; a Receita Líquida do
               Pré-Fabricado nos custos de produção; a de Montagem e a Complementar nos custos de serviços; a de Frete no Frete e Descarga; a ROL no
-              resto. Em Despesas e Extra e no RN, as bases são as do Consolidado.
+              resto. Em Despesas, no Extra-Operacional, no RN e na Leben, as bases são as do Consolidado.
             </p>
             {analitico ? (
               <p>
                 O RN vem da tabela RN da aba Extra-Operacional das Premissas: as Assessorias e Consultorias das Despesas Administrativas (DA), o
-                imposto de renda e a contribuição social (DML) e as receitas e despesas financeiras. As linhas aparecem quando têm valor.
+                imposto de renda e a contribuição social (DML) e as receitas e despesas financeiras; a Leben, com as mesmas contas, da tabela Leben.
+                Todas as contas da tabela aparecem, com zero nos meses sem valor, como em Resultados Empresariais.
               </p>
             ) : null}
             {analitico ? null : (
@@ -456,6 +516,8 @@ export function CenarioResultadosContent() {
       {analitico ? <AvisoRateiosSemBase id={id} /> : null}
       {naManuais ? (
         <IndicadoresDoCenario id={id} aba="manuais" tipo={tipoGrafico} comRotulos={comRotulos} />
+      ) : nosCustos ? (
+        <VisaoCustosOperacionais id={id} analitico={analitico} />
       ) : nosDepartamentos ? (
         <VisaoDepartamentos id={id} />
       ) : nosCentros ? (
@@ -475,14 +537,12 @@ export function CenarioResultadosContent() {
 const pendente = (c: Cenario) => (c.recalculo?.total ?? 0) > 0 || !!c.rateios?.desatualizados;
 
 /**
- * A caixa Aplicar Reajustes e o botão Recalcular (21/11/2026, pedido do Adão; antes, o Aplicar / Remover Reajustes ficava no quadro
- * Índices de Reajuste das Configurações). A caixa só marca: o Recalcular aplica (ou remove) os reajustes na DRE. Marcá-la confirma
- * antes, porque as Configurações e as Premissas ficam bloqueadas para edição; ela segue a Edição das Configurações (só quem criou
- * o cenário, ou o Administrador, com ela Particular). O Recalcular só fica clicável com alguma alteração ainda não recalculada.
+ * O botão Recalcular (21/11/2026, pedido do Adão): refaz a DRE com as alterações pendentes, com os reajustes se a caixa Aplicar ao
+ * Recalcular (27/11/2026: em Configurações / Comparativo e Reajustes; antes, ao lado deste botão) estiver marcada. Só fica clicável
+ * com alguma alteração ainda não recalculada.
  */
 function ControlesDoRecalculo({ cenario }: { cenario: Cenario }) {
   const queryClient = useQueryClient();
-  const [confirmando, setConfirmando] = useState(false);
   const recalcular = useMutation({
     mutationFn: () => cenariosService.recalcular(cenario.id),
     onSuccess: (c) => {
@@ -492,61 +552,19 @@ function ControlesDoRecalculo({ cenario }: { cenario: Cenario }) {
     },
     onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível recalcular o cenário.")),
   });
-  const caixa = useMutation({
-    mutationFn: (aplicar: boolean) => cenariosService.aplicarReajustes(cenario.id, aplicar),
-    onSuccess: (c) => {
-      queryClient.invalidateQueries({ queryKey: ["cenarios"] });
-      setConfirmando(false);
-      toast.success(
-        c.reajustesAplicados
-          ? "Aplicar Reajustes marcado: clique em “Recalcular” para aplicá-los na DRE. As Configurações e as Premissas ficam bloqueadas para edição."
-          : "Aplicar Reajustes desmarcado: clique em “Recalcular” para tirá-los da DRE. As Configurações e as Premissas voltam a ser editáveis.",
-      );
-    },
-    onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível mudar a caixa Aplicar Reajustes.")),
-  });
   const temPendencia = pendente(cenario);
-  const motivoDaCaixa = !cenario.podeEditarConfiguracoes
-    ? `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) aplica os reajustes.`
-    : "Marcada, o Recalcular aplica os Reajustes das Premissas (Configurações / Comparativo e Reajustes) na DRE";
+  const comReajustes = cenario.reajustesAplicados ? ", com os reajustes (Aplicar ao Recalcular marcada)" : ", sem os reajustes (Aplicar ao Recalcular desmarcada)";
   return (
-    <>
-      <label
-        className={`flex items-center gap-2 rounded-sm border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 ${cenario.podeEditarConfiguracoes ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
-        title={motivoDaCaixa}
-      >
-        <input
-          type="checkbox"
-          className="size-4 accent-black"
-          checked={cenario.reajustesAplicados}
-          disabled={!cenario.podeEditarConfiguracoes || caixa.isPending || recalcular.isPending}
-          onChange={(e) => (e.target.checked ? (caixa.reset(), setConfirmando(true)) : caixa.mutate(false))}
-        />
-        Aplicar Reajustes
-      </label>
-      <Button
-        type="button"
-        className={botaoPrimario}
-        disabled={!temPendencia || recalcular.isPending}
-        title={temPendencia ? "Refaz a DRE com as alterações pendentes de recálculo" : "Nenhuma alteração pendente de recálculo"}
-        onClick={() => recalcular.mutate()}
-      >
-        <RefreshCw className={`size-4 ${recalcular.isPending ? "animate-spin" : ""}`} />
-        {recalcular.isPending ? "Recalculando…" : "Recalcular"}
-      </Button>
-      {confirmando ? (
-        <ConfirmacaoDialog
-          titulo="Aplicar Reajustes"
-          descricao="No próximo “Recalcular”, a DRE do cenário passa a ter os Reajustes das Premissas: nas contas das combinações dos Índices de Reajuste (Configurações / Comparativo e Reajustes), cada mês a partir do Inicia Em de cada reajuste vira o valor × (1 + Valor), cada reajuste sobre os anteriores. Marcada a caixa, as Configurações e as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição; para voltar a editar, desmarque-a."
-          acao="Marcar"
-          acaoPendente="Marcando…"
-          pendente={caixa.isPending}
-          destrutiva={false}
-          onConfirmar={() => caixa.mutate(true)}
-          onFechar={() => (caixa.isPending ? undefined : setConfirmando(false))}
-        />
-      ) : null}
-    </>
+    <Button
+      type="button"
+      className={botaoPrimario}
+      disabled={!temPendencia || recalcular.isPending}
+      title={temPendencia ? `Refaz a DRE com as alterações pendentes de recálculo${comReajustes}` : "Nenhuma alteração pendente de recálculo"}
+      onClick={() => recalcular.mutate()}
+    >
+      <RefreshCw className={`size-4 ${recalcular.isPending ? "animate-spin" : ""}`} />
+      {recalcular.isPending ? "Recalculando…" : "Recalcular"}
+    </Button>
   );
 }
 
@@ -567,7 +585,7 @@ function PendenteDeRecalculo({ cenario }: { cenario: Cenario }) {
     {
       rotulo: plural(r.reajustes, "Reajuste", "Reajustes"),
       valor: r.reajustes,
-      dica: "A caixa Aplicar Reajustes mudada ou os Índices de Reajuste gravados com ela marcada, ainda fora da DRE",
+      dica: "A caixa Aplicar ao Recalcular (Configurações / Comparativo e Reajustes) mudada ou os Índices de Reajuste gravados com ela marcada, ainda fora da DRE",
     },
   ].filter((i) => i.valor > 0);
   return (

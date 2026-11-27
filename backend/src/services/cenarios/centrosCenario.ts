@@ -15,7 +15,7 @@ import { semOGrupo } from "../dre/descricaoDeOrigem.js";
  * - nas contas dos custos de montagem (CSM), o balde OBRAS vai direto para Serviços; ACOMPANHAMENTO se rateia entre a
  *   Montagem (CSM) e a Complementar (na conta equivalente da CSC); COMPLEMENTAR (20/11/2026) vai para a conta equivalente da
  *   CSC, como no fechamento;
- * - nas despesas (DL, DT, DC e DA), Despesas e Extra.
+ * - nas despesas (DL, DT, DC e DA), Despesas (antes de 27/11/2026, Despesas e Extra).
  *
  * Os percentuais dos rateios saem das premissas (premissasCenario.ts): Produção pelo m³ produzido, Projeto pela Liberação
  * de Projetos: Matriz e Filial dos Indicadores Manuais (projetosCenario.ts, 16/11/2026; como no Fechamento Mensal, os
@@ -157,7 +157,7 @@ function montarGrupos(centros: CentroDoGrupo[], filiais: Array<{ centroCustoId: 
 }
 
 function destinoDoGrupo(grupoDRE: string, balde: string | null, unidade: 1 | 2) {
-  if (DESPESAS.has(grupoDRE)) return "Despesas e Extra";
+  if (DESPESAS.has(grupoDRE)) return "Despesas";
   if (grupoDRE === "CSM") return balde === "ACOMPANHAMENTO" ? "Rateio de Acompanhamento (Montagem e Complementar)" : balde === "COMPLEMENTAR" ? "Serviços (Complementares)" : "Serviços";
   switch (balde) {
     case "MATRIZ":

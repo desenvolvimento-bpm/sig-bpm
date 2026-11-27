@@ -136,7 +136,7 @@ async function valoresDosCentros(competenciaId: string, linhas: LinhaEstrutura[]
 
 export const dreService = {
   /**
-   * Apura a DRE das cinco unidades a partir do que já está apurado no mês — a
+   * Apura a DRE das seis unidades a partir do que já está apurado no mês — a
    * classificação dos lançamentos, os rateios e a receita prévia — e dos
    * lançamentos manuais; depois, a consolidada (a soma das unidades) e a visão
    * por centro de custo (os lançamentos de cada centro, antes do rateio).
@@ -227,7 +227,7 @@ export const dreService = {
       }),
     ]);
     const m = montarLinhas(linhas, valores, acesso, unidade);
-    // O % e o R$/m³ (13/11/2026): em Despesas e Extra e no RN, sobre as bases do Consolidado; nas outras, os valores gravados
+    // O % e o R$/m³ (13/11/2026): em Despesas, no Extra-Operacional, no RN e na Leben, sobre as bases do Consolidado; nas outras, os valores gravados
     // da unidade (os volumes com todas as casas, como nos Resultados Empresariais).
     const gravados = basesGravadas(linhas, valores);
     const bases = unidade >= 4 ? await basesDoConsolidadoDoMes(c.id) : gravados;

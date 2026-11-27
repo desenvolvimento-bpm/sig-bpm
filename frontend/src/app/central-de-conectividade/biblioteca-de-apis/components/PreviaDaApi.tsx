@@ -21,7 +21,7 @@ import { useNomesDasUnidades } from "@/hooks/useNomesDasUnidades";
 const OPCOES: Record<string, Array<[string, string]>> = {
   // O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
   get visao() {
-    return ["0", "1", "2", "3", "4", "5"].map((v): [string, string] => [v, nomeDaVisao(v)]);
+    return ["0", "1", "2", "3", "4", "6", "5"].map((v): [string, string] => [v, nomeDaVisao(v)]);
   },
   nivel: [["1", "Totais"], ["2", "Atribuições"], ["3", "Contas"]],
   comparacao: [["", "Orçamento (o padrão)"], ["RESULTADOS_ANTERIORES", "Anterior"], ["RESULTADOS_VENDIDOS", "Vendido"], ["PREVISAO", "Forecast"]],

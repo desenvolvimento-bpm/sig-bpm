@@ -26,7 +26,7 @@ export function AvisoMarcado({ cenario: c, oQue, varios = false }: { cenario: Tr
           <>
             A {rotuloVersao(c.versao)} está congelada (em {data(c.versaoSalvaEm)}
             {c.versaoSalvaPor ? `, por ${c.versaoSalvaPor}` : ""}): {oQue} {editam}. Para editar, reabra a versão (Reabrir Versão) ou crie uma
-            revisão (Criar Revisão), na tela Resultados.
+            revisão (Criar Revisão), em Configurações / Cenário.
           </>
         ) : (
           <>
@@ -34,23 +34,6 @@ export function AvisoMarcado({ cenario: c, oQue, varios = false }: { cenario: Tr
             Configurações / Cenário (Marcar Cenário).
           </>
         )}
-      </span>
-    </p>
-  );
-}
-
-/**
- * O aviso dos reajustes aplicados na DRE do cenário analítico (11/11/2026, pedido do Adão): as abas das Premissas (menos os
- * Indicadores Manuais) e a referência não se editam com a caixa Aplicar Reajustes marcada (21/11/2026: nos Resultados, antes do
- * Recalcular).
- */
-export function AvisoReajustesAplicados({ oQue, varios = false }: { oQue: string; varios?: boolean }) {
-  return (
-    <p className="flex items-start gap-2 rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-700">
-      <Lock className="mt-0.5 size-4 shrink-0 text-gray-500" />
-      <span>
-        A caixa Aplicar Reajustes está marcada: {oQue} {varios ? "não se editam" : "não se edita"}. Para editar, desmarque “Aplicar Reajustes”, nos
-        Resultados (antes do “Recalcular”).
       </span>
     </p>
   );

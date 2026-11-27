@@ -15,11 +15,10 @@ export type AuthUser = {
     setores: string[];
     recorteDepartamento: boolean;
     departamentos: DepartamentoAcesso[];
-    /** Recorte por centro de custo (Coordenador): a gestão, os centros e se vê os resultados das obras. */
+    /** Recorte por centro de custo (Coordenador): a gestão e os centros. */
     recorteCentro?: boolean;
     gestao?: DepartamentoAcesso | null;
     centros?: string[];
-    veObras?: boolean;
   };
   /** Divergências abertas que o usuário alcança: o aviso ao entrar (Passo 24). */
   divergenciasAbertas?: number;

@@ -45,8 +45,10 @@ const UNIDADES: Array<UnidadeDasVariacoes & { aba: string }> = [
   { visao: 1, nome: "Matriz", aba: "matriz" },
   { visao: 2, nome: "Filial", aba: "filial" },
   { visao: 3, nome: "Serviços", aba: "servicos" },
-  { visao: 4, nome: "Despesas e Extra", aba: "despesas" },
+  { visao: 4, nome: "Despesas", aba: "despesas" },
+  { visao: 6, nome: "Extra-Operacional", aba: "extra_operacional" },
   { visao: 5, nome: "RN", aba: "rn" },
+  { visao: 7, nome: "Leben", aba: "leben" },
 ];
 /** As unidades que o perfil lê em Resultados (as abas delas). */
 function useUnidadesDasVariacoes(): UnidadeDasVariacoes[] {

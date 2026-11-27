@@ -53,12 +53,46 @@ export const ITENS_DOS_ENCARGOS: Array<{ item: ItemDosEncargos; venda: string; r
   // 1/12 de férias por mês trabalhado, com o terço constitucional: 1/12 × 4/3.
   { item: "FERIAS", venda: "ENCARGOS_FERIAS", rotulo: "Férias (+1/3)", und: "%", padrao: 1 / 9 },
   { item: "DECIMO_TERCEIRO", venda: "ENCARGOS_13", rotulo: "Décimo Terceiro", und: "%", padrao: 1 / 12 },
-  { item: "BENEFICIOS", venda: "BENEFICIOS", rotulo: "Benefícios Adicionais", und: "R$", padrao: null },
+  // Os Benefícios Padrão antes dos Benefícios Adicionais (27/11/2026, pedido do Adão).
   // A venda não se grava (os Benefícios Padrão saem do Quadro de Lotação em cada cálculo): só o nome do item.
   { item: "BENEFICIOS_PADRAO", venda: "BENEFICIOS_PADRAO", rotulo: "Benefícios Padrão", und: "R$", padrao: null, calculado: true },
+  { item: "BENEFICIOS", venda: "BENEFICIOS", rotulo: "Benefícios Adicionais", und: "R$", padrao: null },
 ];
 export const VENDAS_DOS_ENCARGOS = new Set(ITENS_DOS_ENCARGOS.map((i) => i.venda));
 export const itemDosEncargos = (item: string) => ITENS_DOS_ENCARGOS.find((i) => i.item === item);
+
+/**
+ * As linhas calculadas dos Encargos e Benefícios de um grupo (27/11/2026, pedido do Adão), na aba Centros de Custo das Premissas e
+ * nos Excel dos centros: logo antes dos Benefícios Padrão, os Encargos Trabalhistas (a soma das contas Encargos e Benefícios do
+ * grupo, só o cálculo pelos percentuais, sem os benefícios) e, abaixo, os Encargos por Folha (os Encargos Trabalhistas ÷ as
+ * Remunerações CLT do grupo, em %); depois dos Benefícios Adicionais, os Benefícios por Colaborador (os Benefícios Padrão + os
+ * Adicionais ÷ o Total de Colaboradores, em R$). Não se gravam, não se digitam nem se importam: os arquivos sem elas continuam
+ * se importando.
+ */
+export type IndicadorDosEncargos = "ENCARGOS_TRABALHISTAS" | "ENCARGOS_POR_FOLHA" | "BENEFICIOS_POR_COLABORADOR";
+export const INDICADORES_DOS_ENCARGOS: Array<{ item: IndicadorDosEncargos; rotulo: string; und: "R$" | "%" | "R$/colab."; depoisDe: ItemDosEncargos }> = [
+  { item: "ENCARGOS_TRABALHISTAS", rotulo: "Encargos Trabalhistas", und: "R$", depoisDe: "DECIMO_TERCEIRO" },
+  { item: "ENCARGOS_POR_FOLHA", rotulo: "Encargos por Folha", und: "%", depoisDe: "DECIMO_TERCEIRO" },
+  { item: "BENEFICIOS_POR_COLABORADOR", rotulo: "Benefícios por Colaborador", und: "R$/colab.", depoisDe: "BENEFICIOS" },
+];
+/** As linhas dos Encargos e Benefícios na ordem da tela e dos Excel: os itens, com as calculadas depois do item delas. */
+export const LINHAS_DOS_ENCARGOS: Array<ItemDosEncargos | IndicadorDosEncargos> = ITENS_DOS_ENCARGOS.flatMap((i) => [
+  i.item,
+  ...INDICADORES_DOS_ENCARGOS.filter((x) => x.depoisDe === i.item).map((x) => x.item),
+]);
+export const indicadorDosEncargos = (item: string) => INDICADORES_DOS_ENCARGOS.find((i) => i.item === item);
+
+/**
+ * Os valores das linhas calculadas num mês (ou na Média de Referência, ou no ano, com as somas): os Encargos Trabalhistas, os
+ * Encargos por Folha (em fração; sem Remunerações CLT, nulo) e os Benefícios por Colaborador (sem colaboradores, nulo).
+ */
+export function valoresDosIndicadores(x: { encargos: number; remuneracoesCLT: number; beneficios: number; colaboradores: number }): Record<IndicadorDosEncargos, number | null> {
+  return {
+    ENCARGOS_TRABALHISTAS: x.encargos,
+    ENCARGOS_POR_FOLHA: Math.abs(x.remuneracoesCLT) < 0.005 ? null : x.encargos / x.remuneracoesCLT,
+    BENEFICIOS_POR_COLABORADOR: Math.abs(x.colaboradores) < 0.0001 ? null : x.beneficios / x.colaboradores,
+  };
+}
 
 /**
  * O fator dos encargos sobre a base: (INSS + FGTS + Férias + Décimo Terceiro) + (INSS + FGTS) × (Férias + Décimo Terceiro).
@@ -88,6 +122,8 @@ const HORAS_EXTRAS = "HORAS_EXTRAS";
 const ENCARGOS = "ENCARGOS_E_BENEFICIOS";
 /** A conta é a Encargos e Benefícios (calculada nos analíticos)? */
 export const ehContaDeEncargos = (codigo: string) => codigo.endsWith(`.${ENCARGOS}`);
+/** A conta é a Remunerações CLT de uma mão de obra (27/11/2026: a base dos Encargos por Folha)? */
+export const ehContaDeRemuneracoesCLT = (codigo: string) => codigo.endsWith(`.${REMUNERACOES_CLT}`);
 
 /**
  * As contas de encargos de um grupo: para cada mão de obra (o prefixo "CPP.MOD"…) que o grupo tem, a conta de encargos,

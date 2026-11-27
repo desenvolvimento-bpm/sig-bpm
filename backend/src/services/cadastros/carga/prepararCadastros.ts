@@ -216,6 +216,11 @@ const ABA_PARA_UNIDADE: Record<string, number> = {
   "Realizado (RN)": 5,
 };
 const REF_UNIDADE = /'(Realizado \([^)]*\))'!B(\d+)/g;
+/**
+ * Os grupos da DRE do Extra-Operacional (27/11/2026, o teste da separação): a aba Realizado (Desp.+Extra) da planilha dá a
+ * unidade 4 (Despesas) às contas das despesas e a 6 (Extra-Operacional) às de DML em diante.
+ */
+const GRUPOS_DO_EXTRA = new Set(["DML", "NOPAT", "RFC", "RFNC", "DFC", "DFNC"]);
 const SOMA_INTERVALO = /^SUM\(B(\d+):B(\d+)\)(\/2)?$/;
 const REF_LOCAL = /\bB(\d+)\b/g;
 
@@ -243,7 +248,9 @@ function prepararDre(brutas: LinhaBrutaDRE[], avisos: Aviso[]) {
           tipo = "ITEM";
           for (const m of refs) {
             const u = ABA_PARA_UNIDADE[m[1]];
-            if (u) unidades.add(u);
+            if (u) unidades.add(u === 4 && GRUPOS_DO_EXTRA.has(texto(l.grupoSigla) ?? "") ? 6 : u);
+            // A Leben (27/11/2026): as mesmas contas do RN (a planilha não tem a aba dela).
+            if (u === 5) unidades.add(7);
           }
         } else {
           const soma = f.match(SOMA_INTERVALO);

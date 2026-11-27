@@ -44,7 +44,7 @@ const ATRIBUICOES = [
   { valor: "INDIRETA", rotulo: "Indireto" },
 ];
 // O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
-const VISOES = ["0", "1", "2", "3", "4", "5"].map((valor) => ({
+const VISOES = ["0", "1", "2", "3", "4", "6", "5"].map((valor) => ({
   valor,
   get rotulo() {
     return nomeDaVisao(valor);

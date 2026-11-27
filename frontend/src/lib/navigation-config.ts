@@ -276,6 +276,19 @@ export const navGrupos: NavGrupo[] = [
   {
     titulo: "Controladoria",
     itens: [
+      // Os Arquivos Gerais (05/11/2026, pedido do Adão), o primeiro processo da Controladoria (desde 27/11/2026, pedido do Adão,
+      // antes da Central de Conectividade): as telas Treinamentos e Informativos, em que se adicionam, visualizam, baixam e
+      // excluem arquivos.
+      {
+        title: "Arquivos Gerais",
+        href: "/arquivos-gerais/treinamentos",
+        icon: FolderOpen,
+        recurso: "ARQUIVOS_GERAIS",
+        telas: [
+          { title: "Treinamentos", href: "/arquivos-gerais/treinamentos", icon: GraduationCap, permission: "arquivos_treinamentos:ler" },
+          { title: "Informativos", href: "/arquivos-gerais/informativos", icon: Newspaper, permission: "arquivos_informativos:ler" },
+        ],
+      },
       // A Central de Conectividade (30/10/2026, pedido do Adão: um processo da Controladoria, acima dos Cadastros da
       // Controladoria): a tela APIs, que abre os dados do SIG a outros aplicativos (o endereço continua o mesmo), e, desde
       // 13/11/2026 (pedido do Adão), a tela Acessos, com a aba APIs (antes, a aba Acesso às APIs da tela APIs).
@@ -335,18 +348,6 @@ export const navGrupos: NavGrupo[] = [
               { title: "Indicadores", href: "/cadastros/estrutura-indicadores", icon: Gauge, permission: "cadastro_analitico.estrutura_indicadores:ler" },
             ],
           },
-        ],
-      },
-      // Os Arquivos Gerais (05/11/2026, pedido do Adão), acima do Controle de Usuários: as telas Treinamentos e Informativos, em
-      // que se adicionam, visualizam, baixam e excluem arquivos.
-      {
-        title: "Arquivos Gerais",
-        href: "/arquivos-gerais/treinamentos",
-        icon: FolderOpen,
-        recurso: "ARQUIVOS_GERAIS",
-        telas: [
-          { title: "Treinamentos", href: "/arquivos-gerais/treinamentos", icon: GraduationCap, permission: "arquivos_treinamentos:ler" },
-          { title: "Informativos", href: "/arquivos-gerais/informativos", icon: Newspaper, permission: "arquivos_informativos:ler" },
         ],
       },
       {

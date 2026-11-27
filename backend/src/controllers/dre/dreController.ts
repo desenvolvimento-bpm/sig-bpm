@@ -13,7 +13,7 @@ import { volumesDaLinha } from "../../services/dre/volumesDaLinhaService.js";
 import { rateiosService, RegraRateioError } from "../../services/volumes/rateiosService.js";
 import { auditar } from "../../services/auditoriaService.js";
 
-const unidadeSchema = z.coerce.number().int().min(1).max(5);
+const unidadeSchema = z.coerce.number().int().min(1).max(7);
 const grupoSchema = z.string().trim().min(1).max(200).optional();
 /** A obra: o código do centro de custo de obra no RM (1.98.… ou 1.99.…). */
 const obraSchema = z.string().trim().regex(/^1.9[89].[0-9.]+$/).optional();
@@ -29,7 +29,7 @@ function competencia(request: Request, response: Response) {
   return c.data;
 }
 
-/** A linha e a visão do detalhamento pela query: ?linha= e ?unidade=1..5, ?grupo= (centro), ?obra=, ?semCentro= ou nenhuma (consolidado). */
+/** A linha e a visão do detalhamento pela query: ?linha= e ?unidade=1..6, ?grupo= (centro), ?obra=, ?semCentro= ou nenhuma (consolidado). */
 function linhaEVisaoDoDetalhe(request: Request): { linha: string; visao: Parameters<typeof detalhamentoService.detalhar>[3] } | { erro: string } {
   const linha = z.string().trim().min(1).max(200).safeParse(request.query.linha);
   if (!linha.success) return { erro: "Linha da DRE inválida" };
@@ -131,7 +131,7 @@ export const dreController = {
     }
   },
 
-  /** Detalhamento de uma linha: ?linha=código e ?unidade=1..5, ?grupo=centro, ou nenhum dos dois (consolidado). */
+  /** Detalhamento de uma linha: ?linha=código e ?unidade=1..6, ?grupo=centro, ou nenhum dos dois (consolidado). */
   async detalhe(request: Request, response: Response) {
     const c = competencia(request, response);
     if (!c) return;
@@ -243,7 +243,7 @@ export const dreController = {
 
   /**
    * A DRE apurada em Excel ou PDF (Passo 26): ?formato=xlsx|pdf e ?visao=
-   * consolidado, todas, centros, obras ou 1..5, ?grupo= para um agrupamento de
+   * consolidado, todas, centros, obras ou 1..6, ?grupo= para um agrupamento de
    * centros ou ?obra= para uma obra.
    */
   async exportar(request: Request, response: Response) {
@@ -269,7 +269,7 @@ export const dreController = {
     else if (v === "obras") visao = { tipo: "todasObras" };
     else {
       const u = unidadeSchema.safeParse(v);
-      if (!u.success) return response.status(400).json({ error: "Visão inválida: use consolidado, todas, centros, obras ou a unidade (1 a 5)." });
+      if (!u.success) return response.status(400).json({ error: "Visão inválida: use consolidado, todas, centros, obras ou a unidade (1 a 6)." });
       visao = { tipo: "unidade", unidade: u.data };
     }
     try {

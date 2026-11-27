@@ -156,8 +156,8 @@ export function ConfigurarTabelaDialog({
   const [nivel, setNivel] = useState<Nivel>(inicial?.nivel ?? 1);
   const [recolhido, setRecolhido] = useState(inicial?.recolhido ?? true);
   const [colunas, setColunas] = useState<ColunasDaTabela>(inicial?.colunas ?? TODAS_AS_COLUNAS);
-  // Despesas e Extra e RN não têm o R$/m³.
-  const semUnitario = visao === 4 || visao === 5;
+  // Despesas, Extra-Operacional, RN e Leben não têm o R$/m³.
+  const semUnitario = visao === 4 || visao === 5 || visao === 6 || visao === 7;
   // As linhas marcadas; null: todas (as da visão, mesmo as que entrarem depois).
   const [marcadas, setMarcadas] = useState<Set<string> | null>(inicial?.linhas ? new Set(inicial.linhas) : null);
   const consulta = useResultados(relatorioId, visao);
@@ -238,7 +238,7 @@ export function ConfigurarTabelaDialog({
                   <label
                     key={c.chave}
                     className={`flex items-start gap-2 rounded-sm border border-gray-200 px-2.5 py-2 text-sm ${desabilitada ? "text-gray-400" : "cursor-pointer hover:bg-gray-50"}`}
-                    title={desabilitada ? "Despesas e Extra e RN não têm o R$/m³" : undefined}
+                    title={desabilitada ? "Despesas, Extra-Operacional, RN e Leben não têm o R$/m³" : undefined}
                   >
                     <input
                       type="checkbox"

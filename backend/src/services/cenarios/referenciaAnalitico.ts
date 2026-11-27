@@ -687,5 +687,5 @@ export async function referenciaDoRealizado(
 }
 
 const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços" };
-const NOME_DA_UNIDADE_TODAS: Record<number, string> = { ...NOME_DA_UNIDADE, 4: "Despesas e Extra", 5: "RN" };
+const NOME_DA_UNIDADE_TODAS: Record<number, string> = { ...NOME_DA_UNIDADE, 4: "Despesas", 5: "RN", 6: "Extra-Operacional", 7: "Leben" };
 const nomeDaConta = (est: Array<{ codigo: string; descricao: string }>, codigo: string) => est.find((l) => l.codigo === codigo)?.descricao ?? codigo;

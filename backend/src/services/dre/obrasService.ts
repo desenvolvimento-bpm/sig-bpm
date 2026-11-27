@@ -2,7 +2,7 @@ import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import type { NaturezaReceita } from "../../generated/prisma/enums.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { podeVerLinhaNaObra, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import type { LinhaEstrutura } from "./apuracaoUnidades.js";
 import { avaliarEstrutura, soSoma } from "./consolidacao.js";
 import { estrutura, RegraDREError } from "./dreService.js";
@@ -46,8 +46,8 @@ const rotulo = (ano: number, mes: number) => `${String(mes).padStart(2, "0")}/${
  * Pré-Fabricado e vai à de Frete; a complementar sai da de Montagem e vai à Complementar. A tabela da obra não
  * mostra esses totais calculados (pedido de 09/10/2026): a primeira ROL, o CPV,
  * a MB, a MC, o EBITDA, o EBIT, o NOPAT e o RL (CALCULADOS). No recorte do Gestor por departamento, só as
- * linhas dos departamentos dele, com os totais que só somam (como nos centros); no do Coordenador (com a opção de
- * ver as obras, 11/10/2026), as da gestão dele, também com os totais que só somam.
+ * linhas dos departamentos dele, com os totais que só somam (como nos centros); no do Coordenador, só as abertas a todos
+ * (27/11/2026, sem a opção de ver as obras). O Realizado por Obra consulta sem recorte (`semRecorte`).
  */
 
 export const CENTRO_DE_OBRA = /^1\.9[89]\./;
@@ -169,7 +169,7 @@ async function movimentos(competenciaId: string, linhas: LinhaEstrutura[], acess
     }).then((ms) => ms.map(({ centroCusto, centroCustoId, ...m }) => ({ ...m, codigoCentroCusto: codigoQueVale({ ...m, centroCustoId, centroCusto }), nomeCentroCusto: centroCusto?.nomeRM ?? m.nomeCentroCusto }))),
     contasDoReconhecimentoDoCpv(),
   ]);
-  const porId = new Map(linhas.filter((l) => podeVerLinhaNaObra(acesso, l)).map((l) => [l.id, l]));
+  const porId = new Map(linhas.filter((l) => podeVerMovimentos(acesso, l)).map((l) => [l.id, l]));
   const obras = new Map<string, { nomes: Map<string, number>; itens: Map<string, { valor: Decimal; n: number }> }>();
   for (const m of ls) {
     if (!ehCentroDeObra(m.codigoCentroCusto)) continue;
@@ -194,7 +194,7 @@ async function movimentos(competenciaId: string, linhas: LinhaEstrutura[], acess
  */
 async function volumesDaObra(competenciaId: string, linhas: LinhaEstrutura[], acesso: Acesso, obra: string) {
   const numero = numeroDaObra(obra);
-  const alcancadas = new Set(linhas.filter((l) => podeVerLinhaNaObra(acesso, l)).map((l) => l.codigo));
+  const alcancadas = new Set(linhas.filter((l) => podeVerMovimentos(acesso, l)).map((l) => l.codigo));
   const vs = (await volumesDasObras(competenciaId, linhas, numero)).get(numero) ?? new Map<string, Decimal>();
   return new Map([...vs].filter(([codigo, v]) => alcancadas.has(codigo) && !v.isZero()).map(([codigo, v]) => [codigo, { valor: v, n: 1 }]));
 }

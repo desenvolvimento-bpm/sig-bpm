@@ -9,7 +9,7 @@ import { painelService } from "../../services/relatorios/painelService.js";
 import { pesquisaDosResultados } from "../../services/relatorios/pesquisaDosResultados.js";
 import { RelatorioError, resultadosService } from "../../services/relatorios/resultadosService.js";
 import { creditosImpostosService } from "../../services/impostos/creditosImpostosService.js";
-import { veObras } from "../../services/acesso/recorteDepartamento.js";
+import { custosOperacionaisService } from "../../services/relatorios/custosOperacionais.js";
 import { cenariosMarcados } from "../../services/cenarios/indicadoresDoCenario.js";
 import { ehGrupoSemCentro, veSemCentros, type GrupoSemCentro } from "../../services/dre/semCentroService.js";
 import { RegraLinhasError, resultadosLinhaService } from "../../services/resultadosLinha/resultadosLinhaService.js";
@@ -17,8 +17,7 @@ import { ABA_DA_VISAO } from "../../services/acesso/telas.js";
 
 const anoSchema = z.coerce.number().int().min(2025).max(2100);
 const ateSchema = z.coerce.number().int().min(1).max(12).optional();
-const visaoSchema = z.union([z.literal("departamentos"), z.literal("centros"), z.literal("obras"), z.literal("sem_centros"), z.literal("linhas"), z.literal("rateios_linhas"), z.coerce.number().int().min(0).max(5)]);
-const obraSchema = z.string().trim().regex(/^1.9[89]./, "Obra inválida").max(40).optional();
+const visaoSchema = z.union([z.literal("departamentos"), z.literal("centros"), z.literal("sem_centros"), z.literal("linhas"), z.literal("rateios_linhas"), z.coerce.number().int().min(0).max(7)]);
 const grupoSchema = z.string().trim().min(1).max(200).optional();
 const linhaSchema = z.string().trim().min(1).max(60).optional();
 
@@ -137,9 +136,20 @@ export const relatoriosController = {
   },
 
   /**
-   * ?visao=0..5 (0 Consolidado) ou ?visao=centros: sem ?grupo, a lista dos agrupamentos; com ele, o agrupamento. Ou
-   * ?visao=obras: sem ?obra, a lista das obras; com ela (o código do centro 1.98 ou 1.99), a obra. Ou ?visao=linhas e
-   * ?visao=rateios_linhas (26/10/2026): sem ?linha, a lista das linhas; com ela, a DRE da linha ou o rateado dela.
+   * A aba Custos Operacionais (26/11/2026): os custos de produção e de serviços em R$/dia e R$/m³ dos meses fechados do
+   * exercício até ?ate=, com a Média Mensal do cenário da Comparação Padrão (?comparaCom=) para a Diferença e o Atingimento.
+   */
+  async custosOperacionais(request: Request, response: Response) {
+    const p = periodo(request, response);
+    if (!p) return;
+    const comparaCom = comparaComDe(request);
+    if (comparaCom === false) return response.status(400).json({ error: "Compara Com inválido" });
+    return responder(response, () => custosOperacionaisService.realizado(p.ano, p.ate, comparaCom));
+  },
+
+  /**
+   * ?visao=0..6 (0 Consolidado) ou ?visao=centros: sem ?grupo, a lista dos agrupamentos; com ele, o agrupamento. Ou
+   * ?visao=linhas e ?visao=rateios_linhas (26/10/2026): sem ?linha, a lista das linhas; com ela, a DRE da linha ou o rateado dela.
    */
   async resultados(request: Request, response: Response) {
     const p = periodo(request, response);
@@ -148,13 +158,6 @@ export const relatoriosController = {
     const g = grupoSchema.safeParse(request.query.grupo);
     if (!v.success || !g.success) return response.status(400).json({ error: "Visão inválida" });
     const acesso = request.user!.acesso;
-    if (v.data === "obras") {
-      const o = obraSchema.safeParse(request.query.obra || undefined);
-      if (!o.success) return response.status(400).json({ error: "Obra inválida" });
-      // O Coordenador vê as obras só com a opção marcada no cadastro dele.
-      if (!veObras(acesso)) return response.status(403).json({ error: "O seu usuário não inclui os resultados das obras." });
-      return responder(response, () => (o.data ? resultadosService.obra(p.ano, o.data, p.ate, acesso, true) : resultadosService.listarObras(p.ano, p.ate, acesso, true)));
-    }
     // Os movimentos sem centro de custo (14/10/2026): sem ?grupo, a lista dos grupos; com ele, o grupo.
     if (v.data === "sem_centros") {
       if (!veSemCentros(acesso)) return response.status(403).json({ error: "Os movimentos sem centro de custo não são do seu recorte." });
@@ -178,7 +181,7 @@ export const relatoriosController = {
       const rateios = v.data === "rateios_linhas";
       return responder(response, () => (l.data ? resultadosLinhaService.linha(p.ano, p.ate, l.data, rateios, unidades) : resultadosLinhaService.listar(p.ano, p.ate, unidades)));
     }
-    const visao = v.data as 0 | 1 | 2 | 3 | 4 | 5;
+    const visao = v.data as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
     const comparaCom = comparaComDe(request);
     if (comparaCom === false) return response.status(400).json({ error: "Compara Com inválido" });
     const prova = provaDe(request);
@@ -187,7 +190,7 @@ export const relatoriosController = {
   },
 
   /**
-   * ?formato=xlsx|pdf e ?escopo=atual (a visão de ?visao=0..5, ou o centro de ?grupo=), unidades (as seis visões) ou
+   * ?formato=xlsx|pdf e ?escopo=atual (a visão de ?visao=0..6, ou o centro de ?grupo=), unidades (as sete visões) ou
    * centros (todos os agrupamentos que o usuário alcança): uma visão por aba (Excel) ou por página (PDF).
    */
   async exportarResultados(request: Request, response: Response) {
@@ -200,17 +203,11 @@ export const relatoriosController = {
     const escopo = String(request.query.escopo ?? "atual");
     let e: EscopoResultados;
     const acesso = request.user!.acesso;
-    const o = obraSchema.safeParse(request.query.obra || undefined);
     if (escopo === "unidades") e = { tipo: "unidades" };
     else if (escopo === "centros") e = { tipo: "centros" };
     else if (escopo === "centros_arquivos") e = { tipo: "centrosArquivos" };
-    // As obras (o Coordenador só com a opção) e os movimentos sem centro de custo (14/10/2026).
-    else if (escopo === "obras" || (v.success && v.data === "obras")) {
-      if (!veObras(acesso)) return response.status(403).json({ error: "O seu usuário não inclui os resultados das obras." });
-      if (escopo === "obras") e = { tipo: "obras" };
-      else if (o.success && o.data) e = { tipo: "obra", codigo: o.data };
-      else return response.status(400).json({ error: "Obra inválida" });
-    } else if (escopo === "sem_centros" || (v.success && v.data === "sem_centros")) {
+    // Os movimentos sem centro de custo (14/10/2026).
+    else if (escopo === "sem_centros" || (v.success && v.data === "sem_centros")) {
       if (!veSemCentros(acesso)) return response.status(403).json({ error: "Os movimentos sem centro de custo não são do seu recorte." });
       if (escopo === "sem_centros") e = { tipo: "semCentros" };
       else if (g.success && g.data && ehGrupoSemCentro(g.data)) e = { tipo: "semCentro", grupo: g.data };
@@ -227,8 +224,8 @@ export const relatoriosController = {
     }
     else if (g.success && g.data) e = { tipo: "centro", grupo: g.data };
     else if (v.success && v.data === "departamentos") e = { tipo: "departamentos" };
-    else if (v.success && typeof v.data === "number") e = { tipo: "visao", visao: v.data as 0 | 1 | 2 | 3 | 4 | 5 };
-    else return response.status(400).json({ error: "Visão inválida: use ?visao=0..5, ?grupo= ou ?escopo=unidades|centros." });
+    else if (v.success && typeof v.data === "number") e = { tipo: "visao", visao: v.data as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 };
+    else return response.status(400).json({ error: "Visão inválida: use ?visao=0..6, ?grupo= ou ?escopo=unidades|centros." });
     // ?detalhes=1 (27/10/2026): no Excel, a aba Detalhes no fim, com os movimentos do balancete de cada aba.
     const detalhes = request.query.detalhes === "1";
     // A comparação da tela (16/11/2026): nas visões das unidades, as linhas que entram pelo orçado são as do cenário que a

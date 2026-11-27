@@ -111,7 +111,7 @@ export function abaDaChave(chave: string): AbaDasPremissas | null {
  * os centros de custo de produção (CPP) e a depreciação base e os investimentos da Matriz e da Filial; Serviços: a aba
  * Serviços, os centros de serviços (CSM e CSC) e a depreciação e os investimentos de Serviços; Logística, Técnico,
  * Comercial e Administrativo: os centros do departamento (DL, DT, DC e DA); Extra-Operacional: a aba Extra-Operacional.
- * Esses cinco levam também a depreciação base e os investimentos de Despesas e Extra (o patrimônio). Os indicadores
+ * Esses cinco levam também a depreciação base e os investimentos de Despesas (o patrimônio; antes de 27/11/2026, Despesas e Extra). Os indicadores
  * manuais vão pelo grupo deles (o GME, que é das vendas, com o Comercial; o Geral, com o Administrativo).
  */
 export type Departamento = "PRODUCAO" | "SERVICOS" | "LOGISTICA" | "TECNICO" | "COMERCIAL" | "ADMINISTRATIVO" | "EXTRA";
@@ -172,7 +172,7 @@ export function blocoDaChave(chave: string, descricao: string[] = []) {
   if (tipo === "P") return NOME_DA_ABA[a as "1"] ?? "Premissas";
   if (tipo === "C" || tipo === "L" || tipo === "E") return `Centro de Custo: ${a}`;
   if (tipo === "B") return `Depreciação Base: ${CONTAS_DEPRECIACAO.find((c) => String(c.unidade) === a)?.nomeUnidade ?? a}`;
-  if (tipo === "X") return `Extra-Operacional: ${a === "5" ? "RN" : "Despesas e Extra"}`;
+  if (tipo === "X") return `Extra-Operacional: ${a === "5" ? "RN" : a === "6" ? "Extra-Operacional" : a === "7" ? "Leben" : "Despesas e Extra"}`;
   if (tipo === "I") return `Indicadores Manuais${descricao[0] ? `: ${descricao[0]}` : ""}`;
   return b ?? chave;
 }
@@ -258,7 +258,21 @@ export function abaDaPlanilha(
   // Os rótulos (a linha 5) com a quebra de texto automática (11/11/2026, pedido do Adão), como em todas as abas da planilha.
   const cab = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoQuebra });
   const cabDireita = (valor: string): Celula => ({ valor, estilo: ESTILO.cabecalhoDireitaQuebra });
-  const numero = (l: LinhaDaPlanilha, v: number | null): Celula => ({ valor: v, estilo: l.percentual ? ESTILO.itemPercentual : ESTILO.itemNumero });
+  // Os meses das linhas calculadas pelo SIG (27/11/2026, pedido do Adão), em fórmula e que não se importam, no amarelo claro, como na
+  // tela; os percentuais calculados (os Encargos por Folha) com duas casas.
+  const numero = (l: LinhaDaPlanilha, v: number | null, doMes = false): Celula => ({
+    valor: v,
+    estilo:
+      l.calculada && doMes
+        ? l.percentual
+          ? ESTILO.itemPercentualCalculado
+          : ESTILO.itemNumeroCalculado
+        : l.percentual
+          ? l.calculada
+            ? ESTILO.itemPercentualDuasCasas
+            : ESTILO.itemPercentual
+          : ESTILO.itemNumero,
+  });
   // As colunas (a partir de 0): as descrições (11/11/2026: sem o Código antes delas), a Und., os meses da referência (com
   // ela), a Média, o Total da Referência, a Variação Máxima, os doze meses, Justificar? e a Justificativa.
   const n = COLUNAS[aba].length;
@@ -293,7 +307,7 @@ export function abaDaPlanilha(
             (referencia ? ` As colunas ${referencia.rotulo}, antes da Média, são os meses da referência do cenário (${referencia.descricao}) e também não se importam.` : "") +
             // 17/11/2026 (pedido do Adão): a conta Encargos e Benefícios sem os Benefícios Adicionais.
             (aba === "centros"
-              ? " A conta Encargos e Benefícios é o cálculo pelos percentuais, sem os Benefícios Adicionais: a soma das duas linhas é o total da conta na DRE (também na Média de Referência e nos meses da referência)."
+              ? " A conta Encargos e Benefícios é o cálculo pelos percentuais, sem os Benefícios Padrão e os Adicionais: a soma das três linhas é o total da conta na DRE (também na Média de Referência e nos meses da referência). Os meses em amarelo são calculados pelo SIG, em fórmula, e não se importam: o Quadro de Lotação, os Encargos Trabalhistas (a soma das contas Encargos e Benefícios), os Encargos por Folha (os Encargos Trabalhistas ÷ as Remunerações CLT), os Benefícios Padrão, os Benefícios por Colaborador ((Padrão + Adicionais) ÷ o Total de Colaboradores), as Remunerações e a conta Encargos e Benefícios."
               : ""),
           estilo: ESTILO.informacao,
         },
@@ -324,7 +338,7 @@ export function abaDaPlanilha(
             ? { ...numero(l, l.media), formula: `IF(${m}="","",${m})` }
             : { ...numero(l, l.media === null ? null : l.media * 12), formula: `IF(${m}="","",${m}*12)` },
           { valor: l.limite, estilo: ESTILO.itemNumero },
-          ...l.meses.map((x, k) => ({ ...numero(l, x), formula: mesEmFormula(l, k) })),
+          ...l.meses.map((x, k) => ({ ...numero(l, x, true), formula: mesEmFormula(l, k) })),
           {
             valor: precisaJustificar(l) ? "Sim" : "Não",
             formula: `IF(OR(${m}="",${v}=""),"Não",IF(ABS(${t})<0.005,IF(ABS(${soma})<0.005,"Não","Sim"),IF(ROUND(ABS(${soma}-${t})/ABS(${t})*100,2)>${v},"Sim","Não")))`,
@@ -395,7 +409,7 @@ export type InvestimentoLido = {
   valorTotal: number;
   valorPosUso: number;
   vidaUtil: number;
-  /** O Departamento (12/11/2026): só nos de Despesas e Extra (um dos cinco do patrimônio); sem ele, nulo. */
+  /** O Departamento (12/11/2026): só nos de Despesas (um dos cinco do patrimônio); sem ele, nulo. */
   departamento: DepartamentoAcesso | null;
 };
 /** Os campos de uma linha do Quadro de Lotação lida (09/11/2026): os textos dos cadastros, como no Lançamento Inicial. */
@@ -442,9 +456,9 @@ export const ABA_INVESTIMENTOS = "Investimentos";
 const COLUNA_NOME_REFERENCIA = "Nome de Referência";
 /** A Condição de Pagamento (19/10/2026, no lugar do Ganho Previsto, da Receita Bruta Prevista e do ROI): opcional na leitura. */
 const COLUNA_CONDICAO = "Condição de Pagamento";
-/** O Departamento dos investimentos de Despesas e Extra (12/11/2026): opcional na leitura (os arquivos de antes não o têm). */
+/** O Departamento dos investimentos de Despesas (12/11/2026): opcional na leitura (os arquivos de antes não o têm). */
 const COLUNA_DEPARTAMENTO = "Departamento";
-/** Os departamentos do patrimônio (o Departamento de um investimento de Despesas e Extra), com os nomes da planilha. */
+/** Os departamentos do patrimônio (o Departamento de um investimento de Despesas), com os nomes da planilha. */
 const DEPARTAMENTOS_DO_INVESTIMENTO: Array<{ chave: DepartamentoAcesso; nome: string }> = [
   { chave: "LOGISTICA", nome: "Logística" },
   { chave: "TECNICO", nome: "Técnico" },
@@ -575,7 +589,9 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
       continue;
     }
     nomes.add(nomeReferencia.toLocaleLowerCase("pt-BR"));
-    const unidade = CONTAS_DEPRECIACAO.find((x) => x.nomeUnidade.toLocaleLowerCase("pt-BR") === texto(c[iUnidade]).toLocaleLowerCase("pt-BR"));
+    // "Despesas e Extra", o nome de antes de 27/11/2026 (os arquivos exportados antes da separação), vale como Despesas.
+    const nomeDaUnidade = /^despesas e extra$/i.test(texto(c[iUnidade])) ? "Despesas" : texto(c[iUnidade]);
+    const unidade = CONTAS_DEPRECIACAO.find((x) => x.nomeUnidade.toLocaleLowerCase("pt-BR") === nomeDaUnidade.toLocaleLowerCase("pt-BR"));
     if (!unidade) {
       erro(`a Unidade “${texto(c[iUnidade])}” não é uma das da lista (${CONTAS_DEPRECIACAO.map((x) => x.nomeUnidade).join(", ")}).`);
       continue;
@@ -585,7 +601,7 @@ function lerInvestimentos(nome: string, linhas: Array<{ numero: number; celulas:
       erro(`a Conta de ${unidade.nomeUnidade} é a ${unidade.rotulo} (está “${conta}”).`);
       continue;
     }
-    // O Departamento (12/11/2026): só em Despesas e Extra; nas demais unidades, ignorado.
+    // O Departamento (12/11/2026): só em Despesas; nas demais unidades, ignorado.
     const nomeDoDepartamento = iDepartamento < 0 ? "" : texto(c[iDepartamento]);
     const departamento = nomeDoDepartamento ? DEPARTAMENTOS_DO_INVESTIMENTO.find((d) => d.nome.toLocaleLowerCase("pt-BR") === nomeDoDepartamento.toLocaleLowerCase("pt-BR")) : null;
     if (nomeDoDepartamento && !departamento && unidade.unidade === 4) {
@@ -710,7 +726,7 @@ export function abaDoQuadroDeLotacao(
     [
       {
         valor:
-          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um); o Salário Total e o Custo no Ano são fórmulas e não se importam. Os Benefícios, depois do Salário Total, são os da linha no mês (os Benefícios Padrão aplicados × os colaboradores, no SIG): digite o valor para mudá-lo — com outro valor, ele fica digitado no lugar dos Benefícios Padrão aplicados; igual, eles ficam (e seguem os colaboradores). Nos centros de custo deste arquivo, a linha Benefícios Padrão de cada grupo soma esta coluna das linhas dos centros dele. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
+          "Altere as linhas, apague as que saem ou inclua novas nas linhas em branco e importe o arquivo em Premissas / Importar Valores: as linhas desta aba substituem as do Quadro de Lotação do cenário nos departamentos do arquivo (a linha 4; não a altere) — as que não estão aqui saem. A Unidade, o Tipo (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (o código) são os dos cadastros, como no Lançamento Inicial. Em cada mês, os Colaboradores e o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um); o Salário Total e o Custo no Ano são fórmulas (em amarelo) e não se importam. Os Benefícios, depois do Salário Total, são os da linha no mês (os Benefícios Padrão aplicados × os colaboradores, no SIG): digite o valor para mudá-lo — com outro valor, ele fica digitado no lugar dos Benefícios Padrão aplicados; igual, eles ficam (e seguem os colaboradores). Nos centros de custo deste arquivo, a linha Benefícios Padrão de cada grupo soma esta coluna das linhas dos centros dele. Nos centros de custo deste arquivo, as Remunerações CLT e PJ de todos os grupos e, nos grupos com linhas aqui, os colaboradores e os Salários dos Aprendizes e dos Estagiários são fórmulas sobre esta aba (o Centro de Custo pelo código ou “código - nome”): incluir ou mudar as linhas muda os centros e os Encargos." +
           (referencia ? ` A coluna ${referencia.rotulo}, depois do Centro de Custo, ${referencia.explicacao} e não se importa.` : ""),
         estilo: ESTILO.informacao,
       },
@@ -737,11 +753,11 @@ export function abaDoQuadroDeLotacao(
         { valor: vazio(m.colaboradores), estilo: ESTILO.itemNumero },
         { valor: vazio(m.salarioBruto), estilo: ESTILO.itemNumero },
         { valor: vazio(m.adicional), estilo: ESTILO.itemNumero },
-        { valor: vazio(salarioTotal(m)), estilo: ESTILO.itemNumero, formula: f.total(k) },
+        { valor: vazio(salarioTotal(m)), estilo: ESTILO.itemNumeroCalculado, formula: f.total(k) },
         // Os Benefícios do mês (21/11/2026): o valor, que se digita.
         { valor: vazio(Math.round((l.beneficios?.[k] ?? 0) * 100) / 100), estilo: ESTILO.itemNumero },
       ]),
-      { valor: Math.round(l.meses.reduce((s, m) => s + salarioTotal(m), 0) * 100) / 100, estilo: ESTILO.itemNumero, formula: f.custo },
+      { valor: Math.round(l.meses.reduce((s, m) => s + salarioTotal(m), 0) * 100) / 100, estilo: ESTILO.itemNumeroCalculado, formula: f.custo },
     ]);
   });
   for (let k = 0; k < LINHAS_NOVAS; k++) {
@@ -753,10 +769,10 @@ export function abaDoQuadroDeLotacao(
         { valor: null, estilo: ESTILO.itemNumero },
         { valor: null, estilo: ESTILO.itemNumero },
         { valor: null, estilo: ESTILO.itemNumero },
-        { valor: null, estilo: ESTILO.itemNumero, formula: f.total(m) },
+        { valor: null, estilo: ESTILO.itemNumeroCalculado, formula: f.total(m) },
         { valor: null, estilo: ESTILO.itemNumero },
       ]).flat(),
-      { valor: null, estilo: ESTILO.itemNumero, formula: f.custo },
+      { valor: null, estilo: ESTILO.itemNumeroCalculado, formula: f.custo },
     ]);
   }
   const ultima = PRIMEIRA_LINHA + linhas.length + LINHAS_NOVAS - 1;

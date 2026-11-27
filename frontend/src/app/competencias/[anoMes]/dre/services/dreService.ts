@@ -309,7 +309,8 @@ export const dreService = {
 };
 
 /** As unidades, com o nome do cadastro na hora de mostrar (25/11/2026: muda a qualquer momento; a tela usa useNomesDasUnidades). */
-export const UNIDADES = [1, 2, 3, 4, 5].map((codigo) => ({
+// O Extra-Operacional (6, 27/11/2026) entre Despesas e o RN, como nas abas.
+export const UNIDADES = [1, 2, 3, 4, 6, 5, 7].map((codigo) => ({
   codigo,
   get nome() {
     return nomeDaUnidade(codigo);

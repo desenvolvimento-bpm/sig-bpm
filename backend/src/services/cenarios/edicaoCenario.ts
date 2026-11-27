@@ -16,7 +16,7 @@ type Tx = Prisma.TransactionClient;
  * no Consolidado, cada conta é a soma das unidades, e os totais saem das expressões com essas somas.
  */
 
-export const UNIDADES = [1, 2, 3, 4, 5] as const;
+export const UNIDADES = [1, 2, 3, 4, 5, 6, 7] as const;
 
 /**
  * As linhas de uma unidade: as que a Estrutura da DRE atribui a ela e os totais cujas parcelas são todas dela (a

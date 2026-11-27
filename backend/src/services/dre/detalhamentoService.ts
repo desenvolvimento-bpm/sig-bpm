@@ -3,7 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { NaturezaReceita } from "../../generated/prisma/enums.js";
 import { manualNoSinalDoBalancete, type Composicao, type OrigemValor, type ParcelaRateio } from "./apuracaoUnidades.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { MENSAGEM_SENSIVEL, podeVerCentro, podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { MENSAGEM_SENSIVEL, podeVerCentro, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { grupoDoCentro, RegraDREError } from "./dreService.js";
 import { CENTRO_DE_OBRA, foraDaObra, ondeOCentroVale, PREVIAS_DA_OBRA, previasDaObra, sinalDaLinha } from "./obrasService.js";
 import { numeroDaObra } from "../resultadosLinha/alocacaoNasLinhas.js";
@@ -251,8 +251,8 @@ async function blocosDaUnidade(competenciaId: string, unidade: number, c: Compos
       total: somar(ls.map((l) => l.valorMovimento)).times(fator).toFixed(2),
       lancamentos: agrupar(ls).map((l) => paraDetalhe(l, fator)).sort(porValor),
     });
-    // Os manuais do mesmo filtro (fora do balde RN, que é da aba RN, e dos baldes de rateio).
-    const fm: Prisma.LancamentoManualWhereInput[] = [{ OR: [{ balde: null }, { balde: { notIn: ["RN", ...CHAVES] as never } }] }];
+    // Os manuais do mesmo filtro (fora dos baldes RN e LEBEN, que são das abas RN e Leben, e dos baldes de rateio).
+    const fm: Prisma.LancamentoManualWhereInput[] = [{ OR: [{ balde: null }, { balde: { notIn: ["RN", "LEBEN", ...CHAVES] as never } }] }];
     if (f.baldes) fm.push({ balde: { in: f.baldes as never } });
     if (f.excetoBaldes) fm.push({ OR: [{ balde: null }, { balde: { notIn: f.excetoBaldes as never } }] });
     if (f.pares) fm.push({ OR: f.pares.map((p) => ({ balde: p.balde as never, ...(p.filial !== undefined ? { filial: p.filial } : {}) })) });
@@ -368,8 +368,8 @@ export const detalhamentoService = {
     if (!podeVerSensiveis(acesso, linha)) throw new RegraDREError(403, MENSAGEM_SENSIVEL(linha.descricao));
     // Recorte do Gestor (Passo 22): só as movimentações das linhas dos seus departamentos. O do Coordenador: nas
     // unidades, só as linhas abertas a todos; nos centros de custo, as dos seus centros.
-    // Nas obras, as linhas que o usuário vê nelas (o Coordenador com a opção: as da gestão dele).
-    const pode = "grupo" in visao ? podeVerLinhaNoCentro(acesso, linha) : "obra" in visao ? podeVerLinhaNaObra(acesso, linha) : podeVerMovimentos(acesso, linha);
+    // Nas obras, como nas unidades (o Realizado por Obra consulta sem recorte: `semRecorte`).
+    const pode = "grupo" in visao ? podeVerLinhaNoCentro(acesso, linha) : podeVerMovimentos(acesso, linha);
     if (!pode) {
       throw new RegraDREError(403, `As movimentações de "${linha.descricao}" não são de um departamento seu.`);
     }

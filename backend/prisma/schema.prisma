@@ -161,9 +161,6 @@ model Usuario {
   centros       UsuarioCentro[]
   /// As contestações de gastos que o usuário pediu (27/10/2026).
   contestacoes  Contestacao[]
-  /// Com recorte por centro de custo: o usuário vê também os resultados das
-  /// obras, nas linhas da DRE da gestão dele (e nas abertas a todos).
-  veObras       Boolean @default(false) @map("ve_obras")
 
   competenciasAbertas   Competencia[] @relation("CompetenciaAberta")
   competenciasApuradas  Competencia[] @relation("CompetenciaApurada")

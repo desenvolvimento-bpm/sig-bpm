@@ -1,10 +1,9 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { podeVerLinhaNaObra, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { cenarioDaComparacao, rotuloDaComparacao, type Comparacao } from "../cenarios/indicadoresDoCenario.js";
 import type { MarcacaoCenario } from "../../generated/prisma/enums.js";
 import { dreService, RegraDREError } from "../dre/dreService.js";
-import { obrasService } from "../dre/obrasService.js";
 import { GRUPOS_SEM_CENTRO, nomeDoGrupoSemCentro, semCentroService, type GrupoSemCentro } from "../dre/semCentroService.js";
 import { linhasDoCentro, prefixoDaAtribuicao } from "../dre/recorteCentros.js";
 import { baseDoPercentual, baseDoUnitario, basesDoConsolidado, COD, GRUPOS_DE_VOLUME, type VisaoResultados } from "./basesResultados.js";
@@ -69,8 +68,8 @@ export async function estrutura(): Promise<LinhaEstrutura[]> {
   });
 }
 
-/** Os códigos das linhas que a Estrutura da DRE dá a uma unidade (26/11/2026), sem as seções. */
-async function codigosDaUnidade(unidade: number) {
+/** Os códigos das linhas que a Estrutura da DRE dá a uma unidade (26/11/2026), sem as seções; também no RN e na Leben dos analíticos. */
+export async function codigosDaUnidade(unidade: number) {
   const ls = await getPrismaClient().linhaDRE.findMany({
     where: { ativo: true, tipo: { not: "SECAO" }, unidades: { some: { unidadeNegocio: { codigo: unidade } } } },
     select: { codigo: true },
@@ -100,7 +99,7 @@ async function orcadoDaVisao(visao: number, ate: number, comparacao: Comparacao 
   for (const r of rs) {
     const v = Number(r.valor);
     if (r.visao === 0) somar(doConsolidado, r.linhaDRE.codigo, r.mes, v);
-    // Em Despesas e Extra e no RN, a ROL é a do Consolidado, como no realizado.
+    // Em Despesas, no Extra-Operacional, no RN e na Leben, a ROL é a do Consolidado, como no realizado.
     const entra = visao >= 4 ? (r.visao === 0) === (r.linhaDRE.codigo === COD.RO) : r.visao === visao;
     if (entra) somar(daVisao, r.linhaDRE.codigo, r.mes, v);
   }
@@ -162,7 +161,7 @@ export function montar(
         volume,
         /** O usuário alcança os lançamentos da linha (o recorte do Gestor por departamento), como na DRE. */
         // Sem o Acesso a Informações Sensíveis (27/10/2026), as linhas de Mão de Obra Direta e Indireta sem a lupa, em todas as visões.
-        podeDetalhar: podeVerSensiveis(acesso, l) && (visao === "centros" || (visao === "obras" ? podeVerLinhaNaObra(acesso, l) : podeVerMovimentos(acesso, l))),
+        podeDetalhar: podeVerSensiveis(acesso, l) && (visao === "centros" || podeVerMovimentos(acesso, l)),
         meses,
         total: {
           valor: total,
@@ -180,18 +179,18 @@ export const resultadosService = {
    * `prova` (31/10/2026, a Tabela PROVA dos Relatórios Executivos): as marcações dos outros cenários; os que existem vêm em
    * `prova` (a marcação, o rótulo e o nome), e cada linha traz, em `prova`, o orçado de cada um, como o do comparado.
    */
-  async unidade(ano: number, visao: 0 | 1 | 2 | 3 | 4 | 5, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false, comparaCom: Comparacao = "ORCAMENTO_EMPRESARIAL", prova: MarcacaoCenario[] = []) {
+  async unidade(ano: number, visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false, comparaCom: Comparacao = "ORCAMENTO_EMPRESARIAL", prova: MarcacaoCenario[] = []) {
     const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
     const competencias = meses.map((m) => m.competenciaId);
     const [linhas, valores, daUnidade] = await Promise.all([estrutura(), valoresDaVisao(competencias, visao), visao === 0 ? [] : codigosDaUnidade(visao)]);
     const consolidado = basesDoConsolidado(visao) ? await valoresDaVisao(competencias, 0) : valores;
-    // Em Despesas e Extra e no RN, a ROL do Consolidado abre a tabela, como nas abas da planilha.
-    if (visao === 4 || visao === 5) valores.forEach((m, i) => consolidado[i].has(COD.RO) && m.set(COD.RO, consolidado[i].get(COD.RO)!));
+    // Em Despesas, no Extra-Operacional, no RN e na Leben, a ROL do Consolidado abre a tabela, como nas abas da planilha.
+    if (visao === 4 || visao === 5 || visao === 6 || visao === 7) valores.forEach((m, i) => consolidado[i].has(COD.RO) && m.set(COD.RO, consolidado[i].get(COD.RO)!));
     const apurado = meses.map((m) => m.competenciaId !== null);
     const [orcado, ...dosCenarios] = await Promise.all([orcadoDaVisao(visao, ultimo, comparaCom), ...prova.map((m) => orcadoDaVisao(visao, ultimo, m))]);
     // Os cenários da Tabela PROVA que existem, com a marcação.
     const doProva = prova.flatMap((m, k) => (dosCenarios[k].cenario ? [{ marcacao: m, orcado: dosCenarios[k] }] : []));
-    // O % e o R$/m³ do orçado sobre as bases do próprio orçado (em Despesas e Extra e no RN, as do Consolidado).
+    // O % e o R$/m³ do orçado sobre as bases do próprio orçado (em Despesas, no Extra-Operacional, no RN e na Leben, as do Consolidado).
     const celulaDo = (o: typeof orcado) => (l: LinhaEstrutura, periodo: "mes" | "total") => {
       const basesOrcado = basesDoConsolidado(visao) ? o.doConsolidado : o.daVisao;
       const v = arredonda(o.daVisao[periodo].get(l.codigo) ?? 0, 4);
@@ -243,63 +242,6 @@ export const resultadosService = {
             }
           : {}),
       })),
-    };
-  },
-
-  /**
-   * As obras (centros 1.98 e 1.99) com lançamento em algum mês, com o total do exercício: o Resultado Líquido; no
-   * recorte, a soma das linhas que o usuário vê (11/10/2026). O nome é o do último mês.
-   */
-  async listarObras(ano: number, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false) {
-    const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
-    const obras = new Map<string, { nome: string; total: number }>();
-    for (const m of meses) {
-      if (!m.competenciaId) continue;
-      for (const o of (await obrasService.listar(ano, m.mes, acesso)).obras) {
-        const x = obras.get(o.codigo) ?? { nome: o.nome, total: 0 };
-        obras.set(o.codigo, { nome: o.nome, total: x.total + Number(o.total) });
-      }
-    }
-    return {
-      ano,
-      ate: ultimo,
-      obras: [...obras]
-        .map(([codigo, o]) => ({ codigo, nome: o.nome, total: o.total.toFixed(2) }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR") || a.codigo.localeCompare(b.codigo)),
-    };
-  },
-
-  /** Uma obra mês a mês (a DRE da obra de cada mês, como na aba Obras da DRE); o % sobre a receita da própria obra. */
-  async obra(ano: number, codigo: string, ate?: number, acesso: Acesso = ACESSO_TOTAL, somenteFechadas = false) {
-    const { ultimo, meses } = await mesesDoExercicio(ano, ate, somenteFechadas);
-    const linhas = await estrutura();
-    let nome = codigo;
-    const valores = await Promise.all(
-      meses.map(async (m) => {
-        const mapa = new Map<string, number>();
-        if (!m.competenciaId) return mapa;
-        try {
-          const dre = await obrasService.consultar(ano, m.mes, codigo, acesso);
-          // No mês só com os volumes (sem lançamento), o nome é o código.
-          if (dre.obra.nome !== codigo) nome = dre.obra.nome;
-          for (const l of dre.linhas) if (l.valor !== null && l.tipo !== "SECAO") mapa.set(l.codigo, Number(l.valor));
-        } catch (error) {
-          if (!(error instanceof RegraDREError && error.status === 404)) throw error; // sem lançamento no mês
-        }
-        return mapa;
-      }),
-    );
-    if (valores.every((m) => m.size === 0)) throw new RelatorioError(404, `Nenhum lançamento da obra ${codigo} em ${ano}.`);
-    const apurado = meses.map((m) => m.competenciaId !== null);
-    const montadas = montar(linhas, "obras", apurado, valores, valores, acesso);
-    // As seções ficam de fora, menos a Produção e Serviços (PS) da obra com volume (30/10/2026), como no Consolidado.
-    const comVolume = montadas.some((l) => l.volume && l.tipo !== "SECAO");
-    return {
-      ano,
-      ate: ultimo,
-      obra: { codigo, nome },
-      meses: meses.map(({ mes, rotulo, competenciaId }) => ({ mes, rotulo, apurado: competenciaId !== null })),
-      linhas: montadas.filter((l) => l.tipo !== "SECAO" || (comVolume && l.volume)),
     };
   },
 

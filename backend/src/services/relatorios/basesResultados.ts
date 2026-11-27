@@ -15,7 +15,7 @@
  *   produção (m³); a receita de montagem e os custos de montagem sobre a
  *   montagem (m³); o Frete e Descarga sobre a expedição (m³) (21/10/2026). As demais linhas não têm.
  *
- * Em Despesas e Extra e no RN, a base é a ROL do Consolidado (a primeira linha
+ * Em Despesas, no Extra-Operacional, no RN e na Leben, a base é a ROL do Consolidado (a primeira linha
  * dessas abas); nos centros de custo, as do Consolidado.
  */
 
@@ -36,8 +36,8 @@ export const COD = {
   EXPEDICAO: "S.EXPEDICAO_DO_PRE_FABRICADO_M",
 } as const;
 
-/** 0 Consolidado, 1 Matriz, 2 Filial, 3 Serviços, 4 Despesas e Extra, 5 RN, ou os centros de custo. */
-export type VisaoResultados = 0 | 1 | 2 | 3 | 4 | 5 | "centros" | "obras";
+/** 0 Consolidado, 1 Matriz, 2 Filial, 3 Serviços, 4 Despesas, 5 RN, 6 Extra-Operacional (27/11/2026), 7 Leben (27/11/2026), ou os centros de custo. */
+export type VisaoResultados = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | "centros" | "obras";
 type Linha = { codigo: string; grupoSigla: string };
 
 /** Os grupos das linhas de volume (m³, kg, pistas, dias): sem % nem R$/m³. */
@@ -67,5 +67,5 @@ export function baseDoUnitario(l: Linha): string | null {
   return null;
 }
 
-/** Em Despesas e Extra, no RN e nos centros de custo, as bases vêm do Consolidado. */
-export const basesDoConsolidado = (visao: VisaoResultados) => visao === 4 || visao === 5 || visao === "centros";
+/** Em Despesas, no Extra-Operacional, no RN, na Leben e nos centros de custo, as bases vêm do Consolidado. */
+export const basesDoConsolidado = (visao: VisaoResultados) => visao === 4 || visao === 5 || visao === 6 || visao === 7 || visao === "centros";

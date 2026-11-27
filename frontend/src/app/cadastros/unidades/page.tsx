@@ -18,8 +18,8 @@ export default function UnidadesPage() {
               <li>Use os filtros nos rótulos das colunas.</li>
               <li>
                 Use “Novo” para incluir uma unidade: ela recebe o próximo código (sem a Ordem, vai para o fim da lista), e o nome não pode repetir o de
-                outra. A apuração, os Resultados e os cenários calculam só as cinco unidades com regra própria (Matriz, Filial, Serviços, Despesas e
-                Extra e RN): a unidade nova fica fora da DRE até ganhar a regra dela, e a mensagem depois de gravar lembra isso. Nos cenários analíticos,
+                outra. A apuração, os Resultados e os cenários calculam só as sete unidades com regra própria (Matriz, Filial, Serviços, Despesas,
+                Extra-Operacional, RN e Leben): a unidade nova fica fora da DRE até ganhar a regra dela, e a mensagem depois de gravar lembra isso. Nos cenários analíticos,
                 ela entra pelo Trazer Novos dos Cadastros Gerais.
               </li>
               <li>O lápis edita o nome, a ordem e a situação. A exclusão não existe: desmarque “Ativa” para tirar uma unidade de uso.</li>

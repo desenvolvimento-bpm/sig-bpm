@@ -41,6 +41,17 @@ export function ConfiguracoesContent() {
               Também na aba Cenário: “Marcar Cenário” marca o cenário como Orçamento, Anterior, Vendido ou Forecast (cada
               marcação fica ativa em um cenário só: marcar este tira a do anterior), e “Excluir Cenário” o exclui (um cenário marcado não se exclui).
             </li>
+            <li>
+              As versões, ainda na aba Cenário, logo depois de “Gravar Configurações” (para quem edita a tela Resultados): “Congelar Versão” trava o
+              cenário na versão atual (VER00, VER01…), como o fechamento de uma competência — a DRE, os Indicadores Manuais e a referência não se
+              editam mais
+              {analitico
+                ? "; no cenário analítico, só com a DRE recalculada (Resultados / Recalcular) e com as Verificações das Premissas (a última aba delas) todas corrigidas ou com o De Acordo"
+                : ""}
+              ; “Reabrir Versão” a destrava, como a reabertura de uma competência. “Criar Revisão” (só numa versão congelada) cria uma cópia na
+              próxima versão, aberta para edição: um cenário novo na lista, com a DRE, os indicadores, o comparativo e as justificativas, que abre
+              nesta tela. A marcação fica na versão de origem: remarque a revisão à mão em “Marcar Cenário”.
+            </li>
             {analitico ? (
               <>
                 <li>
@@ -62,8 +73,7 @@ export function ConfiguracoesContent() {
                   as médias novas, e o “Replicar Médias” as leva aos meses; desmarcada, a referência substitui também os meses (os valores digitados se perdem). Os colaboradores do cenário vêm só da aba Quadro de Lotação das
                   Premissas, alimentada pela Gestão de Colaboradores: no realizado, marque “Importar Quadro de Lotação Vigente” para trocar as linhas
                   dela pelas do Quadro de Lotação mais recente da Gestão de Colaboradores (os colaboradores do fim da competência mais recente, em todos
-                  os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam. Com a caixa Aplicar Reajustes marcada
-                  (nos Resultados), a referência não se carrega nem se realoca, com o aviso na aba: desmarque-a antes.
+                  os meses), qualquer que seja o período (De / Até); os salários das linhas que o cenário já tinha ficam.
                 </li>
                 <li>A Correspondência Tarefa × Linha, que leva os custos do realizado às linhas, fica nos Cadastros Gerais / Linhas, no botão “Tarefas”.</li>
                 <li>
@@ -100,7 +110,7 @@ export function ConfiguracoesContent() {
                 <li>
                   As gravações das Configurações (a referência e as realocações, os centros de custo, os benefícios padrão, as regras de rateio) e
                   dos Índices de Reajuste não refazem a DRE: cada uma conta no destaque Pendente de Recálculo da tela Resultados (como uma
-                  Configuração, ou um Reajuste, com a caixa Aplicar Reajustes marcada), cujo “Recalcular” refaz a DRE com todas. Os Índices de
+                  Configuração, ou um Reajuste, com a caixa Aplicar ao Recalcular marcada), cujo “Recalcular” refaz a DRE com todas. Os Índices de
                   Comparação, as unidades, os departamentos e as redistribuições não mudam a DRE.
                 </li>
                 <li>
@@ -163,7 +173,7 @@ export function ConfiguracoesContent() {
                   Gestor (recorte por Departamento), o que é dos departamentos dele, pela regra do Exportar Premissas (Produção: Matriz, Filial, os
                   centros de produção, os rateios, a depreciação e os investimentos delas; Serviços: a aba Serviços, os centros de serviços, os rateios e
                   os seus investimentos; Logística, Técnico, Comercial e Administrativo: os centros do departamento; Extra-Operacional: a aba
-                  Extra-Operacional; os investimentos de Despesas e Extra, pelo Departamento de cada um; os indicadores manuais, pelo grupo); o
+                  Extra-Operacional; os investimentos de Despesas, pelo Departamento de cada um; os indicadores manuais, pelo grupo); o
                   Coordenador (recorte por Centros de Custo), só os grupos de centros com algum centro dele, no Quadro de Lotação, nos Centros de Custo e
                   nos Rateios. Quem criou o cenário e os Administradores veem tudo; Resultados e Painel de Bordo mostram sempre a DRE inteira. Só quem
                   criou o cenário ou o Administrador muda o Acesso às Informações.
@@ -203,13 +213,14 @@ export function ConfiguracoesContent() {
                   unidade (Configurações / Departamentos).
                 </li>
                 <li>
-                  Os reajustes entram na DRE pela caixa “Aplicar Reajustes”, na tela Resultados, antes do “Recalcular” (marcá-la confirma num
-                  modal): o Recalcular multiplica cada conta com índice, em cada mês, por (1 + Valor) de cada reajuste já iniciado; desmarcada a
-                  caixa, o Recalcular faz o inverso e volta aos valores das premissas. O aviso acima do quadro diz se a caixa está marcada. Marcada,
-                  a barra do cenário mostra a etiqueta Reajustes Aplicados, as Configurações e as abas das Premissas (menos Indicadores Manuais)
-                  ficam bloqueadas para edição, “Importar Valores” sai da tela Premissas, a referência não se carrega e gravar um Índice de Reajuste
-                  deixa a DRE pendente de recálculo; o histórico registra cada aplicação e remoção no Recalcular (tela Histórico). As premissas não
-                  mudam: o reajuste fica só na DRE.
+                  Os reajustes entram na DRE pela caixa “Aplicar ao Recalcular”, no destaque dos Índices de Reajuste, antes do “Novo Índice”:
+                  marcada, todo “Recalcular” (na tela Resultados) multiplica cada conta com índice, em cada mês, por (1 + Valor) de cada reajuste já
+                  iniciado, sobre os valores das premissas; desmarcada, o Recalcular leva as premissas sem os reajustes. Mudar a caixa conta como um
+                  Reajuste no Pendente de Recálculo, e o aviso acima do quadro diz se ela está marcada. Marcada, a barra do cenário mostra a etiqueta
+                  Reajustes Aplicados, e gravar um Índice de Reajuste deixa a DRE pendente de recálculo; as Configurações e as Premissas continuam
+                  editáveis, e o próximo Recalcular aplica os reajustes sobre os valores novos. O histórico registra cada aplicação e remoção no
+                  Recalcular (tela Histórico). As premissas não mudam: o reajuste fica só na DRE. A caixa segue a Edição das Configurações: com ela
+                  Particular, só quem criou o cenário (ou o Administrador) a muda; sem nenhuma conta com Índice de Reajuste, ela não se marca.
                 </li>
                 <li>
                   Na tela Resultados, nas abas das unidades (no Consolidado, não), a coluna Índice de Reajuste, antes de Janeiro, traz o

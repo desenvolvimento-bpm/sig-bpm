@@ -93,7 +93,7 @@ export function escopo(est: LinhaDRE[], prefixos: Set<string>) {
   return s;
 }
 
-/** Os lançamentos do mês, contábeis e manuais (fora do balde RN), agrupados pelo contexto, no sinal do balancete. */
+/** Os lançamentos do mês, contábeis e manuais (fora dos baldes RN e LEBEN), agrupados pelo contexto, no sinal do balancete. */
 async function fontesDoMes(competenciaId: string): Promise<Fonte[]> {
   const prisma = getPrismaClient();
   const [diretos, partes, manuais] = await Promise.all([
@@ -139,7 +139,7 @@ async function fontesDoMes(competenciaId: string): Promise<Fonte[]> {
     );
   }
   for (const m of manuais) {
-    if (n(m.balde) === "RN") continue;
+    if (n(m.balde) === "RN" || n(m.balde) === "LEBEN") continue;
     const rateio = CHAVES_DE_RATEIO.has(m.balde ?? "");
     somar(
       {

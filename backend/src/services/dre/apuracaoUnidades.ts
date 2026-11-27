@@ -8,8 +8,9 @@ type Decimal = Prisma.Decimal;
 
 /**
  * Apuração da DRE por unidade — as abas Resultados (Matriz), (Filial),
- * (Serviços), (Desp.+Extra) e (RN) do SIG BPM 2026 - BASE REALIZADO
- * (RESULTADOS). Cada linha de item sai dos lançamentos classificados (a aba
+ * (Serviços), (Desp.+Extra) e (RN) do SIG BPM 2026 - BASE REALIZADO, com a Leben (7, 27/11/2026: uma cópia do RN, com o balde LEBEN)
+ * (RESULTADOS); desde 27/11/2026 (o teste da separação, pedido do Adão), a aba (Desp.+Extra) em duas unidades: Despesas (4,
+ * DFO a DA) e Extra-Operacional (6, de DML em diante), com a mesma regra, conta a conta. Cada linha de item sai dos lançamentos classificados (a aba
  * Gastos (Contábil)), dos percentuais de rateio, da receita prévia e dos
  * lançamentos manuais, com a regra da fórmula da planilha; subtotais e totais
  * saem das expressões da estrutura da DRE, avaliadas com os itens da unidade.
@@ -29,7 +30,9 @@ type Decimal = Prisma.Decimal;
  * composição de cada um, para a memória de cálculo e o detalhamento.
  */
 
-export const UNIDADE = { MATRIZ: 1, FILIAL: 2, SERVICOS: 3, DESPESAS: 4, RN: 5 } as const;
+export const UNIDADE = { MATRIZ: 1, FILIAL: 2, SERVICOS: 3, DESPESAS: 4, RN: 5, EXTRA: 6, LEBEN: 7 } as const;
+/** Os baldes dos lançamentos manuais que vão só para uma unidade (27/11/2026: a Leben, uma cópia do RN, com o balde LEBEN). */
+const BALDE_DA_UNIDADE_MANUAL: Record<string, number> = { RN: UNIDADE.RN, LEBEN: UNIDADE.LEBEN };
 
 export type LinhaEstrutura = {
   id: string;
@@ -155,7 +158,7 @@ const FINANCEIRAS = new Set(["RFC", "RFNC", "DFC", "DFNC"]);
 /**
  * As chaves de rateio com lançamentos e sem volume no mês (a soma dos percentuais da chave é zero), com a soma dos
  * lançamentos que ficam fora de todas as unidades (13/10/2026). Os do acompanhamento nas receitas e despesas
- * financeiras não contam: vão inteiros para Despesas e Extra.
+ * financeiras não contam: vão inteiros para o Extra-Operacional.
  */
 export function rateiosSemVolume(d: Pick<DadosApuracao, "lancamentos" | "percentuais" | "linhas">): Map<string, Decimal> {
   const porId = new Map(d.linhas.map((l) => [l.id, l]));
@@ -205,7 +208,7 @@ const CALCULADAS = new Set(
  * Vazio, o lançamento fica fora de todas as abas e do resultado (ex.: uma conta de Montagem num centro com o balde
  * COMPLEMENTAR: Serviços soma a Montagem só do balde OBRAS, e a Complementar só nas linhas dela). Usado pela apuração (o
  * aviso), pela Classificação (a pendência "Sem Aba de Resultado") e pelos lançamentos manuais (`manual`: o do balde RN
- * vai só para a aba RN).
+ * vai só para a aba RN, e o do balde LEBEN, só para a Leben, 27/11/2026).
  */
 export function abasQueSomam(
   linha: Pick<LinhaEstrutura, "tipo" | "codigo" | "grupoSigla" | "unidades">,
@@ -216,7 +219,8 @@ export function abasQueSomam(
   // A conta pela descrição de origem (25/11/2026), que não muda com a Descrição.
   const desc = descricaoDeOrigem(linha.codigo);
   const g = linha.grupoSigla;
-  if (l.manual && b === "RN") return linha.unidades.includes(UNIDADE.RN) ? [UNIDADE.RN] : [];
+  const soDoManual = l.manual ? BALDE_DA_UNIDADE_MANUAL[b] : undefined;
+  if (soDoManual) return linha.unidades.includes(soDoManual) ? [soDoManual] : [];
   if (g === "P" || g === "S" || CALCULADAS.has(desc)) return [];
   const comissao = desc === slugDaDRE("Comissões de Representantes e Terceiros");
   const impostos = desc === slugDaDRE("Impostos Operacionais");
@@ -224,11 +228,11 @@ export function abasQueSomam(
   for (const u of linha.unidades) {
     if (l.rateio) {
       // Os rateios: a produção nas linhas da Matriz e da Filial (e nas de Serviços, pela linha de custo de produção); o
-      // acompanhamento na Montagem (a base dele) e nas financeiras de Despesas e Extra.
+      // acompanhamento na Montagem (a base dele) e nas financeiras do Extra-Operacional (antes de 27/11/2026, Despesas e Extra).
       const producao = (RATEIOS_PRODUCAO as readonly string[]).includes(b);
       if ((u === UNIDADE.MATRIZ || u === UNIDADE.FILIAL) && producao && !comissao && !impostos) abas.push(u);
       else if (u === UNIDADE.SERVICOS && b === "ACOMPANHAMENTO" && g === "CSM") abas.push(u);
-      else if (u === UNIDADE.DESPESAS && b === "ACOMPANHAMENTO" && FINANCEIRAS.has(g)) abas.push(u);
+      else if ((u === UNIDADE.DESPESAS || u === UNIDADE.EXTRA) && b === "ACOMPANHAMENTO" && FINANCEIRAS.has(g)) abas.push(u);
       continue;
     }
     if (u === UNIDADE.MATRIZ || u === UNIDADE.FILIAL) {
@@ -244,7 +248,7 @@ export function abasQueSomam(
       else if (g === "DVV" && desc === slugDaDRE("Frete e Descarga") && b === "COMPLEMENTAR") abas.push(u);
       // A Montagem com o balde COMPLEMENTAR vai para a linha equivalente dos Complementares, quando ela existe.
       else if (g === "CSM" && b === "COMPLEMENTAR" && l.parNaComplementar) abas.push(u);
-    } else if (u === UNIDADE.DESPESAS) abas.push(u);
+    } else if (u === UNIDADE.DESPESAS || u === UNIDADE.EXTRA) abas.push(u);
   }
   return abas;
 }
@@ -285,7 +289,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
   const linhaCSM = (l: LinhaEstrutura) => porGrupoESemGrupo.get(`CSM|${semOGrupo(l.codigo)}`);
   const linhaCSC = (l: LinhaEstrutura) => porGrupoESemGrupo.get(`CSC|${semOGrupo(l.codigo)}`);
 
-  // Os lançamentos manuais fora do balde RN (21/10/2026): como lançamentos do balancete do mesmo balde, filial e linha,
+  // Os lançamentos manuais fora dos baldes RN e LEBEN (21/10/2026): como lançamentos do balancete do mesmo balde, filial e linha,
   // no sinal do balancete; os que nenhuma aba soma ficam num aviso.
   const porId = new Map(d.linhas.map((l) => [l.id, l]));
   const manuaisComoBalancete: LancamentoClassificado[] = [];
@@ -296,7 +300,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     if (!abasQueSomam(linha, { filial: m.filial ?? 1, balde: m.balde, rateio: rateioManual, manual: true, parNaComplementar: !!linhaCSC(linha) }).length) {
       avisos.push(`Lançamento manual de ${m.valor.toFixed(2)} em "${linha.descricao}" (balde ${m.balde ?? "-"}, filial ${m.filial ?? "-"}): nenhuma aba de resultado soma essa combinação; ficou fora do resultado.`);
     }
-    if (n(m.balde) === "RN") continue;
+    if (BALDE_DA_UNIDADE_MANUAL[n(m.balde)]) continue;
     // O de rateio com os percentuais de outra competência (30/10/2026) fica à parte, com a competência.
     const rateioDe = rateioManual && m.rateioDe && d.percentuaisDe?.has(m.rateioDe) ? m.rateioDe : undefined;
     manuaisComoBalancete.push({
@@ -360,8 +364,8 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
   const total = (codigo: string) => d.totais.get(codigo) ?? zero();
   const previa = (unidade: number, natureza: string) =>
     d.receitas.find((r) => r.unidade === unidade && r.natureza === natureza) ?? { receitaBruta: zero(), receitaLiquida: zero() };
-  const manualRN = (linhaId: string) =>
-    d.manuais.filter((m) => m.linhaDREId === linhaId && n(m.balde) === "RN").reduce((a, m) => a.plus(m.valor), zero());
+  const manualDoBalde = (linhaId: string, balde: string) =>
+    d.manuais.filter((m) => m.linhaDREId === linhaId && n(m.balde) === balde).reduce((a, m) => a.plus(m.valor), zero());
 
   const parcela = (chave: string, destino: string, linhaBase: LinhaEstrutura | undefined, base: Decimal, p: Decimal, competencia?: BaseDoRateio["competencia"]): ParcelaRateio => ({
     chave,
@@ -627,7 +631,9 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     }
   }
 
-  // --- Despesas + Extra ----------------------------------------------------
+  // --- Despesas e Extra-Operacional ------------------------------------------
+  // As duas unidades da aba (Desp.+Extra) (27/11/2026): cada conta na sua (Despesas, de DFO a DA; Extra-Operacional, de DML em
+  // diante), com a mesma regra.
   // Sem a guarda da ROL consolidada (Resultados (Desp.+Extra), linha 2), que zerava as despesas num mês sem receita:
   // como as guardas da produção e da montagem, servia só ao Excel (decisão do usuário de 13/10/2026).
   const robDe = (u: number) => {
@@ -635,8 +641,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     return l?.expressao ? avaliarExpressao(l.expressao, (c) => valorDe(u, c)) : zero();
   };
   const robConsolidada = [1, 2, 3].reduce((a, u) => a.plus(robDe(u)), zero());
-  {
-    const u = UNIDADE.DESPESAS;
+  for (const u of [UNIDADE.DESPESAS, UNIDADE.EXTRA]) {
     for (const l of itensDa(u)) {
       const c = somaDireto(l.id);
       // Receitas financeiras entram com o sinal trocado (linhas 84, 85 e 87).
@@ -648,7 +653,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
       const despesaFinanceira = l.grupoSigla === "DFC" || l.grupoSigla === "DFNC";
       const bases = despesaFinanceira || financeira ? basesDoRateio("ACOMPANHAMENTO", l.id) : [];
       const acompanhamento = bases.reduce((a, f) => a.plus(f.base), zero());
-      const rateios = bases.map((f) => parcela("ACOMPANHAMENTO", "DESPESAS", l, f.base, zero().plus(financeira ? -1 : 1), f.competencia));
+      const rateios = bases.map((f) => parcela("ACOMPANHAMENTO", u === UNIDADE.EXTRA ? "EXTRA" : "DESPESAS", l, f.base, zero().plus(financeira ? -1 : 1), f.competencia));
       gravar(u, l, financeira ? c.plus(acompanhamento).neg() : c.plus(acompanhamento), {
         regra: financeira
           ? "−(lançamentos contábeis diretos + rateio de acompanhamento inteiro)"
@@ -662,10 +667,13 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
     }
   }
 
-  // --- RN: lançamentos manuais do balde RN ----------------------------------
-  for (const l of itensDa(UNIDADE.RN)) {
-    const v = manualRN(l.id);
-    gravar(UNIDADE.RN, l, v, { regra: "Lançamentos manuais do balde RN", origem: { manual: { linhaId: l.id, balde: "RN" } } });
+  // --- RN e Leben: os lançamentos manuais do balde de cada uma ---------------
+  // A Leben (27/11/2026, pedido do Adão) é uma cópia do RN: as mesmas contas, com os lançamentos manuais do balde LEBEN.
+  for (const [balde, u] of Object.entries(BALDE_DA_UNIDADE_MANUAL)) {
+    for (const l of itensDa(u)) {
+      const v = manualDoBalde(l.id, balde);
+      gravar(u, l, v, { regra: `Lançamentos manuais do balde ${balde}`, origem: { manual: { linhaId: l.id, balde } } });
+    }
   }
 
   // --- Comissões: diretos × participação da unidade na ROB consolidada ------
@@ -687,7 +695,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
   // --- Rateios sem volume (13/10/2026) -------------------------------------
   // Todo custo e despesa vai para algum lugar: uma chave com lançamentos de rateio e sem volume no mês (todos os
   // percentuais zero) deixa esses lançamentos fora de todas as unidades. O aviso diz quanto ficou de fora. As receitas e
-  // as despesas financeiras do acompanhamento vão inteiras para Despesas e Extra e não dependem dos percentuais.
+  // as despesas financeiras do acompanhamento vão inteiras para o Extra-Operacional e não dependem dos percentuais.
   for (const [chave, valor] of rateiosSemVolume({ ...d, lancamentos: lancamentos.filter((l) => !l.rateioDe) })) {
     avisos.push(`Rateio de ${NOME_DA_CHAVE[chave] ?? chave} sem volume no mês: ${valor.toFixed(2)} em lançamentos de rateio não foram para nenhuma unidade.`);
   }
@@ -699,7 +707,7 @@ export function apurarUnidades(d: DadosApuracao): { resultados: ResultadoLinha[]
 
   // --- Subtotais e totais, pela estrutura, com os itens da unidade ---------
   const ordenadas = [...d.linhas].filter((l) => l.tipo !== "ITEM" && l.tipo !== "SECAO" && l.expressao);
-  for (const u of [1, 2, 3, 4, 5]) {
+  for (const u of [1, 2, 3, 4, 5, 6, 7]) {
     const avaliar = (codigo: string, pilha = new Set<string>()): Decimal => {
       const jaTem = valores.get(u)?.get(codigo);
       if (jaTem !== undefined) return jaTem;

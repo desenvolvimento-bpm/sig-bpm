@@ -100,7 +100,7 @@ const SOBRE_ANALITICOS = (
   <>
     <p>
       Os cenários analíticos: versões mais detalhadas dos sintéticos, montadas a partir das premissas — as demandas, os centros de custo, os
-      investimentos e o extra-operacional —, com os resultados (Consolidado, Matriz, Filial, Serviços, Despesas e Extra e RN) calculados a partir
+      investimentos e o extra-operacional —, com os resultados (Consolidado, Matriz, Filial, Serviços, Despesas, Extra-Operacional, RN e Leben) calculados a partir
       delas, pelas relações entre unidades, linhas e centros de custo e pelos rateios do fechamento mensal.
     </p>
     <p>
@@ -144,7 +144,7 @@ export function CenariosContent({ tipo = "SINTETICO" }: { tipo?: TipoCenario }) 
             </li>
             <li>
               Ao lado do nome, a versão do cenário (VER00, VER01…), com o cadeado quando congelada, e a etiqueta “Vigente” (com a estrela) na versão
-              mais alta de cada cenário. As versões se congelam, se reabrem e se revisam na tela Resultados de cada cenário (Congelar Versão, Reabrir
+              mais alta de cada cenário. As versões se congelam, se reabrem e se revisam em Configurações / Cenário de cada cenário (Congelar Versão, Reabrir
               Versão e Criar Revisão); cada revisão é um cenário próprio na lista, com o mesmo nome e a versão seguinte.
             </li>
             <li>Clique na linha para abrir o cenário, com as telas Configurações, Resultados, Painel de Bordo e Reajustes (as que o seu perfil lê).</li>
@@ -170,7 +170,7 @@ export function CenariosContent({ tipo = "SINTETICO" }: { tipo?: TipoCenario }) 
         sobre={analitico ? SOBRE_ANALITICOS : (
           <>
             <p>
-              Os cenários sintéticos: cada um é uma DRE por unidade (Consolidado, Matriz, Filial, Serviços, Despesas e Extra e RN), mês a mês no
+              Os cenários sintéticos: cada um é uma DRE por unidade (Consolidado, Matriz, Filial, Serviços, Despesas, Extra-Operacional, RN e Leben), mês a mês no
               exercício, com as metas dos indicadores.
             </p>
             <p>

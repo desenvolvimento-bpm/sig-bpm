@@ -61,8 +61,8 @@ export const relatoriosExecutivosController = {
     const r = id(request, response);
     if (!r) return;
     const visao = Number(request.query.visao);
-    if (![0, 1, 2, 3, 4, 5].includes(visao)) return response.status(400).json({ error: "Visão inválida." });
-    return responder(response, () => s.resultados(r, visao as 0 | 1 | 2 | 3 | 4 | 5));
+    if (![0, 1, 2, 3, 4, 5, 6, 7].includes(visao)) return response.status(400).json({ error: "Visão inválida." });
+    return responder(response, () => s.resultados(r, visao as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7));
   },
 
   gravarAba(request: Request, response: Response) {

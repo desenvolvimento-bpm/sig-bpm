@@ -29,8 +29,10 @@ const UNIDADES = [
   { codigo: 1, nome: "Matriz" },
   { codigo: 2, nome: "Filial" },
   { codigo: 3, nome: "Serviços" },
-  { codigo: 4, nome: "Despesas e Extra" },
+  { codigo: 4, nome: "Despesas" },
+  { codigo: 6, nome: "Extra-Operacional" },
   { codigo: 5, nome: "RN" },
+  { codigo: 7, nome: "Leben" },
 ];
 
 /**

@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { baseDasMedias, beneficiosDaDiferenca, encargosDasMedias, encargosDoGrupo, FATOR_PADRAO, fatorDosEncargos, ITENS_DOS_ENCARGOS, maosDeObraDoGrupo } from "../src/services/cenarios/encargosCenario.js";
+import {
+  baseDasMedias,
+  beneficiosDaDiferenca,
+  ehContaDeRemuneracoesCLT,
+  encargosDasMedias,
+  encargosDoGrupo,
+  FATOR_PADRAO,
+  fatorDosEncargos,
+  ITENS_DOS_ENCARGOS,
+  LINHAS_DOS_ENCARGOS,
+  maosDeObraDoGrupo,
+  valoresDosIndicadores,
+} from "../src/services/cenarios/encargosCenario.js";
 import { assinaturaDoQuadro, gruposDasMedias } from "../src/services/cenarios/maoDeObraDasMedias.js";
 
 const MOD = ["CPP.MOD.REMUNERACOES_CLT", "CPP.MOD.REMUNERACOES_PJ", "CPP.MOD.ENCARGOS_E_BENEFICIOS", "CPP.MOD.HORAS_EXTRAS", "CPP.MOD.MULTAS_RESCISORIAS"];
@@ -88,5 +100,39 @@ describe("a mão de obra das médias (22/11/2026)", () => {
     assert.deepEqual(gruposDasMedias(marcadores, comSalario), { validos: new Set(), vencidos: ["ACABAMENTO", "SEM QUADRO"] });
     assert.equal(assinaturaDoQuadro(undefined), 0);
     assert.notEqual(assinaturaDoQuadro(q), 0);
+  });
+});
+
+describe("as linhas calculadas dos Encargos e Benefícios (27/11/2026)", () => {
+  it("a ordem: os percentuais, os Encargos Trabalhistas e os Encargos por Folha, os Benefícios Padrão, os Adicionais e os Benefícios por Colaborador", () => {
+    assert.deepEqual(LINHAS_DOS_ENCARGOS, [
+      "INSS",
+      "FGTS_APRENDIZ",
+      "FGTS",
+      "FERIAS",
+      "DECIMO_TERCEIRO",
+      "ENCARGOS_TRABALHISTAS",
+      "ENCARGOS_POR_FOLHA",
+      "BENEFICIOS_PADRAO",
+      "BENEFICIOS",
+      "BENEFICIOS_POR_COLABORADOR",
+    ]);
+    // Os itens gravados continuam os mesmos (as vendas das premissas), só com os Benefícios Padrão antes dos Adicionais.
+    assert.deepEqual(
+      ITENS_DOS_ENCARGOS.map((i) => i.item),
+      ["INSS", "FGTS_APRENDIZ", "FGTS", "FERIAS", "DECIMO_TERCEIRO", "BENEFICIOS_PADRAO", "BENEFICIOS"],
+    );
+  });
+
+  it("os Encargos por Folha sobre as Remunerações CLT e os Benefícios por Colaborador sobre o Total de Colaboradores; sem a base, nulo", () => {
+    const v = valoresDosIndicadores({ encargos: 6364, remuneracoesCLT: 10000, beneficios: 1500, colaboradores: 3 });
+    assert.equal(v.ENCARGOS_TRABALHISTAS, 6364);
+    assert.equal(centavos((v.ENCARGOS_POR_FOLHA ?? 0) * 100), 63.64);
+    assert.equal(v.BENEFICIOS_POR_COLABORADOR, 500);
+    const semBase = valoresDosIndicadores({ encargos: 0, remuneracoesCLT: 0, beneficios: 200, colaboradores: 0 });
+    assert.equal(semBase.ENCARGOS_POR_FOLHA, null);
+    assert.equal(semBase.BENEFICIOS_POR_COLABORADOR, null);
+    assert.ok(ehContaDeRemuneracoesCLT("CPP.MOD.REMUNERACOES_CLT"));
+    assert.ok(!ehContaDeRemuneracoesCLT("CPP.MOD.REMUNERACOES_PJ"));
   });
 });

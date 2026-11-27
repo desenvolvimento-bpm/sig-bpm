@@ -97,23 +97,6 @@ export function podeVerCentro(acesso: Acesso, centro: { id: string; departamento
 }
 
 /**
- * O usuário alcança os resultados das obras? Com recorte por centro de custo (Coordenador), só com a opção marcada no
- * cadastro dele (11/10/2026); os demais, sempre (o Gestor, nas linhas dos seus departamentos).
- */
-export const veObras = (acesso: Acesso) => !acesso.recorteCentro || acesso.recorteDepartamento || acesso.veObras;
-
-/**
- * Nas obras, as linhas que o usuário vê: o Coordenador com a opção, as da gestão dele e as abertas a todos (como um
- * Gestor daquele departamento); os demais, as das movimentações (`podeVerMovimentos`).
- */
-export function podeVerLinhaNaObra(acesso: Acesso, l: { grupoSigla: string; codigo: string }) {
-  if (acesso.recorteCentro && !acesso.recorteDepartamento) {
-    return acesso.veObras && (ABERTOS_A_TODOS.has(l.grupoSigla) || (acesso.gestao !== null && departamentoDaLinha(l) === acesso.gestao));
-  }
-  return podeVerMovimentos(acesso, l);
-}
-
-/**
  * As linhas com informações sensíveis (27/10/2026, pedido do Adão): as de Mão de Obra Direta (MOD) e Indireta (MOI) de
  * cada grupo da DRE — as Remunerações CLT e PJ, as Horas Extras, as Multas Rescisórias, os Encargos e Benefícios e o Pró
  * Labore Diretoria. A Mão de Obra Terceirizada (MOT) não é delas.

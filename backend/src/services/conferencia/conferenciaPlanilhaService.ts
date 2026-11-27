@@ -175,7 +175,11 @@ export const conferenciaPlanilhaService = {
 
     const visoes = [];
     for (const { unidade, aba } of ABAS) {
-      const dre = unidade === 0 ? consolidado : await dreService.consultarUnidade(ano, mes, unidade);
+      const daUnidade = unidade === 0 ? consolidado : await dreService.consultarUnidade(ano, mes, unidade);
+      // A aba Desp.+Extra da planilha contra Despesas (4) e Extra-Operacional (6) juntas (27/11/2026, o teste da separação): as
+      // contas de uma e da outra não se repetem, e a ROL das duas é a consolidada.
+      const extra = unidade === 4 ? await dreService.consultarUnidade(ano, mes, 6).catch(() => null) : null;
+      const dre = extra ? { ...daUnidade, linhas: [...daUnidade.linhas, ...extra.linhas.filter((l) => !daUnidade.linhas.some((x) => x.codigo === l.codigo))] } : daUnidade;
       const porCodigo = new Map(dre.linhas.map((l) => [l.codigo, l]));
       const daAba = valores.filter((v) => v.unidade === unidade);
       const linhas: LinhaRelatorio[] = [];
@@ -223,7 +227,7 @@ export const conferenciaPlanilhaService = {
       const destacadas = linhas.filter((l) => l.destaque);
       visoes.push({
         unidade,
-        nome: unidade === 0 ? "Consolidado" : (unidades.find((u) => u.codigo === unidade)?.nome ?? `Unidade ${unidade}`),
+        nome: unidade === 0 ? "Consolidado" : unidade === 4 ? "Despesas e Extra" : (unidades.find((u) => u.codigo === unidade)?.nome ?? `Unidade ${unidade}`),
         aba,
         comparadas: linhas.length,
         diferencas: destacadas.length,

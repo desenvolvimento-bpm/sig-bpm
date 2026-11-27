@@ -598,7 +598,7 @@ export async function alteradoSemRecalcular(tx: Tx, cenarioId: string, tela: Tel
   await tx.cenario.update({ where: { id: cenarioId }, data: { [CAMPO_DO_RECALCULO[tela]]: { increment: 1 } } });
 }
 
-/** As alterações ainda não recalculadas do analítico, por tela (os Reajustes com a caixa Aplicar Reajustes mudada). */
+/** As alterações ainda não recalculadas do analítico, por tela (os Reajustes com a caixa Aplicar ao Recalcular mudada). */
 export function pendenciasDoRecalculo(c: { recalculoConfiguracoes: number; recalculoPremissas: number; recalculoReajustes: number; reajustesAplicados: boolean; reajustesCalculados: boolean }) {
   const reajustes = c.recalculoReajustes + (c.reajustesAplicados !== c.reajustesCalculados ? 1 : 0);
   return { configuracoes: c.recalculoConfiguracoes, premissas: c.recalculoPremissas, reajustes, total: c.recalculoConfiguracoes + c.recalculoPremissas + reajustes };
@@ -647,7 +647,7 @@ export async function calcularAnalitico(tx: Tx, cenarioId: string) {
     percentuaisPelasRegras(regras, cenario.ano, bases),
   );
   // As regras deste cálculo: se mudarem depois, a tela Resultados pede o Recalcular. A DRE fica com todas as alterações
-  // (21/11/2026): as pendências do Recalcular zeram, e os reajustes do cálculo são os da caixa Aplicar Reajustes.
+  // (21/11/2026): as pendências do Recalcular zeram, e os reajustes do cálculo são os da caixa Aplicar ao Recalcular.
   await tx.cenario.update({
     where: { id: cenarioId },
     data: { rateiosAssinatura: assinaturaDasRegras(regras), recalculoConfiguracoes: 0, recalculoPremissas: 0, recalculoReajustes: 0, reajustesCalculados: cenario.reajustesAplicados },

@@ -15,15 +15,34 @@ import { ehAConta } from "../dre/descricaoDeOrigem.js";
 
 export const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
-/** As abas da DRE por visão (0 Consolidado, 1 a 5 as unidades), pelos nomes aceitos. */
+/**
+ * As abas da DRE por visão (0 Consolidado, 1 a 6 as unidades), pelos nomes aceitos. Desde 27/11/2026 (o teste da separação), a
+ * aba Desp.+Extra dos arquivos traz as duas unidades: a leitura (`separarDespesasEExtra`) deixa em Despesas (4) as contas dela e
+ * leva ao Extra-Operacional (6) as de DML em diante; um arquivo com a aba própria do Extra-Operacional usa a aba.
+ */
 export const ABAS_DRE: Array<{ visao: number; nome: string; abas: string[] }> = [
   { visao: 0, nome: "Consolidado", abas: ["Consolidado", "Resultados (Consolidado)"] },
   { visao: 1, nome: "Matriz", abas: ["Matriz", "Resultados (Matriz)"] },
   { visao: 2, nome: "Filial", abas: ["Filial", "Resultados (Filial)"] },
   { visao: 3, nome: "Serviços", abas: ["Serviços", "Resultados (Serviços)"] },
-  { visao: 4, nome: "Despesas e Extra", abas: ["Desp.+Extra", "Desp. +Extra", "Despesas e Extra", "Resultados (Desp.+Extra)"] },
+  { visao: 4, nome: "Despesas", abas: ["Desp.+Extra", "Desp. +Extra", "Despesas e Extra", "Resultados (Desp.+Extra)", "Despesas", "Resultados (Despesas)"] },
+  { visao: 6, nome: "Extra-Operacional", abas: ["Extra-Operacional", "Resultados (Extra-Operacional)"] },
   { visao: 5, nome: "RN", abas: ["RN", "Extra RN", "Resultados (RN)"] },
 ];
+
+/**
+ * A aba Desp.+Extra (a visão 4) em duas (27/11/2026): as contas que a Estrutura da DRE dá ao Extra-Operacional (6) saem da 4 e
+ * formam a visão 6, com a mesma aba; sem a aba própria do Extra-Operacional no arquivo. `daUnidade6`: os ids dessas contas.
+ */
+export function separarDespesasEExtra(dre: AbaDRELida[], daUnidade6: Set<string>): AbaDRELida[] {
+  const desp = dre.find((d) => d.visao === 4);
+  if (!desp || dre.some((d) => d.visao === 6)) return dre;
+  const extra = desp.valores.filter((v) => daUnidade6.has(v.linhaDREId));
+  if (!extra.length) return dre;
+  const linhasDe = (vs: ValorDRE[]) => new Set(vs.map((v) => v.linhaDREId)).size;
+  const resto = desp.valores.filter((v) => !daUnidade6.has(v.linhaDREId));
+  return [...dre.filter((d) => d !== desp), { ...desp, valores: resto, linhas: linhasDe(resto) }, { ...desp, visao: 6, valores: extra, linhas: linhasDe(extra), semPar: [] }];
+}
 /** A aba das metas: a Metas (Orçamento) traz o ano inteiro; a Metas, só até o mês de referência da planilha. */
 export const ABAS_METAS = ["Metas (Orçamento)", "Metas"];
 

@@ -120,7 +120,7 @@ export function corpoDasPaginas(telasDoSumario: z.ZodType<string>, maximoDeTelas
     // O Texto Livre e o Sumário (20/10/2026).
     z.object({ ...posicao, tipo: z.literal("TEXTO"), tamanho: tamanhoDoTexto, texto: z.string().max(5000), html: z.string().max(30000).optional(), espacamento, borda }),
     // A tabela de Resultados (22/10/2026): a visão, o nível, as linhas escolhidas e os meses anteriores recolhidos.
-    z.object({ ...posicao, tipo: z.literal("TABELA"), visao: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]), nivel: z.union([z.literal(1), z.literal(2), z.literal(3)]), linhas: z.array(z.string().min(1).max(200)).max(1000).optional(), recolhido: z.boolean().optional(), colunas: z.object({ unitario: z.boolean(), diferenca: z.boolean(), atingimento: z.boolean(), eficiencia: z.boolean() }).optional(), prova }),
+    z.object({ ...posicao, tipo: z.literal("TABELA"), visao: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)]), nivel: z.union([z.literal(1), z.literal(2), z.literal(3)]), linhas: z.array(z.string().min(1).max(200)).max(1000).optional(), recolhido: z.boolean().optional(), colunas: z.object({ unitario: z.boolean(), diferenca: z.boolean(), atingimento: z.boolean(), eficiencia: z.boolean() }).optional(), prova }),
     z.object({ ...posicao, tipo: z.literal("SUMARIO"), listar: z.enum(["TELAS", "TELAS_E_SLIDES"]), telas: z.array(telasDoSumario).max(maximoDeTelas), linha: z.enum(["PONTOS", "TRACOS", "LINHA", "NENHUM"]).optional(), estilos: z.object({ telas: estiloDoSumario.optional(), slides: estiloDoSumario.optional() }).optional() }),
   ]);
   return z.object({

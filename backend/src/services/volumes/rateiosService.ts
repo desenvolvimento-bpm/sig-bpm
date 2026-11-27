@@ -106,7 +106,7 @@ export const rateiosService = {
     ]);
     const totalAtual = new Map(totais.map((t) => [t.codigo as string, t.quantidade]));
     // Os lançamentos de rateio do mês por chave (13/10/2026): numa chave sem volume, ficam fora de todas as unidades.
-    // As receitas e despesas financeiras do acompanhamento vão inteiras para Despesas e Extra e não contam.
+    // As receitas e despesas financeiras do acompanhamento vão inteiras para o Extra-Operacional e não contam.
     // Os redistribuídos (13/11/2026) pelas partes, na chave do centro de cada destino.
     const foraDaChave = { NOT: { AND: [{ balde: "ACOMPANHAMENTO" as const }, { linhaDRE: { grupoSigla: { in: ["RFC", "RFNC", "DFC", "DFNC"] } } }] } };
     const [deRateio, partesDeRateio] = await Promise.all([

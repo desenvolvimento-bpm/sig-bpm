@@ -4,28 +4,33 @@ import { estrutura } from "../dre/dreService.js";
 import { arquivoDeResultados, identificacaoLivre, type Bloco, type Formato } from "../relatorios/exportacaoRelatoriosService.js";
 import { CenarioError, cenariosService, rotuloVersao } from "./cenariosService.js";
 import { abaConsolidado, juntarOrigem, type OrigensDasContas } from "./consolidadoDosCentros.js";
+import { ehContaDeEncargos, ehContaDeRemuneracoesCLT, indicadorDosEncargos } from "./encargosCenario.js";
 
 type Usuario = NonNullable<Parameters<typeof cenariosService.obter>[1]>;
 
-const VISOES: Array<{ visao: 0 | 1 | 2 | 3 | 4 | 5; nome: string }> = [
+const VISOES: Array<{ visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; nome: string }> = [
   { visao: 0, nome: "Consolidado" },
   { visao: 1, nome: "Matriz" },
   { visao: 2, nome: "Filial" },
   { visao: 3, nome: "Serviços" },
-  { visao: 4, nome: "Despesas e Extra" },
+  { visao: 4, nome: "Despesas" },
+  // O Extra-Operacional (27/11/2026, o teste da separação), entre Despesas e o RN, como nas abas.
+  { visao: 6, nome: "Extra-Operacional" },
   { visao: 5, nome: "RN" },
+  // A Leben (27/11/2026), depois do RN, como nas abas.
+  { visao: 7, nome: "Leben" },
 ];
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /** A aba Departamentos dos analíticos (23/11/2026): o Consolidado com os departamentos abertos pelos grupos de centros. */
-export type EscopoResultadosDoCenario = { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 } | { tipo: "unidades" } | { tipo: "departamentos" };
+export type EscopoResultadosDoCenario = { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 } | { tipo: "unidades" } | { tipo: "departamentos" };
 export type EscopoCentrosDoCenario = { tipo: "centro"; grupo: string } | { tipo: "centros" } | { tipo: "centrosArquivos" };
 
 /** "Cenário Orgânico VER00 (2027)": o nome do cenário nos arquivos. */
 const nomeDoCenario = (c: { nome: string; versao: number; ano: number }) => `${/^cen[aá]rio/i.test(c.nome) ? "" : "Cenário "}${c.nome} ${rotuloVersao(c.versao)} (${c.ano})`;
 
 /**
- * A exportação dos cenários (14/10/2026), como a de Resultados Empresariais: a DRE do cenário (a visão na tela ou as seis,
+ * A exportação dos cenários (14/10/2026), como a de Resultados Empresariais: a DRE do cenário (a visão na tela ou as sete,
  * uma por aba no Excel ou por página no PDF, no mesmo formato) e, nos analíticos, os centros de custo em Excel (o
  * centro na tela, todos numa planilha — um por aba, com o Consolidado na primeira (15/10/2026) — ou um arquivo por
  * centro, num ZIP, com o departamento e o centro no nome).
@@ -88,7 +93,7 @@ export const exportacaoCenarioService = {
           est: await estrutura(),
           informacoes: [
             `${nomeBase} · ${geracao}`,
-            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate (com a caixa Aplicar Reajustes, a DRE tem os reajustes, e estas abas, os valores das premissas, sem eles); por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os percentuais dos Encargos e Benefícios não entram; a conta Encargos e Benefícios entra com os Benefícios Adicionais (nas abas, em linhas separadas).",
+            "A DRE das contas dos centros de custo: cada conta é a soma dela nas abas dos centros (em fórmulas: acompanha os valores das abas); as atribuições, os grupos e o total somam as contas. Confira com a DRE do cenário (tela Resultados / Consolidado): o total bate (com a caixa Aplicar ao Recalcular, a DRE tem os reajustes, e estas abas, os valores das premissas, sem eles); por conta, a parte dos rateios que vai para Serviços (Metalurgia, Armadura e Acompanhamento) está, na DRE, nas contas da CSM ou da CSC. O Quadro de Lotação e os percentuais dos Encargos e Benefícios não entram; a conta Encargos e Benefícios entra com os Benefícios Adicionais (nas abas, em linhas separadas).",
           ],
           rotulos: lista.meses.map((m) => m.rotulo),
           total: [0, lista.meses.length - 1],
@@ -135,6 +140,12 @@ function abaDoCentro(
   const num = (v: number | null, destaque: boolean, formula?: string, percentual = false): Celula => ({
     valor: v === null ? null : percentual ? v : arred(v),
     estilo: percentual ? (destaque ? ESTILO.destaquePercentual : ESTILO.itemPercentual) : destaque ? ESTILO.destaqueNumero : ESTILO.itemNumero,
+    formula,
+  });
+  // Os valores calculados pelo SIG (27/11/2026): no amarelo claro; os percentuais com duas casas.
+  const calculado = (v: number | null, percentual = false, formula?: string): Celula => ({
+    valor: v === null ? null : percentual ? v : arred(v),
+    estilo: percentual ? ESTILO.itemPercentualCalculado : ESTILO.itemNumeroCalculado,
     formula,
   });
   const cab = (t: string) => ({ valor: t, estilo: ESTILO.cabecalhoDireita });
@@ -191,19 +202,32 @@ function abaDoCentro(
   // Os encargos e benefícios: os percentuais (em fração, no formato %; no total, a média) e os Benefícios Adicionais (R$).
   secao(
     "Encargos e Benefícios",
-    "Conta Encargos e Benefícios = base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º); base = Remunerações CLT + Horas Extras − Salários dos Estagiários. Os Benefícios Adicionais e os Benefícios Padrão (a soma dos Benefícios das linhas do Quadro de Lotação do grupo) ficam fora dela: a soma das três linhas é a conta na DRE (o subtotal da atribuição e o Total do Centro os somam).",
+    "Conta Encargos e Benefícios = base × [(INSS + FGTS CLT + Férias + 13º) + (INSS + FGTS CLT) × (Férias + 13º)] + (FGTS Aprendiz − FGTS CLT) × Salários dos Aprendizes × (1 + Férias + 13º); base = Remunerações CLT + Horas Extras − Salários dos Estagiários. Os Benefícios Adicionais e os Benefícios Padrão (a soma dos Benefícios das linhas do Quadro de Lotação do grupo) ficam fora dela: a soma das três linhas é a conta na DRE (o subtotal da atribuição e o Total do Centro os somam). Calculados pelo SIG, em amarelo: os Encargos Trabalhistas (a soma das contas Encargos e Benefícios), os Encargos por Folha (÷ as Remunerações CLT), os Benefícios Padrão e os Benefícios por Colaborador ((Padrão + Adicionais) ÷ o Total de Colaboradores).",
   );
   const linhaDoItem = new Map<string, number>();
+  // As linhas calculadas dos Encargos e Benefícios (27/11/2026, pedido do Adão): os Encargos Trabalhistas, os Encargos por Folha e os
+  // Benefícios por Colaborador, no amarelo claro; as fórmulas entram depois das contas, que vêm abaixo delas.
+  const calculadas = new Map<string, { r: number; meses: Celula[]; total: Celula }>();
   for (const e of dados.encargos) {
     const r = proxima();
     linhaDoItem.set(e.item, r);
     const percentual = e.und === "%";
-    const valores = e.valores.map((v) => (percentual ? v / 100 : v));
+    const valores = e.valores.map((v) => (v === null ? null : percentual ? v / 100 : v));
+    if (indicadorDosEncargos(e.item)) {
+      const total = e.item === "ENCARGOS_TRABALHISTAS" ? soma(valores.map((v) => v ?? 0)) : e.total === undefined || e.total === null ? null : percentual ? e.total / 100 : e.total;
+      const meses = valores.map((v) => calculado(v, percentual));
+      const celulaDoTotal = calculado(total, percentual);
+      calculadas.set(e.item, { r, meses, total: celulaDoTotal });
+      linhas.push([{ valor: null, estilo: ESTILO.item }, { valor: `${e.rotulo} (calculada)`, estilo: ESTILO.item }, ...meses, celulaDoTotal]);
+      continue;
+    }
+    const doze = valores.map((v) => v ?? 0);
     linhas.push([
       { valor: null, estilo: ESTILO.item },
       { valor: e.rotulo, estilo: ESTILO.item },
-      ...valores.map((v) => num(v, false, undefined, percentual)),
-      percentual ? num(soma(valores) / 12, false, `AVERAGE(${cJan}${r}:${cDez}${r})`, true) : num(soma(valores), false, `SUM(${cJan}${r}:${cDez}${r})`),
+      // Os Benefícios Padrão (do Quadro de Lotação) no amarelo claro dos calculados (27/11/2026).
+      ...doze.map((v) => (e.calculado ? calculado(v, percentual) : num(v, false, undefined, percentual))),
+      percentual ? num(soma(doze) / 12, false, `AVERAGE(${cJan}${r}:${cDez}${r})`, true) : num(soma(doze), false, `SUM(${cJan}${r}:${cDez}${r})`),
     ]);
   }
   // O fator (20/10/2026): (INSS + FGTS) + (Férias + 13º) + (INSS + FGTS) × (Férias + 13º).
@@ -219,6 +243,7 @@ function abaDoCentro(
   const padraoDoGrupo = dados.encargos.find((e) => e.item === "BENEFICIOS_PADRAO") ?? null;
   // As contas por atribuição; a Encargos e Benefícios em fórmula, das linhas da mesma atribuição.
   const atribuicoes = [...new Set(dados.contas.map((x) => x.atribuicao))];
+  const linhaDaContaNaAba = new Map<string, number>();
   const total = Array<number>(12).fill(0);
   const subtotais: number[] = [];
   for (const a of atribuicoes) {
@@ -244,6 +269,7 @@ function abaDoCentro(
     const prefixo = (codigo: string) => codigo.split(".").slice(0, 2).join(".");
     for (const x of contas) {
       const r = proxima();
+      linhaDaContaNaAba.set(x.codigo, r);
       const rem = linhaDaConta.get(`${prefixo(x.codigo)}.REMUNERACOES_CLT`);
       const he = linhaDaConta.get(`${prefixo(x.codigo)}.HORAS_EXTRAS`);
       // Na mão de obra principal (12/11/2026: a que recebe as remunerações do Quadro de Lotação), os salários do grupo.
@@ -275,9 +301,38 @@ function abaDoCentro(
       ]);
       contasDaAba.push({ codigo: x.codigo, linha: r, valores: x.valores.map(arred) });
       // Os Benefícios Adicionais (17/11/2026) somam na conta no Consolidado.
-      if (x.comBeneficios && beneficiosDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS")!, valores: beneficiosDoGrupo.valores.map(arred) });
-      if (x.comBeneficios && padraoDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS_PADRAO")!, valores: padraoDoGrupo.valores.map(arred) });
+      if (x.comBeneficios && beneficiosDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS")!, valores: beneficiosDoGrupo.valores.map((v) => arred(v ?? 0)) });
+      if (x.comBeneficios && padraoDoGrupo) contasDaAba.push({ codigo: x.codigo, linha: linhaDoItem.get("BENEFICIOS_PADRAO")!, valores: padraoDoGrupo.valores.map((v) => arred(v ?? 0)) });
     }
+  }
+  // As fórmulas das linhas calculadas (27/11/2026): os Encargos Trabalhistas somam as contas Encargos e Benefícios (que vêm sem os
+  // benefícios); os Encargos por Folha os dividem pelas Remunerações CLT; os Benefícios por Colaborador, os Padrão + os Adicionais pelo
+  // Total de Colaboradores. No total, as somas do ano divididas.
+  const linhasDas = (e: (codigo: string) => boolean) => [...linhaDaContaNaAba].filter(([codigo]) => e(codigo)).map(([, r]) => r);
+  const [dosEncargos, dasRemuneracoes] = [linhasDas(ehContaDeEncargos), linhasDas(ehContaDeRemuneracoesCLT)];
+  const ano = (r: number) => `SUM(${cJan}${r}:${cDez}${r})`;
+  const trabalhistas = calculadas.get("ENCARGOS_TRABALHISTAS");
+  if (trabalhistas && dosEncargos.length) {
+    trabalhistas.meses.forEach((c, k) => (c.formula = dosEncargos.map((r) => `${cMes(k)}${r}`).join("+")));
+    trabalhistas.total.formula = ano(trabalhistas.r);
+  }
+  const porFolha = calculadas.get("ENCARGOS_POR_FOLHA");
+  if (porFolha && trabalhistas && dasRemuneracoes.length) {
+    porFolha.meses.forEach((c, k) => {
+      const remuneracoes = dasRemuneracoes.map((r) => `${cMes(k)}${r}`).join("+");
+      c.formula = `IF(ABS(${remuneracoes})<0.005,"",${cMes(k)}${trabalhistas.r}/(${remuneracoes}))`;
+    });
+    const remuneracoes = dasRemuneracoes.map(ano).join("+");
+    porFolha.total.formula = `IF(ABS(${remuneracoes})<0.005,"",${ano(trabalhistas.r)}/(${remuneracoes}))`;
+  }
+  const porColaborador = calculadas.get("BENEFICIOS_POR_COLABORADOR");
+  const [rPadrao, rAdicionais] = [linhaDoItem.get("BENEFICIOS_PADRAO"), linhaDoItem.get("BENEFICIOS")];
+  if (porColaborador && rPadrao && rAdicionais) {
+    porColaborador.meses.forEach((c, k) => {
+      const m = (r: number) => `N(${cMes(k)}${r})`;
+      c.formula = `IF(${m(rTot)}=0,"",(${m(rPadrao)}+${m(rAdicionais)})/${m(rTot)})`;
+    });
+    porColaborador.total.formula = `IF(${ano(rTot)}=0,"",(${ano(rPadrao)}+${ano(rAdicionais)})/${ano(rTot)})`;
   }
   const rTotal = proxima();
   linhas.push([

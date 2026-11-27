@@ -34,7 +34,6 @@ export function UsuarioDialog({ opcoes, editando, onFechar }: Props) {
   const [departamentos, setDepartamentos] = useState<DepartamentoAcesso[]>(editando?.departamentos ?? []);
   const [gestao, setGestao] = useState<DepartamentoAcesso | "">(editando?.gestao ?? "");
   const [centros, setCentros] = useState<string[]>(editando?.centros ?? []);
-  const [veObras, setVeObras] = useState(editando?.veObras ?? false);
   const [senha, setSenha] = useState("");
   const perfil = opcoes.perfis.find((p) => p.id === perfilId);
 
@@ -42,7 +41,7 @@ export function UsuarioDialog({ opcoes, editando, onFechar }: Props) {
     mutationFn: () => {
       // Sem o recorte por centro de custo no perfil, a gestão e os centros não valem: vão vazios.
       const doCoordenador = !!perfil?.recorteCentro;
-      const d = { nome, email, perfilId, ativo, setores, departamentos, gestao: doCoordenador ? gestao || null : null, centros: doCoordenador ? centros : [], veObras: doCoordenador && veObras };
+      const d = { nome, email, perfilId, ativo, setores, departamentos, gestao: doCoordenador ? gestao || null : null, centros: doCoordenador ? centros : [] };
       return editando ? usuariosService.atualizar(editando.id, d) : usuariosService.criar({ ...d, senha });
     },
     onSuccess: () => {
@@ -218,16 +217,6 @@ export function UsuarioDialog({ opcoes, editando, onFechar }: Props) {
                   </div>
                 </div>
               ) : null}
-              <label className="flex items-start gap-2 pt-1 text-sm text-gray-900">
-                <input type="checkbox" checked={veObras} onChange={(e) => setVeObras(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-black" />
-                <span>
-                  Vê os Resultados das Obras
-                  <span className="text-gray-500">
-                    : a aba Obras de Resultados Empresariais, só com as linhas da DRE da gestão
-                    {gestao ? ` (${opcoes.gestoes.find((g) => g.gestao === gestao)?.rotulo ?? gestao})` : ""} e as da Receita Bruta, da Receita Líquida e dos Impostos
-                  </span>
-                </span>
-              </label>
               <p className="text-xs text-gray-500">
                 A DRE é inteira para todos; o usuário vê só os centros marcados na visão por centro de custo, com as movimentações deles. Sem centro marcado,
                 não vê centros nem movimentações (salvo as da Receita Bruta, da Receita Líquida e dos Impostos, abertas a todos).

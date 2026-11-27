@@ -39,7 +39,7 @@ describe("os nomes dos cadastros que mudam (25/11/2026)", () => {
   });
 
   it("os nomes das unidades e dos baldes, com os de sempre antes da carga do cadastro", () => {
-    assert.deepEqual([1, 2, 3, 4, 5].map(nomeDaUnidade), ["Matriz", "Filial", "Serviços", "Despesas e Extra", "RN"]);
+    assert.deepEqual([1, 2, 3, 4, 5, 6].map(nomeDaUnidade), ["Matriz", "Filial", "Serviços", "Despesas", "RN", "Extra-Operacional"]);
     assert.equal(nomeDaVisao(0), "Consolidado");
     assert.equal(nomeDaUnidade(9), "Unidade 9");
     assert.deepEqual(["MATRIZ", "FILIAL", "SERVICOS", "MONTAGEM"].map(nomeDoBalde), ["Matriz", "Filial", "Serviços", undefined]);

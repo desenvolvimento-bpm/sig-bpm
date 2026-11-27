@@ -1,8 +1,7 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { MENSAGEM_SENSIVEL, podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { MENSAGEM_SENSIVEL, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { contestacoesService } from "../contestacoes/contestacoesService.js";
-import { CENTRO_DE_OBRA } from "./obrasService.js";
 import { chaveDoMovimento, itensDoMovimentoService } from "./itensDoMovimento.js";
 import { RegraDREError } from "./dreService.js";
 
@@ -30,9 +29,7 @@ async function competenciaDoBalancete(ano: number, mes: number, filtro: FiltroDo
     !!filtro.centro &&
     podeVerLinhaNoCentro(acesso, linha) &&
     !!(await prisma.centroCusto.findFirst({ where: { codigoRM: filtro.centro, id: { in: acesso.centros } }, select: { id: true } }));
-  // E, com a opção das obras, numa obra (centro 1.98 ou 1.99), nas linhas que ele vê nas obras.
-  const daObra = acesso.recorteCentro && !!filtro.centro && CENTRO_DE_OBRA.test(filtro.centro) && podeVerLinhaNaObra(acesso, linha);
-  if (!podeVerMovimentos(acesso, linha) && !doCentroDele && !daObra) {
+  if (!podeVerMovimentos(acesso, linha) && !doCentroDele) {
     throw new RegraDREError(403, acesso.recorteCentro ? "Só as movimentações dos seus centros de custo: marque o Centro de Custo do Lançamento." : `As movimentações de "${linha.descricao}" não são de um departamento seu.`);
   }
   return c;

@@ -12,7 +12,7 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
 import { cenariosService, type ContasDoCentro, type LinhaDaPremissa, type RateiosDoCenario as Rateios, type SerieDoCentro } from "../services/cenariosService";
 import { Erro } from "./CenarioDialog";
-import { TabelaEditavel, type NiveisDaTabela } from "./TabelaPremissas";
+import { FUNDO_CALCULADO, TabelaEditavel, type NiveisDaTabela } from "./TabelaPremissas";
 import { BotaoContasDoBalancete } from "./ContasDoBalancete";
 import { plural } from "@/lib/texto";
 
@@ -139,7 +139,7 @@ export function CentrosDoCenario({ id, editavel, grupoInicial = null }: { id: st
 function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
   const { aprendizes, estagiarios, clt, pj } = dados.lotacao;
   const series = [aprendizes, estagiarios, clt, pj].filter((x): x is NonNullable<typeof x> => !!x);
-  const premissa = (chave: string, secao: string, rotulo: string, und: string, casas: number, x: SerieDoCentro): LinhaDaPremissa => ({
+  const premissa = (chave: string, secao: string, rotulo: string, und: string, casas: number, x: Omit<SerieDoCentro, "valores"> & { valores: Array<number | null> }): LinhaDaPremissa => ({
     chave,
     secao,
     grupo: null,
@@ -190,7 +190,13 @@ function linhasDoCentro(dados: ContasDoCentro): LinhaDaPremissa[] {
     ),
   ];
   // Os Benefícios Padrão (21/11/2026): calculados pela aba Quadro de Lotação (os benefícios das linhas dos centros do grupo), não se digitam.
-  const encargos = dados.encargos.map((e) => ({ ...premissa(`ENCARGOS|${e.item}`, "ENCARGOS E BENEFÍCIOS", e.rotulo, e.und, 2, e), ...(e.calculado ? { tipo: "CALCULO" as const, negrito: false } : {}) }));
+  // Antes deles (27/11/2026, pedido do Adão), os Encargos Trabalhistas e os Encargos por Folha e, depois dos Benefícios Adicionais, os
+  // Benefícios por Colaborador, também calculados (na ordem do servidor), com o Total e a Média do ano nos dois que dividem.
+  const encargos = dados.encargos.map((e) => ({
+    ...premissa(`ENCARGOS|${e.item}`, "ENCARGOS E BENEFÍCIOS", e.rotulo, e.und, 2, e),
+    ...(e.calculado ? { tipo: "CALCULO" as const, negrito: false } : {}),
+    ...(e.total !== undefined ? { totalDoAno: e.total } : {}),
+  }));
   const contas = dados.contas;
   const linhas: LinhaDaPremissa[] = contas.map((c) => ({
     chave: c.codigo,
@@ -330,7 +336,8 @@ export function RateiosDoCenario({ id }: { id: string }) {
           <SemResultado colunas={colunas.length} onLimpar={tabela.limpar} />
         ) : (
           tabela.visiveis.map((r) => (
-            <tr key={r.id} className={`border-t border-gray-100 ${r.linha === "Base" ? "" : "bg-gray-50/60"}`}>
+            // As bases e os percentuais são todos calculados pelo SIG (das premissas e das Regras de Rateio): no amarelo claro (27/11/2026, pedido do Adão).
+            <tr key={r.id} className={`border-t border-gray-100 ${FUNDO_CALCULADO}`}>
               <td className="truncate px-4 py-1.5 whitespace-nowrap text-gray-900" title={r.chave}>
                 {r.chave}
               </td>

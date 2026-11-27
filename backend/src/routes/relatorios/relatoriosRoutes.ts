@@ -16,8 +16,7 @@ relatoriosRoutes.get("/resultados", autenticacao, verificarAba("relatorio_result
 relatoriosRoutes.get("/resultados/exportar", autenticacao, verificarAba("relatorio_resultados", "ler", (r) => {
   const escopo = String(r.query.escopo ?? "atual");
   if (escopo === "unidades") return [...ABA_DA_VISAO];
-  // As obras e os movimentos sem centro de custo (14/10/2026): a aba deles, de um ou de todos.
-  if (escopo === "obras" || r.query.visao === "obras") return ["obras"];
+  // Os movimentos sem centro de custo (14/10/2026): a aba deles, de um ou de todos.
   if (escopo === "sem_centros" || r.query.visao === "sem_centros") return ["sem_centros"];
   // As linhas (26/10/2026): a aba Linhas ou a Rateios das Linhas.
   if (escopo === "linhas" || r.query.visao === "linhas") return ["linhas"];
@@ -32,6 +31,8 @@ relatoriosRoutes.get("/resultados/pesquisa/contas", autenticacao, verificarPermi
 relatoriosRoutes.get("/resultados/pesquisa/fornecedores", autenticacao, verificarPermissao("relatorio_resultados:ler"), asyncHandler(c.fornecedoresDaPesquisa));
 // A aba Impostos (Créditos de Impostos, 03/11/2026, pedido do Adão; de início, Almoxarifado): os créditos de impostos de cada mês.
 relatoriosRoutes.get("/resultados/impostos", autenticacao, verificarPermissao("relatorio_resultados.impostos:ler"), asyncHandler(c.impostos));
+// A aba Custos Operacionais (26/11/2026, pedido do Adão): os custos de produção e de serviços em R$/dia e R$/m³, por trimestre.
+relatoriosRoutes.get("/resultados/custos-operacionais", autenticacao, verificarPermissao("relatorio_resultados.custos_operacionais:ler"), asyncHandler(c.custosOperacionais));
 // Os indicadores: a tela Indicadores dos Resultados Empresariais ou, na etapa do Fechamento Mensal (?etapa=1), a dela.
 relatoriosRoutes.get("/indicadores/exportar", autenticacao, verificarAlgumaPermissao("relatorio_painel.indicadores:ler", "totais.indicadores:ler"), asyncHandler(c.exportarIndicadores));
 relatoriosRoutes.get("/indicadores", autenticacao, verificarAlgumaPermissao("relatorio_painel.indicadores:ler", "totais.indicadores:ler"), asyncHandler(c.indicadores));

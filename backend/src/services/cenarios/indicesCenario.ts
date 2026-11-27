@@ -72,7 +72,7 @@ type Db = Prisma.TransactionClient;
 
 /** Os nomes das seções dos volumes, como atribuição (P e S). */
 const SECOES: Record<string, string> = { P: "Produção", S: "Serviços" };
-const NOME_PADRAO_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra", 5: "RN" };
+const NOME_PADRAO_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas", 5: "RN", 6: "Extra-Operacional", 7: "Leben" };
 
 /**
  * O universo das combinações (puro): as contas de cada tipo, em cada unidade — nos Índices de Comparação, as linhas verificadas do

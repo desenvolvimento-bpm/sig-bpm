@@ -28,6 +28,160 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 27/11/2026: Despesas e Extra-Operacional em duas unidades, a unidade Leben, a aba Custos Operacionais, o RN completo nos analíticos, o Realizado por Obra sem recorte (sem a aba Obras de Resultados), o Aplicar ao Recalcular e as versões nas Configurações dos cenários, os calculados em amarelo e os Encargos novos nas Premissas, e os Arquivos Gerais antes da Central de Conectividade.
+  {
+    publicada: "2026-11-27T12:45",
+    processo: TODO_O_SIG,
+    itens: ["No menu lateral, os Arquivos Gerais passam a ser o primeiro processo da Controladoria, antes da Central de Conectividade."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Fechamento Mensal",
+    tela: "DRE",
+    rota: DRE,
+    itens: [
+      "A unidade Despesas e Extra se divide em duas abas: Despesas, com as despesas até DESPESAS ADMINISTRATIVAS (DFO, DL, DT, DC e DA), e Extra-Operacional, das DEDUÇÕES DA MARGEM LÍQUIDA (DML) ao Resultado Líquido (o imposto de renda e a contribuição social e as receitas e despesas financeiras). Os valores são os mesmos, só divididos entre as duas, também nas competências fechadas; quem lia a Despesas e Extra lê as duas.",
+      "A aba Leben, depois da RN: uma cópia do RN, com as mesmas contas, que soma os Lançamentos Manuais do balde LEBEN. O Consolidado soma a Leben, como as outras unidades.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Fechamento Mensal",
+    tela: "Lançamentos Manuais",
+    rota: "/competencias/0000-00/lancamentos-manuais",
+    itens: [
+      "Os lançamentos do balde LEBEN vão para a aba Leben, como os do RN vão para o RN; os dos baldes DESPESAS e EXTRA vão para Despesas ou para o Extra-Operacional, pela linha da DRE.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Fechamento Mensal",
+    tela: "Conferência",
+    rota: "/competencias/0000-00/conferencia-planilha",
+    itens: ["A aba Desp.+Extra da planilha é conferida com as abas Despesas e Extra-Operacional juntas."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Resultados Empresariais",
+    tela: "Resultados",
+    rota: RESULTADOS,
+    itens: [
+      "A aba Custos Operacionais, logo depois das unidades: os 23 custos de produção (Matriz e Filial) e de serviços, um por linha, em R$/dia (a soma do custo nos meses ÷ 20 dias por mês) ou em R$/m³ (a soma do custo ÷ a soma da produção ou da montagem), com a média de cada trimestre, a Média Mensal e, contra a Média Mensal do cenário da Comparação, a Diferença e o Atingimento. Passe o mouse no rótulo para ver os meses de cada coluna, e na Diferença e no Atingimento para ver a Média Mensal do comparado. O “Exportar” da aba baixa a tabela em Excel ou PDF.",
+      "A unidade Despesas e Extra se divide em duas abas: Despesas (até DESPESAS ADMINISTRATIVAS) e Extra-Operacional (das DEDUÇÕES DA MARGEM LÍQUIDA ao Resultado Líquido), com os mesmos valores, só divididos entre as duas.",
+      "A aba Leben, depois da RN: uma cópia do RN, com as mesmas contas, que traz os Lançamentos Manuais do balde LEBEN.",
+      "A aba Obras saiu: as obras estão no Realizado por Obra.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Resultados Empresariais",
+    tela: "Painel de Bordo",
+    rota: PAINEL,
+    itens: ["Na aba Variações, Despesas e Extra-Operacional aparecem em separado, cada uma com os departamentos dela."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Realizado por Obra",
+    tela: "Resultados",
+    rota: "/realizado-por-obra/resultados",
+    itens: [
+      "Quem lê a tela vê o Realizado por Obra inteiro (todas as vendas, linhas e lançamentos), qualquer que seja o recorte do perfil; só as Informações Sensíveis seguem o perfil. Vale também para a API DRE de uma Obra e para as consultas da obra na DRE do mês.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Controle de Usuários",
+    tela: "Usuários",
+    rota: "/usuarios",
+    itens: ["O cadastro do usuário não tem mais a opção Vê os Resultados das Obras: o Realizado por Obra não tem recorte."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Controle de Usuários",
+    tela: "Perfis",
+    rota: "/perfis",
+    itens: [
+      "Nas telas com as abas das unidades (a DRE do mês, os Resultados Empresariais e os Resultados dos cenários), as abas Despesas, Extra-Operacional e Leben: quem lia a Despesas e Extra recebeu a Despesas e a Extra-Operacional, e quem lia o RN recebeu a Leben, com a mesma ação.",
+      "A aba Custos Operacionais dos Resultados, para quem lê a Matriz, a Filial e Serviços; a aba Obras dos Resultados Empresariais saiu.",
+      "Os Arquivos Gerais vêm antes da Central de Conectividade, como no menu.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cadastros Gerais",
+    tela: "Contábil",
+    rota: "/cadastros/unidades",
+    itens: ["Em Unidades, a 4 passa a se chamar Despesas, e entram a Extra-Operacional (6) e a Leben (7), nesta ordem depois dela: Despesas, Extra-Operacional, RN e Leben."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Central de Conectividade",
+    tela: "APIs",
+    rota: "/central-de-conectividade/biblioteca-de-apis",
+    itens: [
+      "Duas APIs de Custos Operacionais: resultados-custos-operacionais (Resultados Empresariais: ano, mês e comparação) e cenario-custos-operacionais (um cenário), em dados ou no visual, com a mesma tabela da aba.",
+      "As APIs de Resultados e dos cenários aceitam as visões 6 (Extra-Operacional) e 7 (Leben); a 4 é a Despesas. A API de Resultados não tem mais a visão das obras: use a DRE de uma Obra (obra-dre), que não tem recorte.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Relatórios Executivos",
+    tela: "Relatório Executivo",
+    rota: RE,
+    itens: ["Na Tabela Padrão, as abas Despesas, Extra-Operacional e Leben (Despesas, Extra-Operacional, RN e Leben não têm o R$/m³)."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cenários Sintéticos",
+    tela: "Configurações",
+    rota: "/cenarios/sinteticos/0/configuracoes",
+    itens: ["Congelar Versão, Reabrir Versão e Criar Revisão ficam na aba Cenário, depois de “Gravar Configurações”, para quem edita os Resultados; a revisão criada abre nas Configurações dela."],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cenários Sintéticos",
+    tela: "Resultados",
+    rota: "/cenarios/sinteticos/0/resultados",
+    itens: [
+      "A aba Custos Operacionais, logo depois das unidades: os 23 custos de produção e de serviços do cenário em R$/dia ou R$/m³, com a média de cada trimestre, a Média Mensal e, contra o cenário comparado, a Diferença e o Atingimento.",
+      "As abas Despesas e Extra-Operacional, no lugar da Despesas e Extra, e a aba Leben, depois da RN.",
+      "O Consolidado não tem mais as colunas de R$/m³ (as exportações continuam com elas). Os botões das versões saíram da barra do título: estão nas Configurações.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Configurações",
+    rota: "/cenarios/analiticos/0/configuracoes",
+    itens: [
+      "Congelar Versão, Reabrir Versão e Criar Revisão ficam na aba Cenário, depois de “Gravar Configurações”, para quem edita os Resultados; a revisão criada abre nas Configurações dela.",
+      "Em Comparativo e Reajustes, a caixa Aplicar ao Recalcular, antes de “Novo Índice” dos Índices de Reajuste: marcada, cada Recalcular aplica os reajustes sobre as premissas; desmarcada, leva só as premissas. As Configurações e as Premissas não travam com ela marcada.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Premissas",
+    rota: "/cenarios/analiticos/0/premissas",
+    itens: [
+      "Na aba Extra-Operacional, a tabela da unidade Extra-Operacional (antes, Despesas e Extra) e, depois da do RN, a tabela Leben, com as mesmas contas do RN.",
+      "Os valores que o SIG calcula ficam em amarelo claro (nas listas, no Quadro de Lotação, nos Investimentos, nos Rateios e nos meses calculados do Exportar Premissas).",
+      "Em Centros de Custo, os Encargos e Benefícios na ordem: os percentuais, Encargos Trabalhistas, Encargos por Folha (÷ Remunerações CLT), Benefícios Padrão, Benefícios Adicionais e Benefícios por Colaborador (÷ Total de Colaboradores), calculados; no Exportar Premissas, como fórmulas. Os arquivos antigos continuam entrando.",
+    ],
+  },
+  {
+    publicada: "2026-11-27T12:45",
+    processo: "Cenários Analíticos",
+    tela: "Resultados",
+    rota: "/cenarios/analiticos/0/resultados",
+    itens: [
+      "A aba Custos Operacionais, logo depois das unidades: os 23 custos de produção e de serviços do cenário em R$/dia ou R$/m³, com a média de cada trimestre, a Média Mensal e, contra o cenário comparado, a Diferença e o Atingimento.",
+      "As abas Despesas e Extra-Operacional, no lugar da Despesas e Extra, e a aba Leben, depois da RN, com a tabela Leben das Premissas.",
+      "No RN, todas as contas da tabela RN das Premissas aparecem, com zero nos meses sem valor (as Assessorias e Consultorias das Despesas Administrativas sem valor não apareciam).",
+      "Só o botão Recalcular fica aqui: a caixa Aplicar Reajustes passou às Configurações (Aplicar ao Recalcular), e os botões das versões, à aba Cenário das Configurações.",
+      "O Consolidado e os Centros de Custo não têm mais as colunas de R$/m³ (as exportações continuam com elas).",
+    ],
+  },
   // 26/11/2026: a aba Realizado por Obra nas APIs, as Assessorias e Consultorias da DA no RN (Fechamento Mensal, Resultados Empresariais e Cenários Analíticos) e os custos de Serviços da referência dos analíticos pela Alocação nas Linhas.
   {
     publicada: "2026-11-26T15:35",

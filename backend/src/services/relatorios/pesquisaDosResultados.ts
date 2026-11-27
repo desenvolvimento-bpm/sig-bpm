@@ -1,10 +1,9 @@
 import { getPrismaClient } from "../../config/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import { contestacoesService } from "../contestacoes/contestacoesService.js";
 import { chaveDoMovimento, itensDoMovimentoService } from "../dre/itensDoMovimento.js";
-import { CENTRO_DE_OBRA } from "../dre/obrasService.js";
 import { rotuloDaLinha } from "./detalhesDosResultados.js";
 import { mesesDoExercicio, RelatorioError } from "./resultadosService.js";
 
@@ -16,8 +15,8 @@ import { mesesDoExercicio, RelatorioError } from "./resultadosService.js";
  * atribuição, a linha da DRE, a conta (na pesquisa por fornecedor) ou o fornecedor (na pesquisa por conta) e o valor, com
  * o que o Balancete mostra para contestar (a situação da contestação e os itens do movimento).
  *
- * O recorte é o do Balancete: as linhas com as movimentações do usuário (o departamento dele), os centros dele (o
- * Coordenador) e as obras (com a opção), sem as informações sensíveis sem o acesso a elas. Só as linhas da DRE (os
+ * O recorte é o do Balancete: as linhas com as movimentações do usuário (o departamento dele) e os centros dele (o
+ * Coordenador), sem as informações sensíveis sem o acesso a elas. Só as linhas da DRE (os
  * movimentos sem linha não vão aos resultados).
  */
 
@@ -55,9 +54,7 @@ function noRecorte(acesso: Acesso, m: Pick<Movimento, "linhaDRE" | "centroCusto"
   if (!l || !podeVerSensiveis(acesso, l)) return false;
   if (podeVerMovimentos(acesso, l)) return true;
   if (!acesso.recorteCentro) return false;
-  const codigo = m.centroCusto?.codigoRM ?? m.codigoCentroCusto;
-  if (m.centroCusto && acesso.centros.includes(m.centroCusto.id) && podeVerLinhaNoCentro(acesso, l)) return true;
-  return !!codigo && CENTRO_DE_OBRA.test(codigo) && podeVerLinhaNaObra(acesso, l);
+  return !!m.centroCusto && acesso.centros.includes(m.centroCusto.id) && podeVerLinhaNoCentro(acesso, l);
 }
 
 /** A conta da pesquisa: pelo código reduzido (ou "código · descrição", da lista) ou pela descrição, se só uma a tiver. */

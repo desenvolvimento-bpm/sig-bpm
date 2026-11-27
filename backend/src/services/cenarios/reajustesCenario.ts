@@ -3,12 +3,12 @@
  * Manuais): os Índices de Reajuste — cada um com até quatro reajustes, o Valor (%) e o mês em que ele Inicia Em — e a
  * Aplicação dos Reajustes, os índices de cada conta da DRE (desde 19/11/2026, até dois: o 1º e o 2º Índice de Reajuste).
  *
- * Com os reajustes aplicados (o Recalcular dos Resultados, "Aplicar Reajustes"), cada cálculo da DRE multiplica o valor
+ * Com a caixa Aplicar ao Recalcular marcada (Configurações / Comparativo e Reajustes), cada cálculo da DRE multiplica o valor
  * de cada conta com índice, em cada unidade e mês, pelo fator do índice no mês: o produto de (1 + Valor ÷ 100) dos
  * reajustes que já começaram. Cada reajuste vale sobre os anteriores: 4% a partir de janeiro e 2% a partir de abril dão
  * 1,04 de janeiro a março e 1,04 × 1,02 de abril em diante. Com dois índices na conta, eles rodam na ordem: o 1º sobre o
- * valor das premissas e o 2º sobre o valor já reajustado pelo 1º (o fator do mês é o do 1º × o do 2º). "Remover Reajustes"
- * desliga: a DRE volta aos valores das premissas (o valor reajustado ÷ o fator de cada mês).
+ * valor das premissas e o 2º sobre o valor já reajustado pelo 1º (o fator do mês é o do 1º × o do 2º). Desmarcar a caixa
+ * desliga: no Recalcular, a DRE volta aos valores das premissas.
  */
 
 export const MAXIMO_DE_REAJUSTES = 4;

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 
+import { semRecorte } from "../../services/acesso/acesso.js";
 import { RegraRealizadoObraError, realizadoObraService as s } from "../../services/realizadoObra/realizadoObraService.js";
 
 async function responder(response: Response, fn: () => Promise<unknown>) {
@@ -26,9 +27,9 @@ export const realizadoObraController = {
     return responder(response, () => s.escolher(request.user!.sub, corpo.data.obraId, corpo.data.versao));
   },
 
-  /** GET /resultados: a DRE da venda, por aba, contra o vendido. */
+  /** GET /resultados: a DRE da venda, por aba, contra o vendido; sem recorte (27/11/2026): quem lê a tela a vê inteira. */
   resultados(request: Request, response: Response) {
-    return responder(response, () => s.resultados(request.user!.sub, request.user!.acesso));
+    return responder(response, () => s.resultados(request.user!.sub, semRecorte(request.user!.acesso)));
   },
 
   /** GET /memoria?mes=AAAAMM&aba=&codigo=: a memória de cálculo de um subtotal agrupado (a Mão de Obra e os Gastos Gerais). */
