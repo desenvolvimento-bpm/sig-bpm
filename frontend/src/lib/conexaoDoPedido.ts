@@ -19,6 +19,18 @@ export const conexaoMarcada = () => (globalThis as { [MARCA_ATIVA]?: boolean })[
 export const semPrefixoIpv6 = (ip: string) => ip.trim().replace(/^::ffff:/i, "");
 
 /**
+ * Só o endereço de um item do X-Forwarded-For: sem a porta, se vier (o IIS pode mandar "IP:porta": 192.168.10.25:51234 ou
+ * [fe80::1]:51234), e sem o prefixo do IPv6. O IPv6 sem colchetes fica como está (os dois-pontos são dele).
+ */
+export function soOEndereco(item: string) {
+  const v = item.trim();
+  const ipv6 = /^\[([^\]]+)\](?::\d+)?$/.exec(v);
+  if (ipv6) return semPrefixoIpv6(ipv6[1]);
+  const ipv4 = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(v);
+  return semPrefixoIpv6(ipv4 ? ipv4[1] : v);
+}
+
+/**
  * Os servidores de entrada em que o SIG confia (o IIS do TI, 192.168.0.10, que repassa o http://sig.bpm.interno): só deles
  * valem o X-Forwarded-For e o X-Forwarded-Proto. A variável PROXY_CONFIAVEL troca a lista (os endereços separados por vírgula).
  */
@@ -31,7 +43,8 @@ export type OrigemDoPedido = { endereco: string | null; protocolo: "http" | "htt
 
 /**
  * De onde veio o pedido, para a API (a Auditoria, os bloqueios por endereço e a regra do HTTPS):
- * - da conexão do IIS: o último endereço do X-Forwarded-For (o que o IIS acrescenta) e o X-Forwarded-Proto dele;
+ * - da conexão do IIS: o último endereço do X-Forwarded-For (o que o IIS acrescenta; sem a porta, se vier) e o
+ *   X-Forwarded-Proto dele;
  * - de qualquer outra conexão: o endereço e o protocolo da própria conexão (o X-Forwarded-* do aplicativo não vale).
  * Sem a marca da conexão (o instrumentation.ts não rodou, ou o pedido chegou antes dele), endereço nulo e HTTP: nada do
  * aplicativo vale, e o backend registra o endereço do servidor do Next.
@@ -45,7 +58,7 @@ export function origemDoPedido(h: Cabecalhos, confiaveis = proxiesConfiaveis(), 
   const xff = (h.get("x-forwarded-for") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
   const xfp = (h.get("x-forwarded-proto") ?? "").split(",")[0].trim().toLowerCase();
   return {
-    endereco: xff.length ? semPrefixoIpv6(xff[xff.length - 1]) : daConexao,
+    endereco: xff.length ? soOEndereco(xff[xff.length - 1]) : daConexao,
     protocolo: xfp === "https" || xfp === "http" ? xfp : protocoloDaConexao,
   };
 }

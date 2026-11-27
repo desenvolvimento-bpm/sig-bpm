@@ -28,6 +28,17 @@ const PAINEL = "/relatorios/painel";
 const DRE = "/competencias/0000-00/dre";
 
 export const NOVIDADES: Novidade[] = [
+  // 27/11/2026, pedido do TI (GLPI #312): a API pelo http://sig.bpm.interno e o endereço de quem chama as APIs.
+  {
+    publicada: "2026-11-27T16:00",
+    processo: "Central de Conectividade",
+    tela: "APIs",
+    rota: "/central-de-conectividade/biblioteca-de-apis",
+    itens: [
+      "O endereço das APIs para os outros sistemas é http://sig.bpm.interno/api/v1, só na rede interna da BPM (decisão do TI).",
+      "Na tela Acessos e na Auditoria, o endereço de quem chama as APIs é sempre o do computador que chamou, nunca o que o sistema informa; o bloqueio por endereço vale para esse endereço.",
+    ],
+  },
   // 27/11/2026: Despesas e Extra-Operacional em duas unidades, a unidade Leben, a aba Custos Operacionais, o RN completo nos analíticos, o Realizado por Obra sem recorte (sem a aba Obras de Resultados), o Aplicar ao Recalcular e as versões nas Configurações dos cenários, os calculados em amarelo e os Encargos novos nas Premissas, e os Arquivos Gerais antes da Central de Conectividade.
   {
     publicada: "2026-11-27T12:45",
