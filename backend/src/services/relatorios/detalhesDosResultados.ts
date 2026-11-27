@@ -1,12 +1,10 @@
 import { getPrismaClient } from "../../config/prisma.js";
-import { codigoQueVale } from "../classificacao/centrosObra.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { ESTILO, type AbaEscrita, type Celula } from "../../lib/xlsxEscrita.js";
 import { ACESSO_TOTAL, type Acesso } from "../acesso/acesso.js";
-import { linhaSensivel, podeVerCentro, podeVerLinhaNaObra, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
+import { linhaSensivel, podeVerCentro, podeVerLinhaNoCentro, podeVerMovimentos, podeVerSensiveis } from "../acesso/recorteDepartamento.js";
 import type { Composicao, OrigemValor, ParcelaRateio } from "../dre/apuracaoUnidades.js";
 import { grupoDoCentro } from "../dre/dreService.js";
-import { foraDaObra, sinalDaLinha } from "../dre/obrasService.js";
 import { deveriaTerCentro, grupoSemCentro, type GrupoSemCentro } from "../dre/semCentroService.js";
 import { nomeDaUnidade, nomeDoBalde } from "../cadastros/nomesDasUnidades.js";
 
@@ -16,14 +14,13 @@ import { nomeDaUnidade, nomeDoBalde } from "../cadastros/nomesDasUnidades.js";
  * fechada do período, com a parte que vai à aba (Na Aba).
  * - Nas unidades, pelos filtros que a apuração gravou em cada linha (a composição: os lançamentos diretos, × o fator da
  *   regra, e os de rateio, × o percentual do destino), como o extrato de cada valor. O Consolidado junta as cinco.
- * - Nos centros de custo, nas obras e sem centro de custo, os lançamentos deles nas linhas da aba.
+ * - Nos centros de custo e sem centro de custo, os lançamentos deles nas linhas da aba.
  * A receita prévia e os lançamentos manuais não são movimentos do balancete e ficam fora, como na aba Detalhes do extrato;
  * as linhas (a aba Linhas e, nos Resultados por Obra, os Rateios das Linhas) não abrem os lançamentos.
  */
 export type AlvoDosDetalhes =
   | { tipo: "unidades"; unidades: number[] }
   | { tipo: "centro"; grupo: string }
-  | { tipo: "obra"; codigo: string }
   | { tipo: "semCentro"; grupo: GrupoSemCentro };
 
 /** Uma aba exportada: o nome (a coluna Aba), as linhas da DRE dela (os códigos, na ordem) e o que detalhar (sem: as linhas). */
@@ -209,16 +206,6 @@ export async function detalhesDosResultados(ano: number, ate: number, acesso: Ac
             const linha = porId.get(linhaId);
             if (!naAba(linha) || !podeVerLinhaNoCentro(acesso, linha)) continue;
             partes.push({ linha, bloco: "Lançamentos Contábeis", ms: ms.filter((m) => m.centroCustoId !== null && ids.has(m.centroCustoId)), fator: () => new Prisma.Decimal(1) });
-          }
-        } else if (alvo.tipo === "obra") {
-          for (const [linhaId, ms] of porLinha) {
-            const linha = porId.get(linhaId);
-            if (!naAba(linha) || !podeVerLinhaNaObra(acesso, linha)) continue;
-            // O sinal da DRE (as receitas trocadas), como na aba Obras; sem as contas de Reconhecimento do CPV nas receitas (03/11/2026).
-            const fator = new Prisma.Decimal(sinalDaLinha(linha.codigo));
-            // A obra pelo centro que vale (13/11/2026): sem os movimentos que saíram dela.
-            const daObra = ms.filter((m) => codigoQueVale(m) === alvo.codigo && !foraDaObra(linha.codigo, m.contaAdotada ?? m.contaResultado));
-            partes.push({ linha, bloco: "Lançamentos Contábeis", ms: daObra, fator: () => fator });
           }
         } else {
           for (const [linhaId, ms] of porLinha) {

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 
 import { getPrismaClient } from "../config/prisma.js";
+import { semRecorte } from "../services/acesso/acesso.js";
 import { ABA_DA_VISAO } from "../services/acesso/telas.js";
 
 /**
@@ -53,7 +54,7 @@ export function abaDaVisao(v: unknown): string | null {
   const s = String(v ?? "0");
   if (s === "departamentos" || s === "centros" || s === "obras" || s === "consolidado" || s === "sem_centros" || s === "linhas" || s === "rateios_linhas") return s;
   const n = Number(s);
-  return Number.isInteger(n) && n >= 0 && n <= 5 ? ABA_DA_VISAO[n] : null;
+  return Number.isInteger(n) && n >= 0 && n < ABA_DA_VISAO.length ? ABA_DA_VISAO[n] : null;
 }
 
 /**
@@ -98,17 +99,24 @@ export async function lerDREDoMes(request: Request, response: Response, next: Ne
   if (!abas) return response.status(400).json({ error: "Visão inválida." });
   // Sem aba (os documentos de uma linha), basta a tela.
   const pode = (tela: string) => (abas.length ? abas.every((a) => temPermissao(request, `${tela}.${a}:ler`)) : temPermissao(request, `${tela}:ler`));
-  if (pode("dre")) return next();
   // As consultas dos Resultados do Realizado por Obra (03/11/2026): as da obra (os lançamentos dos centros dela, os volumes
   // das listas e o balancete de uma conta), só nas competências fechadas, como nos Resultados Empresariais.
   const doRealizado = abas.every((a) => a === "obras") && temPermissao(request, "realizado_obra_resultados:ler");
+  // Sem recorte (27/11/2026, pedido do Adão), as consultas de uma obra de quem lê o Realizado por Obra: a aba Obras ou o
+  // balancete de um centro de obra (1.98 ou 1.99). O balancete da conta inteira (sem o centro) segue o recorte do usuário.
+  const daObra = doRealizado && (abas.length > 0 || /^1\.9[89]\./.test(String((request.query as Record<string, unknown>).centro ?? "")));
+  const seguir = () => {
+    if (daObra) request.user!.acesso = semRecorte(request.user!.acesso);
+    return next();
+  };
+  if (pode("dre")) return seguir();
   if (!pode("relatorio_resultados") && !doRealizado) return response.status(403).json(SEM_PERMISSAO);
   const m = /^(\d{4})-(\d{2})$/.exec(String(request.params.anoMes ?? ""));
   if (!m) return response.status(400).json({ error: "Competência inválida." });
   try {
     const c = await getPrismaClient().competencia.findUnique({ where: { ano_mes: { ano: Number(m[1]), mes: Number(m[2]) } }, select: { status: true } });
     if (c?.status !== "FECHADA") return response.status(403).json({ error: "Os Resultados Empresariais mostram só as competências fechadas." });
-    return next();
+    return seguir();
   } catch (error) {
     return next(error);
   }

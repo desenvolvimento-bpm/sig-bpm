@@ -28,12 +28,30 @@ const UNIDADES: AbaDoCatalogo[] = [
   { codigo: "matriz", nome: "Matriz" },
   { codigo: "filial", nome: "Filial" },
   { codigo: "servicos", nome: "Serviços" },
-  { codigo: "despesas", nome: "Despesas e Extra" },
+  { codigo: "despesas", nome: "Despesas" },
+  // O Extra-Operacional (27/11/2026, o teste da separação; a unidade 6), depois de Despesas: os perfis com a aba Despesas e Extra
+  // herdaram as duas (migração 20261127100000). O código não é "extra", que é a aba Extra-Operacional das Premissas.
+  { codigo: "extra_operacional", nome: "Extra-Operacional" },
   { codigo: "rn", nome: "RN" },
+  // A Leben (27/11/2026, pedido do Adão; a unidade 7), depois do RN: uma cópia dele, com os lançamentos manuais do balde LEBEN; os
+  // perfis com a aba RN a herdaram, com a mesma ação (migração 20261127210000).
+  { codigo: "leben", nome: "Leben" },
 ];
-const COM_CENTROS_E_OBRAS: AbaDoCatalogo[] = [...UNIDADES, { codigo: "centros", nome: "Centros de Custo" }, { codigo: "obras", nome: "Obras" }];
-/** A aba de uma visão da DRE (0 Consolidado, 1 a 5 as unidades). */
-export const ABA_DA_VISAO = ["consolidado", "matriz", "filial", "servicos", "despesas", "rn"] as const;
+const CENTROS: AbaDoCatalogo = { codigo: "centros", nome: "Centros de Custo" };
+const OBRAS: AbaDoCatalogo = { codigo: "obras", nome: "Obras" };
+/**
+ * As abas da Conferência com a Planilha: as da planilha, com a Desp.+Extra numa só (a unidade 4 junto com a 6, 27/11/2026) e sem a
+ * Leben, que a planilha não tem.
+ */
+const DA_PLANILHA: AbaDoCatalogo[] = UNIDADES.filter((a) => a.codigo !== "extra_operacional" && a.codigo !== "leben").map((a) => (a.codigo === "despesas" ? { ...a, nome: "Despesas e Extra" } : a));
+/**
+ * A aba Custos Operacionais da tela Resultados (26/11/2026, pedido do Adão), logo depois das unidades, em Resultados Empresariais e
+ * nos cenários (sintéticos e analíticos): os perfis que leem as abas Matriz, Filial e Serviços da tela a herdaram (migração
+ * 20261126180000).
+ */
+const CUSTOS_OPERACIONAIS: AbaDoCatalogo = { codigo: "custos_operacionais", nome: "Custos Operacionais" };
+/** A aba de uma visão da DRE (0 Consolidado, 1 a 7 as unidades). */
+export const ABA_DA_VISAO = ["consolidado", "matriz", "filial", "servicos", "despesas", "rn", "extra_operacional", "leben"] as const;
 const PAINEL: AbaDoCatalogo[] = [
   { codigo: "resultados", nome: "Resultados" },
   { codigo: "performance", nome: "Performance" },
@@ -105,8 +123,8 @@ function telasDoCenario(base: string, analitico: boolean): TelaDoCatalogo[] {
       codigo: `${base}_resultados`,
       nome: "Resultados",
       abas: analitico
-        ? [...UNIDADES, { codigo: "departamentos", nome: "Departamentos" }, { codigo: "centros", nome: "Centros de Custo" }]
-        : [...UNIDADES, { codigo: "manuais", nome: "Indicadores Manuais" }],
+        ? [...UNIDADES, CUSTOS_OPERACIONAIS, { codigo: "departamentos", nome: "Departamentos" }, { codigo: "centros", nome: "Centros de Custo" }]
+        : [...UNIDADES, CUSTOS_OPERACIONAIS, { codigo: "manuais", nome: "Indicadores Manuais" }],
     },
     // A aba Indicadores no Painel de Bordo, depois de Performance (19/10/2026; antes, a tela Indicadores e, por um dia, a
     // aba Metas; a chave continua `metas`): todos os indicadores do cenário.
@@ -147,11 +165,12 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
     nome: "Resultados Empresariais",
     area: "resultados",
     telas: [
-      // A aba Sem Centros de Custo (14/10/2026), só nos Resultados Empresariais; a aba Linhas (26/10/2026), antes de Obras.
+      // A aba Sem Centros de Custo (14/10/2026), só nos Resultados Empresariais; a aba Linhas (26/10/2026).
       // A aba Rateios das Linhas (26/10/2026, antes Rateios por Obras; a chave rateios_linhas) saiu da tela em 27/10/2026, a
       // pedido do Adão: o código fica (a visão rateios_linhas do relatório e da exportação, o `rateios` do PainelDeLinhas e do
       // resultadosLinhaService.linha) para o processo Resultados por Obra. Fora do catálogo, nenhum perfil a alcança.
-      // A aba Impostos (Créditos de Impostos; 03/11/2026, pedido do Adão; de início, Almoxarifado), depois de Obras: os créditos
+      // A aba Obras saiu em 27/11/2026 (pedido do Adão): as obras ficam no Realizado por Obra (migração 20261127100000).
+      // A aba Impostos (Créditos de Impostos; 03/11/2026, pedido do Adão; de início, Almoxarifado), depois de Linhas: os créditos
       // de impostos de cada mês fechado. A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: os perfis que
       // leem o Consolidado e os Centros de Custo a herdaram (migração 20261123100000).
       {
@@ -159,11 +178,11 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
         nome: "Resultados",
         abas: [
           ...UNIDADES,
+          CUSTOS_OPERACIONAIS,
           { codigo: "departamentos", nome: "Departamentos" },
-          COM_CENTROS_E_OBRAS[6],
+          CENTROS,
           { codigo: "sem_centros", nome: "Sem Centros de Custo" },
           { codigo: "linhas", nome: "Linhas" },
-          COM_CENTROS_E_OBRAS[7],
           { codigo: "impostos", nome: "Impostos" },
         ],
       },
@@ -238,12 +257,12 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
       {
         codigo: "dre",
         nome: "Resultados",
-        abas: [...COM_CENTROS_E_OBRAS.slice(0, 7), { codigo: "sem_centros", nome: "Sem Centros de Custo" }, COM_CENTROS_E_OBRAS[7], { codigo: "impostos", nome: "Impostos" }],
+        abas: [...UNIDADES, CENTROS, { codigo: "sem_centros", nome: "Sem Centros de Custo" }, OBRAS, { codigo: "impostos", nome: "Impostos" }],
       },
       // A etapa Linhas (26/10/2026): a DRE de cada unidade dividida entre as linhas, gravada na apuração. Editar grava as
       // linhas de uma competência fechada antes dela.
       { codigo: "linhas_mes", nome: "Linhas" },
-      { codigo: "conferencia", nome: "Conferência", abas: UNIDADES },
+      { codigo: "conferencia", nome: "Conferência", abas: DA_PLANILHA },
       { codigo: "divergencia", nome: "Divergências" },
     ],
   },
@@ -310,6 +329,17 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
       },
     ],
   },
+  // Os Arquivos Gerais (05/11/2026, pedido do Adão), o primeiro processo da Controladoria, como no menu (desde 27/11/2026, antes
+  // da Central de Conectividade): Ler visualiza e baixa os arquivos; Editar também os adiciona e exclui.
+  {
+    recurso: "ARQUIVOS_GERAIS",
+    nome: "Arquivos Gerais",
+    area: "arquivos_gerais",
+    telas: [
+      { codigo: "arquivos_treinamentos", nome: "Treinamentos" },
+      { codigo: "arquivos_informativos", nome: "Informativos" },
+    ],
+  },
   // A Central de Conectividade (24/10/2026; desde 30/10/2026, um processo da Controladoria, acima dos Cadastros da
   // Controladoria, como no menu): a tela APIs — Ler usa as APIs e vê os próprios acessos; Editar vê os de todos e bloqueia
   // APIs, usuários e endereços.
@@ -364,17 +394,6 @@ export const CATALOGO_DE_TELAS: GrupoDoCatalogo[] = [
           { codigo: "estrutura_indicadores", nome: "Indicadores" },
         ],
       },
-    ],
-  },
-  // Os Arquivos Gerais (05/11/2026, pedido do Adão), acima do Controle de Usuários, como no menu: Ler visualiza e baixa os
-  // arquivos; Editar também os adiciona e exclui.
-  {
-    recurso: "ARQUIVOS_GERAIS",
-    nome: "Arquivos Gerais",
-    area: "arquivos_gerais",
-    telas: [
-      { codigo: "arquivos_treinamentos", nome: "Treinamentos" },
-      { codigo: "arquivos_informativos", nome: "Informativos" },
     ],
   },
   {

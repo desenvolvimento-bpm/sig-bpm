@@ -792,7 +792,7 @@ export function PainelContent() {
               Na aba Variações, no alto, em destaque (e flutuante, abaixo do título, ao rolar a tela), o “Ordenar Por” escolhe a medida que define as três maiores variações: Diferença (a maior em
               reais, para mais ou para menos), Atingimento (o mais longe de zero) ou Eficiência (a maior em pontos percentuais); a escolha fica
               guardada neste navegador. Ao lado, a legenda dos sinais, em quadrados nas cores deles: Melhor, Até 5% Var. e Pior (nos custos e despesas, menor é melhor;
-              nas receitas financeiras, maior é melhor). Embaixo, cada unidade (Matriz, Filial, Serviços, Despesas e Extra e RN; só as que o seu
+              nas receitas financeiras, maior é melhor). Embaixo, cada unidade (Matriz, Filial, Serviços, Despesas, Extra-Operacional, RN e Leben; só as que o seu
               perfil lê em Resultados) com os departamentos dela — os grupos de custos e despesas da DRE, como Custos de Produção: Pré-Fabricados
               (CPP) ou Despesas Administrativas (DA); as receitas, os impostos sobre elas e as Despesas Variáveis de Venda (DVV) ficam de fora. Cada
               departamento tem três cards, na largura da tela, cada um com as três maiores variações lado a lado: Atual · SET/26 (Vs. Realizado de

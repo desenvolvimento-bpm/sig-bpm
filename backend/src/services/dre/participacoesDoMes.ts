@@ -7,7 +7,7 @@ import { baseDoPercentual, baseDoUnitario, type VisaoResultados } from "../relat
  * custos de produção, de montagem e complementares e no Frete e Descarga, e sobre a ROL no resto; o R$/m³ do pré-fabricado
  * e dos custos de produção sobre a produção, da montagem sobre a montagem e do Frete e Descarga sobre a expedição; nas
  * obras, sobre a receita da própria obra. As linhas de volume não têm nem um nem outro. As bases são as da própria visão
- * (o Consolidado, Matriz, Filial, Serviços, a obra) ou, em Despesas e Extra, no RN, nos centros de custo e nos movimentos
+ * (o Consolidado, Matriz, Filial, Serviços, a obra) ou, em Despesas, no Extra-Operacional, no RN, na Leben, nos centros de custo e nos movimentos
  * sem centro de custo, as do Consolidado apurado do mês.
  */
 

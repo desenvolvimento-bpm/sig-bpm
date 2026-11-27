@@ -22,7 +22,7 @@ const reais = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency",
 
 /**
  * A nota no alto do extrato de um item (03/11/2026): a composição do valor da célula, porque o extrato traz os lançamentos
- * dos centros da obra (a aba Obras dos Resultados Empresariais), e não o rateio, os créditos nem a parte de uma linha.
+ * dos centros da obra, e não o rateio, os créditos nem a parte de uma linha.
  */
 function notaDaConsulta(aba: AbaDaObra, l: LinhaResultado, i: number, mes: string): ReactNode {
   const valor = l.meses[i]?.valor ?? 0;
@@ -30,8 +30,7 @@ function notaDaConsulta(aba: AbaDaObra, l: LinhaResultado, i: number, mes: strin
   if (l.codigo.startsWith("ROB.") || l.codigo.startsWith("IRB.")) {
     return consolidado ? (
       <>
-        No Realizado, {mes}: <strong>{reais(valor)}</strong>, os lançamentos dos centros da obra e a receita prévia de frete e complementar dela, como na aba
-        Obras de Resultados Empresariais › Resultados.
+        No Realizado, {mes}: <strong>{reais(valor)}</strong>, os lançamentos dos centros da obra e a receita prévia de frete e complementar dela.
       </>
     ) : (
       <>
@@ -136,12 +135,16 @@ export function ResultadosDaObraContent() {
               “887305”).
             </p>
             <p>
-              A receita bruta, os impostos e a receita líquida seguem a aba Obras de Resultados Empresariais › Resultados: a receita bruta é a dos
+              Quem lê esta tela vê qualquer venda inteira, com todas as linhas e os lançamentos, sem os recortes do perfil (por setor, por departamento ou
+              por centro de custo). Só o Acesso a Informações Sensíveis segue o perfil: sem ele, os lançamentos da Mão de Obra Direta e Indireta não abrem.
+            </p>
+            <p>
+              Na receita bruta, nos impostos e na receita líquida: a receita bruta é a dos
               lançamentos dos centros da obra (1.98 e 1.99), sem as contas de Reconhecimento do CPV, com a receita prévia de frete da obra levada do
               Pré-Fabricado ao Frete e a complementar levada da Montagem à Complementar; os impostos são os lançados nos centros da obra; a receita líquida é
               a receita bruta menos os impostos. Nas abas das linhas, cada receita vai às linhas pela Receita Prévia da obra na natureza dela (no mês; sem
-              ela, no período), e os impostos pela de todas as naturezas; sem a Receita Prévia, ficam só no Consolidado. O % também é o da aba Obras: sobre a
-              receita bruta nas receitas e nos impostos, sobre a receita líquida no resto.
+              ela, no período), e os impostos pela de todas as naturezas; sem a Receita Prévia, ficam só no Consolidado. O % é sobre a receita bruta nas
+              receitas e nos impostos, e sobre a receita líquida no resto.
             </p>
             <p>
               Os custos de cada mês são a soma do direto na obra — os lançamentos dos centros de custo dela e os volumes dela nas listas — com a parte dela no

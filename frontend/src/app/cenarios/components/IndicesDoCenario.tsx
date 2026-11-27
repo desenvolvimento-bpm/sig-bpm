@@ -270,13 +270,29 @@ export function IndicesDeComparacao({ id, podeEditar }: { id: string; podeEditar
 type LinhaDeReajuste = IndiceDosReajustes & { contas: number };
 
 /**
- * Os Índices de Reajuste: o aviso da caixa Aplicar Reajustes (21/11/2026: nos Resultados, antes do Recalcular; antes, o botão
- * Aplicar / Remover Reajustes deste quadro), a tabela (com a coluna Reajustes, do 1º ao 4º numa só), o “Novo Índice” e o Exportar,
- * e o modal de cada índice.
+ * Os Índices de Reajuste: o aviso e a caixa Aplicar ao Recalcular (27/11/2026, pedido do Adão: no destaque, antes do “Novo Índice”;
+ * antes, a caixa Aplicar Reajustes dos Resultados), a tabela (com a coluna Reajustes, do 1º ao 4º numa só), o “Novo Índice” e o
+ * Exportar, e o modal de cada índice. Marcada, todo Recalcular aplica os reajustes sobre as premissas na DRE; desmarcada, a DRE fica
+ * com as premissas, sem eles. As Configurações e as Premissas continuam editáveis com ela marcada. `motivo` é a dica da caixa
+ * quando ela não muda (o perfil só lê, a Edição das Configurações Particular de outro usuário ou o cenário travado).
  */
-export function IndicesDeReajuste({ id, podeEditar }: { id: string; podeEditar: boolean }) {
+export function IndicesDeReajuste({ id, podeEditar, motivo }: { id: string; podeEditar: boolean; motivo?: string }) {
+  const queryClient = useQueryClient();
   const consulta = useQuery({ queryKey: ["cenarios", id, "reajustesDasPremissas"], queryFn: () => cenariosService.reajustesDasPremissas(id) });
   const [aberto, setAberto] = useState<LinhaDeReajuste | "novo" | null>(null);
+  const caixa = useMutation({
+    mutationFn: (aplicar: boolean) => cenariosService.aplicarReajustes(id, aplicar),
+    onSuccess: (c) => {
+      // O cenário (a etiqueta da barra e o Pendente de Recálculo dos Resultados) e o aviso deste quadro.
+      queryClient.invalidateQueries({ queryKey: ["cenarios"] });
+      toast.success(
+        c.reajustesAplicados
+          ? "Aplicar ao Recalcular marcada: o próximo “Recalcular”, nos Resultados, aplica os reajustes sobre as premissas na DRE."
+          : "Aplicar ao Recalcular desmarcada: o próximo “Recalcular”, nos Resultados, leva as premissas sem os reajustes.",
+      );
+    },
+    onError: (e) => toast.error(mensagemDeErro(e, "Não foi possível mudar a caixa Aplicar ao Recalcular.")),
+  });
   const dados = consulta.data;
   const universo = dados?.universo;
   const deps = useMemo(() => (universo ? departamentosDe(universo) : new Map() as Deps), [universo]);
@@ -295,11 +311,34 @@ export function IndicesDeReajuste({ id, podeEditar }: { id: string; podeEditar: 
   if (consulta.isError) return <Erro erro={mensagemDeErro(consulta.error, "Erro ao carregar os Índices de Reajuste.")} />;
   if (!dados || !universo) return <div className="h-48 animate-pulse rounded-sm bg-gray-100" />;
   const pode = podeEditar && dados.editavel;
+  // Sem conta com reajuste, a caixa não se marca (o servidor recusa do mesmo jeito); marcada, sempre se desmarca.
+  const semContas = !dados.aplicados && dados.contasComReajuste === 0;
+  const mudaCaixa = pode && !semContas;
+  const dicaDaCaixa = !pode
+    ? (motivo ?? "A caixa Aplicar ao Recalcular não muda.")
+    : semContas
+      ? "Nenhuma conta com Índice de Reajuste: inclua um índice com combinações antes de marcar a caixa."
+      : dados.aplicados
+        ? "Marcada: todo “Recalcular”, nos Resultados, aplica os reajustes sobre as premissas na DRE. Desmarque para recalcular sem eles."
+        : "Desmarcada: o “Recalcular”, nos Resultados, leva as premissas sem os reajustes. Marque para aplicá-los a cada Recalcular.";
   const destaque = (
     <Destaque
       titulo="Índices de Reajuste"
       descricao="Até quatro reajustes por índice (o Valor (%) e o mês em que ele Inicia Em, cada um sobre os anteriores, até o fim do exercício), nas contas das combinações dele. Clique numa linha para abrir o índice."
     >
+      <label
+        className={`flex items-center gap-2 rounded-sm border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 ${mudaCaixa ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+        title={dicaDaCaixa}
+      >
+        <input
+          type="checkbox"
+          className="size-4 accent-black"
+          checked={dados.aplicados}
+          disabled={!mudaCaixa || caixa.isPending}
+          onChange={(e) => caixa.mutate(e.target.checked)}
+        />
+        Aplicar ao Recalcular
+      </label>
       {pode ? (
         <Button type="button" className={botaoPrimario} onClick={() => setAberto("novo")}>
           <Plus className="size-4" />
@@ -314,14 +353,14 @@ export function IndicesDeReajuste({ id, podeEditar }: { id: string; podeEditar: 
       <p className={`rounded-sm border border-l-4 border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 ${dados.aplicados ? "border-l-bpm-primary" : "border-l-red-600"}`}>
         {dados.aplicados ? (
           <>
-            <span className="font-bold text-gray-900">Aplicar Reajustes marcado.</span> A DRE tem os reajustes depois do “Recalcular”, nos Resultados. As
-            Configurações e as abas das Premissas (menos Indicadores Manuais) ficam bloqueadas para edição; gravar um Índice de Reajuste deixa a DRE
-            pendente de recálculo. Para voltar a editar, desmarque a caixa nos Resultados.
+            <span className="font-bold text-gray-900">Aplicar ao Recalcular marcada.</span> Todo “Recalcular”, nos Resultados, aplica os reajustes
+            sobre as premissas na DRE; gravar um Índice de Reajuste deixa a DRE pendente de recálculo. As Configurações e as Premissas continuam
+            editáveis.
           </>
         ) : (
           <>
-            <span className="font-bold text-gray-900">Reajustes não aplicados na DRE.</span> Para aplicá-los, marque “Aplicar Reajustes”, nos Resultados, e
-            clique em “Recalcular”.
+            <span className="font-bold text-gray-900">Reajustes fora da DRE.</span> O “Recalcular”, nos Resultados, leva as premissas sem os
+            reajustes. Para aplicá-los, marque “Aplicar ao Recalcular”, abaixo, e clique em “Recalcular”.
           </>
         )}
       </p>

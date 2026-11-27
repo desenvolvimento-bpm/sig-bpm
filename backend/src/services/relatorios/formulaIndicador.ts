@@ -3,7 +3,7 @@
  * números e quatro tipos de item, gravados entre colchetes:
  *
  * - [DRE|u|código]: uma linha da DRE apurada (qualquer tipo) na visão u — 0 Consolidado, 1 Matriz, 2 Filial,
- *   3 Serviços, 4 Despesas e Extra, 5 RN;
+ *   3 Serviços, 4 Despesas, 5 RN, 6 Extra-Operacional, 7 Leben;
  * - [LISTA|código]: um totalizador das Listas Operacionais (Projetos Liberados: Matriz…; os "_TOTAL" somam a lista);
  * - [IND|nome]: um indicador importado ou digitado das abas Comercial e Administrativo (Venda: Total, Quadro de
  *   Lotação…);
@@ -70,7 +70,7 @@ export class FormulaInvalidaError extends Error {}
 /** O item de um trecho entre colchetes ("DRE|1|CPP…"), ou erro. */
 export function lerItem(texto: string): Item {
   const [tipo, ...resto] = texto.split("|");
-  if (tipo === "DRE" && resto.length === 2 && /^[0-5]$/.test(resto[0]) && resto[1]) return { tipo, unidade: Number(resto[0]), codigo: resto[1] };
+  if (tipo === "DRE" && resto.length === 2 && /^[0-7]$/.test(resto[0]) && resto[1]) return { tipo, unidade: Number(resto[0]), codigo: resto[1] };
   if ((tipo === "LISTA" || tipo === "IND" || tipo === "META" || tipo === "INDICADOR") && resto.length === 1 && resto[0]) {
     return tipo === "LISTA" ? { tipo, codigo: resto[0] } : { tipo, nome: resto[0] };
   }

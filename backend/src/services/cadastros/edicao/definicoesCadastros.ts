@@ -205,7 +205,7 @@ export const BALDES: Array<[string, string]> = [
   ["DESPESAS", "DESPESAS"],
   ["EXTRA", "EXTRA"],
   ["RN", "RN"],
-  ["LEBEN", "LEBEN (em desuso)"],
+  ["LEBEN", "LEBEN"],
 ];
 const opcaoBalde = (v: unknown) => {
   const t = texto(v);
@@ -833,7 +833,7 @@ const unidades: DefinicaoCadastro = {
   entidade: "unidades",
   titulo: "Unidade de negócio",
   auditoria: "unidade_negocio",
-  // As cinco unidades de 1 a 5 são apuradas cada uma por uma regra própria. O Tipo saiu do cadastro (09/10/2026): a unidade é
+  // As seis unidades de 1 a 6 (27/11/2026: a 6, Extra-Operacional) são apuradas cada uma por uma regra própria. O Tipo saiu do cadastro (09/10/2026): a unidade é
   // identificada pelo código, também na carga da Estrutura da DRE (as abas Realizado (…), desde 25/11/2026), e o Nome muda a
   // qualquer momento (25/11/2026, pedido do Adão; as telas o leem de nomesDasUnidades.ts). Desde 24/11/2026 (pedido do Adão), com
   // o Novo: a unidade nova recebe o próximo código e fica fora da DRE (a apuração, os Resultados e os cenários calculam só as de 1
@@ -880,7 +880,7 @@ const unidades: DefinicaoCadastro = {
     const dados = d as { nome: string; ordem: number; ativo: boolean };
     const [maiores, comRegra] = await Promise.all([
       db.unidadeNegocio.aggregate({ _max: { codigo: true, ordem: true } }),
-      db.unidadeNegocio.findMany({ where: { codigo: { in: [1, 2, 3, 4, 5] } }, orderBy: { codigo: "asc" }, select: { nome: true } }),
+      db.unidadeNegocio.findMany({ where: { codigo: { in: [1, 2, 3, 4, 5, 6, 7] } }, orderBy: { codigo: "asc" }, select: { nome: true } }),
     ]);
     const codigo = (maiores._max.codigo ?? 0) + 1;
     const criada = await db.unidadeNegocio.create({ data: { ...dados, codigo, ordem: dados.ordem || (maiores._max.ordem ?? 0) + 1 } });

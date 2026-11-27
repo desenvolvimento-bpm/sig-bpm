@@ -279,9 +279,10 @@ export function BibliotecaDeApisContent() {
               no endereço — e os exemplos em curl e, logo abaixo, no Power Query (Excel e Power BI), com o botão de copiar.
             </li>
             <li>
-              Resultados Empresariais, Realizado por Obra e Cenários: as APIs de cada origem, uma abaixo da outra — nos Resultados Empresariais, a DRE, os Cards e
-              os Indicadores do Painel de Bordo; no Realizado por Obra, a Lista de Vendas (o código e as versões vendidas que a outra pede) e a DRE de uma Obra;
-              nos Cenários, a Lista de Cenários (o id que as outras pedem), a DRE, os Cards e os Indicadores de um cenário. Em cada uma: o nome, o código (copie
+              Resultados Empresariais, Realizado por Obra e Cenários: as APIs de cada origem, uma abaixo da outra — nos Resultados Empresariais, a DRE, os Custos
+              Operacionais, os Cards e os Indicadores do Painel de Bordo; no Realizado por Obra, a Lista de Vendas (o código e as versões vendidas que a outra pede)
+              e a DRE de uma Obra; nos Cenários, a Lista de Cenários (o id que as outras pedem), a DRE, os Custos Operacionais, os Cards e os Indicadores de um
+              cenário. Em cada uma: o nome, o código (copie
               com o botão), o que ela traz, a permissão que exige no perfil, os formatos (Dados: a tabela, com as colunas e as linhas; Visual: os cards e as
               tabelas em SVG, como nas telas) e os parâmetros (o asterisco marca os obrigatórios).
             </li>
@@ -290,6 +291,11 @@ export function BibliotecaDeApisContent() {
               escolhida na lista Venda da tela: a versão vendida em versao (0 ou VER00; sem ela, a mais recente), o Consolidado, uma linha da obra ou todas em
               linha e o nível em nivel. Em Dados, os meses, o Realizado, o Vendido, a Diferença, o Atingimento e a Eficiência, e, em meta, os avisos da tela; em
               Visual, a tabela com os meses recolhidos, uma por aba.
+            </li>
+            <li>
+              Os Custos Operacionais trazem a aba Custos Operacionais da tela Resultados (de Resultados Empresariais ou de um cenário): os custos de produção e
+              de serviços em R$/dia ou em R$/m³, com a média de cada trimestre e a Média Mensal. Em Dados, também a Média Mensal do comparado (a coluna que a
+              tela mostra só na dica), com a Diferença e o Atingimento; em Visual, a tabela da tela.
             </li>
             <li>
               Pré-visualizar abre o que um aplicativo receberia com o seu login: escolha os parâmetros e o formato e clique em Ver; o endereço do pedido, logo acima

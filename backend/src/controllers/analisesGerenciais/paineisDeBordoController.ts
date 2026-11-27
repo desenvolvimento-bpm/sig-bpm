@@ -74,8 +74,8 @@ export const paineisDeBordoController = {
     const r = id(request, response);
     if (!r) return;
     const visao = Number(request.query.visao);
-    if (![0, 1, 2, 3, 4, 5].includes(visao)) return response.status(400).json({ error: "Visão inválida." });
-    return responder(response, () => s.resultados(r, visao as 0 | 1 | 2 | 3 | 4 | 5, usuario(request)));
+    if (![0, 1, 2, 3, 4, 5, 6, 7].includes(visao)) return response.status(400).json({ error: "Visão inválida." });
+    return responder(response, () => s.resultados(r, visao as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, usuario(request)));
   },
 
   gravarPaginas(request: Request, response: Response) {

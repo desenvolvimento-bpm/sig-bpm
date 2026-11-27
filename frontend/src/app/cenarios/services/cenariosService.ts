@@ -1,7 +1,7 @@
 import { api } from "@/lib/api";
 import type { DadosDaRedistribuicao, FornecedorDaCombinacao, OpcoesDaRedistribuicao, Redistribuicao } from "@/app/cadastros/services/redistribuicoesService";
 
-import type { Indicador, MesRelatorio, Painel, Resultados } from "@/app/relatorios/services/relatoriosService";
+import type { CustosOperacionais, Indicador, MesRelatorio, Painel, Resultados } from "@/app/relatorios/services/relatoriosService";
 import type { TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 
 export type MarcacaoCenario = "ORCAMENTO_EMPRESARIAL" | "RESULTADOS_ANTERIORES" | "RESULTADOS_VENDIDOS" | "PREVISAO";
@@ -46,6 +46,11 @@ export type LinhaDaPremissa = {
   valores: Array<number | null>;
   /** Os meses com a premissa gravada; os demais valem o padrão. */
   gravados: boolean[];
+  /**
+   * O Total e a Média da linha (27/11/2026: os Encargos por Folha e os Benefícios por Colaborador, as somas do ano divididas), no
+   * lugar da soma ou da média dos meses.
+   */
+  totalDoAno?: number | null;
 };
 export type TabelaDePremissas = { venda: "GLOBAL" | "MERCANTIL"; titulo: string; linhas: LinhaDaPremissa[] };
 /** As Contas do Balancete de uma conta da DRE (13/11/2026): as contas do RM com essa Linha da DRE. */
@@ -118,8 +123,12 @@ export type ContasDoCentro = {
   /** A mão de obra principal do grupo (o prefixo "CPP.MOD"…): a da atribuição dele, que recebe as remunerações do Quadro de Lotação. */
   principal: string | null;
   /** Os Encargos e Benefícios (19/10/2026): os percentuais em %, com o padrão nos meses sem valor gravado, e os Benefícios Adicionais em R$. */
-  /** `calculado` (21/11/2026): os Benefícios Padrão, da aba Quadro de Lotação, que não se digitam. */
-  encargos: Array<SerieDoCentro & { item: string; rotulo: string; und: "%" | "R$"; calculado?: boolean }>;
+  /**
+   * `calculado` (21/11/2026): os Benefícios Padrão, da aba Quadro de Lotação, que não se digitam; e (27/11/2026) os Encargos
+   * Trabalhistas, os Encargos por Folha (em %; sem Remunerações CLT, nulo) e os Benefícios por Colaborador (R$/colab.; sem
+   * colaboradores, nulo), com o `total` do ano nos dois últimos (as somas do ano divididas).
+   */
+  encargos: Array<{ item: string; rotulo: string; und: string; calculado?: boolean; referencia: number | null; valores: Array<number | null>; gravados: boolean[]; total?: number | null }>;
   /**
    * `calculada`: a conta Encargos e Benefícios (19/10/2026) e, com o Quadro de Lotação, as Remunerações (`doQuadro`, 09/11/2026).
    * `comBeneficios` (17/11/2026): a conta Encargos e Benefícios que, na DRE, leva os Benefícios Adicionais; aqui vem sem eles
@@ -198,13 +207,13 @@ export type InvestimentoDoCenario = {
   valorPosUso: number;
   vidaUtil: number;
   depreciacaoMensal: number;
-  /** O Departamento (12/11/2026): só nos de Despesas e Extra; sem ele, é dos cinco do patrimônio. */
+  /** O Departamento (12/11/2026): só nos de Despesas; sem ele, é dos cinco do patrimônio. */
   departamento: DepartamentoDoInvestimento | null;
   /** Quem o incluiu (19/11/2026; nulo nos de antes sem o registro) e se o usuário o altera e exclui (com recorte, só os seus). */
   incluidoPor: string | null;
   podeAlterar: boolean;
 };
-/** O Departamento de um investimento de Despesas e Extra (12/11/2026). */
+/** O Departamento de um investimento de Despesas (12/11/2026). */
 export type DepartamentoDoInvestimento = "LOGISTICA" | "TECNICO" | "COMERCIAL" | "ADMINISTRATIVO" | "EXTRA_OPERACIONAL";
 export const NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO: Record<DepartamentoDoInvestimento, string> = {
   LOGISTICA: "Logística",
@@ -335,7 +344,7 @@ export type RegrasDoCenario = {
   opcoes: { chaves: Array<{ chave: string; nome: string; destinos: Array<{ codigo: string; rotulo: string }>; fixos: Array<{ destino: string; nome: string }> }> };
   avisos: string[];
 };
-export type ExtraDoCenario = { ano: number; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: Array<{ unidade: 4 | 5; nome: string; linhas: LinhaDaPremissa[] }> };
+export type ExtraDoCenario = { ano: number; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: Array<{ unidade: 5 | 6 | 7; nome: string; linhas: LinhaDaPremissa[] }> };
 export type PremissasDaUnidade = { ano: number; unidade: 1 | 2 | 3; nome: string; meses: Array<{ mes: number; rotulo: string }>; editavel: boolean; tabelas: TabelaDePremissas[] };
 /**
  * O caminho, o nome e as permissões de cada tipo (14/10/2026: por tela e por aba). `area` é o prefixo das áreas das
@@ -414,8 +423,8 @@ export type Cenario = {
   /** Nos analíticos (14/10/2026): os avisos dos rateios no exercício e se as regras mudaram depois do último cálculo. */
   rateios?: { avisos: string[]; desatualizados: boolean } | null;
   /**
-   * A caixa Aplicar Reajustes dos Resultados (analíticos; 21/11/2026, antes do Recalcular): marcada, o Recalcular aplica os Reajustes
-   * das Premissas na DRE, e as Configurações e as Premissas não se editam.
+   * A caixa Aplicar ao Recalcular (analíticos; 27/11/2026, em Configurações / Comparativo e Reajustes): marcada, todo Recalcular
+   * aplica os Reajustes das Premissas na DRE; desmarcada, a DRE fica com as premissas. As premissas continuam editáveis.
    */
   reajustesAplicados: boolean;
   /**
@@ -756,6 +765,8 @@ export const cenariosService = {
         `/proxy/cenarios/${id}/resultados/departamentos`,
       )
     ).data.data,
+  /** A aba Custos Operacionais dos Resultados (26/11/2026; sintéticos e analíticos): os custos em R$/dia e R$/m³ do cenário, com a Média Mensal do comparado. */
+  custosOperacionais: async (id: string) => (await api.get<{ data: CustosOperacionais }>(`/proxy/cenarios/${id}/resultados/custos-operacionais`)).data.data,
   /** A aba Centros de Custo dos Resultados dos analíticos (19/11/2026): os grupos com valor e a DRE de um grupo. */
   centrosDosResultados: async (id: string) =>
     (await api.get<{ data: { ano: number; grupos: Array<{ grupo: string; departamento: string; total: number }> } }>(`/proxy/cenarios/${id}/resultados/centros`)).data.data,
@@ -861,7 +872,7 @@ export const cenariosService = {
     indices: Array<{ chave: string | null; descricao: string; observacao: string | null; reajustes: ReajusteDoIndice[]; combinacoes: CombinacaoDoIndice[] }>,
   ) =>
     (await api.put<{ data: ReajustesDasPremissas }>(`/proxy/cenarios/${id}/premissas/reajustes/indices`, { indices })).data.data,
-  /** A caixa Aplicar Reajustes dos Resultados (21/11/2026): marca (true) ou desmarca; o Recalcular aplica ou remove. Devolve o cenário. */
+  /** A caixa Aplicar ao Recalcular (27/11/2026): marca (true) ou desmarca; o Recalcular aplica ou não os reajustes. Devolve o cenário. */
   aplicarReajustes: async (id: string, aplicados: boolean) => (await api.put<{ data: Cenario }>(`/proxy/cenarios/${id}/premissas/reajustes/aplicados`, { aplicados })).data.data,
   /** Grava as realocações das movimentações fora dos padrões (o grupo de cada conta, ou nulo). */
   gravarRealocacoes: async (id: string, decisoes: Record<string, string | null>) =>

@@ -136,11 +136,11 @@ export type Bloco = Posicao &
         prova?: true | MarcacaoComparavel[];
       }
   );
-export type VisaoDaTabela = 0 | 1 | 2 | 3 | 4 | 5;
+export type VisaoDaTabela = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 /** As colunas que a tabela mostra ou não (30/10/2026, pedido do Adão): o R$/m³ e as três da variação. */
 export type ColunasDaTabela = { unitario: boolean; diferenca: boolean; atingimento: boolean; eficiencia: boolean };
 /** As visões da tabela (as abas de Resultados das unidades), com o nome. */
-export const VISOES_DA_TABELA: Array<{ visao: VisaoDaTabela; nome: string }> = ([0, 1, 2, 3, 4, 5] as VisaoDaTabela[]).map((visao) => ({
+export const VISOES_DA_TABELA: Array<{ visao: VisaoDaTabela; nome: string }> = ([0, 1, 2, 3, 4, 6, 5, 7] as VisaoDaTabela[]).map((visao) => ({
   visao,
   // O nome das unidades no cadastro na hora de mostrar (25/11/2026: muda a qualquer momento).
   get nome() {

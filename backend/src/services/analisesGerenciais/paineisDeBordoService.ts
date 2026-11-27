@@ -330,7 +330,7 @@ export const paineisDeBordoService = {
   },
 
   /** A tabela de Resultados de uma visão, para os blocos de tabela (veja resultadosDaTabela, nos slides). */
-  async resultados(id: string, visao: 0 | 1 | 2 | 3 | 4 | 5, usuario: UsuarioDosSlides) {
+  async resultados(id: string, visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, usuario: UsuarioDosSlides) {
     return resultadosDaTabela(await documentoDoPainel(await doPainel(id, usuario)), visao);
   },
 

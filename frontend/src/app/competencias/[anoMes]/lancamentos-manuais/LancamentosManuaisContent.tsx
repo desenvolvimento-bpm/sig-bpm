@@ -114,7 +114,7 @@ export function LancamentosManuaisContent() {
             <li>
               Os lançamentos entram na DRE na próxima apuração, na aba de resultado do balde (o do centro de custo ou, sem centro, o da conta), como um
               lançamento do balancete: MATRIZ na Matriz, FILIAL na Filial, UNIDADE na da filial, OBRAS e COMPLEMENTAR em Serviços, DESPESAS e EXTRA em
-              Despesas e Extra, RN na RN, e os de rateio pelos percentuais. O valor é o da DRE: positivo soma à linha, negativo subtrai (numa receita, o
+              Despesas ou no Extra-Operacional (pela linha da DRE), RN no RN, LEBEN na Leben, e os de rateio pelos percentuais. O valor é o da DRE: positivo soma à linha, negativo subtrai (numa receita, o
               negativo a reduz). Uma combinação que nenhuma aba soma é recusada ao gravar, com o motivo.
             </li>
           </ul>

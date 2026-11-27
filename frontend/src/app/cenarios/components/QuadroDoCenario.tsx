@@ -23,6 +23,7 @@ import { cenariosService, type BeneficioPadrao, type CampoDoMes, type LinhaDoQua
 import { ROTULO_DO_TIPO, rotuloDoTipo, TIPOS_DO_COLABORADOR, type TipoDoColaborador } from "@/app/gestao-de-colaboradores/services/tiposDoColaborador";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero, ValorDialog } from "./EdicaoDialogs";
+import { FUNDO_CALCULADO } from "./TabelaPremissas";
 
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
 const CAMPOS: Array<{ campo: CampoDoMes; rotulo: string; dica: string; largura: number }> = [
@@ -464,10 +465,10 @@ export function QuadroDoCenario({ id, editavel }: { id: string; editavel: boolea
                       </td>,
                       <td key={`${m.mes}b`} />,
                       <td key={`${m.mes}a`} />,
-                      <td key={`${m.mes}t`} className="px-3 py-2 text-right whitespace-nowrap" title="A folha do mês: a soma do Salário Total das linhas">
+                      <td key={`${m.mes}t`} className={`${FUNDO_CALCULADO} px-3 py-2 text-right whitespace-nowrap`} title="A folha do mês: a soma do Salário Total das linhas">
                         {reais(folha)}
                       </td>,
-                      <td key={`${m.mes}be`} className="px-3 py-2 text-right whitespace-nowrap" title="Os Benefícios do mês: a soma dos Benefícios das linhas">
+                      <td key={`${m.mes}be`} className={`${FUNDO_CALCULADO} px-3 py-2 text-right whitespace-nowrap`} title="Os Benefícios do mês: a soma dos Benefícios das linhas">
                         {beneficios ? reais(beneficios) : ""}
                       </td>,
                     ];
@@ -659,8 +660,9 @@ function CelulasDoMes({
           </td>
         );
       })}
-      <td className="px-2 py-1 text-right whitespace-nowrap text-gray-600">{salarioTotal ? reais(salarioTotal) : ""}</td>
-      <td className="px-2 py-1 text-right whitespace-nowrap text-gray-600" title={dica}>
+      {/* O Salário Total e os Benefícios, calculados pelo SIG, no amarelo claro (27/11/2026, pedido do Adão). */}
+      <td className={`${FUNDO_CALCULADO} px-2 py-1 text-right whitespace-nowrap text-gray-600`}>{salarioTotal ? reais(salarioTotal) : ""}</td>
+      <td className={`${FUNDO_CALCULADO} px-2 py-1 text-right whitespace-nowrap text-gray-600`} title={dica}>
         {beneficios.beneficios ? reais(beneficios.beneficios) : ""}
       </td>
     </>

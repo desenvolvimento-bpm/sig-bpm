@@ -45,10 +45,10 @@ export const RECURSOS: RecursoSistema[] = [
   "CADASTROS_APURACAO",
   // A Gestão de Colaboradores (06/11/2026), nos Processos Administrativos, entre a Apuração e a Controladoria, como no menu.
   "GESTAO_COLABORADORES",
+  // Os Arquivos Gerais (05/11/2026), o primeiro processo da Controladoria, como no menu (desde 27/11/2026).
+  "ARQUIVOS_GERAIS",
   "CENTRAL_CONECTIVIDADE",
   "CADASTROS_CONTROLADORIA",
-  // Os Arquivos Gerais (05/11/2026), acima do Controle de Usuários, como no menu.
-  "ARQUIVOS_GERAIS",
   "CONTROLE_USUARIOS",
 ];
 const ROTULO_RECURSO: Record<RecursoSistema, string> = {
@@ -95,8 +95,6 @@ export type DadosUsuario = {
   /** O recorte por centro de custo (Coordenador): a gestão e os centros dela que o usuário alcança. */
   gestao?: DepartamentoAcesso | null;
   centros?: string[];
-  /** Com recorte por centro de custo: vê também os resultados das obras, nas linhas da gestão. */
-  veObras?: boolean;
 };
 export type DadosPerfil = {
   nome: string;
@@ -136,7 +134,6 @@ const selecaoUsuario = {
   setores: { select: { tipoLista: true } },
   departamentos: { select: { departamento: true } },
   gestao: true,
-  veObras: true,
   centros: { select: { centroCusto: { select: { id: true, codigoRM: true, nomeRM: true } } } },
 } satisfies Prisma.UsuarioSelect;
 type UsuarioLido = Prisma.UsuarioGetPayload<{ select: typeof selecaoUsuario }>;
@@ -237,7 +234,6 @@ export const usuariosService = {
         setores: { create: [...new Set(d.setores)].map((tipoLista) => ({ tipoLista })) },
         departamentos: { create: [...new Set(d.departamentos)].map((departamento) => ({ departamento })) },
         gestao: d.gestao ?? null,
-        veObras: d.veObras ?? false,
         centros: { create: centros.map((centroCustoId) => ({ centroCustoId })) },
       },
       select: selecaoUsuario,
@@ -286,7 +282,6 @@ export const usuariosService = {
           setores: { create: [...new Set(d.setores)].map((tipoLista) => ({ tipoLista })) },
           departamentos: { create: [...new Set(d.departamentos)].map((departamento) => ({ departamento })) },
           gestao: d.gestao ?? null,
-          veObras: d.veObras ?? false,
           centros: { create: centros.map((centroCustoId) => ({ centroCustoId })) },
         },
         select: selecaoUsuario,

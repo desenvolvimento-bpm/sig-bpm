@@ -284,7 +284,7 @@ export const openApiSpec = {
         tags: ["Central de Conectividade"],
         summary: "Os dados de uma API",
         description:
-          "Códigos: resultados-dre, resultados-painel, resultados-indicadores, obras, obra-dre, cenarios, cenario-dre, cenario-painel e cenario-indicadores. " +
+          "Códigos: resultados-dre, resultados-custos-operacionais, resultados-painel, resultados-indicadores, obras, obra-dre, cenarios, cenario-dre, cenario-custos-operacionais, cenario-painel e cenario-indicadores. " +
           "?formato=dados (o padrão: { colunas, linhas }) ou visual ({ visuais: [{ titulo, largura, altura, svg }] }); os demais parâmetros, conforme a API (GET /v1/apis).",
         security: [{ BearerAuth: [] }],
         parameters: [

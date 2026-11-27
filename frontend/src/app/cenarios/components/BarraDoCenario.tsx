@@ -106,9 +106,9 @@ export function BarraDoCenario({ id, tela }: { id: string; tela: string }) {
         {/* Depois da versão, a etiqueta Vigente e a da marcação, com os símbolos (14/10/2026). */}
         {atual?.vigente ? <EtiquetaVigente classe={ETIQUETA} /> : null}
         <EtiquetaMarcacao marcacao={atual?.marcacao ?? null} classe={ETIQUETA} />
-        {/* Os Reajustes aplicados na DRE (11/11/2026): a caixa Aplicar Reajustes dos Resultados (21/11/2026) os marca, e o Recalcular os aplica. */}
+        {/* Os Reajustes aplicados na DRE (11/11/2026): a caixa Aplicar ao Recalcular (27/11/2026, Configurações / Comparativo e Reajustes) os marca, e o Recalcular os aplica. */}
         {t.tipo === "ANALITICO" && atual?.reajustesAplicados ? (
-          <span className={ETIQUETA} title="A caixa Aplicar Reajustes dos Resultados está marcada: o Recalcular aplica os reajustes na DRE, e as Configurações e as Premissas não se editam">
+          <span className={ETIQUETA} title="A caixa Aplicar ao Recalcular (Configurações / Comparativo e Reajustes) está marcada: cada Recalcular aplica os reajustes sobre as premissas na DRE">
             Reajustes Aplicados
           </span>
         ) : null}

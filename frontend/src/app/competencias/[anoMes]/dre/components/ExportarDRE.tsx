@@ -53,7 +53,7 @@ export function ExportarDRE({ anoMes, visao }: { anoMes: string; visao: VisaoExp
   const { hasPermission } = usePermissions();
   const le = (aba: string) => hasPermission(`dre.${aba}:ler`);
   const opcoes = OPCOES.filter((o) =>
-    o.alcance === "unidades" ? ["consolidado", "matriz", "filial", "servicos", "despesas", "rn"].every(le) : o.alcance === "atual" ? true : le(o.alcance === "centrosArquivos" ? "centros" : o.alcance === "semCentros" ? "sem_centros" : o.alcance),
+    o.alcance === "unidades" ? ["consolidado", "matriz", "filial", "servicos", "despesas", "extra_operacional", "rn", "leben"].every(le) : o.alcance === "atual" ? true : le(o.alcance === "centrosArquivos" ? "centros" : o.alcance === "semCentros" ? "sem_centros" : o.alcance),
   );
 
   async function baixar(formato: Formato, alcance: Alcance) {

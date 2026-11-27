@@ -24,7 +24,7 @@ import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
  */
 
 export type EscopoResultados =
-  | { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 }
+  | { tipo: "visao"; visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 }
   | { tipo: "centro"; grupo: string }
   /** A aba Departamentos (23/11/2026): o Consolidado com os departamentos abertos pelos centros de custo. */
   | { tipo: "departamentos" }
@@ -32,9 +32,7 @@ export type EscopoResultados =
   | { tipo: "centros" }
   /** Todos os centros de custo, um arquivo Excel por centro, num ZIP (14/10/2026). */
   | { tipo: "centrosArquivos" }
-  // As obras e os movimentos sem centro de custo (14/10/2026): um (o da tela) ou todos.
-  | { tipo: "obra"; codigo: string }
-  | { tipo: "obras" }
+  // Os movimentos sem centro de custo (14/10/2026): um (o da tela) ou todos.
   | { tipo: "semCentro"; grupo: GrupoSemCentro }
   | { tipo: "semCentros" }
   // As linhas (26/10/2026): uma (a da tela) ou todas, das unidades que o perfil lê; `rateios`, a aba Rateios das Linhas.
@@ -94,7 +92,7 @@ const pontos = (pp: number) => {
 };
 
 // As visões com o nome das unidades no cadastro (25/11/2026: mudam a qualquer momento).
-const visoes = () => ([0, 1, 2, 3, 4, 5] as const).map((visao) => ({ visao, nome: nomeDaVisao(visao) }));
+const visoes = () => ([0, 1, 2, 3, 4, 6, 5, 7] as const).map((visao) => ({ visao, nome: nomeDaVisao(visao) }));
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 const dataHora = (d: Date) =>
@@ -121,28 +119,19 @@ export type Identificacao = Awaited<ReturnType<typeof identificar>>;
 export const identificacaoLivre = (periodo: string, usuarioNome: string): Identificacao => ({ periodo, avisos: [], geracao: `Gerado em ${dataHora(new Date())} por ${usuarioNome} · SIG BPM` });
 
 /** O que a aba Detalhes detalha numa visão (27/10/2026): a unidade, ou as cinco no Consolidado. */
-const alvoDaVisao = (visao: number): AlvoDosDetalhes => ({ tipo: "unidades", unidades: visao === 0 ? [1, 2, 3, 4, 5] : [visao] });
+const alvoDaVisao = (visao: number): AlvoDosDetalhes => ({ tipo: "unidades", unidades: visao === 0 ? [1, 2, 3, 4, 5, 6, 7] : [visao] });
 /** Uma aba exportada, para a aba Detalhes: o nome, as linhas dela e o que detalhar. */
 const abaDetalhada = (b: Bloco): AbaDetalhada => ({ nome: b.nome, codigos: b.dados.linhas.map((l) => l.codigo), alvo: b.detalhe ?? null });
 
 // A exportação de Resultados é a tela de Resultados Empresariais: só as competências fechadas (11/10/2026).
 async function blocos(ano: number, ate: number | undefined, escopo: EscopoResultados, acesso: Acesso, comparacao: ComparacaoDaTela = SEM_COMPARACAO): Promise<Bloco[]> {
-  const daVisao = (visao: 0 | 1 | 2 | 3 | 4 | 5) => resultadosService.unidade(ano, visao, ate, acesso, true, comparacao.comparaCom, comparacao.prova);
+  const daVisao = (visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7) => resultadosService.unidade(ano, visao, ate, acesso, true, comparacao.comparaCom, comparacao.prova);
   if (escopo.tipo === "visao") {
     const v = visoes().find((x) => x.visao === escopo.visao)!;
     return [{ nome: v.nome, titulo: v.nome, dados: await daVisao(v.visao), detalhe: alvoDaVisao(v.visao) }];
   }
   // A aba Departamentos (23/11/2026), sem a aba Detalhes (as linhas dos centros não são as do balancete).
   if (escopo.tipo === "departamentos") return [{ nome: "Departamentos", titulo: "Departamentos", dados: await resultadosService.departamentos(ano, ate, acesso, true, comparacao.comparaCom), detalhe: null }];
-  if (escopo.tipo === "obra" || escopo.tipo === "obras") {
-    const obras = escopo.tipo === "obra" ? [escopo.codigo] : (await resultadosService.listarObras(ano, ate, acesso, true)).obras.map((o) => o.codigo);
-    const r: Bloco[] = [];
-    for (const codigo of obras) {
-      const dados = await resultadosService.obra(ano, codigo, ate, acesso, true);
-      r.push({ nome: dados.obra.nome, titulo: `Obra ${dados.obra.nome} (${codigo})`, dados, detalhe: { tipo: "obra", codigo } });
-    }
-    return r;
-  }
   if (escopo.tipo === "semCentro" || escopo.tipo === "semCentros") {
     const grupos = escopo.tipo === "semCentro" ? [escopo.grupo] : (await resultadosService.listarSemCentros(ano, ate, acesso, true)).grupos.map((g) => g.codigo as GrupoSemCentro);
     const r: Bloco[] = [];
@@ -528,7 +517,7 @@ export const exportacaoRelatoriosService = {
     if (escopo.tipo === "centrosArquivos" && formato !== "xlsx") throw new RelatorioError(400, "Um arquivo por centro de custo só sai em Excel.");
     // Sem `ate`, até o último mês apurado (como na tela).
     const bs = await blocos(ano, ate, escopo.tipo === "centrosArquivos" ? { tipo: "centros" } : escopo, acesso, comparacao);
-    if (bs.length === 0) throw new RelatorioError(404, escopo.tipo === "linhas" ? "Nenhuma linha para exportar." : escopo.tipo === "obras" ? "Nenhuma obra com lançamento para exportar." : escopo.tipo === "semCentros" ? "Nenhum movimento sem centro de custo para exportar." : "Nenhum centro de custo com valor para exportar.");
+    if (bs.length === 0) throw new RelatorioError(404, escopo.tipo === "linhas" ? "Nenhuma linha para exportar." : escopo.tipo === "semCentros" ? "Nenhum movimento sem centro de custo para exportar." : "Nenhum centro de custo com valor para exportar.");
     const ultimo = bs[0].dados.ate;
     const id = await identificar(ano, ultimo, usuarioNome);
     const nomeVisao =
@@ -540,8 +529,6 @@ export const exportacaoRelatoriosService = {
             ? "centros de custo (um arquivo por centro)"
             : escopo.tipo === "centro"
               ? `${bs[0].departamento} - ${bs[0].nome}`
-              : escopo.tipo === "obras"
-            ? "todas as obras"
             : escopo.tipo === "semCentros"
               ? "sem centros de custo"
               : escopo.tipo === "semCentro"
@@ -563,7 +550,7 @@ export const exportacaoRelatoriosService = {
     }
     // Em Todas as Unidades, o Consolidado é a soma das outras cinco: na aba Detalhes, só elas.
     const detalhadas = escopo.tipo === "unidades" ? bs.filter((b) => b.nome !== "Consolidado") : bs;
-    const notas = escopo.tipo === "unidades" ? ["O Consolidado é a soma das cinco unidades: os movimentos dele são os delas."] : [];
+    const notas = escopo.tipo === "unidades" ? ["O Consolidado é a soma das seis unidades: os movimentos dele são os delas."] : [];
     const extras = det ? [await det.aba(detalhadas.map(abaDetalhada), titulo, notas)] : [];
     return arquivoDeResultados(bs, id, formato, titulo, nomeArquivo, extras);
   },

@@ -199,7 +199,7 @@ function ExportarPremissasDialog({ id, onFechar }: { id: string; onFechar: () =>
           <DialogTitle>Exportar Premissas</DialogTitle>
           <DialogDescription>
             O arquivo em Excel leva só o que é dos departamentos marcados. Logística, Técnico, Comercial, Administrativo e Extra-Operacional levam também a
-            depreciação de Despesas e Extra; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos centros dos
+            depreciação de Despesas; os indicadores manuais vão pelo grupo deles; a aba Quadro de Lotação, as linhas dos centros dos
             departamentos marcados. A aba Investimentos leva todos os investimentos do cenário: importada, ela substitui os seus (os seus que não
             estiverem nela saem). Cada linha traz a Média e o Total da Referência, a Variação Máxima e Justificar? (em fórmula).
           </DialogDescription>

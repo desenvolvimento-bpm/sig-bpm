@@ -33,8 +33,6 @@ export type Acesso = {
   gestao: DepartamentoAcesso | null;
   /** Os ids dos centros de custo do usuário. */
   centros: string[];
-  /** Com recorte por centro de custo: vê os resultados das obras, nas linhas da gestão dele. */
-  veObras: boolean;
   /**
    * Acesso a Informações Sensíveis (27/10/2026): vê as movimentações das linhas de Mão de Obra Direta e Indireta
    * (`podeVerSensiveis`). Do perfil.
@@ -58,7 +56,7 @@ export type UsuarioAutenticado = {
  * seria contornado. O mesmo vale para o recorte por centro de custo (Coordenador).
  */
 // As Validações das contestações (27/10/2026) mostram as de todos os departamentos, como os Lançamentos. O Realizado por
-// Obra (03/11/2026) junta os custos de todos os departamentos, como a etapa Linhas.
+// Obra não tem recorte (27/11/2026, pedido do Adão): quem lê a tela a vê inteira, com qualquer recorte (`semRecorte`).
 const FORA_DO_RECORTE_DE_DEPARTAMENTO = new Set([
   "classificacao",
   "lancamentos_manuais",
@@ -67,7 +65,6 @@ const FORA_DO_RECORTE_DE_DEPARTAMENTO = new Set([
   "conferencia",
   "auditoria",
   "contestacoes_validacoes",
-  "realizado_obra_resultados",
 ]);
 /**
  * As abas fora do recorte numa tela que ele alcança (27/10/2026): os Rateios, na tela Totais (os Indicadores ficam); os
@@ -110,7 +107,6 @@ const SELECAO_DO_USUARIO = {
   setores: { select: { tipoLista: true } },
   departamentos: { select: { departamento: true } },
   gestao: true,
-  veObras: true,
   centros: { select: { centroCustoId: true } },
   perfil: {
     select: {
@@ -170,7 +166,6 @@ function montarUsuario(usuario: Prisma.UsuarioGetPayload<{ select: typeof SELECA
       recorteCentro: usuario.perfil.recorteCentro,
       gestao: usuario.gestao,
       centros: usuario.centros.map((c) => c.centroCustoId),
-      veObras: usuario.veObras,
       informacoesSensiveis: usuario.perfil.informacoesSensiveis,
     },
   };
@@ -185,9 +180,15 @@ export const ACESSO_TOTAL: Acesso = {
   recorteCentro: false,
   gestao: null,
   centros: [],
-  veObras: false,
   informacoesSensiveis: true,
 };
+
+/**
+ * O acesso do Realizado por Obra (27/11/2026, pedido do Adão: ou o usuário lê a tela, ou não): sem os recortes por setor,
+ * departamento e centro de custo, nos Resultados, na API obra-dre e nas consultas da obra na DRE do mês (o extrato, os
+ * volumes e o balancete de um centro de obra). As informações sensíveis seguem o perfil.
+ */
+export const semRecorte = (acesso: Acesso): Acesso => ({ ...ACESSO_TOTAL, informacoesSensiveis: acesso.informacoesSensiveis });
 
 /** O usuário alcança esta lista operacional? */
 export const alcancaLista = (acesso: Acesso, tipo: string) => !acesso.recorteSetor || acesso.setores.includes(tipo as TipoImportacao);

@@ -2,7 +2,7 @@
  * As regras das linhas da DRE nas exportações (22/10/2026), as mesmas das telas (frontend: NiveisDRE.tsx).
  *
  * Os dois totais da ROL da estrutura: o primeiro (no topo) sai quando o segundo (depois da receita bruta e dos impostos)
- * está nas linhas; nas visões com um só (Despesas e Extra e RN), ele fica.
+ * está nas linhas; nas visões com um só (Despesas, Extra-Operacional, RN e Leben), ele fica.
  */
 const PRIMEIRO_TOTAL_DA_ROL = "RO.RECEITA_OPERACIONAL_LIQUIDA_ROL";
 const TOTAL_DA_ROL = "ROL.RECEITA_OPERACIONAL_LIQUIDA_ROL";

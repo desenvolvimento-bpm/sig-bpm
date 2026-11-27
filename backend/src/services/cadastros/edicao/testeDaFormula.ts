@@ -80,7 +80,7 @@ export async function valoresDosItens(entidade: string) {
     const prisma = getPrismaClient();
     for (const i of catalogo) valores[`META|${i.nome}`] = b.orcamento.cenario ? finito(b.orcamento.acumulado(i, b.ultimo)) : null;
     const codigos = (await prisma.linhaDRE.findMany({ where: { tipo: { not: "SECAO" }, ativo: true }, select: { codigo: true } })).map((l) => l.codigo);
-    for (let u = 0; u <= 5; u++) for (const c of codigos) valores[`DRE|${u}|${c}`] = somaDosMeses(b.dados, (m) => m.dre(u, c));
+    for (let u = 0; u <= 7; u++) for (const c of codigos) valores[`DRE|${u}|${c}`] = somaDosMeses(b.dados, (m) => m.dre(u, c));
     for (const t of TOTALIZADORES_DAS_LISTAS) valores[`LISTA|${t.codigo}`] = somaDosMeses(b.dados, (m) => (m.lista ? m.lista(t.codigo) : m.volume(t.codigo)));
     // O Quadro de Lotação: a posição do mês da competência (o estoque de colaboradores não se soma).
     const doMes = b.dados[b.ultimo - 1];

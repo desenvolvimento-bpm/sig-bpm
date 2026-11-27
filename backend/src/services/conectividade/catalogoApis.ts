@@ -1,13 +1,14 @@
 import { z } from "zod";
 
 import { getPrismaClient } from "../../config/prisma.js";
-import { CODIGO_ADMINISTRADOR, type UsuarioAutenticado } from "../acesso/acesso.js";
+import { CODIGO_ADMINISTRADOR, semRecorte, type UsuarioAutenticado } from "../acesso/acesso.js";
 import { ABA_DA_VISAO } from "../acesso/telas.js";
 import { CenarioError, cenariosService, MARCACOES } from "../cenarios/cenariosService.js";
 import { indicadoresService } from "../relatorios/indicadoresService.js";
 import { nomesAntigos } from "../relatorios/indicadoresDoSistema.js";
 import { painelService } from "../relatorios/painelService.js";
 import { RelatorioError, resultadosService } from "../relatorios/resultadosService.js";
+import { custosOperacionaisService } from "../relatorios/custosOperacionais.js";
 import { RegraRealizadoObraError, realizadoObraService, rotuloDaVersao } from "../realizadoObra/realizadoObraService.js";
 import { cardEmSvg, direcaoDo, tabelaEmSvg, type BlocoDoCard, type ColunaVisual, type LinhaVisual, type Sinal, type Visual } from "./visuais.js";
 import { nomeDaVisao } from "../cadastros/nomesDasUnidades.js";
@@ -114,7 +115,7 @@ const fatorDoIndicador = (unidade: string) => (unidade === "%" ? 100 : unidade =
 const MENSAGENS: Record<string, string> = {
   ano: "ano: o exercício, de 2025 a 2100",
   mes: "mes: o mês, de 1 a 12",
-  visao: "visao: 0 (Consolidado), 1 (Matriz), 2 (Filial), 3 (Serviços), 4 (Despesas e Extra) ou 5 (RN)",
+  visao: "visao: 0 (Consolidado), 1 (Matriz), 2 (Filial), 3 (Serviços), 4 (Despesas), 5 (RN), 6 (Extra-Operacional) ou 7 (Leben)",
   comparacao: "comparacao: ORCAMENTO_EMPRESARIAL, RESULTADOS_ANTERIORES, RESULTADOS_VENDIDOS ou PREVISAO",
   aba: "aba: resultados ou performance",
   grafico: "grafico: sim ou nao",
@@ -135,7 +136,7 @@ const vazioComoAusente = (v: unknown) => (v === "" ? undefined : v);
 const P = {
   ano: z.coerce.number().int().min(2025).max(2100),
   mes: z.preprocess(vazioComoAusente, z.coerce.number().int().min(1).max(12).optional()),
-  visao: z.preprocess(vazioComoAusente, z.coerce.number().int().min(0).max(5).default(0)),
+  visao: z.preprocess(vazioComoAusente, z.coerce.number().int().min(0).max(7).default(0)),
   comparacao: z.preprocess(vazioComoAusente, z.enum(["ORCAMENTO_EMPRESARIAL", "RESULTADOS_ANTERIORES", "RESULTADOS_VENDIDOS", "PREVISAO"]).default("ORCAMENTO_EMPRESARIAL")),
   aba: z.preprocess(vazioComoAusente, z.enum(["resultados", "performance"]).optional()),
   grafico: z.preprocess(vazioComoAusente, z.enum(["sim", "nao"]).default("sim")),
@@ -184,7 +185,7 @@ const NOME_DO_MODO = ["Totais", "Atribuições", "Contas"];
 const PARAMETRO: Record<string, Parametro> = {
   ano: { nome: "ano", descricao: "O exercício.", obrigatorio: true, exemplo: "2026" },
   mes: { nome: "mes", descricao: "O mês (1 a 12); sem ele, o último fechado. Só as competências fechadas, como nas telas.", obrigatorio: false, exemplo: "9" },
-  visao: { nome: "visao", descricao: "0 Consolidado, 1 Matriz, 2 Filial, 3 Serviços, 4 Despesas e Extra ou 5 RN; sem ela, 0.", obrigatorio: false, exemplo: "0" },
+  visao: { nome: "visao", descricao: "0 Consolidado, 1 Matriz, 2 Filial, 3 Serviços, 4 Despesas, 5 RN, 6 Extra-Operacional ou 7 Leben; sem ela, 0.", obrigatorio: false, exemplo: "0" },
   comparacao: { nome: "comparacao", descricao: "O cenário comparado, pela marcação: ORCAMENTO_EMPRESARIAL (o padrão), RESULTADOS_ANTERIORES, RESULTADOS_VENDIDOS ou PREVISAO.", obrigatorio: false, exemplo: "ORCAMENTO_EMPRESARIAL" },
   aba: { nome: "aba", descricao: "Só os cards de uma aba do Painel: resultados ou performance; sem ela, as que o seu perfil lê.", obrigatorio: false, exemplo: "resultados" },
   item: { nome: "item", descricao: "Só um card: a sigla, o nome (sem diferenciar maiúsculas) ou o id dele no cadastro, que não muda com o nome.", obrigatorio: false, exemplo: "ROL" },
@@ -579,6 +580,66 @@ function obraEmVisual(a: AbaDaObraNaApi, nivel: number, titulo: string, subtitul
   return tabelaEmSvg(titulo, subtitulo, colunas, linhas);
 }
 
+/** A aba Custos Operacionais (26/11/2026), de Resultados Empresariais ou de um cenário (custosOperacionais.ts). */
+type CustosNaApi = Awaited<ReturnType<typeof custosOperacionaisService.realizado>>;
+type CustosDaTela = Pick<CustosNaApi, "trimestres" | "mesesDaMedia" | "linhas"> & { comparado: { rotulo: string; nome: string | null } | null };
+/** A Diferença (o realizado menos o comparado) e o Atingimento (realizado ÷ comparado − 100%) da Média Mensal; sem o comparado, null. */
+const variacoesDoCusto = (l: CustosDaTela["linhas"][number]) => ({
+  diferenca: l.media === null || l.comparado === null ? null : arredondado(l.media - l.comparado, 8),
+  atingimento: l.media === null || !l.comparado ? null : arredondado(l.media / l.comparado - 1, 8),
+});
+
+/** Os Custos Operacionais em tabela: cada indicador com a unidade, as médias dos trimestres, a Média Mensal, a do comparado e as variações. */
+function custosEmDados(r: CustosDaTela, meta: Record<string, unknown>): Resposta {
+  const rotulo = r.comparado?.rotulo ?? "Comparado";
+  const colunas: Coluna[] = [
+    { chave: "indicador", titulo: "Indicador", tipo: "texto" },
+    { chave: "unidade", titulo: "Unidade", tipo: "texto" },
+    ...r.trimestres.map((t, k): Coluna => ({ chave: `trimestre_${k + 1}`, titulo: `Média ${t.rotulo}`, tipo: "numero" })),
+    { chave: "media", titulo: "Média Mensal", tipo: "numero" },
+    { chave: "comparado", titulo: `${rotulo} (Média Mensal)`, tipo: "numero" },
+    { chave: "diferenca", titulo: "Diferença", tipo: "numero" },
+    { chave: "atingimento", titulo: "Atingimento", tipo: "percentual" },
+  ];
+  const linhas = r.linhas.map(
+    (l): Linha => ({
+      indicador: l.descricao,
+      unidade: l.unidade,
+      ...Object.fromEntries(l.trimestres.map((v, k) => [`trimestre_${k + 1}`, v])),
+      media: l.media,
+      comparado: l.comparado,
+      ...variacoesDoCusto(l),
+    }),
+  );
+  return { formato: "dados", colunas, linhas, meta: { ...meta, linhas: linhas.length } };
+}
+
+/** Os Custos Operacionais em SVG, como a tabela da tela: as médias dos trimestres, a Média Mensal, a Diferença e o Atingimento. */
+function custosEmVisual(r: CustosDaTela, titulo: string, subtitulo: string): Visual {
+  const comComparado = !!r.comparado;
+  const colunas: ColunaVisual[] = [
+    { titulo: "Indicador", largura: 440, alinhar: "start" },
+    ...r.trimestres.map((t): ColunaVisual => ({ titulo: `Média ${t.rotulo}`, largura: 132, alinhar: "end" })),
+    { titulo: "Média Mensal", largura: 120, alinhar: "end" },
+    ...(comComparado ? ([{ titulo: "Diferença", largura: 112, alinhar: "end" }, { titulo: "Atingimento", largura: 104, alinhar: "end" }] as ColunaVisual[]) : []),
+  ];
+  const v = (x: number | null) => ou(x, n2.format);
+  const linhas = r.linhas.map((l): LinhaVisual => {
+    const d = variacoesDoCusto(l);
+    return {
+      estilo: "ITEM",
+      recuo: 0,
+      celulas: [
+        l.descricao,
+        ...l.trimestres.map(v),
+        v(l.media),
+        ...(comComparado ? [d.diferenca === null ? "—" : `${d.diferenca > 0 ? "+" : ""}${n2.format(d.diferenca)}`, desvio(d.atingimento)] : []),
+      ],
+    };
+  });
+  return tabelaEmSvg(titulo, subtitulo, colunas, linhas);
+}
+
 const admin = (u: UsuarioAutenticado) => u.perfil.codigo === CODIGO_ADMINISTRADOR;
 const usuarioDoCenario = (u: UsuarioAutenticado) => ({ id: u.sub, nome: u.nome, admin: admin(u) });
 const BASES = ["cenarios", "cenarios_analiticos"] as const;
@@ -595,7 +656,7 @@ export const CATALOGO: DefinicaoDaApi[] = [
     codigo: "resultados-dre",
     nome: "DRE dos Resultados Empresariais",
     origem: "Resultados Empresariais",
-    descricao: "A tabela de Resultados de uma visão (Consolidado, Matriz, Filial, Serviços, Despesas e Extra ou RN): as linhas da DRE com os meses, o acumulado, o comparado e as variações.",
+    descricao: "A tabela de Resultados de uma visão (Consolidado, Matriz, Filial, Serviços, Despesas, Extra-Operacional, RN ou Leben): as linhas da DRE com os meses, o acumulado, o comparado e as variações.",
     exige: "Resultados Empresariais › Resultados (a aba da visão): Ler",
     formatos: ["dados", "visual"],
     parametros: [PARAMETRO.ano, PARAMETRO.mes, PARAMETRO.visao, PARAMETRO.nivel, PARAMETRO.comparacao, PARAMETRO.formato],
@@ -603,12 +664,33 @@ export const CATALOGO: DefinicaoDaApi[] = [
     async executar(q, u, formato) {
       const p = validar(z.object({ ano: P.ano, mes: P.mes, visao: P.visao, nivel: P.nivel, comparacao: P.comparacao }), q);
       exigir(u, `relatorio_resultados.${ABA_DA_VISAO[p.visao]}:ler`);
-      const tela = await daTela(() => resultadosService.unidade(p.ano, p.visao as 0 | 1 | 2 | 3 | 4 | 5, p.mes, u.acesso, true, p.comparacao));
+      const tela = await daTela(() => resultadosService.unidade(p.ano, p.visao as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, p.mes, u.acesso, true, p.comparacao));
       const r = { ...tela, linhas: noNivel(tela.linhas, p.nivel) } as unknown as Dre;
       const meta = { ano: tela.ano, mes: tela.ate, visao: nomeDaVisao(p.visao), nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.rotuloComparado };
       if (formato === "dados") return dreEmDados(r, tela.rotuloComparado, meta);
       const mes = tela.meses.find((m) => m.mes === tela.ate)?.rotulo ?? "";
       return { formato, visuais: [dreEmVisual(r, `Resultados · ${nomeDaVisao(p.visao)}`, `${mes} · comparado: ${tela.rotuloComparado}`, tela.rotuloComparado, true)], meta };
+    },
+  },
+  {
+    // A aba Custos Operacionais (26/11/2026, pedido do Adão).
+    codigo: "resultados-custos-operacionais",
+    nome: "Custos Operacionais dos Resultados Empresariais",
+    origem: "Resultados Empresariais",
+    descricao:
+      "A aba Custos Operacionais de Resultados: os custos de produção (Matriz e Filial) e de serviços em R$/dia (÷ 20 dias por mês) e em R$/m³ (pela Produção ou pela Montagem), com a média de cada trimestre e a Média Mensal das competências fechadas e, contra a Média Mensal do comparado, a Diferença e o Atingimento.",
+    exige: "Resultados Empresariais › Resultados › Custos Operacionais: Ler",
+    formatos: ["dados", "visual"],
+    parametros: [PARAMETRO.ano, PARAMETRO.mes, PARAMETRO.comparacao, PARAMETRO.formato],
+    alcanca: (u) => pode(u, "relatorio_resultados.custos_operacionais:ler"),
+    async executar(q, u, formato) {
+      const p = validar(z.object({ ano: P.ano, mes: P.mes, comparacao: P.comparacao }), q);
+      exigir(u, "relatorio_resultados.custos_operacionais:ler");
+      const r = await daTela(() => custosOperacionaisService.realizado(p.ano, p.mes, p.comparacao));
+      const meta = { ano: r.ano, mes: r.ate, meses: r.mesesDaMedia, comparado: r.comparado.rotulo, cenarioComparado: r.comparado.nome };
+      if (formato === "dados") return custosEmDados(r, meta);
+      const periodo = r.mesesDaMedia.length ? `${r.mesesDaMedia[0]} a ${r.mesesDaMedia[r.mesesDaMedia.length - 1]}` : String(r.ano);
+      return { formato, visuais: [custosEmVisual(r, "Resultados · Custos Operacionais", `${periodo} · comparado: ${r.comparado.rotulo}`)], meta };
     },
   },
   {
@@ -695,7 +777,8 @@ export const CATALOGO: DefinicaoDaApi[] = [
     async executar(q, u, formato) {
       const p = validar(z.object({ obra: P.obra, versao: P.versao, linha: P.linha, nivel: P.nivel }), q);
       exigir(u, "realizado_obra_resultados:ler");
-      const r = await daTela(() => realizadoObraService.resultadosDaApi(p.obra, p.versao ?? null, u.acesso));
+      // Sem recorte (27/11/2026), como a tela: quem lê o Realizado por Obra vê a obra inteira.
+      const r = await daTela(() => realizadoObraService.resultadosDaApi(p.obra, p.versao ?? null, semRecorte(u.acesso)));
       if (!r) throw new ApiError(404, `Nenhuma venda com o código "${p.obra}" (a API obras lista as que você lê).`, "OBRA_INEXISTENTE");
       if (p.versao !== undefined && r.versoes.length && !r.versoes.includes(p.versao)) {
         throw new ApiError(404, `A venda ${r.obra.codigo} não tem a ${rotuloDaVersao(p.versao)} na DRE de venda. As versões dela: ${r.versoes.map(rotuloDaVersao).join(", ")}.`, "VERSAO_INEXISTENTE");
@@ -777,12 +860,33 @@ export const CATALOGO: DefinicaoDaApi[] = [
       const p = validar(z.object({ cenario: P.cenario, visao: P.visao, nivel: P.nivel }), q);
       const c = await cenarioDaApi(p.cenario, u);
       exigir(u, `${c.base}_resultados.${ABA_DA_VISAO[p.visao]}:ler`);
-      const tela = await daTela(() => cenariosService.resultados(p.cenario, p.visao as 0 | 1 | 2 | 3 | 4 | 5, usuarioDoCenario(u)));
+      const tela = await daTela(() => cenariosService.resultados(p.cenario, p.visao as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, usuarioDoCenario(u)));
       const r = { ...tela, linhas: noNivel(tela.linhas, p.nivel) } as unknown as Dre;
       const comparado = tela.comparado?.nome ?? "Comparado";
       const meta = { cenario: c.nome, ano: tela.ano, visao: nomeDaVisao(p.visao), nivel: NOME_DO_MODO[p.nivel - 1], comparado: tela.comparado?.nome ?? null };
       if (formato === "dados") return dreEmDados(r, comparado, meta);
       return { formato, visuais: [dreEmVisual(r, `${c.nome} · ${nomeDaVisao(p.visao)}`, `Cenário ${c.ano}${tela.comparado ? ` · comparado: ${tela.comparado.nome}` : ""}`, comparado, false)], meta };
+    },
+  },
+  {
+    // A aba Custos Operacionais dos Resultados de um cenário (26/11/2026, pedido do Adão).
+    codigo: "cenario-custos-operacionais",
+    nome: "Custos Operacionais de um Cenário",
+    origem: "Cenários",
+    descricao:
+      "A aba Custos Operacionais dos Resultados de um cenário (sintético ou analítico): os custos de produção (Matriz e Filial) e de serviços em R$/dia (÷ 20 dias por mês) e em R$/m³ (pela Demanda do cenário), com a média de cada trimestre e a Média Mensal e, contra a Média Mensal do cenário comparado, a Diferença e o Atingimento.",
+    exige: "Cenários Sintéticos ou Analíticos › Resultados › Custos Operacionais: Ler",
+    formatos: ["dados", "visual"],
+    parametros: [PARAMETRO.cenario, PARAMETRO.formato],
+    alcanca: (u) => BASES.some((b) => pode(u, `${b}_resultados.custos_operacionais:ler`)),
+    async executar(q, u, formato) {
+      const p = validar(z.object({ cenario: P.cenario }), q);
+      const c = await cenarioDaApi(p.cenario, u);
+      exigir(u, `${c.base}_resultados.custos_operacionais:ler`);
+      const r = await daTela(() => cenariosService.custosOperacionais(p.cenario, usuarioDoCenario(u)));
+      const meta = { cenario: c.nome, ano: r.ano, comparado: r.comparado?.nome ?? null };
+      if (formato === "dados") return custosEmDados(r, meta);
+      return { formato, visuais: [custosEmVisual(r, `${c.nome} · Custos Operacionais`, `Cenário ${c.ano}${r.comparado ? ` · comparado: ${r.comparado.nome}` : ""}`)], meta };
     },
   },
   {

@@ -18,14 +18,14 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { cenariosService, type DadosDoInvestimento, type InvestimentoDoCenario, type InvestimentosDoCenario as Dados, NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO, type DepartamentoDoInvestimento } from "../services/cenariosService";
 import { botaoPrimario, classeSelect, Erro } from "./CenarioDialog";
 import { lerNumero } from "./EdicaoDialogs";
-import { TabelaEditavel } from "./TabelaPremissas";
+import { FUNDO_CALCULADO, TabelaEditavel } from "./TabelaPremissas";
 import { plural } from "@/lib/texto";
 
 const Carregando = () => <div className="h-64 animate-pulse rounded-sm bg-gray-100" />;
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const reais = (v: number | null) => (v === null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
 const paraCampo = (v: number | null | undefined) => (v === null || v === undefined ? "" : v.toLocaleString("pt-BR", { maximumFractionDigits: 2 }));
-const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas e Extra" };
+const NOME_DA_UNIDADE: Record<number, string> = { 1: "Matriz", 2: "Filial", 3: "Serviços", 4: "Despesas" };
 /**
  * As colunas da lista dos investimentos, com a largura de cada uma (16/11/2026: os rótulos presos ao rolar a página, como nas
  * demais tabelas, numa tabela à parte com as mesmas larguras); a partir do Início, à direita.
@@ -48,7 +48,7 @@ const COLUNAS_DA_LISTA: Array<{ rotulo: string; largura: number; direita?: boole
 /** O autor de um investimento na lista (os de antes do registro, sem ele). */
 const autorDoInvestimento = (i: InvestimentoDoCenario) => i.incluidoPor ?? "—";
 
-/** O Departamento de um investimento na lista (12/11/2026): só em Despesas e Extra; sem ele, os cinco. */
+/** O Departamento de um investimento na lista (12/11/2026): só em Despesas; sem ele, os cinco. */
 const departamentoDoInvestimento = (i: InvestimentoDoCenario) =>
   i.unidade !== 4 ? "—" : i.departamento ? NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[i.departamento] : "Todos";
 
@@ -274,7 +274,8 @@ export function InvestimentosDoCenario({ id, editavel }: { id: string; editavel:
                       <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorTotal)}</td>
                       <td className="px-3 py-1.5 text-right whitespace-nowrap">{reais(i.valorPosUso)}</td>
                       <td className="px-3 py-1.5 text-right whitespace-nowrap">{i.vidaUtil} meses</td>
-                      <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">{reais(i.depreciacaoMensal)}</td>
+                      {/* A Depreciação Mensal, calculada pelo SIG, no amarelo claro (27/11/2026, pedido do Adão). */}
+                      <td className={`${FUNDO_CALCULADO} px-3 py-1.5 text-right font-bold whitespace-nowrap`}>{reais(i.depreciacaoMensal)}</td>
                       <td className="truncate px-3 py-1.5 whitespace-nowrap text-gray-600" title={i.incluidoPor ?? undefined}>
                         {autorDoInvestimento(i)}
                       </td>
@@ -307,7 +308,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
   const [nome, setNome] = useState(investimento?.nomeReferencia ?? "");
   // As unidades da lista (19/11/2026): todas para quem edita a aba Investimentos, qualquer que seja o recorte.
   const [unidade, setUnidade] = useState<number>(investimento?.unidade ?? dados.contasDosInvestimentos[0]?.unidade ?? 1);
-  // O Departamento dos investimentos de Despesas e Extra (12/11/2026; sem ele, é dos cinco).
+  // O Departamento dos investimentos de Despesas (12/11/2026; sem ele, é dos cinco).
   const [departamento, setDepartamento] = useState<DepartamentoDoInvestimento | "">(investimento?.departamento ?? "");
   const [descricao, setDescricao] = useState(investimento?.descricao ?? "");
   const [condicao, setCondicao] = useState(investimento?.condicaoPagamento ?? "");
@@ -393,7 +394,7 @@ function InvestimentoDialog({ id, dados, investimento, onFechar }: { id: string;
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="inv-departamento">Departamento</Label>
               <select id="inv-departamento" value={departamento} onChange={(e) => setDepartamento(e.target.value as DepartamentoDoInvestimento | "")} className={classeSelect}>
-                <option value="">Todos os Departamentos de Despesas e Extra</option>
+                <option value="">Todos os Departamentos de Despesas</option>
                 {dados.departamentos.map((d) => (
                   <option key={d} value={d}>
                     {NOME_DO_DEPARTAMENTO_DO_INVESTIMENTO[d]}

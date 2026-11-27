@@ -22,8 +22,6 @@ export type Usuario = {
   /** O recorte por centro de custo (Coordenador): a gestão e os ids dos centros dela que o usuário alcança. */
   gestao: DepartamentoAcesso | null;
   centros: string[];
-  /** Com recorte por centro de custo: vê também os resultados das obras, nas linhas da gestão dele. */
-  veObras: boolean;
 };
 
 /** Um centro de custo ativo, com a gestão dele (o departamento do cadastro). */
@@ -59,7 +57,6 @@ export type DadosUsuario = {
   departamentos: DepartamentoAcesso[];
   gestao: DepartamentoAcesso | null;
   centros: string[];
-  veObras: boolean;
   senha?: string;
 };
 

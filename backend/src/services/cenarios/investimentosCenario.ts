@@ -10,8 +10,8 @@ import type { LinhaEstrutura } from "../dre/apuracaoUnidades.js";
  * - os investimentos: cada um deprecia, a partir do mês de início e pela vida útil, (valor total − valor pós uso) ÷ vida
  *   útil por mês, somado à depreciação base da conta (19/10/2026: sem o ROI, o Ganho Previsto e a Receita Bruta Prevista);
  * - o extra-operacional, mês a mês, como os Lançamentos Manuais do fechamento: o imposto de renda e a contribuição
- *   social e as receitas e despesas financeiras, em Despesas e Extra e no RN (no RN, também as Assessorias e Consultorias da
- *   DA, 26/11/2026); gravado nas premissas com a venda EXTRA e a chave "unidade|conta".
+ *   social e as receitas e despesas financeiras, no Extra-Operacional (antes de 27/11/2026, Despesas e Extra) e no RN (no RN,
+ *   também as Assessorias e Consultorias da DA, 26/11/2026); gravado nas premissas com a venda EXTRA e a chave "unidade|conta".
  */
 
 export const VENDA_BASE = "BASE";
@@ -22,24 +22,28 @@ export const CONTAS_DEPRECIACAO: Array<{ unidade: 1 | 2 | 3 | 4; nomeUnidade: st
   { unidade: 1, nomeUnidade: "Matriz", conta: "CPP.D.DEPRECIACAO_DO_MAQUINARIO", rotulo: "Depreciação do Maquinário de Produção" },
   { unidade: 2, nomeUnidade: "Filial", conta: "CPP.D.DEPRECIACAO_DO_MAQUINARIO", rotulo: "Depreciação do Maquinário de Produção" },
   { unidade: 3, nomeUnidade: "Serviços", conta: "CSM.D.DEPRECIACAO_DO_MAQUINARIO", rotulo: "Depreciação do Maquinário de Serviços" },
-  { unidade: 4, nomeUnidade: "Despesas e Extra", conta: "DA.D.DEPRECIACAO_DO_PATRIMONIO", rotulo: "Depreciação do Patrimônio" },
+  { unidade: 4, nomeUnidade: "Despesas", conta: "DA.D.DEPRECIACAO_DO_PATRIMONIO", rotulo: "Depreciação do Patrimônio" },
 ];
 export const contaDeDepreciacao = (unidade: number) => CONTAS_DEPRECIACAO.find((c) => c.unidade === unidade);
 
-/** As unidades do extra-operacional: Despesas e Extra e o RN. */
-export const UNIDADES_EXTRA: Array<{ unidade: 4 | 5; nome: string }> = [
-  { unidade: 4, nome: "Despesas e Extra" },
+/**
+ * As unidades do extra-operacional: o Extra-Operacional (27/11/2026, o teste da separação; antes, a 4, Despesas e Extra), o RN e,
+ * depois dele, a Leben (27/11/2026, pedido do Adão; uma cópia do RN).
+ */
+export const UNIDADES_EXTRA: Array<{ unidade: 5 | 6 | 7; nome: string }> = [
+  { unidade: 6, nome: "Extra-Operacional" },
   { unidade: 5, nome: "RN" },
+  { unidade: 7, nome: "Leben" },
 ];
 const GRUPOS_EXTRA = new Set(["DML", "RFC", "RFNC", "DFC", "DFNC"]);
 
 /**
  * As contas do extra-operacional de uma unidade: o IR e a CS e as receitas e despesas financeiras dela. No RN, todas as contas
  * dele (26/11/2026: também as Assessorias e Consultorias da DA), que só têm valor por aqui, como os lançamentos manuais do balde RN
- * no fechamento.
+ * no fechamento; na Leben (27/11/2026), as mesmas do RN, como os do balde LEBEN.
  */
 export const contasExtra = (est: LinhaEstrutura[], unidade: number) =>
-  est.filter((l) => l.tipo === "ITEM" && l.unidades.includes(unidade) && (unidade === 5 || GRUPOS_EXTRA.has(l.grupoSigla)));
+  est.filter((l) => l.tipo === "ITEM" && l.unidades.includes(unidade) && (unidade === 5 || unidade === 6 || unidade === 7 || GRUPOS_EXTRA.has(l.grupoSigla)));
 
 export type Investimento = { unidade: number; conta: string; inicio: number; valorTotal: number; valorPosUso: number; vidaUtil: number };
 

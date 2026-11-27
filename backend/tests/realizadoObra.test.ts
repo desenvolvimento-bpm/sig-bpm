@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { permissoesDasRotas } from "../src/services/acesso/acesso.js";
+import { permissoesDasRotas, semRecorte } from "../src/services/acesso/acesso.js";
 import { chaveValida } from "../src/services/acesso/telas.js";
 import { ehContaDosCreditos } from "../src/services/impostos/creditosImpostosService.js";
 import { lerCreditos } from "../src/services/importacoes/impostos/leituraCreditos.js";
@@ -296,16 +296,36 @@ describe("Realizado por Obra: as permissões (03/11/2026)", () => {
     }
   });
 
-  it("fora do recorte por departamento, como a etapa Linhas", () => {
+  it("os Impostos fora do recorte por departamento; o Realizado por Obra sem recorte (27/11/2026): vale com qualquer um", () => {
     const matriz = ["realizado_obra_resultados", "dre", "dre.consolidado", "dre.impostos", "relatorio_resultados", "relatorio_resultados.impostos"].map((chave) => ({ chave, acao: "LER" as const }));
-    const semRecorte = permissoesDasRotas(matriz, { recorteSetor: false, recorteDepartamento: false });
-    for (const p of ["dre.impostos:ler", "realizado_obra_resultados:ler", "relatorio_resultados.impostos:ler"]) assert.equal(semRecorte.includes(p), true, p);
+    const livre = permissoesDasRotas(matriz, { recorteSetor: false, recorteDepartamento: false });
+    for (const p of ["dre.impostos:ler", "realizado_obra_resultados:ler", "relatorio_resultados.impostos:ler"]) assert.equal(livre.includes(p), true, p);
     const comRecorte = permissoesDasRotas(matriz, { recorteSetor: false, recorteDepartamento: true });
-    assert.equal(comRecorte.includes("realizado_obra_resultados:ler"), false);
+    assert.equal(comRecorte.includes("realizado_obra_resultados:ler"), true);
     assert.equal(comRecorte.includes("dre.impostos:ler"), false);
     assert.equal(comRecorte.includes("relatorio_resultados.impostos:ler"), false);
     assert.equal(comRecorte.includes("relatorio_resultados:ler"), true);
     assert.equal(comRecorte.includes("dre.consolidado:ler"), true);
+    const porCentro = permissoesDasRotas(matriz, { recorteSetor: false, recorteDepartamento: false, recorteCentro: true });
+    assert.equal(porCentro.includes("realizado_obra_resultados:ler"), true);
+    const porSetor = permissoesDasRotas(matriz, { recorteSetor: true, recorteDepartamento: false });
+    assert.equal(porSetor.includes("realizado_obra_resultados:ler"), true);
+  });
+
+  it("o acesso sem recorte do Realizado por Obra mantém só as informações sensíveis do perfil", () => {
+    const coordenador = { recorteSetor: false, setores: [], recorteDepartamento: false, departamentos: [], recorteCentro: true, gestao: "PRODUCAO" as const, centros: ["c1"], informacoesSensiveis: false };
+    const a = semRecorte(coordenador);
+    assert.equal(a.recorteCentro, false);
+    assert.equal(a.recorteDepartamento, false);
+    assert.equal(a.recorteSetor, false);
+    assert.deepEqual(a.centros, []);
+    assert.equal(a.informacoesSensiveis, false);
+    assert.equal(semRecorte({ ...coordenador, informacoesSensiveis: true }).informacoesSensiveis, true);
+  });
+
+  it("a aba Obras saiu dos Resultados Empresariais (27/11/2026)", () => {
+    assert.equal(chaveValida("relatorio_resultados.obras"), false);
+    assert.equal(chaveValida("dre.obras"), true);
   });
 });
 

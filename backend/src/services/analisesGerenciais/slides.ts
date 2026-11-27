@@ -90,7 +90,7 @@ export type BlocoDoRelatorio = { id: string; x: number; y: number; w: number; h:
    * códigos; sem elas, todas), o nível (1 Totais, 2 Atribuições, 3 Contas), os meses anteriores recolhidos ou não e as
    * colunas opcionais (30/10/2026: o R$/m³, a Diferença, o Atingimento e a Eficiência; sem elas, todas).
    */
-  | { tipo: "TABELA"; visao: 0 | 1 | 2 | 3 | 4 | 5; nivel: 1 | 2 | 3; linhas?: string[]; recolhido?: boolean; colunas?: { unitario: boolean; diferenca: boolean; atingimento: boolean; eficiencia: boolean }; /** A Tabela PROVA (31/10/2026): os cenários da Comparação PROVA lado a lado, no lugar do comparado; sem ela, a Tabela Padrão. */ prova?: true | MarcacaoCenario[] }
+  | { tipo: "TABELA"; visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; nivel: 1 | 2 | 3; linhas?: string[]; recolhido?: boolean; colunas?: { unitario: boolean; diferenca: boolean; atingimento: boolean; eficiencia: boolean }; /** A Tabela PROVA (31/10/2026): os cenários da Comparação PROVA lado a lado, no lugar do comparado; sem ela, a Tabela Padrão. */ prova?: true | MarcacaoCenario[] }
 );
 
 /** Os ajustes de uma imagem (21/10/2026): brilho e saturação em % (100 = como veio), matiz em graus, desfoque em px e transparência em %; sem um deles, o padrão. */
@@ -350,7 +350,7 @@ export async function dadosDosCards(r: ComparacoesDoDocumento) {
  * fechadas, com o orçado (o Orçamento Empresarial), como a tela Resultados; sem o recorte do usuário, como os cards. Com
  * o orçado dos cenários da Comparação PROVA (31/10/2026), para a Tabela PROVA.
  */
-export async function resultadosDaTabela(r: ComparacoesDoDocumento, visao: 0 | 1 | 2 | 3 | 4 | 5) {
+export async function resultadosDaTabela(r: ComparacoesDoDocumento, visao: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7) {
   return resultadosService.unidade(r.ano, visao, r.mes, ACESSO_TOTAL, true, await comparacaoDo(r), provaDo(r));
 }
 

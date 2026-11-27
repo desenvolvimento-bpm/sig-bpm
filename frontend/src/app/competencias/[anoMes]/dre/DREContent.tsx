@@ -33,7 +33,7 @@ const volume = (v: string) => Number(v).toLocaleString("pt-BR", { maximumFractio
 
 /** Consolidado, uma das unidades (1 a 5), a visão por centro de custo, a dos movimentos sem centro, a por obra ou os créditos de impostos. */
 type Visao = "consolidado" | "centros" | "sem_centros" | "obras" | "impostos" | number;
-const ABA_DA_UNIDADE = ["consolidado", "matriz", "filial", "servicos", "despesas", "rn"];
+const ABA_DA_UNIDADE = ["consolidado", "matriz", "filial", "servicos", "despesas", "rn", "extra_operacional", "leben"];
 const VISOES: Array<{ visao: Visao; aba: string; nome: string }> = [
   { visao: "consolidado", aba: "consolidado", nome: "Consolidado" },
   ...UNIDADES.map((u) => ({
@@ -532,7 +532,7 @@ export function DREContent() {
         titulo="Resultados"
         comoUsar={
           <ul>
-            <li>Escolha a visão nas abas: Consolidado, cada unidade, RN, Centros de Custo, Sem Centros de Custo, Obras (com a lista dos centros, dos grupos ou das obras à esquerda) ou Impostos (os Créditos de Impostos). Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>Escolha a visão nas abas: Consolidado, cada unidade (com o RN e a Leben), Centros de Custo, Sem Centros de Custo, Obras (com a lista dos centros, dos grupos ou das obras à esquerda) ou Impostos (os Créditos de Impostos). Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
             <li>
               Centros de Custo, Sem Centros de Custo e Obras saem dos lançamentos do balancete: consultam-se desde a importação, antes da apuração (com
               o que já está classificado). Depois da apuração, os centros de custo mostram os valores apurados.
@@ -642,13 +642,13 @@ export function DREContent() {
               sobre a receita bruta (ROB); dos custos de produção, de montagem e complementares sobre a receita líquida do pré-fabricado, de montagem e
               complementar; do Frete e Descarga sobre a receita líquida de frete (em Serviços, a complementar); o resto sobre a receita líquida (ROL). O
               R$/m³ da receita do pré-fabricado e dos custos de produção sobre a produção (m³), da receita e dos custos de montagem sobre a montagem (m³) e
-              do Frete e Descarga sobre a expedição (m³). Em Despesas e Extra, no RN, nos centros de custo e sem centro de custo, as bases são as do
+              do Frete e Descarga sobre a expedição (m³). Em Despesas, no Extra-Operacional, no RN, na Leben, nos centros de custo e sem centro de custo, as bases são as do
               Consolidado; em cada obra, a receita (a ROB nas receitas e nos impostos, a ROL no resto) e os volumes da própria obra.
             </p>
             <p>
               O RN soma os lançamentos manuais do balde RN: as Assessorias e Consultorias das Despesas Administrativas (DA), o imposto de renda e a
-              contribuição social (DML) e as receitas e despesas financeiras. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela; no mês
-              apurado, a linha sem valor apurado aparece com zero.
+              contribuição social (DML) e as receitas e despesas financeiras. A Leben é uma cópia do RN: as mesmas contas, com os lançamentos manuais do
+              balde LEBEN. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela; no mês apurado, a linha sem valor apurado aparece com zero.
             </p>
             <p>
               Em Impostos, os créditos de impostos do mês em cada unidade (Matriz e Filial): o Creditado e o Estornado das contas de Matérias Primas, de

@@ -24,7 +24,8 @@ import { JustificativasCenario } from "../../../components/JustificativasCenario
 import { cenariosService, type ReajusteDoCenario } from "../../../services/cenariosService";
 import { useTipoDoCenario } from "../../../components/tipoDoCenario";
 
-const ABAS = ["Consolidado", "Matriz", "Filial", "Serviços", "Despesas e Extra", "RN"];
+// Pelo número da visão (27/11/2026: a 6, Extra-Operacional; a 4, Despesas).
+const ABAS = ["Consolidado", "Matriz", "Filial", "Serviços", "Despesas", "RN", "Extra-Operacional", "Leben"];
 const MESES = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 const dataHora = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 const comSinal = (v: number, texto: string) => (v > 0 ? `+${texto}` : texto);

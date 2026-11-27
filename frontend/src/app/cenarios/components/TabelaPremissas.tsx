@@ -21,6 +21,12 @@ import { plural } from "@/lib/texto";
 /** As larguras das colunas (a premissa, a unidade, a Média de Referência, os meses, o Total e a Média): as mesmas nos rótulos e no corpo. */
 const LARGURA = { premissa: 340, und: 92, referencia: 116, mes: 104, total: 116 };
 
+/**
+ * O fundo das linhas e das colunas com os valores calculados pelo SIG (27/11/2026, pedido do Adão), nas Premissas: o amarelo claro
+ * dos totais das DREs (fundoDaLinha), para separá-los dos valores digitados ou importados.
+ */
+export const FUNDO_CALCULADO = "bg-yellow-100";
+
 /** Os botões da barra de marcação, como os da edição da DRE dos sintéticos. */
 const botaoCinza = "rounded-sm border border-gray-200 bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-gray-200";
 
@@ -69,7 +75,8 @@ const negrito = (l: LinhaDaPremissa) => l.negrito ?? (l.tipo === "CALCULO" && l.
  * o da célula (os valores na linha amarela do título de uma seção).
  */
 function CelulasDoTotal({ l, fundo = "bg-gray-50" }: { l: LinhaDaPremissa; fundo?: string }) {
-  const { total, media } = totalEMedia(l.valores, l.und, (i) => l.tipo === "PREMISSA" && !l.gravados[i] && !l.valores[i]);
+  const { total, media } =
+    l.totalDoAno !== undefined ? { total: l.totalDoAno, media: l.totalDoAno } : totalEMedia(l.valores, l.und, (i) => l.tipo === "PREMISSA" && !l.gravados[i] && !l.valores[i]);
   const classe = `px-3 py-1.5 text-right text-sm whitespace-nowrap ${fundo} ${negrito(l) ? "font-bold text-gray-900" : "text-gray-700"}`;
   const casasDaMedia = { ...l, casas: l.und === "R$" ? l.casas : Math.max(l.casas, 1) };
   return (
@@ -371,8 +378,9 @@ export function TabelaEditavel({
     const ePremissa = l.tipo === "PREMISSA";
     const marcada = linhas.has(l.chave);
     corpo.push(
-      <tr key={l.chave} className="border-t border-gray-100">
-        <td className={`sticky left-0 z-10 bg-white py-1.5 pr-3 text-sm ${l.grupo ? "pl-9" : "pl-4"} ${ePremissa ? "text-gray-900" : "text-gray-600"} ${negrito(l) ? "font-bold" : ""}`}>
+      // As linhas calculadas pelo SIG (27/11/2026, pedido do Adão) no amarelo claro dos totais das DREs: não se digitam nem se importam.
+      <tr key={l.chave} className={`border-t border-gray-100 ${ePremissa ? "" : FUNDO_CALCULADO}`}>
+        <td className={`sticky left-0 z-10 ${ePremissa ? "bg-white" : FUNDO_CALCULADO} py-1.5 pr-3 text-sm ${l.grupo ? "pl-9" : "pl-4"} ${ePremissa ? "text-gray-900" : "text-gray-600"} ${negrito(l) ? "font-bold" : ""}`}>
           <span className="inline-flex items-center gap-2">
             {editavel && ePremissa ? <Caixa marcada={marcada} rotulo={`Marcar ${l.rotulo}`} onMudar={(m) => marcarLinhas([l.chave], m)} /> : editavel ? <span className="size-3.5 shrink-0" aria-hidden /> : null}
             {l.rotulo}
@@ -380,7 +388,7 @@ export function TabelaEditavel({
           </span>
         </td>
         <td className="px-3 py-1.5 text-xs whitespace-nowrap text-gray-500">{l.und}</td>
-        {comReferencia ? <td className="border-r border-gray-300 bg-gray-50 px-3 py-1.5 text-right text-sm whitespace-nowrap text-gray-700">{formatar(l.referencia, l)}</td> : null}
+        {comReferencia ? <td className={`border-r border-gray-300 ${ePremissa ? "bg-gray-50" : FUNDO_CALCULADO} px-3 py-1.5 text-right text-sm whitespace-nowrap text-gray-700`}>{formatar(l.referencia, l)}</td> : null}
         {l.valores.map((v, i) => {
           const contornado = ePremissa && marcada && meses.has(i);
           // O mês sem valor gravado fica em branco (15/10/2026); o padrão diferente de zero (os dias úteis), em cinza.
@@ -398,7 +406,7 @@ export function TabelaEditavel({
             </td>
           );
         })}
-        {comTotais ? <CelulasDoTotal l={l} /> : null}
+        {comTotais ? <CelulasDoTotal l={l} fundo={ePremissa ? undefined : FUNDO_CALCULADO} /> : null}
       </tr>,
     );
   }

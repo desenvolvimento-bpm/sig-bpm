@@ -29,6 +29,7 @@ import { MarcarCenarioDialog } from "./MarcarCenarioDialog";
 import { ReferenciaAnalitica } from "./ReferenciaAnalitica";
 import { ReferenciaSintetica } from "./ReferenciaSintetica";
 import { RegrasDoCenarioAba } from "./RegrasDoCenario";
+import { BotoesDeVersao } from "./VersaoCenario";
 import { CentrosDoCadastroDoCenarioAba, DepartamentosDoCenarioAba, RedistribuicoesDoCenarioAba, UnidadesDoCenarioAba } from "./CadastrosDoCenario";
 
 /**
@@ -63,6 +64,8 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
       ? `Seu perfil só lê ${oQue}.`
       : `Este cenário é de ${cenario.criadoPor ?? "outro usuário"}, com a Edição das Configurações Particular: só quem o criou (ou o Administrador) altera ${oQue}.`;
   const analitico = t.tipo === "ANALITICO";
+  // Os botões das versões (27/11/2026: na aba Cenário; antes, na tela Resultados) seguem a permissão de editar a tela Resultados.
+  const editaVersoes = hasPermission(t.perm("resultados", "editar"));
   // Nos analíticos (21/11/2026, pedido do Adão), a aba Comparativo e Reajustes junta o Cenário Comparado, os Índices de Comparação
   // (antes, de Referência) e os Índices de Reajuste (antes, a aba Reajustes), cada quadro com a sua permissão: a aba aparece com uma
   // das três.
@@ -246,30 +249,42 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
           </div>
           {travado && edita("cenario") ? <AvisoMarcado cenario={cenario} oQue="o nome e a descrição" varios /> : null}
           <Erro erro={salvar.isError ? mensagemDeErro(salvar.error, "Não foi possível gravar as configurações.") : null} />
-          {!edita("cenario") ? <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("cenario", "os dados do cenário")}</p> : (
+          {!edita("cenario") ? <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{soLe("cenario", "os dados do cenário")}</p> : null}
+          {edita("cenario") || editaVersoes ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" className="rounded-sm" onClick={() => setAcao("marcar")}>
-              <Bookmark className="size-4" />
-              Marcar Cenário
-            </Button>
-            {/* O cenário marcado não se exclui: o botão fica apagado, com o motivo na dica. */}
-            <span title={cenario.marcacao ? `Marcado como ${rotuloMarcacao(cenario.marcacao)}: tire a marcação antes de excluir` : undefined}>
-              <Button
-                type="button"
-                variant="outline"
-                className="rounded-sm border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
-                disabled={!!cenario.marcacao}
-                onClick={() => setAcao("excluir")}
-              >
-                <Trash2 className="size-4" />
-                Excluir Cenário
-              </Button>
-            </span>
-            <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={!nome.trim() || !mudou || salvar.isPending} onClick={() => salvar.mutate()}>
-              {salvar.isPending ? "Gravando…" : "Gravar Configurações"}
-            </Button>
+            {edita("cenario") ? (
+              <>
+                <Button type="button" variant="outline" className="rounded-sm" onClick={() => setAcao("marcar")}>
+                  <Bookmark className="size-4" />
+                  Marcar Cenário
+                </Button>
+                {/* O cenário marcado não se exclui: o botão fica apagado, com o motivo na dica. */}
+                <span title={cenario.marcacao ? `Marcado como ${rotuloMarcacao(cenario.marcacao)}: tire a marcação antes de excluir` : undefined}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-sm border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    disabled={!!cenario.marcacao}
+                    onClick={() => setAcao("excluir")}
+                  >
+                    <Trash2 className="size-4" />
+                    Excluir Cenário
+                  </Button>
+                </span>
+                <Button type="button" className={`${botaoPrimario} ml-auto`} disabled={!nome.trim() || !mudou || salvar.isPending} onClick={() => salvar.mutate()}>
+                  {salvar.isPending ? "Gravando…" : "Gravar Configurações"}
+                </Button>
+              </>
+            ) : null}
+            {/* Congelar / Reabrir Versão e Criar Revisão (27/11/2026, pedido do Adão; antes, na tela Resultados), logo depois de
+                "Gravar Configurações", com a permissão de editar a tela Resultados, como antes. */}
+            {editaVersoes ? (
+              <div className={edita("cenario") ? "" : "ml-auto"}>
+                <BotoesDeVersao cenario={cenario} />
+              </div>
+            ) : null}
           </div>
-          )}
+          ) : null}
         </section>
       ) : aba === "comparativo" && analitico ? (
         // A aba Comparativo e Reajustes dos analíticos (21/11/2026, pedido do Adão): o Cenário Comparado, os Índices de Comparação e,
@@ -301,7 +316,19 @@ export function ConfiguracoesCenario({ cenario, abaInicial = "cenario" }: { cena
           {travado && (edita("comparativo") || edita("indices") || edita("reajustes")) ? <AvisoMarcado cenario={cenario} oQue="o comparativo e os índices" varios /> : null}
           {pode("comparativo") ? <CenarioComparado id={cenario.id} podeEditar={edita("comparativo") && !travado} /> : null}
           {lerIndices ? <IndicesDeComparacao id={cenario.id} podeEditar={edita("indices") && !travado} /> : null}
-          {lerReajustes ? <IndicesDeReajuste id={cenario.id} podeEditar={edita("reajustes") && !travado} /> : null}
+          {lerReajustes ? (
+            <IndicesDeReajuste
+              id={cenario.id}
+              podeEditar={edita("reajustes") && !travado}
+              motivo={
+                !edita("reajustes")
+                  ? soLe("reajustes", "a caixa Aplicar ao Recalcular")
+                  : travado
+                    ? "Com o cenário marcado ou com a versão congelada, a caixa Aplicar ao Recalcular não muda."
+                    : undefined
+              }
+            />
+          ) : null}
         </div>
       ) : aba === "comparativo" ? (
         <div className="space-y-4">

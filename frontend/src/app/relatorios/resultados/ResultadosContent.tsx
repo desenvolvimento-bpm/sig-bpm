@@ -24,6 +24,7 @@ import { ExportarRelatorio, type OpcaoExportar } from "../components/ExportarRel
 import { SeletorPeriodo, useExercicios } from "../components/SeletorPeriodo";
 import { TabelaEstatica, TabelaLarga } from "../components/TabelaLarga";
 import { ExportarImpostos, VisaoImpostos } from "./VisaoImpostos";
+import { ExportarCustosOperacionais, TabelaCustosOperacionais } from "./CustosOperacionais";
 import { PesquisarResultados } from "./PesquisarResultados";
 import {
   formato,
@@ -46,8 +47,15 @@ const TODAS_AS_VISOES: Array<{ chave: string; aba: string; nome: string; foraDaT
   { chave: "1", aba: "matriz", nome: "Matriz" },
   { chave: "2", aba: "filial", nome: "Filial" },
   { chave: "3", aba: "servicos", nome: "Serviços" },
-  { chave: "4", aba: "despesas", nome: "Despesas e Extra" },
+  { chave: "4", aba: "despesas", nome: "Despesas" },
+  // O Extra-Operacional (27/11/2026, o teste da separação; a unidade 6), depois de Despesas.
+  { chave: "6", aba: "extra_operacional", nome: "Extra-Operacional" },
   { chave: "5", aba: "rn", nome: "RN" },
+  // A Leben (27/11/2026, pedido do Adão), depois do RN.
+  { chave: "7", aba: "leben", nome: "Leben" },
+  // A aba Custos Operacionais (26/11/2026, pedido do Adão), logo depois das unidades: os custos de produção e de serviços em R$/dia e
+  // R$/m³, por trimestre, com a Diferença e o Atingimento contra o comparado.
+  { chave: "custos_operacionais", aba: "custos_operacionais", nome: "Custos Operacionais" },
   // A aba Departamentos (23/11/2026, pedido do Adão), antes de Centros de Custo: o Consolidado com os departamentos de CPP a DA
   // abertos pelos centros de custo, no lugar das atribuições e das contas.
   { chave: "departamentos", aba: "departamentos", nome: "Departamentos" },
@@ -59,8 +67,6 @@ const TODAS_AS_VISOES: Array<{ chave: string; aba: string; nome: string; foraDaT
   // Os Rateios das Linhas (antes, Rateios por Obras): os custos de cada linha que não vieram dos centros de obra, sobre os
   // volumes. Fora da tela desde 27/10/2026 (pedido do Adão), com o código guardado para o processo Resultados por Obra.
   { chave: "rateios_linhas", aba: "rateios_linhas", nome: "Rateios das Linhas", foraDaTela: true },
-  // As obras (centros 1.98 e 1.99), como a aba Obras da DRE (11/10/2026).
-  { chave: "obras", aba: "obras", nome: "Obras" },
   // Os Créditos de Impostos de cada mês fechado (03/11/2026, pedido do Adão; de início, Almoxarifado; antes, nas
   // Configurações do Realizado por Obra).
   { chave: "impostos", aba: "impostos", nome: "Impostos" },
@@ -151,6 +157,7 @@ export function TabelaResultados({
   consultaDaVenda,
   recolheTodosOsMeses = false,
   acaoDaLinha,
+  semUnitario = false,
 }: {
   dados: Resultados;
   titulo: string;
@@ -206,15 +213,17 @@ export function TabelaResultados({
   recolheTodosOsMeses?: boolean;
   /** Um botão depois da descrição da linha (13/11/2026: as Contas do Balancete nos Resultados dos Cenários Analíticos). */
   acaoDaLinha?: (l: LinhaResultado) => ReactNode;
+  /** Sem as colunas R$/m³ (27/11/2026: o Consolidado e os Centros de Custo dos Resultados dos cenários, pedido do Adão). */
+  semUnitario?: boolean;
 }) {
   // Sem o primeiro total da ROL (21/10/2026): ele repete o segundo (depois da receita bruta e dos impostos). Nas visões
-  // com um só (Despesas e Extra e RN, a ROL do Consolidado no topo), ele fica.
+  // com um só (Despesas, Extra-Operacional, RN e Leben, a ROL do Consolidado no topo), ele fica.
   const linhasDaTabela = useMemo(() => semPrimeiroTotalDaRol(dados.linhas), [dados.linhas]);
   const niveis = useNiveisDRE(linhasDaTabela, "sig.resultados.nivel", estatico?.nivel, estatico ? undefined : "recolhida");
   const linhasEscolhidas = estatico?.linhas;
   const escolhidas = useMemo(() => (linhasEscolhidas ? new Set(linhasEscolhidas) : null), [linhasEscolhidas]);
-  // Sem o R$/m³ em Despesas e Extra e no RN (21/10/2026), nem na tabela fixa sem ele (30/10/2026).
-  const comUnitario = !("unidade" in visao && (visao.unidade === 4 || visao.unidade === 5)) && (estatico?.colunas?.unitario ?? true);
+  // Sem o R$/m³ em Despesas, no Extra-Operacional, no RN e na Leben (21/10/2026), nem na tabela fixa sem ele (30/10/2026).
+  const comUnitario = !semUnitario && !("unidade" in visao && (visao.unidade === 4 || visao.unidade === 5 || visao.unidade === 6 || visao.unidade === 7)) && (estatico?.colunas?.unitario ?? true);
   // Na edição, as contas da linha que a caixa dela marca: ela mesma (se se edita) e as editáveis abaixo dela.
   const contasDaLinha = (l: LinhaResultado) => (edicao ? [l, ...niveis.abaixo(l)].filter(edicao.editavel).map((x) => x.codigo) : []);
   const [consulta, setConsulta] = useState<{ linha: LinhaResultado; mes: MesRelatorio } | null>(null);
@@ -660,70 +669,12 @@ function VisaoSemCentros({ ano, ate, escolhido, onEscolher: setEscolhido }: { an
   );
 }
 
-/** As obras: a lista à esquerda (nome, código e o total do exercício), como os centros de custo, e a tabela da escolhida. */
 /** O grupo sem centro escolhido (o primeiro da lista, sem escolha): a lista e o código, também para o Exportar. */
 function useSemCentroEscolhido(ano: number, ate: number, ativo: boolean, escolhido: string | null) {
   const lista = useQuery({ queryKey: ["relatorios", "resultados", ano, ate, "sem_centros"], queryFn: () => relatoriosService.semCentros(ano, ate), enabled: ativo });
   const grupos = lista.data?.grupos ?? [];
   const codigo = (escolhido && grupos.some((g) => g.codigo === escolhido) ? escolhido : grupos[0]?.codigo) ?? null;
   return { lista, codigo };
-}
-
-/** A obra escolhida (a primeira da lista, sem escolha): a lista e o código, também para o Exportar. */
-function useObraEscolhida(ano: number, ate: number, ativo: boolean, escolhida: string | null) {
-  const lista = useQuery({ queryKey: ["relatorios", "resultados", ano, ate, "obras"], queryFn: () => relatoriosService.obras(ano, ate), enabled: ativo });
-  const obras = lista.data?.obras ?? [];
-  const codigo = (escolhida && obras.some((o) => o.codigo === escolhida) ? escolhida : obras[0]?.codigo) ?? null;
-  return { lista, codigo };
-}
-
-function VisaoObras({ ano, ate, escolhida, onEscolher: setEscolhida }: { ano: number; ate: number; escolhida: string | null; onEscolher: (o: string) => void }) {
-  const [busca, setBusca] = useState("");
-  const { lista, codigo } = useObraEscolhida(ano, ate, true, escolhida);
-  const obras = lista.data?.obras ?? [];
-  const obra = useQuery({ queryKey: ["relatorios", "resultados", ano, ate, "obras", codigo], queryFn: () => relatoriosService.obra(ano, ate, codigo!), enabled: codigo !== null });
-  if (lista.isError) return <Erro erro={lista.error} padrao="Erro ao carregar as obras." />;
-  if (lista.isPending) return <Carregando />;
-  if (obras.length === 0) return <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Nenhuma obra com lançamento no período.</p>;
-  const t = busca.trim().toLowerCase();
-  const filtradas = obras.filter((o) => !t || o.nome.toLowerCase().includes(t) || o.codigo.includes(t));
-  const nome = obras.find((o) => o.codigo === codigo)?.nome ?? codigo ?? "";
-  return (
-    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
-      <div className="rounded-sm border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 p-2">
-          <CampoBusca rotulo="Buscar obra" valor={busca} onMudar={setBusca} placeholder="Obra ou código…" largura="w-full" />
-        </div>
-        <ul className="max-h-[60vh] overflow-y-auto py-1" aria-label="Obras">
-          {filtradas.map((o) => (
-            <li key={o.codigo}>
-              <button
-                type="button"
-                onClick={() => setEscolhida(o.codigo)}
-                aria-current={o.codigo === codigo ? "true" : undefined}
-                className={`block w-full px-3 py-1.5 text-left text-sm ${o.codigo === codigo ? "bg-black text-white" : "text-gray-800 hover:bg-gray-100"}`}
-              >
-                <span className="block truncate" title={o.nome}>
-                  {o.nome}
-                </span>
-                <span className={`block text-xs ${o.codigo === codigo ? "text-white/70" : "text-gray-500"}`}>{o.codigo}</span>
-              </button>
-            </li>
-          ))}
-          {filtradas.length === 0 ? <li className="px-3 py-2 text-sm text-gray-500">Nenhuma obra com esse nome.</li> : null}
-        </ul>
-      </div>
-      <div className="min-w-0">
-        {obra.isError ? (
-          <Erro erro={obra.error} padrao="Erro ao carregar a obra." />
-        ) : obra.isPending ? (
-          <Carregando />
-        ) : (
-          <TabelaResultados key={codigo ?? ""} dados={obra.data} titulo={`${nome} (${codigo})`} visao={{ obra: codigo! }} nomeVisao={nome} />
-        )}
-      </div>
-    </div>
-  );
 }
 
 /** A linha escolhida (a primeira da lista, sem escolha), a mesma nas abas Linhas e Rateios das Linhas: a lista e o id, também para o Exportar. */
@@ -879,21 +830,45 @@ function VisaoDepartamentos({ ano, ate, comparaCom }: { ano: number; ate: number
   );
 }
 
+/** Os Custos Operacionais do período (26/11/2026), com o comparado da Comparação Padrão: a tabela e o Exportar da aba. */
+const useCustosOperacionais = (ano: number, ate: number, comparaCom: MarcacaoComparavel, ativo = true) =>
+  useQuery({
+    queryKey: ["relatorios", "resultados", ano, ate, "custos_operacionais", comparaCom],
+    queryFn: () => relatoriosService.custosOperacionais(ano, ate, comparaCom),
+    enabled: ativo,
+  });
+
+/**
+ * A aba Custos Operacionais (26/11/2026, pedido do Adão): os custos de produção (Matriz e Filial) e de serviços em R$/dia (÷ 20
+ * dias por mês) e em R$/m³ (÷ a Produção ou a Montagem), com a média de cada trimestre e a Média Mensal dos meses fechados e,
+ * contra a Média Mensal do cenário da Comparação Padrão (também com a PROVA escolhida), a Diferença e o Atingimento.
+ */
+function VisaoCustosOperacionais({ ano, ate, comparaCom }: { ano: number; ate: number; comparaCom: MarcacaoComparavel }) {
+  const consulta = useCustosOperacionais(ano, ate, comparaCom);
+  if (consulta.isError) return <Erro erro={consulta.error} padrao="Erro ao carregar os custos operacionais." />;
+  if (consulta.isPending) return <Carregando />;
+  return <TabelaCustosOperacionais dados={consulta.data} titulo="Resultados · Custos Operacionais" />;
+}
+
+/** O Exportar da aba Custos Operacionais, com os dados da tela. */
+function ExportarCustosDaTela({ ano, ate, comparaCom }: { ano: number; ate: number; comparaCom: MarcacaoComparavel }) {
+  const { data } = useCustosOperacionais(ano, ate, comparaCom);
+  return <ExportarCustosOperacionais dados={data} titulo={`Resultados ${ano} · Custos Operacionais`} />;
+}
+
 export function ResultadosContent() {
   // O nome das unidades no cadastro (25/11/2026: muda a qualquer momento).
   const { nomeDaVisao } = useNomesDasUnidades();
-  const VISOES = TODAS_AS_VISOES.map((v) => (/^[0-5]$/.test(v.chave) ? { ...v, nome: nomeDaVisao(v.chave) } : v));
+  const VISOES = TODAS_AS_VISOES.map((v) => (/^[0-7]$/.test(v.chave) ? { ...v, nome: nomeDaVisao(v.chave) } : v));
   useRegistrarAcessoTela("/relatorios/resultados");
   const exercicios = useExercicios();
-  // O Coordenador (recorte por centro de custo) vê a aba Obras só com a opção marcada no cadastro dele.
   const { user } = useAuth();
-  const comObras = !user?.acesso.recorteCentro || user.acesso.recorteDepartamento || !!user.acesso.veObras;
   // Os movimentos sem centro de custo não aparecem para o Coordenador (só os centros dele).
   const comSemCentros = !user?.acesso.recorteCentro || user.acesso.recorteDepartamento;
   // As abas que o perfil lê (14/10/2026).
   const { hasPermission } = usePermissions();
   const le = (aba: string) => hasPermission(`relatorio_resultados.${aba}:ler`);
-  const visoes = VISOES.filter((v) => !v.foraDaTela && (v.chave !== "obras" || comObras) && (v.chave !== "sem_centros" || comSemCentros) && le(v.aba));
+  const visoes = VISOES.filter((v) => !v.foraDaTela && (v.chave !== "sem_centros" || comSemCentros) && le(v.aba));
   const [anoEscolhido, setAno] = useState<number | null>(null);
   const [ateEscolhido, setAte] = useState<number | null>(null);
   const [visaoEscolhida, setVisao] = useAbaLembrada("visao", "0");
@@ -905,10 +880,8 @@ export function ResultadosContent() {
   // O mês escolhido vale se foi apurado no exercício; senão, o último apurado.
   const ate = ateEscolhido && meses.includes(ateEscolhido) ? ateEscolhido : meses[meses.length - 1];
   const { grupo } = useCentroEscolhido(ano ?? 0, ate ?? 0, visao === "centros" && !!ano && !!ate, escolhido);
-  // A obra e o grupo sem centro escolhidos ficam aqui, como o centro: o Exportar deles vai para a linha das abas.
-  const [obra, setObra] = useState<string | null>(null);
+  // O grupo sem centro escolhido fica aqui, como o centro: o Exportar dele vai para a linha das abas.
   const [semCentro, setSemCentro] = useState<string | null>(null);
-  const { codigo: obraEscolhida } = useObraEscolhida(ano ?? 0, ate ?? 0, visao === "obras" && !!ano && !!ate, obra);
   const { codigo: semCentroEscolhido } = useSemCentroEscolhido(ano ?? 0, ate ?? 0, visao === "sem_centros" && !!ano && !!ate, semCentro);
   // A linha escolhida (26/10/2026): a mesma nas abas Linhas e Rateios das Linhas.
   const [linha, setLinha] = useState<string | null>(null);
@@ -923,19 +896,14 @@ export function ResultadosContent() {
     ...(comparacao.prova ? { prova: comparacao.prova.map((c) => c.marcacao).join(",") } : {}),
   };
   // O Exportar (14/10/2026: na altura do título, com as opções de todas as abas): o que está na tela (a visão, o centro,
-  // o grupo sem centro ou a obra escolhidos) e os "todos" de cada aba que o perfil lê.
-  const veObrasNaAba = comObras && le("obras");
+  // o grupo sem centro escolhidos) e os "todos" de cada aba que o perfil lê.
   const veSemCentrosNaAba = comSemCentros && le("sem_centros");
   const atual: OpcaoExportar | null =
     visao === "centros"
       ? grupo
         ? { chave: "atual", excel: "Centro de Custo Atual", pdf: "Centro de Custo Atual", params: { ...periodo, grupo } }
         : null
-      : visao === "obras"
-        ? obraEscolhida
-          ? { chave: "atual", excel: "Obra Atual", pdf: "Obra Atual", params: { ...periodo, visao: "obras", obra: obraEscolhida } }
-          : null
-        : visao === "sem_centros"
+      : visao === "sem_centros"
           ? semCentroEscolhido
             ? { chave: "atual", excel: "Sem Centro de Custo Atual", pdf: "Sem Centro de Custo Atual", params: { ...periodo, visao: "sem_centros", grupo: semCentroEscolhido } }
             : null
@@ -943,13 +911,13 @@ export function ResultadosContent() {
             ? linhaEscolhida
               ? { chave: "atual", excel: "Linha Atual", pdf: "Linha Atual", params: { ...periodo, visao, linha: linhaEscolhida } }
               : null
-          : visao && visao !== "impostos"
+          : visao && visao !== "impostos" && visao !== "custos_operacionais"
             ? { chave: "atual", excel: "Visão Atual", pdf: "Visão Atual", params: { ...periodo, visao, ...daComparacao } }
             : null;
   const opcoesExportar: OpcaoExportar[] = [
     ...(atual ? [atual] : []),
-    // Todas as unidades pedem as seis abas; os centros, as obras e os sem centro, a deles.
-    ...(VISOES.slice(0, 6).every((v) => le(v.aba)) ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { ...periodo, escopo: "unidades", ...daComparacao } }] : []),
+    // Todas as unidades pedem as oito abas (o Consolidado e as sete unidades); os centros e os sem centro, a deles.
+    ...(VISOES.filter((v) => /^[0-7]$/.test(v.chave)).every((v) => le(v.aba)) ? [{ chave: "unidades", excel: "Todas as Unidades (uma por aba)", pdf: "Todas as Unidades (uma por página)", params: { ...periodo, escopo: "unidades", ...daComparacao } }] : []),
     ...(le("centros")
       ? [
           { chave: "centros", excel: "Todos os Centros de Custo (um por aba)", pdf: "Todos os Centros de Custo (um por página)", params: { ...periodo, escopo: "centros" } },
@@ -962,7 +930,6 @@ export function ResultadosContent() {
     ...(le("rateios_linhas") && !VISOES.find((v) => v.chave === "rateios_linhas")?.foraDaTela
       ? [{ chave: "rateios_linhas", excel: "Rateios das Linhas de Todas as Linhas (uma por aba)", pdf: "Rateios das Linhas de Todas as Linhas (uma por página)", params: { ...periodo, escopo: "rateios_linhas" } }]
       : []),
-    ...(veObrasNaAba ? [{ chave: "obras", excel: "Todas as Obras (uma por aba)", pdf: "Todas as Obras (uma por página)", params: { ...periodo, escopo: "obras" } }] : []),
   ];
 
   return (
@@ -972,7 +939,19 @@ export function ResultadosContent() {
         comoUsar={
           <ul>
             <li>Escolha o exercício e o mês até onde ver; só as competências fechadas aparecem (os meses abertos ou em conferência ficam de fora).</li>
-            <li>Escolha a visão nas abas: Consolidado, cada unidade, Departamentos, Centros de Custo (com a lista dos centros à esquerda), Sem Centros de Custo, Linhas (com a lista das linhas à esquerda, por unidade), Obras (com a lista das obras à esquerda, com o código e a busca por nome ou código) ou Impostos (os Créditos de Impostos). Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>Escolha a visão nas abas: Consolidado, cada unidade, Custos Operacionais, Departamentos, Centros de Custo (com a lista dos centros à esquerda), Sem Centros de Custo, Linhas (com a lista das linhas à esquerda, por unidade) ou Impostos (os Créditos de Impostos). As obras estão no Realizado por Obra. Aparecem só as abas que o seu perfil lê (Controle de Usuários / Perfis).</li>
+            <li>
+              Em Custos Operacionais, os custos de produção (Matriz e Filial) e de serviços, um por linha: em R$/dia, a soma do custo nos meses ÷ 20
+              dias por mês (num trimestre inteiro, ÷ 60; com menos meses fechados, ÷ 20 por mês fechado); em R$/m³, a soma do custo ÷ a soma da
+              Produção do Pré-Fabricado (nos de produção) ou da Montagem do Pré-Fabricado (nos de montagem) dos mesmos meses. As colunas trazem a
+              média de cada trimestre (com os meses fechados até o mês escolhido; o trimestre sem nenhum fica com o traço) e a Média Mensal (todos
+              os meses fechados); passe o mouse no rótulo para ver os meses de cada uma. A Diferença (a Média Mensal menos a do comparado) e o
+              Atingimento (a Média Mensal ÷ a do comparado − 100%, com o sinal) comparam com a Média Mensal do cenário da Comparação Padrão nos
+              mesmos meses (também com a PROVA escolhida); passe o mouse nelas para ver a Média Mensal do comparado. Os Outros Gastos Gerais
+              Variáveis são os Gastos Gerais Variáveis sem as Madeiras e Madeirites, que têm linha própria na Matriz e na Montagem. Em Serviços, a
+              mão de obra e os gastos gerais diretos e indiretos somam a Montagem e a Complementar; os materiais aplicados, as madeiras, os outros
+              gastos gerais variáveis e a depreciação são só os da Montagem. Nesta aba, o “Exportar” baixa a tabela em Excel ou PDF.
+            </li>
             <li>
               Em Departamentos, a DRE do Consolidado, com os mesmos totais, mas, de Custo de Produto Vendido até Despesas Administrativas, cada
               departamento com centros de custo (Custos de Produção, Montagem, Complementares, Logística, Técnicas, Comerciais e Administrativas) mostra
@@ -1003,7 +982,6 @@ export function ResultadosContent() {
               conta sem centro (os dos outros centros ficam de fora; desmarque a caixa para ver todos). Os Gastos Gerais
               Variáveis ficam de fora (nos cenários, vêm das premissas). “Exportar” baixa o grupo na tela ou todos (um por aba no Excel, um por página no PDF); o Coordenador não vê a aba.
             </li>
-            <li>Em Obras, cada obra mostra a DRE dos lançamentos dos centros de obra (1.98 e 1.99) mês a mês, como a aba Obras da tela Resultados do Fechamento Mensal, com o % sobre a receita da própria obra (a ROB nas receitas e nos impostos, a ROL no resto). Nas receitas, como na DRE das unidades: as contas de Reconhecimento do CPV ficam de fora (no centro da obra, elas anulam o faturamento, porque a DRE reconhece a receita na produção); a receita prévia de frete da obra sai da Receita Bruta do Pré-Fabricado e vai à de Frete; a complementar sai da de Montagem e vai à Complementar. No alto, Produção e Serviços (PS): os volumes da obra nas Listas Operacionais (Produção, Expedição, Montagem e Acompanhamento, pelo número da obra), que dão também o R$/m³ da obra. No recorte por departamento ou por centro de custo, só as linhas que o usuário alcança (o Coordenador, com a opção de ver as obras no cadastro, as da gestão dele). “Exportar” baixa a obra na tela ou todas (uma por aba no Excel, uma por página no PDF).</li>
             <li>Em Impostos (os Créditos de Impostos), uma tabela por unidade (Matriz e Filial), no padrão do Consolidado: no alto, o Total e, embaixo, cada grupo (Matérias Primas e Gastos Gerais Variáveis, com o Frete e Descarga) com as contas dele; cada mês fechado do exercício, até o mês escolhido, tem o Creditado (R$) e o Estornado (R$), cada um com o % (sobre o valor da conta na unidade); o % do Total e dos grupos é sobre a soma das contas; um traço é o mês sem os créditos importados (Fechamento Mensal › Resultados › Impostos). O menu de níveis, a seta de cada grupo e a seta dos meses anteriores funcionam como nas demais abas. Nesta aba, o “Exportar” baixa as duas tabelas em Excel ou PDF. No recorte por departamento ou por centro de custo, a aba não aparece.</li>
             <li>O botão de seta ao lado do menu de níveis recolhe (seta para a esquerda) ou expande (seta para a direita) os meses anteriores ao escolhido. Recolhidos, a tabela mostra só as contas, o mês (realizado e orçado), os totais (realizado e orçado) e as variações; a escolha fica guardada neste navegador.</li>
             <li>A barra de rolagem lateral (a do navegador, como na tabela de Indicadores) fica presa no pé da janela enquanto a tabela está na tela; também dá para rolar com Shift + roda do mouse.</li>
@@ -1030,7 +1008,7 @@ export function ResultadosContent() {
               o do mês de cada um (PREVISÃO AGO/26, ORÇADO AGO/26…); depois do total, o acumulado de cada um (PREVISÃO TOTAL/2026…), sem a Diferença, o
               Atingimento e a Eficiência. Cada cenário tem a cor dos objetos PROVA dos Relatórios Executivos — o Forecast em cinza, o Orçado em preto, o
               Vendido em ouro forte e o Anterior em ouro fraco —, com as linhas nos tons mais fracos dela. Passe o mouse no rótulo para ver o nome do
-              cenário. Os centros de custo, as obras e as linhas não têm orçado.
+              cenário. Os centros de custo e as linhas não têm orçado.
             </li>
             <li>Clique no valor de um mês, numa linha com lupa, para ver os lançamentos de origem daquele mês (ou, nas linhas de volume, as listas somadas por obra); clicar na descrição abre o mês de referência. Nas linhas de Receita Bruta e Líquida de Frete, de Montagem e Complementar, a parte da receita prévia traz no extrato a tabela dos itens importados na Receita Prévia (os valores e, nos serviços, o andamento de cada medição), com uma aba por origem quando há mais de uma; nas demais receitas (Pré-Fabricado e Devoluções e Inventários), o botão abre a memória de cálculo.</li>
             <li>
@@ -1090,8 +1068,8 @@ export function ResultadosContent() {
             </li>
             <li>
               “Exportar”, ao lado do período, baixa em Excel (todas as colunas) ou PDF (A4 deitada: cada mês com a participação embaixo, e o total com o %
-              e o R$/m³) o que está na tela (a Visão — também Departamentos —, o Centro de Custo, o Sem Centro de Custo, a Linha ou a Obra Atual) e, de qualquer aba, todas as unidades,
-              todos os centros de custo, todas sem centro de custo, todas as linhas e todas as obras (uma por aba ou por
+              e o R$/m³) o que está na tela (a Visão — também Departamentos —, o Centro de Custo, o Sem Centro de Custo ou a Linha Atual) e, de qualquer aba, todas as unidades,
+              todos os centros de custo, todas sem centro de custo e todas as linhas (uma por aba ou por
               página). Nas unidades e no Consolidado, o arquivo traz as mesmas linhas da tela, pela comparação escolhida (o orçado não vai
               ao arquivo). Em Excel, também um arquivo por centro de
               custo, num ZIP, com o departamento e o centro no nome de cada arquivo. Ainda em Excel, marque “Incluir a Aba Detalhes” antes de
@@ -1115,12 +1093,16 @@ export function ResultadosContent() {
               (também na Filial); sobre a Receita Líquida de Montagem e a Complementar nos custos de serviços; sobre a Receita Líquida de Frete
               no Frete e Descarga (em Serviços, onde ele é o frete dos complementares — só o rateio COMPLEMENTAR —, sobre a Receita Líquida
               Complementar); e sobre a ROL no resto. O valor unitário divide a receita e os custos do pré-fabricado pela produção (m³) e os
-              de montagem pela montagem (m³). Em Despesas e Extra, no RN e nos centros de custo, as bases são as do Consolidado.
+              de montagem pela montagem (m³). Em Despesas, no Extra-Operacional, no RN, na Leben e nos centros de custo, as bases são as do Consolidado.
             </p>
             <p>
               O RN traz os lançamentos manuais do balde RN: as Assessorias e Consultorias das Despesas Administrativas (DA), o imposto de renda e a
-              contribuição social (DML) e as receitas e despesas financeiras. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela, com zero
-              nos meses em que a linha não tem valor apurado.
+              contribuição social (DML) e as receitas e despesas financeiras. A Leben é uma cópia do RN: as mesmas contas, com os lançamentos manuais do
+              balde LEBEN. Cada unidade mostra as linhas que a Estrutura da DRE dá a ela, com zero nos meses em que a linha não tem valor apurado.
+            </p>
+            <p>
+              Em Custos Operacionais, os custos de produção (Matriz e Filial) e de serviços por dia de trabalho (20 dias por mês) ou por m³
+              produzido ou montado, com a média de cada trimestre e a Média Mensal dos meses fechados, comparada à do cenário comparado.
             </p>
             <p>Nos centros de custo, cada mês mostra o mesmo recorte da DRE: os custos e despesas de mão de obra, gastos gerais e depreciação.</p>
             <p>
@@ -1159,7 +1141,12 @@ export function ResultadosContent() {
             {/* O Pesquisar (11/11/2026, pedido do Adão), antes do Exportar: os movimentos de um fornecedor ou de uma conta. */}
             {visoes.length ? <PesquisarResultados ano={ano} ate={ate} /> : null}
             {/* Na aba Impostos (03/11/2026), o Exportar leva a tabela dela. */}
-            {visao === "impostos" ? <ExportarImpostos ano={ano} ate={ate} /> : opcoesExportar.length && visoes.length ? <ExportarRelatorio
+            {/* Na aba Custos Operacionais (26/11/2026), o Exportar leva a tabela dela, como na Impostos. */}
+            {visao === "impostos" ? (
+              <ExportarImpostos ano={ano} ate={ate} />
+            ) : visao === "custos_operacionais" ? (
+              <ExportarCustosDaTela ano={ano} ate={ate} comparaCom={comparacao.comparaCom} />
+            ) : opcoesExportar.length && visoes.length ? <ExportarRelatorio
                 caminho="resultados"
                 opcoes={opcoesExportar}
                 padrao={`Resultados ${ano}`}
@@ -1191,12 +1178,12 @@ export function ResultadosContent() {
             <VisaoCentros ano={ano} ate={ate} escolhido={escolhido} onEscolher={setEscolhido} />
           ) : visao === "sem_centros" ? (
             <VisaoSemCentros ano={ano} ate={ate} escolhido={semCentro} onEscolher={setSemCentro} />
-          ) : visao === "obras" ? (
-            <VisaoObras ano={ano} ate={ate} escolhida={obra} onEscolher={setObra} />
           ) : nasLinhas ? (
             <VisaoLinhas ano={ano} ate={ate} escolhida={linha} onEscolher={setLinha} rateios={visao === "rateios_linhas"} />
           ) : visao === "impostos" ? (
             <VisaoImpostos ano={ano} ate={ate} />
+          ) : visao === "custos_operacionais" ? (
+            <VisaoCustosOperacionais ano={ano} ate={ate} comparaCom={comparacao.comparaCom} />
           ) : (
             <VisaoUnidade ano={ano} ate={ate} visao={Number(visao)} nome={VISOES.find((v) => v.chave === visao)!.nome} comparaCom={comparacao.comparaCom} prova={comparacao.prova} />
           )}

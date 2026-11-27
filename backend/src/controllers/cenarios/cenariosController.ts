@@ -26,7 +26,7 @@ const descricaoSchema = z
   .nullish()
   .transform((d) => d || null);
 const anoSchema = z.coerce.number().int().min(2020).max(2100);
-const visaoSchema = z.coerce.number().int().min(0).max(5);
+const visaoSchema = z.coerce.number().int().min(0).max(7);
 /**
  * As combinações de um Índice de Comparação ou de Reajuste (21/11/2026): Unidade, Departamento, Atribuição, Conta e Venda, cada
  * uma nula ("Todas") ou uma escolha; o serviço confere se existem e se não se repetem.
@@ -146,7 +146,7 @@ export const cenariosController = {
 
   /**
    * A exportação da DRE do cenário (14/10/2026), como a de Resultados Empresariais: ?formato=xlsx|pdf e ?escopo=atual (a
-   * visão de ?visao=0..5) ou unidades (as seis: pede a leitura de todas as abas da tela Resultados).
+   * visão de ?visao=0..6) ou unidades (as sete: pede a leitura de todas as abas da tela Resultados).
    */
   async exportar(request: Request, response: Response) {
     const c = id(request, response);
@@ -157,17 +157,17 @@ export const cenariosController = {
     const le = (v: number) => temPermissao(request, `${base}_resultados.${ABA_DA_VISAO[v]}:ler`);
     let escopo: EscopoResultadosDoCenario;
     if (request.query.escopo === "unidades") {
-      if (![0, 1, 2, 3, 4, 5].every(le)) return response.status(403).json({ error: "Exportar todas as unidades pede a leitura de todas as abas da tela Resultados." });
+      if (![0, 1, 2, 3, 4, 5, 6, 7].every(le)) return response.status(403).json({ error: "Exportar todas as unidades pede a leitura de todas as abas da tela Resultados." });
       escopo = { tipo: "unidades" };
     } else if (request.query.visao === "departamentos") {
       // A aba Departamentos dos analíticos (23/11/2026), com a permissão dela.
       if (!temPermissao(request, `${base}_resultados.departamentos:ler`)) return response.status(403).json({ error: "Sem permissão para esta aba." });
       escopo = { tipo: "departamentos" };
     } else {
-      const v = z.coerce.number().int().min(0).max(5).safeParse(request.query.visao ?? 0);
+      const v = z.coerce.number().int().min(0).max(7).safeParse(request.query.visao ?? 0);
       if (!v.success) return response.status(400).json({ error: "Visão inválida." });
       if (!le(v.data)) return response.status(403).json({ error: "Sem permissão para esta aba." });
-      escopo = { tipo: "visao", visao: v.data as 0 | 1 | 2 | 3 | 4 | 5 };
+      escopo = { tipo: "visao", visao: v.data as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 };
     }
     return enviarArquivo(request, response, () => exportacaoCenarioService.resultados(c, escopo, formato.data, usuario(request)));
   },
@@ -199,6 +199,12 @@ export const cenariosController = {
   departamentosDosResultados(request: Request, response: Response) {
     const c = id(request, response);
     return c ? responder(response, () => cenariosService.departamentosDosResultados(c, usuario(request))) : undefined;
+  },
+
+  /** A aba Custos Operacionais dos Resultados (26/11/2026): os custos em R$/dia e R$/m³ do cenário, por trimestre. */
+  custosOperacionaisDosResultados(request: Request, response: Response) {
+    const c = id(request, response);
+    return c ? responder(response, () => cenariosService.custosOperacionais(c, usuario(request))) : undefined;
   },
 
   /** A aba Centros de Custo dos Resultados (19/11/2026): os grupos de centros com valor no cenário. */
@@ -570,7 +576,7 @@ export const cenariosController = {
     if (!c) return;
     const visao = visaoSchema.safeParse(request.query.visao ?? 0);
     if (!visao.success) return response.status(400).json({ error: "Visão inválida." });
-    return responder(response, () => cenariosService.resultados(c, visao.data as 0 | 1 | 2 | 3 | 4 | 5, usuario(request)));
+    return responder(response, () => cenariosService.resultados(c, visao.data as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, usuario(request)));
   },
 
   /** O Painel de Bordo do cenário: ?ate=1..12 (dezembro, sem ele). */
@@ -609,22 +615,22 @@ export const cenariosController = {
     });
   },
 
-  /** A visão da DRE para a edição: ?visao=0..5. */
+  /** A visão da DRE para a edição: ?visao=0..6. */
   edicao(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const visao = visaoSchema.safeParse(request.query.visao ?? 0);
     if (!visao.success) return response.status(400).json({ error: "Visão inválida." });
-    return responder(response, () => cenariosService.edicao(c, visao.data as 0 | 1 | 2 | 3 | 4 | 5, usuario(request)));
+    return responder(response, () => cenariosService.edicao(c, visao.data as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7, usuario(request)));
   },
 
-  /** Valores mensais de contas de uma unidade: { visao: 1..5, alteracoes: [{ linha, mes, valor }] }. */
+  /** Valores mensais de contas de uma unidade: { visao: 1..6, alteracoes: [{ linha, mes, valor }] }. */
   gravarValores(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const corpo = z
       .object({
-        visao: z.number().int().min(1).max(5),
+        visao: z.number().int().min(1).max(7),
         alteracoes: z.array(z.object({ linha: z.string().min(1).max(200), mes: z.number().int().min(1).max(12), valor: z.number().finite() })).min(1).max(5000),
         origem: z
           .object({
@@ -1058,12 +1064,12 @@ export const cenariosController = {
     return responder(response, () => cenariosService.gravarIndicesDosReajustes(c, corpo.data.indices, usuario(request)));
   },
 
-  /** Aplica ou remove os Reajustes das Premissas na DRE: { aplicados: true (Aplicar) | false (Remover) }. */
+  /** A caixa Aplicar ao Recalcular: { aplicados: true (marcada: o Recalcular aplica os reajustes) | false (desmarcada) }. */
   aplicarReajustes(request: Request, response: Response) {
     const c = id(request, response);
     if (!c) return;
     const corpo = z.object({ aplicados: z.boolean() }).safeParse(request.body);
-    if (!corpo.success) return response.status(400).json({ error: "Marque ou desmarque a caixa Aplicar Reajustes." });
+    if (!corpo.success) return response.status(400).json({ error: "Marque ou desmarque a caixa Aplicar ao Recalcular." });
     return responder(response, () => cenariosService.aplicarReajustes(c, corpo.data.aplicados, usuario(request)));
   },
 

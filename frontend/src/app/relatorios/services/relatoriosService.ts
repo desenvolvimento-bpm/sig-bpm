@@ -66,8 +66,6 @@ export type Resultados = {
   /** Na aba Departamentos (23/11/2026): o nome do cenário do orçado, quando ele é sintético (sem centros de custo). */
   orcadoSemCentros?: string | null;
 };
-/** As obras com lançamento no período, com o total do exercício (o Resultado Líquido; no recorte, a soma do que se vê). */
-export type ObrasResultados = { ano: number; ate: number; obras: Array<{ codigo: string; nome: string; total: string }> };
 /** Os grupos dos movimentos sem centro de custo com lançamento no período (14/10/2026), com o total do exercício. */
 export type SemCentrosResultados = { ano: number; ate: number; grupos: Array<{ codigo: string; nome: string; total: string }> };
 export type CentrosResultados = { ano: number; ate: number; grupos: Array<{ grupo: string; departamentos: string[]; total: string }> };
@@ -167,6 +165,21 @@ export type CreditosDosMeses = {
     grupos: Array<{ codigo: string; descricao: string; meses: CreditosDoMes[]; contas: Array<{ codigo: string; descricao: string; meses: CreditosDoMes[] }> }>;
   }>;
 };
+/**
+ * A aba Custos Operacionais (26/11/2026, pedido do Adão), em Resultados Empresariais e nos Cenários: os custos de produção e de
+ * serviços em R$/dia (÷ 20 dias por mês) ou em R$/m³ (÷ a Produção ou a Montagem), com a média de cada trimestre (null: nenhum
+ * mês dele entra) e a Média Mensal e, com o comparado, a Média Mensal dele (a base da Diferença e do Atingimento).
+ */
+export type CustosOperacionais = {
+  ano: number;
+  ate: number;
+  /** O comparado: o rótulo (Orçado, Forecast… ou o nome do cenário) e o cenário (null: nenhum marcado). Null: o cenário sem comparado. */
+  comparado: { rotulo: string; nome: string | null } | null;
+  /** Os trimestres, com os meses que entram em cada um (os rótulos, JAN/26…). */
+  trimestres: Array<{ rotulo: string; meses: string[] }>;
+  mesesDaMedia: string[];
+  linhas: Array<{ chave: string; descricao: string; unidade: "R$/dia" | "R$/m³"; trimestres: Array<number | null>; media: number | null; comparado: number | null }>;
+};
 /** As marcações dos cenários que o Compara Com escolhe (21/10/2026). */
 export type MarcacaoComparavel = "ORCAMENTO_EMPRESARIAL" | "RESULTADOS_ANTERIORES" | "RESULTADOS_VENDIDOS" | "PREVISAO";
 /** Um cenário marcado (o Compara Com): de qualquer exercício (22/10/2026), com o ano dele. */
@@ -244,12 +257,11 @@ export const relatoriosService = {
     (await api.get<{ data: LinhasResultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: "linhas" } })).data.data,
   linha: async (ano: number, ate: number | undefined, linha: string, rateios: boolean) =>
     (await api.get<{ data: ResultadosDaLinha }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: rateios ? "rateios_linhas" : "linhas", linha } })).data.data,
-  obras: async (ano: number, ate: number | undefined) =>
-    (await api.get<{ data: ObrasResultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: "obras" } })).data.data,
-  obra: async (ano: number, ate: number | undefined, obra: string) =>
-    (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: "obras", obra } })).data.data,
   centro: async (ano: number, ate: number | undefined, grupo: string) =>
     (await api.get<{ data: Resultados }>("/proxy/relatorios/resultados", { params: { ...periodo(ano, ate), visao: "centros", grupo } })).data.data,
+  /** A aba Custos Operacionais (26/11/2026): os custos em R$/dia e R$/m³ dos meses fechados, com a Média Mensal do comparado da Comparação Padrão. */
+  custosOperacionais: async (ano: number, ate: number | undefined, comparaCom?: MarcacaoComparavel) =>
+    (await api.get<{ data: CustosOperacionais }>("/proxy/relatorios/resultados/custos-operacionais", { params: { ...periodo(ano, ate), ...comparado(comparaCom) } })).data.data,
   /** A aba Impostos (Créditos de Impostos, 03/11/2026): os créditos de impostos de cada mês fechado do exercício. */
   impostos: async (ano: number, ate: number | undefined) =>
     (await api.get<{ data: CreditosDosMeses }>("/proxy/relatorios/resultados/impostos", { params: periodo(ano, ate) })).data.data,

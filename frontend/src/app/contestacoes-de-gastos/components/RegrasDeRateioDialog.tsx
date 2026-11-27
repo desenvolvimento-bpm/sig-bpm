@@ -51,15 +51,17 @@ const VAI_PARA: Record<string, string> = {
     return `${nomeDaUnidade(3)}: Complementar`;
   },
   get DESPESAS() {
-    return `${nomeDaUnidade(4)}; nas receitas e nos impostos, ${nomeDaUnidade(1)} ou ${nomeDaUnidade(2)}, pela filial do lançamento`;
+    return `${nomeDaUnidade(4)} ou ${nomeDaUnidade(6)}, pela linha da DRE; nas receitas e nos impostos, ${nomeDaUnidade(1)} ou ${nomeDaUnidade(2)}, pela filial do lançamento`;
   },
   get EXTRA() {
-    return nomeDaUnidade(4);
+    return `${nomeDaUnidade(6)} ou ${nomeDaUnidade(4)}, pela linha da DRE`;
   },
   get RN() {
     return nomeDaUnidade(5);
   },
-  LEBEN: "Em desuso (construtora do grupo, encerrada)",
+  get LEBEN() {
+    return nomeDaUnidade(7);
+  },
 };
 
 /** O nome de cada destino. */
@@ -119,7 +121,7 @@ function CartaoDaChave({ c, apurado }: { c: Chave; apurado: boolean }) {
           {c.fixo ? "por percentuais fixos." : `pelo volume de cada um no mês, em ${c.baseFisica ? (BASE[c.baseFisica] ?? c.baseFisica) : "—"}.`} Usam este balde{" "}
           {c.centros} {plural(c.centros, "centro de custo", "centros de custo")} (os lançamentos deles) e {c.contas} {plural(c.contas, "conta", "contas")} (os lançamentos sem
           centro de custo).
-          {c.chave === "ACOMPANHAMENTO" ? " As receitas e as despesas financeiras com este balde não se dividem: vão inteiras a Despesas e Extra." : ""}
+          {c.chave === "ACOMPANHAMENTO" ? " As receitas e as despesas financeiras com este balde não se dividem: vão inteiras ao Extra-Operacional." : ""}
         </p>
         {semVolume ? (
           <p className="rounded-sm border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Sem volume no mês: os lançamentos com este balde não vão para nenhuma unidade.</p>
@@ -197,7 +199,7 @@ export function RegrasDeRateioDialog({ anoMes, onFechar }: { anoMes: string; onF
               </header>
               <div className="space-y-2 px-4 py-3">
                 <p className="text-sm text-gray-700">
-                  Não se dividem: o valor vai inteiro à unidade do balde. As linhas da DRE de Despesas e Extra recebem os lançamentos diretos delas qualquer que
+                  Não se dividem: o valor vai inteiro à unidade do balde. As linhas da DRE de Despesas e do Extra-Operacional recebem os lançamentos diretos delas qualquer que
                   seja o balde.
                 </p>
                 <table className="w-full text-sm">

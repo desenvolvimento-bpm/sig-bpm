@@ -49,6 +49,14 @@ export const ESTILO = {
   cabecalhoDireitaQuebra: 30,
   /** O cabeçalho à esquerda com a quebra de texto automática (11/11/2026: os rótulos do Exportar Premissas). */
   cabecalhoQuebra: 31,
+  /**
+   * Os valores calculados pelo SIG (27/11/2026, pedido do Adão: o Exportar Premissas e os centros de custo dos cenários), no amarelo
+   * claro dos totais da DRE, sem o negrito: o número com duas casas e o percentual com duas casas (0,00%).
+   */
+  itemNumeroCalculado: 32,
+  itemPercentualCalculado: 33,
+  /** O percentual com duas casas (27/11/2026: os Encargos por Folha), sem fundo. */
+  itemPercentualDuasCasas: 34,
 } as const;
 export type Estilo = (typeof ESTILO)[keyof typeof ESTILO];
 
@@ -107,7 +115,7 @@ export function nomesDasAbas(nomes: string[]) {
 }
 
 const ESTILOS = `${XML}<styleSheet xmlns="${NS}">
-<numFmts count="4"><numFmt numFmtId="164" formatCode="&quot;R$ &quot;#,##0.00;-&quot;R$ &quot;#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.000;-#,##0.000"/><numFmt numFmtId="166" formatCode="#,##0.00;-#,##0.00"/><numFmt numFmtId="167" formatCode="0.0%;-0.0%"/></numFmts>
+<numFmts count="5"><numFmt numFmtId="164" formatCode="&quot;R$ &quot;#,##0.00;-&quot;R$ &quot;#,##0.00"/><numFmt numFmtId="165" formatCode="#,##0.000;-#,##0.000"/><numFmt numFmtId="166" formatCode="#,##0.00;-#,##0.00"/><numFmt numFmtId="167" formatCode="0.0%;-0.0%"/><numFmt numFmtId="168" formatCode="0.00%;-0.00%"/></numFmts>
 <fonts count="5">
 <font><sz val="10"/><name val="Arial"/><family val="2"/></font>
 <font><b/><sz val="10"/><name val="Arial"/><family val="2"/></font>
@@ -118,7 +126,7 @@ const ESTILOS = `${XML}<styleSheet xmlns="${NS}">
 <fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEF9C3"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFEF08A"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF9CA3AF"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="32">
+<cellXfs count="35">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
@@ -151,6 +159,9 @@ const ESTILOS = `${XML}<styleSheet xmlns="${NS}">
 <xf numFmtId="167" fontId="1" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1"/>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1"/></xf>
+<xf numFmtId="166" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+<xf numFmtId="168" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+<xf numFmtId="168" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;

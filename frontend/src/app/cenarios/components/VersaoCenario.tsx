@@ -21,11 +21,11 @@ type Acao = "congelar" | "reabrir" | "revisao";
 const TITULO: Record<Acao, string> = { congelar: "Congelar Versão", reabrir: "Reabrir Versão", revisao: "Criar Revisão" };
 
 /**
- * O versionamento do cenário (13/10/2026), na linha do título da tela Resultados: Congelar Versão (antes, Salvar
- * Versão) trava o cenário, como o fechamento de uma competência — a DRE, os indicadores manuais e a referência não se
- * editam mais; Reabrir Versão destrava a versão congelada, como a reabertura de uma competência; Criar Revisão copia a
- * versão congelada numa versão nova (VER01, VER02…), aberta para edição — um cenário novo, na lista. A marcação não
- * passa para a revisão: remarca-se à mão.
+ * O versionamento do cenário (13/10/2026), na aba Cenário das Configurações, logo depois de "Gravar Configurações" (27/11/2026,
+ * pedido do Adão): Congelar Versão trava o cenário, como o fechamento de uma competência — a DRE, os indicadores manuais e a
+ * referência não se editam mais; Reabrir Versão destrava a versão congelada, como a reabertura de uma competência; Criar Revisão
+ * copia a versão congelada numa versão nova (VER01, VER02…), aberta para edição — um cenário novo, na lista, que abre nas
+ * Configurações dele. A marcação não passa para a revisão: remarca-se à mão. A permissão é a de editar a tela Resultados.
  */
 export function BotoesDeVersao({ cenario }: { cenario: Cenario }) {
   const router = useRouter();
@@ -48,7 +48,7 @@ export function BotoesDeVersao({ cenario }: { cenario: Cenario }) {
     mutationFn: () => cenariosService.criarRevisao(cenario.id),
     onSuccess: (nova) => {
       aoTerminar(`${rotuloVersao(nova.versao)} de ${nova.nome} criada, aberta para edição.`);
-      router.push(`${t.base}/${nova.id}/resultados`);
+      router.push(`${t.base}/${nova.id}/configuracoes`);
     },
   });
   const mutacao = dialogo === "congelar" ? congelar : dialogo === "reabrir" ? reabrir : revisar;

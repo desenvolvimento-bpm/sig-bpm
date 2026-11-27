@@ -14,7 +14,7 @@ import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 import { plural } from "@/lib/texto";
 
 import { cenariosService, rotuloVersao, type Cenario } from "../services/cenariosService";
-import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "./AvisoMarcado";
+import { AvisoMarcado, estaTravado } from "./AvisoMarcado";
 import { descreverFechadas } from "./descreverFechadas";
 import { BotaoRealocar, QuadroDeRealocacoes } from "./RealocacoesDialog";
 import { BotaoApagarValores, BotaoReplicarMedias, useEditaTodasAsAbas } from "./PlanilhaPremissas";
@@ -95,16 +95,14 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
       ),
   });
   const travado = estaTravado(cenario);
-  // Com os reajustes aplicados na DRE (11/11/2026), a referência, que regrava as premissas, não se carrega nem se realoca.
-  const bloqueada = travado || cenario.reajustesAplicados;
   // As ações do realizado (03/11/2026, pedido do Adão): o Carregar Realizado e, depois dele, o Realocar, na altura do De e do
   // Até (na Média do Período) ou sozinhos à direita (no Mês a Mês).
-  const comCarregarRealizado = podeEditar && !bloqueada && tipo === "realizado" && anos.length > 0;
+  const comCarregarRealizado = podeEditar && !travado && tipo === "realizado" && anos.length > 0;
   // O Replicar Médias e o Apagar Valores (12/11/2026, pedido do Adão; antes, na tela Premissas), logo depois do Realocar (ou do
   // Carregar Cenário): mexem nos meses de todas as abas das premissas, que o perfil precisa editar.
   const editaTodasAsAbas = useEditaTodasAsAbas();
   const replicarOuApagar =
-    podeEditar && !bloqueada && editaTodasAsAbas ? (
+    podeEditar && !travado && editaTodasAsAbas ? (
       <>
         <BotaoReplicarMedias id={cenario.id} />
         <BotaoApagarValores id={cenario.id} />
@@ -162,8 +160,6 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">{aviso ?? "Seu perfil só lê a referência."}</p>
       ) : travado ? (
         <AvisoMarcado cenario={cenario} oQue="a referência" />
-      ) : cenario.reajustesAplicados ? (
-        <AvisoReajustesAplicados oQue="a referência" />
       ) : (
         <label className="flex items-start gap-2 text-sm text-gray-700">
           <input type="checkbox" className="mt-0.5 accent-black" checked={manterMeses} onChange={(e) => setManterMeses(e.target.checked)} />
@@ -177,7 +173,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
           </span>
         </label>
       )}
-      {!podeEditar || bloqueada ? null : tipo === "cenario" ? (
+      {!podeEditar || travado ? null : tipo === "cenario" ? (
         outros.length === 0 ? (
           <p className="rounded-sm border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900">Nenhum outro cenário analítico.</p>
         ) : (
@@ -297,7 +293,7 @@ export function ReferenciaAnalitica({ cenario, podeEditar = true, aviso }: { cen
       ) : null}
 
       {/* As movimentações fora dos padrões da última carga do realizado e as realocações delas (14/10/2026); o Realocar fica ao lado do Carregar Realizado, quando ele está na tela. */}
-      <QuadroDeRealocacoes cenario={cenario} podeEditar={podeEditar && !bloqueada} comBotao={!comCarregarRealizado} />
+      <QuadroDeRealocacoes cenario={cenario} podeEditar={podeEditar && !travado} comBotao={!comCarregarRealizado} />
 
       {confirmar ? (
         <Dialog open onOpenChange={(o) => (!o ? setConfirmar(false) : undefined)}>

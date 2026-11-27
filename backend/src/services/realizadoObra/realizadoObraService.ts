@@ -17,7 +17,7 @@ import { nomeDaUnidade } from "../cadastros/nomesDasUnidades.js";
  * O Realizado por Obra (03/11/2026, pedido do Adão): a DRE de uma obra, da receita à Margem de Contribuição, mês a mês, contra
  * a DRE vendida. Cada usuário escolhe a venda (a obra e a versão vendida) na lista Venda dos Resultados.
  *
- * - A receita bruta, os impostos e a receita líquida, no modelo da aba Obras dos Resultados Empresariais (`receitasPorLinha`):
+ * - A receita bruta, os impostos e a receita líquida, no modelo da aba Obras da DRE do mês (`receitasPorLinha`):
  *   os lançamentos dos centros da obra, com a receita prévia de frete e complementar levada; a ROL, a ROB menos os impostos.
  * - Os custos e os volumes de cada mês, os gravados pela etapa Linhas nas competências fechadas (ResultadoObra): o direto na
  *   obra (os lançamentos dos centros de obra e os volumes) mais a parte dela no rateio de cada linha. Os custos de
@@ -196,8 +196,8 @@ const IMPOSTOS = "IRB.IO.IMPOSTOS_OPERACIONAIS";
 const ROL = "ROL.RECEITA_OPERACIONAL_LIQUIDA_ROL";
 
 /**
- * As receitas e os impostos da venda num mês, por linha (sem a linha, nula), no modelo da aba Obras dos Resultados
- * Empresariais (03/11/2026, pedido do Adão): os lançamentos dos centros da obra nas linhas da ROB e dos impostos (`lancadas`,
+ * As receitas e os impostos da venda num mês, por linha (sem a linha, nula), no modelo da aba Obras da DRE do mês
+ * (03/11/2026, pedido do Adão): os lançamentos dos centros da obra nas linhas da ROB e dos impostos (`lancadas`,
  * no sinal da DRE, em IMPOSTOS a soma dos impostos) e a receita prévia de frete e complementar da obra, que sai do
  * Pré-Fabricado e vai ao Frete, e sai da Montagem e vai à Complementar, cada uma na linha dela.
  *
@@ -511,7 +511,7 @@ export const realizadoObraService = {
    * Os Resultados da venda: o Consolidado e uma aba por linha, cada uma com a DRE mês a mês e o vendido no total; os meses
    * fechados sem as obras gravadas e os avisos.
    *
-   * - A receita bruta, os impostos e a receita líquida no modelo da aba Obras dos Resultados Empresariais (03/11/2026, pedido
+   * - A receita bruta, os impostos e a receita líquida no modelo da aba Obras da DRE do mês (03/11/2026, pedido
    *   do Adão; `receitasPorLinha`): a ROB e os impostos dos lançamentos dos centros da obra, com a receita prévia de frete e
    *   complementar levada, e a ROL, a ROB menos os impostos (sem a receita líquida por natureza). O % é o da aba Obras: sobre a
    *   ROB nas receitas e nos impostos, sobre a ROL no resto.

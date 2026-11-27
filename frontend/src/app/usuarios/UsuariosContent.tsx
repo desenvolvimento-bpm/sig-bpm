@@ -84,7 +84,7 @@ export function UsuariosContent() {
         [
           u.perfil.recorteSetor ? `Setores: ${u.setores.map((s) => rotuloSetor.get(s) ?? s).join(", ") || "nenhum"}` : null,
           u.perfil.recorteDepartamento ? `Departamentos: ${u.departamentos.map((d) => rotuloDep.get(d) ?? d).join(", ") || "nenhum"}` : null,
-          u.perfil.recorteCentro ? `Gestão ${u.gestao ? (rotuloDep.get(u.gestao) ?? u.gestao) : "não definida"}: ${u.centros.length} ${plural(u.centros.length, "centro", "centros")} de custo${u.veObras ? " e as obras" : ""}` : null,
+          u.perfil.recorteCentro ? `Gestão ${u.gestao ? (rotuloDep.get(u.gestao) ?? u.gestao) : "não definida"}: ${u.centros.length} ${plural(u.centros.length, "centro", "centros")} de custo` : null,
         ]
           .filter(Boolean)
           .join(" · ") || null,
@@ -101,7 +101,7 @@ export function UsuariosContent() {
         comoUsar={
           <ul>
             <li>Use “Novo Usuário” para cadastrar; o lápis edita o nome, o perfil, os setores, os departamentos, os centros de custo e a situação.</li>
-            <li>Num perfil com recorte por centro de custo (o Coordenador), escolha a Gestão do usuário: a lista mostra só os centros ativos dela, agrupados pelo agrupamento da controladoria (o do cadastro de centros), com uma caixa em cada agrupamento para marcar ou desmarcar os centros dele e outra para marcar todos. Trocar a gestão limpa os centros marcados. Marque “Vê os Resultados das Obras” para ele ver a aba Obras de Resultados Empresariais, só com as linhas da DRE da gestão dele (e as da Receita Bruta, da Receita Líquida e dos Impostos).</li>
+            <li>Num perfil com recorte por centro de custo (o Coordenador), escolha a Gestão do usuário: a lista mostra só os centros ativos dela, agrupados pelo agrupamento da controladoria (o do cadastro de centros), com uma caixa em cada agrupamento para marcar ou desmarcar os centros dele e outra para marcar todos. Trocar a gestão limpa os centros marcados.</li>
             <li>Use “Redefinir Senha” para dar uma senha nova (ao menos 8 caracteres). No campo da senha (aqui e na senha inicial do Novo Usuário), o olho à direita mostra o que foi digitado; clique de novo para ocultar.</li>
             <li>O que cada um pode fazer vem do perfil, na tela Perfis.</li>
             <li>

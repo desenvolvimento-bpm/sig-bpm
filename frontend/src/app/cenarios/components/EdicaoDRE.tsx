@@ -89,8 +89,8 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
     <div className="space-y-3">
       {consolidado ? (
         <p className="rounded-sm border border-l-4 border-gray-200 border-l-bpm-primary bg-white px-4 py-2 text-sm text-gray-600">
-          O Consolidado soma as contas das unidades, e os totais saem da Estrutura da DRE: edite os valores nas abas Matriz, Filial, Serviços, Despesas +
-          Extra e RN.
+          O Consolidado soma as contas das unidades, e os totais saem da Estrutura da DRE: edite os valores nas abas Matriz, Filial, Serviços, Despesas,
+          Extra-Operacional, RN e Leben.
         </p>
       ) : (
         <div ref={refOriginal}>{destaque}</div>
@@ -105,6 +105,8 @@ export function EdicaoDRE({ id, visao, nome }: { id: string; visao: number; nome
           nomeVisao={nome}
           consultas={false}
           doCenario
+          // O Consolidado dos cenários sem as colunas R$/m³ (27/11/2026, pedido do Adão).
+          semUnitario={visao === 0}
           edicao={
             consolidado
               ? undefined

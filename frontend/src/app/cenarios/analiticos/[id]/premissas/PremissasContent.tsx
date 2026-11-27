@@ -14,7 +14,7 @@ import { useRegistrarAcessoTela } from "@/hooks/useRegistrarAcessoTela";
 
 import { mensagemDeErro } from "@/app/relatorios/services/relatoriosService";
 
-import { AvisoMarcado, AvisoReajustesAplicados, estaTravado } from "../../../components/AvisoMarcado";
+import { AvisoMarcado, estaTravado } from "../../../components/AvisoMarcado";
 import { CentrosDoCenario, RateiosDoCenario } from "../../../components/CentrosDoCenario";
 import { Erro } from "../../../components/CenarioDialog";
 import { ExtraDoCenario, InvestimentosDoCenario } from "../../../components/InvestimentosDoCenario";
@@ -87,14 +87,12 @@ export function PremissasContent() {
   const deUnidade = ["1", "2", "3"].includes(aba);
   const consulta = useQuery({ queryKey: ["cenarios", id, "premissas", aba], queryFn: () => cenariosService.premissas(id, Number(aba) as 1 | 2 | 3), enabled: deUnidade });
   const travado = !!cenario.data && estaTravado(cenario.data);
-  // Com os reajustes aplicados na DRE (11/11/2026, pedido do Adão), só os Indicadores Manuais se editam.
-  const comReajustes = !!cenario.data?.reajustesAplicados;
-  const bloqueadaPelosReajustes = comReajustes && !manuais && !naVerificacoes;
-  const podeEditar = editaAba && !travado && !bloqueadaPelosReajustes && (!deUnidade || !!consulta.data?.editavel);
-  // Os botões da planilha (15/10/2026), na altura do título: Importar Valores (alguma aba editável; sai com os reajustes
-  // aplicados) e Exportar Premissas. O Replicar Médias e o Apagar Valores ficam em Configurações / Referência (12/11/2026).
+  // A caixa Aplicar ao Recalcular (27/11/2026) não trava as premissas: o Recalcular aplica os reajustes sobre elas.
+  const podeEditar = editaAba && !travado && (!deUnidade || !!consulta.data?.editavel);
+  // Os botões da planilha (15/10/2026), na altura do título: Importar Valores (alguma aba editável) e Exportar Premissas. O
+  // Replicar Médias e o Apagar Valores ficam em Configurações / Referência (12/11/2026).
   const editaAlguma = abas.some((a) => hasPermission(`cenarios_analiticos_premissas.${abaDaChave(a.chave)}:editar`));
-  const editaPlanilha = !!cenario.data && !travado && !comReajustes;
+  const editaPlanilha = !!cenario.data && !travado;
   return (
     <div className="space-y-6">
       <CabecalhoDaTela
@@ -146,7 +144,8 @@ export function PremissasContent() {
               (CLT, PJ, Aprendiz ou Estagiário), a Função e o Centro de Custo (dos grupos de centros do cenário) e, em cada mês, cinco colunas — os
               Colaboradores, o Salário Bruto e a Insalubridade / Periculosidade da linha (os valores de todos os colaboradores dela, não de cada um), o
               Salário Total (a soma) e os Benefícios (os Benefícios Padrão aplicados à linha × os colaboradores dela; parado sobre o valor, a dica diz
-              quais são, ou que o valor foi digitado na importação) —, com o Total (os Colaboradores, a média do ano; o Salário Bruto, a Insalubridade /
+              quais são, ou que o valor foi digitado na importação) —, o Salário Total e os Benefícios, calculados pelo SIG, no amarelo claro dos
+              totais das DREs, com o Total (os Colaboradores, a média do ano; o Salário Bruto, a Insalubridade /
               Periculosidade, o Salário Total e os Benefícios, a soma dos doze meses: o custo da linha no ano) e a Média (a soma ÷ 12) e, na última
               linha, o Total: os colaboradores, a folha e os benefícios de cada mês, do Total e da Média. Os rótulos Unidade, Tipo,
               Função e Centro de Custo ordenam e filtram as linhas, como nas demais tabelas do SIG (o Centro de Custo aparece só com o nome; o
@@ -179,8 +178,11 @@ export function PremissasContent() {
               Estagiários, CLT e PJ, o Total de Colaboradores, a soma, e os Salários dos Aprendizes, dos Estagiários, CLT e PJ — vem da aba Quadro de
               Lotação e não se digita): os Encargos e Benefícios (os percentuais de Previdência Social (INSS), Fundo de
               Garantia: Aprendiz (FGTS), Fundo de Garantia: CLT (FGTS), Férias (+1/3) e Décimo Terceiro — em cinza, o padrão, 29%, 2%, 8%, 11,11% e
-              8,33%, até você digitar outro — e os Benefícios Adicionais, em R$; a linha Benefícios Padrão, a soma dos Benefícios das linhas do Quadro de
-              Lotação dos centros do grupo, não se digita); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
+              8,33%, até você digitar outro —; depois deles, calculados, os Encargos Trabalhistas (a soma das contas Encargos e Benefícios do grupo,
+              sem os benefícios) e os Encargos por Folha (os Encargos Trabalhistas ÷ as Remunerações CLT do grupo, em %); os Benefícios Padrão (a soma
+              dos Benefícios das linhas do Quadro de Lotação dos centros do grupo, que não se digita); os Benefícios Adicionais, em R$, digitados; e os
+              Benefícios por Colaborador (os Benefícios Padrão + os Adicionais ÷ o Total de Colaboradores, em R$; sem colaboradores, o traço) — no
+              Total e na Média, os Encargos por Folha e os Benefícios por Colaborador dividem as somas do ano); e os valores mensais das contas (as Remunerações CLT e PJ não: vêm
               sempre dos Salários do Quadro de Lotação, na mão de obra da atribuição do grupo — as CLT, os Salários dos Aprendizes, dos Estagiários e
               CLT; as PJ, os Salários PJ —, e na outra mão de obra e sem linhas do grupo lá ficam zeradas): mão de obra direta e indireta e gastos
               gerais diretos, indiretos e comerciais (a Mão de Obra Terceirizada, as Matérias Primas, os Gastos Gerais Variáveis e o Estoque ficam nas
@@ -204,18 +206,19 @@ export function PremissasContent() {
             </li>
             <li>
               Na aba Investimentos, em cima, a Depreciação Base de cada unidade mês a mês (digitada: o maquinário de produção na Matriz e na Filial, o de
-              serviços em Serviços e o patrimônio em Despesas e Extra), com a depreciação dos investimentos e a total; embaixo, a lista dos investimentos.
+              serviços em Serviços e o patrimônio em Despesas), com a depreciação dos investimentos e a total; embaixo, a lista dos investimentos.
               Cada uma tem o título e a descrição num card de destaque, com as funções dela à direita (na Depreciação, os valores marcados, “Marcar Todos
               os Meses”, “Reajustar Marcados” e “Replicar Referências”; nos Investimentos, os botões da lista e “Exportar”, que leva a lista em Excel ou PDF).
               {podeEditar
                 ? " Clique em “Novo Investimento” para incluir um, ou numa linha da lista para editá-lo ou excluí-lo; para excluir vários, marque as caixas da lista (a do rótulo marca todos) e clique em “Excluir Selecionados”. A coluna Incluído Por diz quem incluiu cada um: o Administrador, quem criou o cenário e quem não tem recorte no perfil alteram e excluem todos; quem tem recorte, só os que incluiu (os outros ficam sem a caixa e não abrem; os incluídos antes do registro de quem inclui, sem autor, só os primeiros alteram), também no Importar Valores."
                 : null} Cada investimento
-              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas e Extra o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
-              valor pós uso e a vida útil em meses; a lista mostra a depreciação mensal.
+              tem o Nome de Referência (único no cenário; identifica o investimento na planilha), a unidade (a conta é a de depreciação dela), em Despesas o Departamento (Logística, Técnico, Comercial, Administrativo ou Extra-Operacional; sem ele, é dos cinco), a descrição, a condição de pagamento (texto livre), o mês de início, o valor total, o
+              valor pós uso e a vida útil em meses; a lista mostra a depreciação mensal, calculada pelo SIG, no amarelo claro.
             </li>
             <li>
               Na aba Extra-Operacional, como nos Lançamentos Manuais do fechamento, os valores mensais do imposto de renda e da contribuição social e das
-              receitas e despesas financeiras, em Despesas e Extra e no RN (no RN, também as Assessorias e Consultorias das Despesas Administrativas),
+              receitas e despesas financeiras, no Extra-Operacional, no RN e na Leben (no RN e na Leben, também as Assessorias e Consultorias das Despesas
+              Administrativas),
               cada uma com o título num card de destaque e, à direita dele, os valores marcados, “Marcar Todos os Meses”, “Reajustar Marcados” e
               “Replicar Referências”.
             </li>
@@ -236,7 +239,7 @@ export function PremissasContent() {
               de Serviços (× os dias úteis). Nas chaves com percentuais fixos nas Regras de Rateio do cenário (Configurações / Regras de Rateio), valem eles. Sem base no mês, o
               percentual é zero, e o valor dos grupos daquela chave não entra (o aviso dos meses sem base fica nos Resultados do cenário). A tabela tem
               uma linha por chave, destino e Base ou Percentual, com os filtros e a ordenação nos rótulos das colunas (Chave, Destino, Linha, Und. e
-              cada mês), como nas outras tabelas do SIG.
+              cada mês), como nas outras tabelas do SIG; as bases e os percentuais são todos calculados pelo SIG, no amarelo claro.
             </li>
             <li>
               Na aba Verificações, a última, as inconsistências nos valores digitados ou importados, cada uma com a Aba (clique nela para abri-la;
@@ -261,7 +264,7 @@ export function PremissasContent() {
               (ela some da lista) ou o De Acordo: marque a caixa das verificações (ou use “Marcar Todas” / “Desmarcar Todas”, que valem para a tabela
               com os filtros) e clique em “De Acordo”; “Retirar Acordo” desfaz. Só o responsável por cada uma (ou o Administrador) a marca; nas
               outras, a caixa fica em cinza. O De Acordo vale enquanto os valores não mudam: mudou, a verificação volta a Pendente, com o aviso. Com
-              alguma verificação pendente no cenário, a versão não se congela (Congelar Versão, na tela Resultados).
+              alguma verificação pendente no cenário, a versão não se congela (Congelar Versão, em Configurações / Cenário).
             </li>
             <li>
               As gravações das Premissas (os valores, o Quadro de Lotação, os investimentos, os indicadores manuais, as importações) refazem na hora
@@ -269,9 +272,9 @@ export function PremissasContent() {
               cada uma conta como uma Premissa no destaque Pendente de Recálculo da tela Resultados, cujo “Recalcular” refaz a DRE com todas.
             </li>
             <li>
-              Com a caixa Aplicar Reajustes marcada (nos Resultados, antes do “Recalcular”), as abas das Premissas (menos Indicadores Manuais) ficam
-              bloqueadas para edição, com o aviso em cada uma; “Importar Valores” sai da altura do título, e a referência (Configurações / Referência)
-              não se carrega. Desmarcar a caixa as deixa editáveis de novo.
+              As Premissas guardam os valores sem os reajustes. Com a caixa Aplicar ao Recalcular marcada (Configurações / Comparativo e Reajustes),
+              cada “Recalcular” aplica os Índices de Reajuste sobre elas na DRE; desmarcada, a DRE fica com as premissas, sem os reajustes. Marcada
+              ou não, as Premissas continuam editáveis.
             </li>
             <li>
               A base das premissas pode vir da referência (Configurações / Referência): o resultado realizado (as Médias de Referência, os centros de
@@ -295,7 +298,7 @@ export function PremissasContent() {
               de Custo por Aba; ou Um Arquivo por Centro de Custo, num ZIP com um arquivo também para as demais abas). O arquivo leva só o que é dos
               departamentos: Produção, a Matriz, a Filial, os centros de produção e a depreciação delas; Serviços, a aba Serviços, os centros de
               serviços e a depreciação de Serviços; Logística, Técnico, Comercial e Administrativo, os centros do departamento; Extra-Operacional, a
-              aba Extra-Operacional — esses cinco com a depreciação de Despesas e Extra. Os
+              aba Extra-Operacional — esses cinco com a depreciação de Despesas. Os
               indicadores manuais vão pelo grupo deles (o GME com o Comercial). Cada linha traz a descrição (as colunas antes da Und., que a identificam na importação: não as altere, nem o nome das abas; elas, a Und. e os rótulos ficam presos ao rolar a planilha — no Quadro de Lotação, os cadastros; nos Investimentos, até a Descrição), a unidade, os doze meses da
               referência do cenário (com ela: Realizado, o resultado realizado de cada mês do período; Referência, os meses do outro cenário — não se
               importam), a Média de Referência, o Total da Referência (a média × 12; nos percentuais, como os Encargos e Benefícios, a própria média), a Variação Máxima da conta (Configurações / Comparativo), os doze meses, Justificar?
@@ -304,9 +307,10 @@ export function PremissasContent() {
               Estagiários, CLT e PJ, em fórmula sobre a aba Quadro de Lotação do arquivo — em Todas as Abas e em Um Centro de Custo por Aba —, e o
               Total de Colaboradores, a soma; as Remunerações CLT e PJ da mão de obra da atribuição do grupo, em fórmula sobre os Salários, e as da
               outra, zero: incluir ou mudar as linhas ou os salários da aba Quadro de Lotação muda os centros e os Encargos), os Encargos e Benefícios (os percentuais; o mês em branco vale a Média de
-              Referência, o padrão; a linha Benefícios Padrão, em fórmula: a soma da coluna Benefícios das linhas dos centros do grupo na aba Quadro
-              de Lotação) e as contas, com a Encargos e Benefícios em fórmula, sem os Benefícios Adicionais e os Benefícios Padrão (a soma das três
-              linhas é a conta na DRE, também nos meses da referência; no Consolidado, a conta soma as três) — as linhas calculadas não se importam nem se replicam. A aba
+              Referência, o padrão; em fórmula, os Encargos Trabalhistas, os Encargos por Folha, os Benefícios Padrão — a soma da coluna Benefícios
+              das linhas dos centros do grupo na aba Quadro de Lotação — e os Benefícios por Colaborador, na ordem da tela) e as contas, com a Encargos e Benefícios em fórmula, sem os Benefícios Adicionais e os Benefícios Padrão (a soma das três
+              linhas é a conta na DRE, também nos meses da referência; no Consolidado, a conta soma as três) — as linhas calculadas, com os meses no amarelo claro,
+              não se importam nem se replicam. A aba
               Quadro de Lotação traz os departamentos do arquivo (a linha 4) e as linhas, com os cadastros (o Centro de Custo pelo código) e,
               em cada mês, os Colaboradores, o Salário Bruto, a Insalubridade / Periculosidade (os da linha), o Salário Total (em fórmula) e os
               Benefícios (os da linha no mês, que se digitam: com outro valor, ele fica digitado no lugar dos Benefícios Padrão aplicados; igual, eles
@@ -340,7 +344,8 @@ export function PremissasContent() {
               outros valores são alteradas, as novas entram e as que não estão na planilha saem (a prévia mostra quantas; os cadastros conferidos
               como no Lançamento Inicial: uma unidade, função ou centro de custo que não existe, ou um tipo fora de CLT, PJ, Aprendiz e Estagiário,
               recusa o arquivo). Os arquivos sem a coluna Benefícios no Quadro de Lotação ou sem a linha Benefícios Padrão nos centros de custo também
-              se importam: os benefícios das linhas ficam como estão. “Importar” grava os
+              se importam: os benefícios das linhas ficam como estão; os sem as linhas Encargos Trabalhistas, Encargos por Folha e Benefícios por
+              Colaborador, ou com os Benefícios Padrão depois dos Adicionais, também (as linhas se acham pelas descrições). “Importar” grava os
               meses (em branco apaga), as justificativas, os investimentos e as linhas do Quadro de Lotação, deixa a DRE
               pendente de recálculo e registra no histórico (tela Histórico, aba Alterações).
             </li>
@@ -355,7 +360,8 @@ export function PremissasContent() {
               bruta).
             </li>
             <li>
-              Os cálculos ficam em cinza-escuro e não se editam: o volume do mês (a demanda × os dias úteis), a Expedição no Mês (a Expedição Diária
+              Os cálculos ficam no amarelo claro dos totais das DREs (calculados pelo SIG, não digitados nem importados; também nas outras abas) e não
+              se editam: o volume do mês (a demanda × os dias úteis), a Expedição no Mês (a Expedição Diária
               × os dias úteis; sem ela digitada, igual à produção) e o Volume de Estoque no Mês (a produção menos a expedição), a armadura e a metalurgia do mês (o
               volume × o kg por unidade), a Receita Líquida Média, a conta das comissões (a soma das Receitas Brutas Médias × as Comissões) e, no fim, o
               Resultado das Premissas em R$ (o que a tabela leva para a DRE).
@@ -404,13 +410,13 @@ export function PremissasContent() {
               demanda e os valores dos meses na mesma unidade. A demanda diária é o volume do período ÷ os dias úteis dele, e a Expedição Diária, o m³
               expedido (a lista de expedições) ÷ os mesmos dias úteis; os doze meses começam iguais às médias.
               A mão de obra direta e indireta, os gastos gerais diretos e indiretos e as despesas vêm dos centros de custo; a depreciação, dos investimentos; o imposto de
-              renda, a contribuição social e o resultado financeiro, do extra-operacional, como as Assessorias e Consultorias do RN.
+              renda, a contribuição social e o resultado financeiro, do extra-operacional, como as Assessorias e Consultorias do RN e da Leben.
             </p>
             <p>
               Os valores dos grupos de centros de custo vão para as unidades como no fechamento mensal, pelo balde do grupo: nos custos de produção, Matriz e
               Filial vão direto para a unidade, Unidade para a da filial dos centros, e Produção e Projeto se rateiam entre Matriz e Filial; Metalurgia e
               Armadura, também entre a Montagem e a Complementar de Serviços; nos custos de montagem, Obras vai para Serviços (a Montagem), Complementar para a conta equivalente dos Complementares (a CSC), e Acompanhamento se rateia entre
-              a Montagem e a Complementar; as despesas vão para Despesas e Extra. Os percentuais saem das bases das premissas (a aba Rateios). Em Serviços, os
+              a Montagem e a Complementar; as despesas vão para Despesas. Os percentuais saem das bases das premissas (a aba Rateios). Em Serviços, os
               Acompanhamentos no Mês somam o Acompanhamento de Obra (d) da DRE.
             </p>
             <p>
@@ -481,11 +487,7 @@ export function PremissasContent() {
         }}
         abas={abas}
       />
-      {cenario.data && travado && editaAba ? (
-        <AvisoMarcado cenario={cenario.data} oQue="as premissas" />
-      ) : bloqueadaPelosReajustes && editaAba && !rateios && !naVerificacoes ? (
-        <AvisoReajustesAplicados oQue="as premissas desta aba" varios />
-      ) : null}
+      {cenario.data && travado && editaAba ? <AvisoMarcado cenario={cenario.data} oQue="as premissas" /> : null}
       {!abas.length ? (
         <p className="rounded-sm border border-gray-200 bg-white p-6 text-sm text-gray-600">Seu perfil não tem acesso a nenhuma aba desta tela.</p>
       ) : quadro ? (

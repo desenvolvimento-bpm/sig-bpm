@@ -43,6 +43,8 @@ cenariosRoutes.get("/:id/resultados", autenticacao, tela("resultados", "ler", (r
 // A aba Centros de Custo dos Resultados dos analíticos (19/11/2026): os grupos e a DRE de um grupo.
 // A aba Departamentos dos Resultados dos analíticos (23/11/2026), com a permissão dela.
 cenariosRoutes.get("/:id/resultados/departamentos", autenticacao, tela("resultados", "ler", "departamentos"), asyncHandler(c.departamentosDosResultados));
+// A aba Custos Operacionais dos Resultados (26/11/2026; sintéticos e analíticos), com a permissão dela.
+cenariosRoutes.get("/:id/resultados/custos-operacionais", autenticacao, tela("resultados", "ler", "custos_operacionais"), asyncHandler(c.custosOperacionaisDosResultados));
 cenariosRoutes.get("/:id/resultados/centros", autenticacao, tela("resultados", "ler", "centros"), asyncHandler(c.centrosDosResultados));
 cenariosRoutes.get("/:id/resultados/centro", autenticacao, tela("resultados", "ler", "centros"), asyncHandler(c.resultadosDoCentro));
 // Os indicadores: a aba Indicadores do Painel de Bordo (o controlador deixa só as abas permitidas) ou a aba Indicadores
@@ -133,8 +135,8 @@ cenariosRoutes.delete("/:id/cadastros/redistribuicoes/:redistribuicaoId", autent
 // Os Índices de Reajuste dos analíticos (11/11/2026; 21/11/2026: com as combinações, na aba Comparativo e Reajustes das Configurações).
 cenariosRoutes.get("/:id/premissas/reajustes", autenticacao, tela("configuracoes", "ler", "reajustes"), asyncHandler(c.reajustesDasPremissas));
 cenariosRoutes.put("/:id/premissas/reajustes/indices", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.gravarIndicesDosReajustes));
-// A caixa Aplicar Reajustes dos Resultados (21/11/2026; antes, o botão do quadro Índices de Reajuste das Configurações), como o Recalcular.
-cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("resultados", "editar"), express.json(), asyncHandler(c.aplicarReajustes));
+// A caixa Aplicar ao Recalcular (27/11/2026: em Configurações / Comparativo e Reajustes, com a permissão dos Índices de Reajuste).
+cenariosRoutes.put("/:id/premissas/reajustes/aplicados", autenticacao, tela("configuracoes", "editar", "reajustes"), express.json(), asyncHandler(c.aplicarReajustes));
 // Os investimentos e o extra-operacional dos cenários analíticos (13/10/2026).
 cenariosRoutes.get("/:id/investimentos", autenticacao, tela("premissas", "ler", "investimentos"), asyncHandler(c.investimentos));
 cenariosRoutes.post("/:id/investimentos/excluir", autenticacao, tela("premissas", "editar", "investimentos"), express.json(), asyncHandler(c.excluirInvestimentos));

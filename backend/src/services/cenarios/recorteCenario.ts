@@ -98,7 +98,7 @@ export function veLinha(r: Recorte | null, l: Pick<LinhaDaPlanilha, "chave" | "d
 export const departamentosDoInvestimento = (i: { unidade: number; departamento: DepartamentoAcesso | null }): Departamento[] =>
   i.unidade === 4 && i.departamento ? [departamentoDoAcesso(i.departamento)] : departamentosDaUnidade(i.unidade);
 
-/** Os departamentos que podem ser o de um investimento de Despesas e Extra (os do patrimônio). */
+/** Os departamentos que podem ser o de um investimento de Despesas (os do patrimônio). */
 export const DEPARTAMENTOS_DO_PATRIMONIO: DepartamentoAcesso[] = ["LOGISTICA", "TECNICO", "COMERCIAL", "ADMINISTRATIVO", "EXTRA_OPERACIONAL"];
 
 /**
@@ -144,7 +144,7 @@ export const FORA_DO_RECORTE = "Fora do seu recorte: o cenário tem o Acesso às
 
 /**
  * O alcance de uma alteração do histórico (12/11/2026, a coluna `alcance`): os trechos das premissas tocados, cada um com os
- * departamentos dele (vale para qualquer um deles: a depreciação base de Despesas e Extra é dos cinco do patrimônio) e, nos
+ * departamentos dele (vale para qualquer um deles: a depreciação base de Despesas é dos cinco do patrimônio) e, nos
  * centros de custo e no Quadro de Lotação, o grupo de centros.
  */
 export type Trecho = { d: Departamento[]; g?: string; i?: true };
